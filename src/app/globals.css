@@ -1,26 +1,94 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ============================================================
+ * HUNTR — Wolf Palette Theme (Tailwind v4)
+ * Source of Truth: DESIGN_SYSTEM.md
+ * ============================================================ */
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  /* ---- Wolf Palette: Backgrounds ---- */
+  --color-wolf-black: #0B1416;
+  --color-wolf-surface: #162225;
+  --color-wolf-border: #2A3B40;
+
+  /* ---- Wolf Palette: Accents ---- */
+  --color-sunset-orange: #FF8C42;
+  --color-golden-hour: #FFBF69;
+
+  /* ---- Wolf Palette: Text ---- */
+  --color-snow-peak: #F2F4F3;
+  --color-mist: #8C9DA1;
+
+  /* ---- Wolf Palette: Semantic ---- */
+  --color-bearish: #5A7A8A;
+
+  /* ---- Semantic Aliases ---- */
+  --color-background: #0B1416;
+  --color-foreground: #F2F4F3;
+  --color-card: #162225;
+  --color-card-foreground: #F2F4F3;
+  --color-primary: #FF8C42;
+  --color-primary-foreground: #0B1416;
+  --color-secondary: #162225;
+  --color-secondary-foreground: #F2F4F3;
+  --color-muted: #162225;
+  --color-muted-foreground: #8C9DA1;
+  --color-accent: #FFBF69;
+  --color-accent-foreground: #0B1416;
+  --color-destructive: #5A7A8A;
+  --color-destructive-foreground: #F2F4F3;
+  --color-border: #2A3B40;
+  --color-input: #2A3B40;
+  --color-ring: #FF8C42;
+  --color-popover: #162225;
+  --color-popover-foreground: #F2F4F3;
+
+  /* ---- Typography ---- */
+  --font-heading: var(--font-satoshi), "Outfit", sans-serif;
+  --font-sans: var(--font-satoshi), "Outfit", sans-serif;
+  --font-mono: var(--font-geist-mono), "JetBrains Mono", monospace;
+
+  /* ---- Border Radius ---- */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ---- Base Styles ---- */
+* {
+  border-color: var(--color-border);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ---- Financial Data: Tabular Numbers ---- */
+.font-tabular {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* ---- Scrollbar Styling ---- */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-wolf-black);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-wolf-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-mist);
 }
