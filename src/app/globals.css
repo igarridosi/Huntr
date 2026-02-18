@@ -20,7 +20,7 @@
   --color-mist: #8C9DA1;
 
   /* ---- Wolf Palette: Semantic ---- */
-  --color-bearish: #5A7A8A;
+  --color-bearish: #FF4242;
 
   /* ---- Semantic Aliases ---- */
   --color-background: #0B1416;
@@ -35,7 +35,7 @@
   --color-muted-foreground: #8C9DA1;
   --color-accent: #FFBF69;
   --color-accent-foreground: #0B1416;
-  --color-destructive: #5A7A8A;
+  --color-destructive: #FF4242;
   --color-destructive-foreground: #F2F4F3;
   --color-border: #2A3B40;
   --color-input: #2A3B40;

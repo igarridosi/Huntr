@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ROUTES } from "@/lib/constants";
+import { createClient } from "@/lib/supabase/client";
 
 export default function SignupPage() {
   const router = useRouter();
+  const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -34,15 +36,24 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      // TODO: Wire Supabase auth when credentials are configured
-      // const { createClient } = await import("@/lib/supabase/client");
-      // const supabase = createClient();
-      // const { error } = await supabase.auth.signUp({ email, password });
-      // if (error) throw error;
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
 
-      // Mock: redirect directly to dashboard
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      router.push(ROUTES.APP);
+      if (signUpError) {
+        throw signUpError;
+      }
+
+      const hasSession = Boolean(data.session);
+
+      if (hasSession) {
+        router.replace(ROUTES.APP);
+        router.refresh();
+        return;
+      }
+
+      router.replace(`${ROUTES.LOGIN}?checkEmail=1`);
     } catch (err) {
       setError(
         err instanceof Error

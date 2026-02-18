@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { useQueryClient } from "@tanstack/react-query";
-import { Search, ArrowRight, TrendingUp } from "lucide-react";
+import { Search, ArrowRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES, QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import { useSearch } from "@/hooks/use-stock-data";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
-import { getStockProfile, getStockQuote } from "@/lib/mock-data";
+import { fetchStockProfile, fetchStockQuote } from "@/app/actions/stock";
+import { TickerLogo } from "@/components/ui/ticker-logo";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -47,12 +48,12 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     (ticker: string) => {
       queryClient.prefetchQuery({
         queryKey: QUERY_KEYS.STOCK_PROFILE(ticker),
-        queryFn: () => getStockProfile(ticker),
+        queryFn: () => fetchStockProfile(ticker),
         staleTime: STALE_TIMES.STATIC,
       });
       queryClient.prefetchQuery({
         queryKey: QUERY_KEYS.STOCK_QUOTE(ticker),
-        queryFn: () => getStockQuote(ticker),
+        queryFn: () => fetchStockQuote(ticker),
         staleTime: STALE_TIMES.QUOTE,
       });
     },
@@ -140,10 +141,14 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                       "hover:bg-wolf-black/30 aria-selected:bg-sunset-orange/10"
                     )}
                   >
-                    {/* Ticker badge */}
-                    <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-wolf-black/50 border border-wolf-border/50 shrink-0">
-                      <TrendingUp className="w-4 h-4 text-sunset-orange/70" />
-                    </div>
+                    {/* Ticker logo */}
+                    <TickerLogo
+                      ticker={entry.ticker}
+                      src={entry.logo_url}
+                      className="w-12 h-12"
+                      imageClassName="rounded-[8px]"
+                      fallbackClassName="rounded-[8px] text-sm"
+                    />
 
                     {/* Info */}
                     <div className="flex-1 min-w-0">

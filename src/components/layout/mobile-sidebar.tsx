@@ -3,9 +3,12 @@
 import { useEffect } from "react";
 import Link from "next/link";
 import {
-  LayoutDashboard,
+  Lightbulb,
   Star,
-  TrendingUp,
+  CalendarClock,
+  MessageSquareText,
+  Calculator,
+  BriefcaseBusiness,
   Settings,
   LogOut,
   X,
@@ -16,6 +19,9 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
+import { TickerLogo } from "@/components/ui/ticker-logo";
+import { useAllProfiles } from "@/hooks/use-stock-data";
+import { getRecentSearches } from "@/lib/recent-searches";
 
 interface MobileSidebarProps {
   open: boolean;
@@ -24,13 +30,18 @@ interface MobileSidebarProps {
 }
 
 const navItems = [
-  { label: "Dashboard", href: ROUTES.APP, icon: LayoutDashboard },
-  { label: "Watchlist", href: ROUTES.APP, icon: Star },
-  { label: "Markets", href: ROUTES.APP, icon: TrendingUp },
+  { label: "Insights", href: ROUTES.APP_INSIGHTS, icon: Lightbulb },
+  { label: "Watchlists", href: ROUTES.APP_WATCHLISTS, icon: Star },
+  { label: "Earnings", href: ROUTES.APP_EARNINGS, icon: CalendarClock },
+  { label: "Transcripts", href: ROUTES.APP_TRANSCRIPTS, icon: MessageSquareText },
+  { label: "DCF Calculator", href: ROUTES.APP_DCF_CALCULATOR, icon: Calculator },
+  { label: "Portfolios", href: ROUTES.APP_PORTFOLIOS, icon: BriefcaseBusiness },
 ];
 
 export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarProps) {
   const pathname = usePathname();
+  const { data: profiles = [] } = useAllProfiles();
+  const recentSearches = getRecentSearches();
 
   // Close on route change
   useEffect(() => {
@@ -96,7 +107,8 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-1 space-y-1 overflow-y-auto">
+        <nav className="flex-1 px-3 py-1 overflow-y-auto">
+          <div className="space-y-1">
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             return (
@@ -115,6 +127,38 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
               </Link>
             );
           })}
+          </div>
+
+          <div className="pt-4 space-y-1">
+            <p className="px-3 text-[10px] font-semibold text-mist/50 uppercase tracking-widest mb-2">
+              Recent Searches
+            </p>
+            {recentSearches.length > 0 ? (
+              recentSearches.map((ticker) => {
+                const profile = profiles.find((item) => item.ticker === ticker);
+                return (
+                  <Link
+                    key={ticker}
+                    href={ROUTES.SYMBOL(ticker)}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all"
+                  >
+                    <TickerLogo
+                      ticker={ticker}
+                      src={profile?.logo_url}
+                      className="h-4 w-4"
+                      imageClassName="rounded-[4px]"
+                      fallbackClassName="rounded-[4px] text-[9px]"
+                    />
+                    <span className="font-mono text-xs font-semibold tracking-wide">
+                      {ticker}
+                    </span>
+                  </Link>
+                );
+              })
+            ) : (
+              <p className="px-3 py-1 text-xs text-mist/50">No recent symbols</p>
+            )}
+          </div>
         </nav>
 
         {/* Bottom */}

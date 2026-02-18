@@ -88,7 +88,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     if (!open) return null;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-start justify-center pt-[20vh]">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Overlay */}
         <div
           className="fixed inset-0 bg-wolf-black/80 backdrop-blur-sm animate-in fade-in-0"

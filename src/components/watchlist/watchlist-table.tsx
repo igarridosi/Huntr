@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Trash2, TrendingUp } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -11,6 +11,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
+import { TickerLogo } from "@/components/ui/ticker-logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ROUTES } from "@/lib/constants";
 import {
@@ -95,9 +96,13 @@ function WatchlistRow({
           href={ROUTES.SYMBOL(ticker)}
           className="flex items-center gap-3 hover:text-sunset-orange transition-colors"
         >
-          <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-wolf-black/50 border border-wolf-border/50 shrink-0">
-            <TrendingUp className="w-4 h-4 text-sunset-orange/60" />
-          </div>
+          <TickerLogo
+            ticker={ticker}
+            src={profile?.logo_url}
+            className="w-11 h-11"
+            imageClassName="rounded-[8px]"
+            fallbackClassName="rounded-[8px] text-xs"
+          />
           <div className="min-w-0">
             <p className="font-bold text-sm font-mono">{ticker}</p>
             <p className="text-xs text-mist truncate max-w-[140px]">

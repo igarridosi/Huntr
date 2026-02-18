@@ -2,28 +2,40 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
-import type { StockProfile, StockQuote } from "@/types/stock";
+import type { StockProfile, StockQuote, MarketIndexQuote } from "@/types/stock";
 import type {
   CompanyFinancials,
   PeriodType,
 } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import {
-  getStockProfile,
-  getStockQuote,
-  getAllQuotes,
-  getCompanyFinancials,
-  searchTickersByQuery,
-} from "@/lib/mock-data";
+  fetchStockProfile,
+  fetchStockQuote,
+  fetchAllQuotes,
+  fetchBatchPeriodPerformance,
+  fetchBatchBuybackStrength,
+  fetchMarketIndices,
+  fetchAllProfiles,
+  fetchCompanyFinancials,
+  fetchSearchTickers,
+} from "@/app/actions/stock";
 
 // ---------- Stock Profile ----------
 
 export function useStockProfile(ticker: string) {
   return useQuery<StockProfile | null>({
     queryKey: QUERY_KEYS.STOCK_PROFILE(ticker),
-    queryFn: () => getStockProfile(ticker),
+    queryFn: () => fetchStockProfile(ticker),
     staleTime: STALE_TIMES.STATIC,
     enabled: !!ticker,
+  });
+}
+
+export function useAllProfiles() {
+  return useQuery<StockProfile[]>({
+    queryKey: ["stock", "profiles", "all"],
+    queryFn: () => fetchAllProfiles(),
+    staleTime: STALE_TIMES.STATIC,
   });
 }
 
@@ -32,7 +44,7 @@ export function useStockProfile(ticker: string) {
 export function useStockQuote(ticker: string) {
   return useQuery<StockQuote | null>({
     queryKey: QUERY_KEYS.STOCK_QUOTE(ticker),
-    queryFn: () => getStockQuote(ticker),
+    queryFn: () => fetchStockQuote(ticker),
     staleTime: STALE_TIMES.QUOTE,
     enabled: !!ticker,
   });
@@ -41,8 +53,53 @@ export function useStockQuote(ticker: string) {
 export function useAllQuotes() {
   return useQuery<StockQuote[]>({
     queryKey: ["stock", "quotes", "all"],
-    queryFn: () => getAllQuotes(),
+    queryFn: () => fetchAllQuotes(),
     staleTime: STALE_TIMES.QUOTE,
+  });
+}
+
+export function useMarketIndices() {
+  return useQuery<MarketIndexQuote[]>({
+    queryKey: QUERY_KEYS.MARKET_INDICES,
+    queryFn: () => fetchMarketIndices(),
+    staleTime: STALE_TIMES.INDICES,
+    refetchInterval: STALE_TIMES.INDICES,
+    refetchIntervalInBackground: true,
+  });
+}
+
+export function useBatchPeriodPerformance(
+  tickers: string[],
+  window: "1D" | "1W" | "1M" | "YTD",
+  enabled: boolean = true
+) {
+  const normalized = Array.from(
+    new Set(tickers.map((ticker) => ticker.toUpperCase()).filter(Boolean))
+  );
+  const tickersKey = normalized.join(",");
+
+  return useQuery<Record<string, number>>({
+    queryKey: QUERY_KEYS.STOCK_PERFORMANCE(window, tickersKey),
+    queryFn: () => fetchBatchPeriodPerformance(normalized, window),
+    staleTime: STALE_TIMES.QUOTE,
+    enabled: enabled && normalized.length > 0,
+  });
+}
+
+export function useBatchBuybackStrength(
+  tickers: string[],
+  enabled: boolean = true
+) {
+  const normalized = Array.from(
+    new Set(tickers.map((ticker) => ticker.toUpperCase()).filter(Boolean))
+  );
+  const tickersKey = normalized.join(",");
+
+  return useQuery<Record<string, number>>({
+    queryKey: QUERY_KEYS.STOCK_BUYBACK(tickersKey),
+    queryFn: () => fetchBatchBuybackStrength(normalized),
+    staleTime: STALE_TIMES.STATIC,
+    enabled: enabled && normalized.length > 0,
   });
 }
 
@@ -54,7 +111,7 @@ export function useFinancials(
 ) {
   return useQuery<CompanyFinancials | null>({
     queryKey: QUERY_KEYS.FINANCIALS(ticker, periodType),
-    queryFn: () => getCompanyFinancials(ticker),
+    queryFn: () => fetchCompanyFinancials(ticker),
     staleTime: STALE_TIMES.STATIC,
     enabled: !!ticker,
   });
@@ -65,9 +122,9 @@ export function useFinancials(
 export function useSearch(query: string, limit = 10) {
   return useQuery<SearchEntry[]>({
     queryKey: QUERY_KEYS.SEARCH(query),
-    queryFn: () => searchTickersByQuery(query, limit),
+    queryFn: () => fetchSearchTickers(query, limit),
     staleTime: STALE_TIMES.STATIC,
-    // Only search when query has content, otherwise return all
+    // Search is always enabled — returns popular results for empty query
     enabled: true,
   });
 }

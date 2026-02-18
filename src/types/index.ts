@@ -5,6 +5,7 @@
 export type {
   StockProfile,
   StockQuote,
+  MarketIndexQuote,
 } from "./stock";
 
 export type {
@@ -20,3 +21,20 @@ export type {
   Watchlist,
   WatchlistItem,
 } from "./watchlist";
+
+export type {
+  YahooPrice,
+  YahooSummaryProfile,
+  YahooSummaryDetail,
+  YahooDefaultKeyStatistics,
+  YahooCalendarEvents,
+  YahooFinancialData,
+  YahooIncomeStatementRow,
+  YahooBalanceSheetRow,
+  YahooCashFlowRow,
+  YahooEarningsHistoryRow,
+  YahooQuoteSummaryResult,
+  FundamentalsTimeSeriesRow,
+  TimeSeriesFinancialsCache,
+  TickerSeedEntry,
+} from "./yahoo";

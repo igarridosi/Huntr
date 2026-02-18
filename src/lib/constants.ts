@@ -6,6 +6,12 @@
 export const ROUTES = {
   HOME: "/",
   APP: "/app",
+  APP_INSIGHTS: "/app",
+  APP_WATCHLISTS: "/app/watchlists",
+  APP_EARNINGS: "/app/earnings",
+  APP_TRANSCRIPTS: "/app/transcripts",
+  APP_DCF_CALCULATOR: "/app/dcf-calculator",
+  APP_PORTFOLIOS: "/app/portfolios",
   LOGIN: "/login",
   SIGNUP: "/signup",
   SYMBOL: (ticker: string) => `/symbol/${ticker}`,
@@ -18,6 +24,10 @@ export const ROUTES = {
 export const QUERY_KEYS = {
   STOCK_PROFILE: (ticker: string) => ["stock", "profile", ticker] as const,
   STOCK_QUOTE: (ticker: string) => ["stock", "quote", ticker] as const,
+  STOCK_PERFORMANCE: (window: "1D" | "1W" | "1M" | "YTD", tickersKey: string) =>
+    ["stock", "performance", window, tickersKey] as const,
+  STOCK_BUYBACK: (tickersKey: string) => ["stock", "buyback", tickersKey] as const,
+  MARKET_INDICES: ["market", "indices"] as const,
   FINANCIALS: (ticker: string, type: "annual" | "quarterly") =>
     ["financials", ticker, type] as const,
   WATCHLIST: (userId: string) => ["watchlist", userId] as const,
@@ -28,11 +38,12 @@ export const QUERY_KEYS = {
 export const STALE_TIMES = {
   STATIC: Infinity,
   QUOTE: 30_000,       // 30 seconds
+  INDICES: 10_000,     // 10 seconds
   WATCHLIST: 60_000,   // 60 seconds
 } as const;
 
 // ---- Feature Flags ----
 export const FEATURES = {
   ENABLE_AUTH: true,
-  ENABLE_REAL_API: false,  // Toggle when migrating from mock to real API
+  ENABLE_REAL_API: true,  // Yahoo Finance + Supabase tickers (seeded)
 } as const;

@@ -3,10 +3,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { STALE_TIMES } from "@/lib/constants";
 import {
-  getStockProfile,
-  getStockQuote,
-  getDefaultWatchlistTickers,
-} from "@/lib/mock-data";
+  fetchStockProfile,
+  fetchStockQuote,
+  fetchDefaultWatchlistTickers,
+} from "@/app/actions/stock";
 import type { StockProfile, StockQuote } from "@/types/stock";
 
 // ---- Types ----
@@ -45,7 +45,7 @@ const WATCHLIST_KEY = ["watchlist", "local"] as const;
 async function fetchWatchlist(): Promise<WatchlistEntry[]> {
   // Use localStorage if available, else default mock tickers
   const stored = getStoredTickers();
-  const tickers = stored ?? (await getDefaultWatchlistTickers());
+  const tickers = stored ?? (await fetchDefaultWatchlistTickers());
 
   // Persist defaults on first load
   if (!stored) {
@@ -56,8 +56,8 @@ async function fetchWatchlist(): Promise<WatchlistEntry[]> {
   const entries = await Promise.all(
     tickers.map(async (ticker) => {
       const [profile, quote] = await Promise.all([
-        getStockProfile(ticker),
-        getStockQuote(ticker),
+        fetchStockProfile(ticker),
+        fetchStockQuote(ticker),
       ]);
       return { ticker, profile, quote };
     })

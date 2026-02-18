@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Crosshair, ArrowRight, Loader2 } from "lucide-react";
@@ -8,13 +8,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { ROUTES } from "@/lib/constants";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
+  const supabase = createClient();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shouldCheckEmail, setShouldCheckEmail] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    setShouldCheckEmail(params.get("checkEmail") === "1");
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -22,15 +30,17 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      // TODO: Wire Supabase auth when credentials are configured
-      // const { createClient } = await import("@/lib/supabase/client");
-      // const supabase = createClient();
-      // const { error } = await supabase.auth.signInWithPassword({ email, password });
-      // if (error) throw error;
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-      // Mock: redirect directly to dashboard
-      await new Promise((resolve) => setTimeout(resolve, 800));
-      router.push(ROUTES.APP);
+      if (signInError) {
+        throw signInError;
+      }
+
+      router.replace(ROUTES.APP);
+      router.refresh();
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Login failed. Please try again."
@@ -59,6 +69,12 @@ export default function LoginPage() {
 
       {/* Form */}
       <form onSubmit={handleSubmit} className="space-y-5">
+        {shouldCheckEmail && (
+          <div className="text-sm text-sunset-orange bg-sunset-orange/10 border border-sunset-orange/20 rounded-lg px-3 py-2">
+            Account created. Check your email to confirm your account before signing in.
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
           <Input

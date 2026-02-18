@@ -7,6 +7,7 @@ export interface SearchEntry {
   ticker: string;
   name: string;
   sector: string;
+  logo_url?: string;
   /** Lowercased ticker + name for matching */
   searchText: string;
 }
@@ -19,6 +20,7 @@ export const searchIndex: SearchEntry[] = stockProfiles.map((p) => ({
   ticker: p.ticker,
   name: p.name,
   sector: p.sector,
+  logo_url: p.logo_url,
   searchText: `${p.ticker} ${p.name}`.toLowerCase(),
 }));
 
