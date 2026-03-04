@@ -135,16 +135,19 @@ export async function searchTickersFromDB(
       }));
     }
 
-    const q = query.trim().toUpperCase();
+    const q = query.trim();
+    const qLower = q.toLowerCase();
+    const qUpper = q.toUpperCase();
+    const candidateLimit = Math.max(limit * 8, 80);
 
     // Use ilike for flexible matching
     const { data, error } = await supabase
       .from("tickers")
       .select("symbol, name, sector, website")
       .eq("is_active", true)
-      .or(`symbol.ilike.%${q}%,name.ilike.%${q}%`)
+      .or(`symbol.ilike.%${qUpper}%,name.ilike.%${q}%`)
       .order("symbol")
-      .limit(limit);
+      .limit(candidateLimit);
 
     if (error || !data) return [];
 
@@ -157,16 +160,29 @@ export async function searchTickersFromDB(
       searchText: `${row.symbol} ${row.name}`.toLowerCase(),
     }));
 
-    return results.sort((a, b) => {
-      const ql = query.toLowerCase();
-      const aExact = a.ticker.toLowerCase() === ql ? 0 : 1;
-      const bExact = b.ticker.toLowerCase() === ql ? 0 : 1;
-      if (aExact !== bExact) return aExact - bExact;
+    const score = (entry: TickerSearchEntry): number => {
+      const ticker = entry.ticker.toLowerCase();
+      const name = entry.name.toLowerCase();
 
-      const aStarts = a.ticker.toLowerCase().startsWith(ql) ? 0 : 1;
-      const bStarts = b.ticker.toLowerCase().startsWith(ql) ? 0 : 1;
-      return aStarts - bStarts;
-    });
+      if (ticker === qLower) return 0;
+      if (ticker.startsWith(qLower)) return 1;
+      if (name.startsWith(qLower)) return 2;
+      if (name.includes(qLower)) return 3;
+      if (ticker.includes(qLower)) return 4;
+      return 5;
+    };
+
+    return results
+      .sort((a, b) => {
+        const scoreDiff = score(a) - score(b);
+        if (scoreDiff !== 0) return scoreDiff;
+
+        const tickerLenDiff = a.ticker.length - b.ticker.length;
+        if (tickerLenDiff !== 0) return tickerLenDiff;
+
+        return a.ticker.localeCompare(b.ticker);
+      })
+      .slice(0, limit);
   } catch {
     return [];
   }

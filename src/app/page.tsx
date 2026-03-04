@@ -1,4 +1,4 @@
-import { Hero } from "@/components/landing/hero";
+import { HeroParallax } from "@/components/landing/HeroParallax";
 import { Features } from "@/components/landing/features";
 import { Preview } from "@/components/landing/preview";
 import { CTA } from "@/components/landing/cta";
@@ -18,22 +18,22 @@ export default function Home() {
               href="/login"
               className="text-sm text-mist hover:text-snow-peak transition-colors"
             >
-              Sign In
+              Login
             </a>
             <a
               href="/signup"
               className="text-sm font-semibold text-wolf-black bg-sunset-orange hover:bg-sunset-orange/90 px-4 py-1.5 rounded-lg transition-colors"
             >
-              Get Started
+              Start Free
             </a>
           </div>
         </div>
       </nav>
 
       <main className="flex-1">
-        <Hero />
-        <Preview />
+        <HeroParallax />
         <Features />
+        <Preview />
         <CTA />
       </main>
 

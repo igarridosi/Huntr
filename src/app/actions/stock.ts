@@ -46,6 +46,12 @@ export async function fetchBatchPeriodPerformance(
   return dataService.getBatchPeriodPerformance(tickers, window);
 }
 
+export async function fetchBatchIntradayTrend(
+  tickers: string[]
+): Promise<Record<string, number[]>> {
+  return dataService.getBatchIntradayTrend(tickers);
+}
+
 export async function fetchBatchBuybackStrength(
   tickers: string[]
 ): Promise<Record<string, number>> {

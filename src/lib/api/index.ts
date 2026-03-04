@@ -113,6 +113,18 @@ export async function getBatchPeriodPerformance(
   );
 }
 
+export async function getBatchIntradayTrend(
+  tickers: string[]
+): Promise<Record<string, number[]>> {
+  if (FEATURES.ENABLE_REAL_API) {
+    return yahoo.getBatchIntradayTrend(tickers);
+  }
+
+  return Object.fromEntries(
+    tickers.map((ticker) => [ticker.toUpperCase(), []])
+  );
+}
+
 export async function getBatchBuybackStrength(
   tickers: string[]
 ): Promise<Record<string, number>> {
@@ -166,6 +178,16 @@ export async function searchTickers(
   if (FEATURES.ENABLE_REAL_API) {
     // Search from Supabase tickers table
     const dbResults = await searchTickersFromDB(query, limit);
+    if (query.trim().length > 0) {
+      return dbResults.map((r) => ({
+        ticker: r.ticker,
+        name: r.name,
+        sector: r.sector,
+        logo_url: r.logo_url,
+        searchText: r.searchText,
+      }));
+    }
+
     if (dbResults.length > 0) {
       return dbResults.map((r) => ({
         ticker: r.ticker,

@@ -92,3 +92,7 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-mist);
 }
+/* ---- Metric Blur ---- */
+.blur-metrics {
+  filter: blur(5px);
+}

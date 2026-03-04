@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_FALLBACK_SRC = "https://www.allinvestview.com/favicon.ico";
@@ -22,15 +22,49 @@ export function TickerLogo({
   fallbackClassName,
   fallbackSrc = DEFAULT_FALLBACK_SRC,
 }: TickerLogoProps) {
-  const [currentSrc, setCurrentSrc] = useState(src || fallbackSrc);
+  const symbol = ticker.toUpperCase();
+  const candidates = useMemo(() => {
+    const list = [
+      src,
+      `https://assets.parqet.com/logos/symbol/${encodeURIComponent(symbol)}?format=png`,
+      `https://eodhd.com/img/logos/US/${encodeURIComponent(symbol)}.png`,
+      fallbackSrc,
+    ].filter((value): value is string => !!value);
+
+    return Array.from(new Set(list));
+  }, [src, symbol, fallbackSrc]);
+
+  const [sourceIndex, setSourceIndex] = useState(0);
+  const [currentSrc, setCurrentSrc] = useState(candidates[0] ?? fallbackSrc);
   const [showInitials, setShowInitials] = useState(false);
   const [attemptedSymbolLookup, setAttemptedSymbolLookup] = useState(false);
 
   useEffect(() => {
-    setCurrentSrc(src || fallbackSrc);
+    setSourceIndex(0);
+    setCurrentSrc(candidates[0] ?? fallbackSrc);
     setShowInitials(false);
     setAttemptedSymbolLookup(false);
-  }, [src, fallbackSrc]);
+  }, [candidates, fallbackSrc]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const tryResolveWithoutSource = async () => {
+      if (attemptedSymbolLookup) return;
+
+      setAttemptedSymbolLookup(true);
+      const resolved = await resolveLogoFromSymbol();
+      if (!cancelled && resolved) {
+        setCurrentSrc(resolved);
+      }
+    };
+
+    void tryResolveWithoutSource();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attemptedSymbolLookup, ticker]);
 
   const resolveLogoFromSymbol = async (): Promise<string | null> => {
     try {
@@ -66,6 +100,13 @@ export function TickerLogo({
   };
 
   const handleError = async () => {
+    if (sourceIndex + 1 < candidates.length) {
+      const nextIndex = sourceIndex + 1;
+      setSourceIndex(nextIndex);
+      setCurrentSrc(candidates[nextIndex]);
+      return;
+    }
+
     if (!attemptedSymbolLookup) {
       setAttemptedSymbolLookup(true);
       const resolved = await resolveLogoFromSymbol();
@@ -75,10 +116,6 @@ export function TickerLogo({
       }
     }
 
-    if (currentSrc !== fallbackSrc) {
-      setCurrentSrc(fallbackSrc);
-      return;
-    }
     setShowInitials(true);
   };
 

@@ -24,12 +24,13 @@ export const ROUTES = {
 export const QUERY_KEYS = {
   STOCK_PROFILE: (ticker: string) => ["stock", "profile", ticker] as const,
   STOCK_QUOTE: (ticker: string) => ["stock", "quote", ticker] as const,
+  STOCK_INTRADAY_TREND: (tickersKey: string) =>
+    ["stock", "intraday-trend", tickersKey] as const,
   STOCK_PERFORMANCE: (window: "1D" | "1W" | "1M" | "YTD", tickersKey: string) =>
     ["stock", "performance", window, tickersKey] as const,
   STOCK_BUYBACK: (tickersKey: string) => ["stock", "buyback", tickersKey] as const,
   MARKET_INDICES: ["market", "indices"] as const,
-  FINANCIALS: (ticker: string, type: "annual" | "quarterly") =>
-    ["financials", ticker, type] as const,
+  FINANCIALS: (ticker: string) => ["financials", ticker] as const,
   WATCHLIST: (userId: string) => ["watchlist", userId] as const,
   SEARCH: (query: string) => ["search", query] as const,
 } as const;
@@ -38,6 +39,7 @@ export const QUERY_KEYS = {
 export const STALE_TIMES = {
   STATIC: Infinity,
   QUOTE: 30_000,       // 30 seconds
+  SEARCH: 15_000,      // 15 seconds
   INDICES: 10_000,     // 10 seconds
   WATCHLIST: 60_000,   // 60 seconds
 } as const;

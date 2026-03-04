@@ -15,9 +15,14 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  redirectTo?: string;
 }
 
-export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
+export function CommandPalette({
+  open,
+  onOpenChange,
+  redirectTo,
+}: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -31,7 +36,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   );
 
   // Search results from hook
-  const { data: results = [] } = useSearch(query, 8);
+  const { data: results = [] } = useSearch(query, 20);
 
   // Reset query on close
   useEffect(() => {
@@ -64,9 +69,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const handleSelect = useCallback(
     (ticker: string) => {
       onOpenChange(false);
-      router.push(ROUTES.SYMBOL(ticker));
+      router.push(redirectTo ?? ROUTES.SYMBOL(ticker));
     },
-    [onOpenChange, router]
+    [onOpenChange, redirectTo, router]
   );
 
   // Close on Escape

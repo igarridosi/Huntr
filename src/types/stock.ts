@@ -23,6 +23,7 @@ export interface StockQuote {
   day_change?: number;
   day_change_percent?: number;
   next_earnings_date?: string | null;
+  earnings_timing?: "Before Open" | "After Close" | "Time TBD";
   market_cap: number;
   shares_outstanding: number;
   pe_ratio: number;

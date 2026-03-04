@@ -16,16 +16,21 @@ export function CTA() {
 
       <div className="relative z-10 max-w-2xl mx-auto text-center space-y-6">
         <h2 className="text-3xl sm:text-4xl font-bold text-snow-peak tracking-tight">
-          Ready to Hunt?
+          Upgrade Your Research Stack
         </h2>
         <p className="text-mist text-base sm:text-lg leading-relaxed">
-          Crea tu cuenta gratuita y empieza a analizar las empresas que más te interesan
-          con herramientas de nivel institucional.
+          Join HUNTR and analyze opportunities with premium signals,
+          professional metrics, and execution-ready workflows.
         </p>
-        <div className="flex items-center justify-center gap-4 pt-2">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
           <Link href={ROUTES.SIGNUP}>
             <Button size="lg" className="min-w-[200px] text-base font-bold shadow-lg shadow-sunset-orange/20">
-              Create Free Account
+              Start Free Beta
+            </Button>
+          </Link>
+          <Link href={ROUTES.LOGIN}>
+            <Button variant="outline" size="lg" className="min-w-[200px] text-base">
+              Sign In to Dashboard
             </Button>
           </Link>
         </div>

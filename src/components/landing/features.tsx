@@ -1,48 +1,48 @@
 import {
-  BarChart3,
-  Shield,
+  Radar,
+  Activity,
   Search,
-  TrendingUp,
-  Layers,
-  Zap,
+  CalendarClock,
+  CandlestickChart,
+  RefreshCcw,
 } from "lucide-react";
 
 const features = [
   {
-    icon: BarChart3,
-    title: "Financial Statements",
+    icon: Radar,
+    title: "Opportunity Radar Pro",
     description:
-      "Income Statement, Balance Sheet y Cash Flow con 10 años de datos. Toggle anual/trimestral al instante.",
+      "Top Gainers, Top Losers, Unusual Volume, Buyback Leaders, Breaking 52-Week High and Income Leaders in a single panel.",
   },
   {
-    icon: TrendingUp,
-    title: "Valuation Metrics",
+    icon: Activity,
+    title: "Signals by Time Window",
     description:
-      "P/E, P/S, EV/EBITDA, ROIC, FCF Yield y más. Calculados en tiempo real desde los estados financieros.",
+      "Analyze momentum and risk across 1D, 1W, 1M and YTD windows to spot opportunities before consensus.",
   },
   {
     icon: Search,
     title: "Command Palette",
     description:
-      "Cmd+K para buscar cualquier ticker al instante. Prefetch inteligente para transiciones inmediatas.",
+      "Cmd+K to jump to any ticker instantly, with logos, prefetch and persistent recent searches.",
   },
   {
-    icon: Layers,
-    title: "Multi-Chart Overview",
+    icon: CandlestickChart,
+    title: "Deep Symbol Analysis",
     description:
-      "10 gráficos simultáneos en la vista Overview. Revenue, EBITDA, FCF, EPS, márgenes — de un vistazo.",
+      "Actionable view with price, daily change, next earnings, global indices and decision-ready KPI blocks.",
   },
   {
-    icon: Shield,
-    title: "Watchlist Inteligente",
+    icon: CalendarClock,
+    title: "Earnings + Financials",
     description:
-      "Añade tickers con un click. Tu watchlist personal con métricas clave, barra 52W y acceso directo.",
+      "Historical financial statements and structured metrics for valuation, quality, dividends and quarterly tracking.",
   },
   {
-    icon: Zap,
-    title: "Análisis de Dividendos",
+    icon: RefreshCcw,
+    title: "Real-Time UX",
     description:
-      "Yield, Payout Ratio, DPS History y CAGR de dividendos. Todo lo que necesitas para evaluar income stocks.",
+      "Fluid updates, smart pagination and smooth loading animations for a seamless premium experience.",
   },
 ];
 
@@ -55,10 +55,10 @@ export function Features() {
       {/* Section header */}
       <div className="text-center space-y-3 mb-16">
         <h2 className="text-3xl sm:text-4xl font-bold text-snow-peak tracking-tight">
-          Your Tactical Advantage
+          Built for Serious Stock Analysis
         </h2>
         <p className="text-mist text-base sm:text-lg max-w-lg mx-auto">
-          Cada herramienta diseñada para que tomes decisiones con datos, no con emociones.
+          Everything you need to go from idea to decision, in a fast and professional interface.
         </p>
       </div>
 

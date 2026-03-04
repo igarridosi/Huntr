@@ -1,136 +1,589 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
 import { STALE_TIMES } from "@/lib/constants";
 import {
   fetchStockProfile,
   fetchStockQuote,
-  fetchDefaultWatchlistTickers,
 } from "@/app/actions/stock";
-import type { StockProfile, StockQuote } from "@/types/stock";
+import type {
+  WatchlistStore,
+  WatchlistEntry,
+  PriceAlert,
+} from "@/types/watchlist";
+import { DEFAULT_TAGS, LIST_COLORS, DEFAULT_TICKERS } from "@/types/watchlist";
 
-// ---- Types ----
+// Re-export for backward compatibility
+export type { WatchlistEntry };
 
-export interface WatchlistEntry {
-  ticker: string;
-  profile: StockProfile | null;
-  quote: StockQuote | null;
+// ---- Storage Keys ----
+
+const STORAGE_KEY_V2 = "huntr_watchlist_v2";
+const STORAGE_KEY_LEGACY = "huntr_watchlist";
+const ALERTS_KEY = "huntr_price_alerts";
+
+// ---- Default Store ----
+
+function createDefaultStore(): WatchlistStore {
+  return {
+    lists: [
+      {
+        id: "default",
+        name: "Main Watchlist",
+        color: LIST_COLORS[0],
+        items: DEFAULT_TICKERS.map((ticker) => ({
+          ticker,
+          added_at: new Date().toISOString(),
+          notes: "",
+          tags: [],
+          target_price: null,
+        })),
+        created_at: new Date().toISOString(),
+      },
+    ],
+    customTags: [...DEFAULT_TAGS],
+    activeListId: "default",
+  };
 }
 
-// ---- Local Storage Persistence ----
+// ---- Migration from V1 (plain ticker array) ----
 
-const STORAGE_KEY = "huntr_watchlist";
-
-function getStoredTickers(): string[] | null {
+function migrateFromV1(): WatchlistStore | null {
   if (typeof window === "undefined") return null;
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? (JSON.parse(stored) as string[]) : null;
+    const legacy = localStorage.getItem(STORAGE_KEY_LEGACY);
+    if (!legacy) return null;
+    const tickers = JSON.parse(legacy) as string[];
+    if (!Array.isArray(tickers) || tickers.length === 0) return null;
+
+    const store: WatchlistStore = {
+      lists: [
+        {
+          id: "default",
+          name: "Main Watchlist",
+          color: LIST_COLORS[0],
+          items: tickers.map((ticker) => ({
+            ticker: ticker.toUpperCase(),
+            added_at: new Date().toISOString(),
+            notes: "",
+            tags: [],
+            target_price: null,
+          })),
+          created_at: new Date().toISOString(),
+        },
+      ],
+      customTags: [...DEFAULT_TAGS],
+      activeListId: "default",
+    };
+
+    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(store));
+    localStorage.removeItem(STORAGE_KEY_LEGACY);
+    return store;
   } catch {
     return null;
   }
 }
 
-function setStoredTickers(tickers: string[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(tickers));
-}
+// ---- Store Access ----
 
-// ---- Query Key ----
+function getStore(): WatchlistStore {
+  if (typeof window === "undefined") return createDefaultStore();
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_V2);
+    if (raw) return JSON.parse(raw) as WatchlistStore;
 
-const WATCHLIST_KEY = ["watchlist", "local"] as const;
+    const migrated = migrateFromV1();
+    if (migrated) return migrated;
 
-// ---- Fetch Enriched Watchlist ----
-
-async function fetchWatchlist(): Promise<WatchlistEntry[]> {
-  // Use localStorage if available, else default mock tickers
-  const stored = getStoredTickers();
-  const tickers = stored ?? (await fetchDefaultWatchlistTickers());
-
-  // Persist defaults on first load
-  if (!stored) {
-    setStoredTickers(tickers);
+    const fresh = createDefaultStore();
+    localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(fresh));
+    return fresh;
+  } catch {
+    return createDefaultStore();
   }
-
-  // Enrich each ticker with profile + quote data
-  const entries = await Promise.all(
-    tickers.map(async (ticker) => {
-      const [profile, quote] = await Promise.all([
-        fetchStockProfile(ticker),
-        fetchStockQuote(ticker),
-      ]);
-      return { ticker, profile, quote };
-    })
-  );
-
-  return entries;
 }
 
-// ---- Hook ----
+function saveStore(store: WatchlistStore) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(store));
+}
+
+// ---- Alerts Storage ----
+
+function getAlerts(): PriceAlert[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(ALERTS_KEY);
+    return raw ? (JSON.parse(raw) as PriceAlert[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAlerts(alerts: PriceAlert[]) {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
+}
+
+// ---- Unique ID ----
+
+function uid(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+// ---- Query Keys ----
+
+const WATCHLIST_KEY = ["watchlist", "v2"] as const;
+const WATCHLIST_ENRICHED_KEY = ["watchlist", "enriched"] as const;
+const ALERTS_QUERY_KEY = ["watchlist", "alerts"] as const;
+
+// ---- The Hook ----
 
 export function useWatchlist() {
   const queryClient = useQueryClient();
+  const [activeListId, setActiveListIdState] = useState<string>(() =>
+    typeof window !== "undefined" ? getStore().activeListId : "default"
+  );
 
-  // Main query: enriched watchlist
-  const query = useQuery<WatchlistEntry[]>({
+  // ── Store query ──
+
+  const storeQuery = useQuery<WatchlistStore>({
     queryKey: WATCHLIST_KEY,
-    queryFn: fetchWatchlist,
+    queryFn: () => getStore(),
+    staleTime: Infinity,
+  });
+
+  const store = storeQuery.data ?? createDefaultStore();
+  const lists = store.lists;
+  const customTags = store.customTags;
+  const activeList = lists.find((l) => l.id === activeListId) ?? lists[0];
+
+  // ── Update store helper ──
+
+  const updateStore = useCallback(
+    (updater: (s: WatchlistStore) => WatchlistStore) => {
+      const current = getStore();
+      const updated = updater(current);
+      saveStore(updated);
+      queryClient.setQueryData(WATCHLIST_KEY, updated);
+      queryClient.invalidateQueries({ queryKey: WATCHLIST_ENRICHED_KEY });
+    },
+    [queryClient]
+  );
+
+  // ── Set active list ──
+
+  const setActiveList = useCallback(
+    (id: string) => {
+      setActiveListIdState(id);
+      updateStore((s) => ({ ...s, activeListId: id }));
+    },
+    [updateStore]
+  );
+
+  // ── List CRUD ──
+
+  const createList = useCallback(
+    (name: string) => {
+      const id = uid();
+      const colorIndex = lists.length % LIST_COLORS.length;
+      updateStore((s) => ({
+        ...s,
+        lists: [
+          ...s.lists,
+          {
+            id,
+            name,
+            color: LIST_COLORS[colorIndex],
+            items: [],
+            created_at: new Date().toISOString(),
+          },
+        ],
+      }));
+      setActiveListIdState(id);
+      return id;
+    },
+    [lists.length, updateStore]
+  );
+
+  const renameList = useCallback(
+    (id: string, name: string) => {
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => (l.id === id ? { ...l, name } : l)),
+      }));
+    },
+    [updateStore]
+  );
+
+  const deleteList = useCallback(
+    (id: string) => {
+      if (id === "default") return;
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.filter((l) => l.id !== id),
+        activeListId: s.activeListId === id ? "default" : s.activeListId,
+      }));
+      if (activeListId === id) setActiveListIdState("default");
+    },
+    [activeListId, updateStore]
+  );
+
+  // ── Ticker CRUD ──
+
+  const addTicker = useCallback(
+    (ticker: string, listId?: string) => {
+      const targetId = listId ?? activeListId;
+      const upper = ticker.toUpperCase();
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => {
+          if (l.id !== targetId) return l;
+          if (l.items.some((i) => i.ticker === upper)) return l;
+          return {
+            ...l,
+            items: [
+              ...l.items,
+              {
+                ticker: upper,
+                added_at: new Date().toISOString(),
+                notes: "",
+                tags: [],
+                target_price: null,
+              },
+            ],
+          };
+        }),
+      }));
+    },
+    [activeListId, updateStore]
+  );
+
+  const removeTicker = useCallback(
+    (ticker: string, listId?: string) => {
+      const targetId = listId ?? activeListId;
+      const upper = ticker.toUpperCase();
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => {
+          if (l.id !== targetId) return l;
+          return { ...l, items: l.items.filter((i) => i.ticker !== upper) };
+        }),
+      }));
+    },
+    [activeListId, updateStore]
+  );
+
+  const isInWatchlist = useCallback(
+    (ticker: string): boolean => {
+      const upper = ticker.toUpperCase();
+      return store.lists.some((l) =>
+        l.items.some((i) => i.ticker === upper)
+      );
+    },
+    [store.lists]
+  );
+
+  const isInActiveList = useCallback(
+    (ticker: string): boolean => {
+      const upper = ticker.toUpperCase();
+      return activeList?.items.some((i) => i.ticker === upper) ?? false;
+    },
+    [activeList]
+  );
+
+  const toggleTicker = useCallback(
+    (ticker: string) => {
+      if (isInActiveList(ticker)) {
+        removeTicker(ticker);
+      } else {
+        addTicker(ticker);
+      }
+    },
+    [isInActiveList, removeTicker, addTicker]
+  );
+
+  // ── Notes ──
+
+  const updateNotes = useCallback(
+    (ticker: string, notes: string) => {
+      const upper = ticker.toUpperCase();
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => ({
+          ...l,
+          items: l.items.map((i) =>
+            i.ticker === upper ? { ...i, notes } : i
+          ),
+        })),
+      }));
+    },
+    [updateStore]
+  );
+
+  // ── Tags ──
+
+  const addTag = useCallback(
+    (ticker: string, tag: string) => {
+      const upper = ticker.toUpperCase();
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => ({
+          ...l,
+          items: l.items.map((i) => {
+            if (i.ticker !== upper || i.tags.includes(tag)) return i;
+            return { ...i, tags: [...i.tags, tag] };
+          }),
+        })),
+      }));
+    },
+    [updateStore]
+  );
+
+  const removeTag = useCallback(
+    (ticker: string, tag: string) => {
+      const upper = ticker.toUpperCase();
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => ({
+          ...l,
+          items: l.items.map((i) => {
+            if (i.ticker !== upper) return i;
+            return { ...i, tags: i.tags.filter((t) => t !== tag) };
+          }),
+        })),
+      }));
+    },
+    [updateStore]
+  );
+
+  const createCustomTag = useCallback(
+    (tag: string) => {
+      updateStore((s) => ({
+        ...s,
+        customTags: s.customTags.includes(tag)
+          ? s.customTags
+          : [...s.customTags, tag],
+      }));
+    },
+    [updateStore]
+  );
+
+  const deleteCustomTag = useCallback(
+    (tag: string) => {
+      updateStore((s) => ({
+        ...s,
+        customTags: s.customTags.filter((t) => t !== tag),
+        lists: s.lists.map((l) => ({
+          ...l,
+          items: l.items.map((i) => ({
+            ...i,
+            tags: i.tags.filter((t) => t !== tag),
+          })),
+        })),
+      }));
+    },
+    [updateStore]
+  );
+
+  // ── Target Price ──
+
+  const setTargetPrice = useCallback(
+    (ticker: string, price: number | null) => {
+      const upper = ticker.toUpperCase();
+      updateStore((s) => ({
+        ...s,
+        lists: s.lists.map((l) => ({
+          ...l,
+          items: l.items.map((i) =>
+            i.ticker === upper ? { ...i, target_price: price } : i
+          ),
+        })),
+      }));
+    },
+    [updateStore]
+  );
+
+  // ── Alerts ──
+
+  const alertsQuery = useQuery<PriceAlert[]>({
+    queryKey: ALERTS_QUERY_KEY,
+    queryFn: () => getAlerts(),
+    staleTime: Infinity,
+  });
+
+  const alerts = alertsQuery.data ?? [];
+
+  const addAlert = useCallback(
+    (alert: Omit<PriceAlert, "id" | "created_at">) => {
+      const updated = [
+        ...getAlerts(),
+        { ...alert, id: uid(), created_at: new Date().toISOString() },
+      ];
+      saveAlerts(updated);
+      queryClient.setQueryData(ALERTS_QUERY_KEY, updated);
+    },
+    [queryClient]
+  );
+
+  const removeAlert = useCallback(
+    (id: string) => {
+      const updated = getAlerts().filter((a) => a.id !== id);
+      saveAlerts(updated);
+      queryClient.setQueryData(ALERTS_QUERY_KEY, updated);
+    },
+    [queryClient]
+  );
+
+  const toggleAlert = useCallback(
+    (id: string) => {
+      const updated = getAlerts().map((a) =>
+        a.id === id ? { ...a, active: !a.active } : a
+      );
+      saveAlerts(updated);
+      queryClient.setQueryData(ALERTS_QUERY_KEY, updated);
+    },
+    [queryClient]
+  );
+
+  // ── Data Enrichment ──
+
+  const activeTickers = useMemo(
+    () => activeList?.items.map((i) => i.ticker) ?? [],
+    [activeList]
+  );
+
+  const enrichedQuery = useQuery<WatchlistEntry[]>({
+    queryKey: [
+      ...WATCHLIST_ENRICHED_KEY,
+      activeListId,
+      activeTickers.join(","),
+    ],
+    queryFn: async () => {
+      if (!activeList || activeList.items.length === 0) return [];
+
+      const entries = await Promise.all(
+        activeList.items.map(async (item) => {
+          const [profile, quote] = await Promise.all([
+            fetchStockProfile(item.ticker),
+            fetchStockQuote(item.ticker),
+          ]);
+          return {
+            ticker: item.ticker,
+            added_at: item.added_at,
+            notes: item.notes,
+            tags: item.tags,
+            target_price: item.target_price,
+            profile,
+            quote,
+          };
+        })
+      );
+
+      return entries;
+    },
     staleTime: STALE_TIMES.WATCHLIST,
+    enabled: activeTickers.length > 0,
   });
 
-  // Add ticker mutation
-  const addMutation = useMutation({
-    mutationFn: async (ticker: string) => {
-      const current = getStoredTickers() ?? [];
-      const upper = ticker.toUpperCase();
+  // Merge enriched data with latest store metadata so notes/tags
+  // updates reflect instantly without waiting for a re-fetch.
+  const data = useMemo(() => {
+    const enriched = enrichedQuery.data ?? [];
+    if (!activeList) return enriched;
+    return enriched.map((e) => {
+      const storeItem = activeList.items.find((i) => i.ticker === e.ticker);
+      if (!storeItem) return e;
+      return {
+        ...e,
+        notes: storeItem.notes,
+        tags: storeItem.tags,
+        target_price: storeItem.target_price,
+      };
+    });
+  }, [enrichedQuery.data, activeList]);
 
-      if (current.includes(upper)) return;
+  // ── Import / Export ──
 
-      const updated = [...current, upper];
-      setStoredTickers(updated);
+  const exportToCSV = useCallback((): string => {
+    if (!activeList) return "";
+    const headers = ["Ticker", "Added At", "Notes", "Tags", "Target Price"];
+    const rows = activeList.items.map((item) => [
+      item.ticker,
+      item.added_at,
+      `"${item.notes.replace(/"/g, '""')}"`,
+      `"${item.tags.join(", ")}"`,
+      item.target_price?.toString() ?? "",
+    ]);
+    return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  }, [activeList]);
+
+  const importFromCSV = useCallback(
+    (csv: string) => {
+      const lines = csv.trim().split("\n");
+      if (lines.length < 2) return;
+      const tickers = lines
+        .slice(1)
+        .map((line) => {
+          const cols = line.split(",");
+          return cols[0]?.trim().toUpperCase();
+        })
+        .filter(Boolean);
+      for (const ticker of tickers) {
+        if (ticker) addTicker(ticker);
+      }
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WATCHLIST_KEY });
-    },
-  });
-
-  // Remove ticker mutation
-  const removeMutation = useMutation({
-    mutationFn: async (ticker: string) => {
-      const current = getStoredTickers() ?? [];
-      const upper = ticker.toUpperCase();
-      const updated = current.filter((t) => t !== upper);
-      setStoredTickers(updated);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: WATCHLIST_KEY });
-    },
-  });
-
-  // Check if ticker is in watchlist
-  const isInWatchlist = (ticker: string): boolean => {
-    if (!query.data) return false;
-    return query.data.some(
-      (entry) => entry.ticker === ticker.toUpperCase()
-    );
-  };
-
-  // Toggle ticker in watchlist
-  const toggleTicker = (ticker: string) => {
-    if (isInWatchlist(ticker)) {
-      removeMutation.mutate(ticker);
-    } else {
-      addMutation.mutate(ticker);
-    }
-  };
+    [addTicker]
+  );
 
   return {
-    ...query,
-    addTicker: addMutation.mutate,
-    removeTicker: removeMutation.mutate,
+    // Enriched data (with instant metadata sync)
+    data,
+    isLoading: enrichedQuery.isLoading || storeQuery.isLoading,
+    isError: enrichedQuery.isError,
+
+    // List management
+    lists,
+    activeListId,
+    activeList,
+    setActiveList,
+    createList,
+    renameList,
+    deleteList,
+
+    // Ticker CRUD
+    addTicker,
+    removeTicker,
     toggleTicker,
     isInWatchlist,
-    isAdding: addMutation.isPending,
-    isRemoving: removeMutation.isPending,
+    isInActiveList,
+
+    // Notes
+    updateNotes,
+
+    // Tags
+    addTag,
+    removeTag,
+    customTags,
+    createCustomTag,
+    deleteCustomTag,
+
+    // Target price
+    setTargetPrice,
+
+    // Alerts
+    alerts,
+    addAlert,
+    removeAlert,
+    toggleAlert,
+
+    // Import/Export
+    exportToCSV,
+    importFromCSV,
+
+    // Backward compat (mutation states)
+    isAdding: false,
+    isRemoving: false,
   };
 }

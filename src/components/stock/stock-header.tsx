@@ -12,6 +12,20 @@ import {
 import { cn } from "@/lib/utils";
 import type { MarketIndexQuote, StockProfile, StockQuote } from "@/types/stock";
 
+function getRangeWidthClass(percent: number): string {
+  const clamped = Math.min(Math.max(percent, 2), 98);
+  if (clamped < 10) return "w-[8%]";
+  if (clamped < 20) return "w-[18%]";
+  if (clamped < 30) return "w-[28%]";
+  if (clamped < 40) return "w-[38%]";
+  if (clamped < 50) return "w-[48%]";
+  if (clamped < 60) return "w-[58%]";
+  if (clamped < 70) return "w-[68%]";
+  if (clamped < 80) return "w-[78%]";
+  if (clamped < 90) return "w-[88%]";
+  return "w-[98%]";
+}
+
 interface StockHeaderProps {
   profile: StockProfile | null | undefined;
   quote: StockQuote | null | undefined;
@@ -144,8 +158,10 @@ export function StockHeader({
             </span>
             <div className="relative w-20 h-1.5 bg-wolf-border rounded-full overflow-hidden">
               <div
-                className="absolute left-0 top-0 h-full bg-sunset-orange/60 rounded-full"
-                style={{ width: `${Math.min(Math.max(rangePercent, 2), 98)}%` }}
+                className={cn(
+                  "absolute left-0 top-0 h-full bg-sunset-orange/60 rounded-full",
+                  getRangeWidthClass(rangePercent)
+                )}
               />
             </div>
             <span className="text-[10px] text-mist font-mono">

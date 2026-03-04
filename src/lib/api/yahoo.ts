@@ -19,6 +19,7 @@ import type { YahooQuoteSummaryResult, TimeSeriesFinancialsCache, FundamentalsTi
 import type { StockProfile, StockQuote, MarketIndexQuote } from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
 import { buildTickerLogoUrl } from "@/lib/logo";
+import { getFinancialsFromAlphaVantage } from "@/lib/api/alphavantage";
 import {
   mapToStockProfile,
   mapToStockQuote,
@@ -64,8 +65,10 @@ const TTL = {
   QUOTE: 5 * 60 * 1000,                // 5 minutes — price data
   INDICES: 10 * 1000,                  // 10 seconds — market indices (near real-time)
   PERFORMANCE: 30 * 60 * 1000,         // 30 minutes — period performance
+  INTRADAY_TREND: 2 * 60 * 1000,       // 2 minutes — watchlist sparkline
   BUYBACK: 24 * 60 * 60 * 1000,        // 24 hours — capital allocation changes slowly
   FINANCIALS: 24 * 60 * 60 * 1000,     // 24 hours — earnings cycle
+  FINANCIALS_ALPHA: 30 * 24 * 60 * 60 * 1000, // 30 days — avoid repeated Alpha throttling
 } as const;
 
 const MARKET_INDICES = [
@@ -253,6 +256,36 @@ export async function getFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
   const key = ticker.toUpperCase();
+  const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+
+  // 0. Alpha Vantage first (if configured) for longer/more up-to-date histories
+  if (alphaVantageApiKey) {
+    const alphaCached = await getCachedData<CompanyFinancials>(
+      key,
+      "financials-alpha-v2",
+      TTL.FINANCIALS_ALPHA
+    );
+    if (alphaCached) {
+      return alphaCached;
+    }
+
+    try {
+      const alphaFinancials = await getFinancialsFromAlphaVantage(key, alphaVantageApiKey);
+      if (alphaFinancials) {
+        await setCachedData(
+          key,
+          "financials-alpha-v2",
+          alphaFinancials as unknown as Record<string, unknown>
+        );
+        return alphaFinancials;
+      }
+    } catch (alphaError) {
+      console.warn(
+        `[AlphaVantage] Failed to fetch financials for ${key}, falling back to Yahoo:`,
+        alphaError
+      );
+    }
+  }
 
   // 1. Check cache (v2 key to avoid stale quoteSummary format)
   const cached = await getCachedData<TimeSeriesFinancialsCache>(
@@ -333,6 +366,100 @@ export async function getBatchQuotes(
 ): Promise<StockQuote[]> {
   if (tickers.length === 0) return [];
 
+  const toTimestampMs = (value: unknown): number | null => {
+    if (value == null) return null;
+    if (typeof value === "number") {
+      const ms = value < 1e12 ? value * 1000 : value;
+      return Number.isFinite(ms) ? ms : null;
+    }
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.getTime();
+    }
+    if (typeof value === "string") {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date.getTime();
+    }
+    return null;
+  };
+
+  const toIsoDate = (value: unknown): string | null => {
+    if (value == null) return null;
+    if (typeof value === "number") {
+      const ms = value < 1e12 ? value * 1000 : value;
+      const date = new Date(ms);
+      return Number.isNaN(date.getTime()) ? null : date.toISOString().split("T")[0];
+    }
+    if (value instanceof Date) {
+      return Number.isNaN(value.getTime()) ? null : value.toISOString().split("T")[0];
+    }
+    if (typeof value === "string") {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? null : date.toISOString().split("T")[0];
+    }
+    return null;
+  };
+
+  const extractNextEarningsDate = (row: Record<string, unknown>): string | null => {
+    const now = Date.now();
+
+    const candidates = [
+      row.earningsTimestampStart,
+      row.earningsTimestampEnd,
+      row.earningsTimestamp,
+    ]
+      .map((value) => toIsoDate(value))
+      .filter((value): value is string => !!value)
+      .map((value) => new Date(`${value}T00:00:00Z`))
+      .filter((value) => !Number.isNaN(value.getTime()));
+
+    const future = candidates
+      .filter((value) => value.getTime() >= now - 12 * 60 * 60 * 1000)
+      .sort((a, b) => a.getTime() - b.getTime());
+
+    if (future.length > 0) {
+      return future[0].toISOString().split("T")[0];
+    }
+
+    const earningsDate = row.earningsDate;
+    if (Array.isArray(earningsDate)) {
+      const parsed = earningsDate
+        .map((entry) => toIsoDate(entry))
+        .filter((entry): entry is string => !!entry)
+        .sort();
+      return parsed[0] ?? null;
+    }
+
+    return candidates.length > 0
+      ? candidates.sort((a, b) => b.getTime() - a.getTime())[0]
+          .toISOString()
+          .split("T")[0]
+      : toIsoDate(earningsDate);
+  };
+
+  const extractEarningsTiming = (
+    row: Record<string, unknown>
+  ): "Before Open" | "After Close" | "Time TBD" => {
+    const now = Date.now();
+    const candidates = [
+      toTimestampMs(row.earningsTimestampStart),
+      toTimestampMs(row.earningsTimestampEnd),
+      toTimestampMs(row.earningsTimestamp),
+    ].filter((value): value is number => value != null);
+
+    if (candidates.length === 0) return "Time TBD";
+
+    const future = candidates
+      .filter((value) => value >= now - 12 * 60 * 60 * 1000)
+      .sort((a, b) => a - b);
+
+    const pickedTs = future[0] ?? candidates.sort((a, b) => b - a)[0];
+    const hourUtc = new Date(pickedTs).getUTCHours();
+
+    if (hourUtc <= 14) return "Before Open";
+    if (hourUtc >= 20) return "After Close";
+    return "Time TBD";
+  };
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw: any = await yahooFinance.quote(tickers);
@@ -345,8 +472,9 @@ export async function getBatchQuotes(
         price: (r.regularMarketPrice as number) ?? 0,
         current_volume: (r.regularMarketVolume as number) ?? 0,
         day_change: (r.regularMarketChange as number) ?? 0,
-        day_change_percent: (((r.regularMarketChangePercent as number) ?? 0) / 100),
-        next_earnings_date: null,
+        day_change_percent: computeIntradayPercentFromQuoteRow(r),
+        next_earnings_date: extractNextEarningsDate(r),
+        earnings_timing: extractEarningsTiming(r),
         market_cap: (r.marketCap as number) ?? 0,
         shares_outstanding: (r.sharesOutstanding as number) ?? 0,
         pe_ratio: (r.trailingPE as number) ?? 0,
@@ -354,7 +482,7 @@ export async function getBatchQuotes(
         fifty_two_week_high: (r.fiftyTwoWeekHigh as number) ?? 0,
         fifty_two_week_low: (r.fiftyTwoWeekLow as number) ?? 0,
         avg_volume: (r.averageDailyVolume3Month as number) ?? (r.averageDailyVolume10Day as number) ?? 0,
-        beta: 0,
+        beta: (r.beta as number) ?? 0,
       }));
 
     return quotes;
@@ -476,6 +604,20 @@ function normalizePct(raw: number): number {
   return Math.abs(raw) > 1 ? raw / 100 : raw;
 }
 
+function computeIntradayPercentFromQuoteRow(row: Record<string, unknown>): number {
+  const marketPrice = (row.regularMarketPrice as number) ?? 0;
+  const dayChange = (row.regularMarketChange as number) ?? 0;
+  const previousClose =
+    (row.regularMarketPreviousClose as number) ??
+    (marketPrice !== 0 ? marketPrice - dayChange : 0);
+
+  if (previousClose > 0 && Number.isFinite(dayChange)) {
+    return dayChange / previousClose;
+  }
+
+  return normalizePct((row.regularMarketChangePercent as number) ?? 0);
+}
+
 function getWindowStartDate(window: PerformanceWindow): string {
   const now = new Date();
 
@@ -511,7 +653,8 @@ async function getTickerWindowPerformance(
     if (window === "1D") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw: any = await yahooFinance.quote(key);
-      pct = normalizePct((raw?.regularMarketChangePercent as number) ?? 0);
+      const row = (raw ?? {}) as Record<string, unknown>;
+      pct = computeIntradayPercentFromQuoteRow(row);
     } else {
       const rows = await (yahooFinance as any).historical(key, {
         period1: getWindowStartDate(window),
@@ -564,7 +707,7 @@ export async function getBatchPeriodPerformance(
       return Object.fromEntries(
         symbols.map((symbol) => {
           const row = rows.find((item) => item?.symbol === symbol) ?? {};
-          const pct = normalizePct((row.regularMarketChangePercent as number) ?? 0);
+          const pct = computeIntradayPercentFromQuoteRow(row);
           return [symbol, pct];
         })
       );
@@ -585,6 +728,76 @@ export async function getBatchPeriodPerformance(
 
     for (const [symbol, pct] of values) {
       result[symbol] = pct;
+    }
+  }
+
+  return result;
+}
+
+async function getTickerIntradayTrend(ticker: string): Promise<number[]> {
+  const key = ticker.toUpperCase();
+  const cacheKey = `${key}-intraday-trend`;
+
+  const cached = await getCachedData<{ points: number[] }>(
+    cacheKey,
+    "trend",
+    TTL.INTRADAY_TREND
+  );
+  if (cached && Array.isArray(cached.points) && cached.points.length > 1) {
+    return cached.points;
+  }
+
+  try {
+    const now = new Date();
+    const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+
+    const rows = await (yahooFinance as any).historical(key, {
+      period1: start.toISOString().slice(0, 10),
+      period2: now.toISOString().slice(0, 10),
+      interval: "5m",
+    });
+
+    const points: number[] = Array.isArray(rows)
+      ? rows
+          .map((row) => (row?.close as number) ?? 0)
+          .filter((value) => Number.isFinite(value) && value > 0)
+      : [];
+
+    if (points.length > 1) {
+      await setCachedData(
+        cacheKey,
+        "trend",
+        { points } as unknown as Record<string, unknown>
+      );
+      return points;
+    }
+  } catch (error) {
+    console.error(`[Yahoo] Intraday trend failed for ${key}:`, error);
+  }
+
+  return [];
+}
+
+export async function getBatchIntradayTrend(
+  tickers: string[]
+): Promise<Record<string, number[]>> {
+  const symbols = Array.from(
+    new Set(tickers.map((ticker) => ticker.trim().toUpperCase()).filter(Boolean))
+  );
+
+  if (symbols.length === 0) return {};
+
+  const CHUNK_SIZE = 8;
+  const result: Record<string, number[]> = {};
+
+  for (let i = 0; i < symbols.length; i += CHUNK_SIZE) {
+    const chunk = symbols.slice(i, i + CHUNK_SIZE);
+    const values = await Promise.all(
+      chunk.map(async (symbol) => [symbol, await getTickerIntradayTrend(symbol)] as const)
+    );
+
+    for (const [symbol, points] of values) {
+      result[symbol] = points;
     }
   }
 

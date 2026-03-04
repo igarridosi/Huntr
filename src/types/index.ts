@@ -18,8 +18,12 @@ export type {
 } from "./financials";
 
 export type {
-  Watchlist,
-  WatchlistItem,
+  WatchlistStore,
+  WatchlistList,
+  WatchlistTickerItem,
+  WatchlistEntry,
+  WatchlistView,
+  PriceAlert,
 } from "./watchlist";
 
 export type {

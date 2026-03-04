@@ -9,7 +9,7 @@ import {
   type FinancialRowDef,
 } from "@/components/financials/financial-table";
 import { MetricChart } from "@/components/financials/metric-chart";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { cn } from "@/lib/utils";
 import type { PeriodType, FinancialPeriod } from "@/types/financials";
 
@@ -17,6 +17,12 @@ function sortByDateAsc<T extends FinancialPeriod>(rows: T[]): T[] {
   return rows
     .slice()
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
+
+function sortByDateDesc<T extends FinancialPeriod>(rows: T[]): T[] {
+  return rows
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
 
 // ---- Statement Section Toggle ----
@@ -85,7 +91,7 @@ export default function FinancialsPage() {
   const { data: financials, isLoading } = useFinancials(ticker, periodType);
 
   if (isLoading) {
-    return <FinancialsSkeleton />;
+    return <DataHuntingLoader ticker={ticker} compact />;
   }
 
   if (!financials) {
@@ -100,11 +106,11 @@ export default function FinancialsPage() {
   const getData = (): FinancialPeriod[] => {
     switch (activeStatement) {
       case "income":
-        return sortByDateAsc(financials.income_statement[periodType]);
+        return sortByDateDesc(financials.income_statement[periodType]);
       case "balance":
-        return sortByDateAsc(financials.balance_sheet[periodType]);
+        return sortByDateDesc(financials.balance_sheet[periodType]);
       case "cashflow":
-        return sortByDateAsc(financials.cash_flow[periodType]);
+        return sortByDateDesc(financials.cash_flow[periodType]);
     }
   };
 
@@ -190,26 +196,6 @@ export default function FinancialsPage() {
           dataKey="value"
           type="area"
         />
-      </div>
-    </div>
-  );
-}
-
-function FinancialsSkeleton() {
-  return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-8 w-32" />
-        <Skeleton className="h-8 w-32" />
-        <div className="flex-1" />
-        <Skeleton className="h-8 w-40" />
-      </div>
-      <Skeleton className="h-96 rounded-xl" />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Skeleton className="h-60 rounded-xl" />
-        <Skeleton className="h-60 rounded-xl" />
-        <Skeleton className="h-60 rounded-xl" />
       </div>
     </div>
   );

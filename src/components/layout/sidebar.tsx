@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Lightbulb,
   Search,
@@ -69,6 +69,7 @@ const mainNav: NavItem[] = [
 
 export function Sidebar({ onSearchClick }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { data: profiles = [] } = useAllProfiles();
 
@@ -80,6 +81,12 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
   useEffect(() => {
     setRecentSearches(getRecentSearches());
   }, [pathname]);
+
+  useEffect(() => {
+    for (const ticker of recentSearches.slice(0, 6)) {
+      router.prefetch(ROUTES.SYMBOL(ticker));
+    }
+  }, [recentSearches, router]);
 
   return (
     <aside className="hidden lg:flex flex-col w-64 h-screen bg-wolf-surface border-r border-wolf-border/50 fixed left-0 top-0 z-40">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import {
   useStockProfile,
@@ -12,10 +12,10 @@ import {
   MetricChartCard,
   type MetricChartCardData,
 } from "@/components/stock/metric-chart-card";
+import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency, formatPercent } from "@/lib/utils";
+import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
 
 function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
@@ -24,33 +24,130 @@ function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
+function getMostRecentByDate<T extends { date: string }>(rows: T[]): T | null {
+  if (!rows.length) return null;
+  return rows.reduce<T | null>((latest, current) => {
+    if (!latest) return current;
+    return new Date(current.date).getTime() > new Date(latest.date).getTime()
+      ? current
+      : latest;
+  }, null);
+}
+
+function pickMostRecentPeriod<T extends { date: string }>(
+  annualRows: T[],
+  quarterlyRows: T[]
+): T | null {
+  const annualLatest = getMostRecentByDate(annualRows);
+  const quarterlyLatest = getMostRecentByDate(quarterlyRows);
+
+  if (!annualLatest) return quarterlyLatest;
+  if (!quarterlyLatest) return annualLatest;
+
+  return new Date(quarterlyLatest.date).getTime() > new Date(annualLatest.date).getTime()
+    ? quarterlyLatest
+    : annualLatest;
+}
+
+type YearRange = 5 | 10 | 15 | 20;
+
+function filterByYearRange<T extends { date: string }>(rows: T[], years: YearRange): T[] {
+  if (!rows.length) return rows;
+
+  const latest = rows.reduce((acc, row) => {
+    const ts = new Date(row.date).getTime();
+    return ts > acc ? ts : acc;
+  }, 0);
+
+  const cutoff = new Date(latest);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
+  const cutoffTs = cutoff.getTime();
+
+  return rows.filter((row) => new Date(row.date).getTime() >= cutoffTs);
+}
+
 export default function OverviewPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params.ticker ?? "").toUpperCase();
 
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
+  const [yearRange, setYearRange] = useState<YearRange>(10);
+  const hasAutoSelectedPeriod = useRef(false);
 
   const { data: profile } = useStockProfile(ticker);
   const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker);
   const { data: financials, isLoading: finLoading } = useFinancials(ticker);
 
-  const isLoading = quoteLoading || finLoading;
+  const latestIncome = useMemo(() => {
+    if (!financials) return null;
+    return pickMostRecentPeriod(
+      financials.income_statement.annual,
+      financials.income_statement.quarterly
+    );
+  }, [financials]);
 
-  // Most recent annual statements (for categorized metrics)
-  const latestIncome = financials?.income_statement.annual.at(-1) ?? null;
-  const latestBalance = financials?.balance_sheet.annual.at(-1) ?? null;
-  const latestCashFlow = financials?.cash_flow.annual.at(-1) ?? null;
+  const latestBalance = useMemo(() => {
+    if (!financials) return null;
+    return pickMostRecentPeriod(
+      financials.balance_sheet.annual,
+      financials.balance_sheet.quarterly
+    );
+  }, [financials]);
+
+  const latestCashFlow = useMemo(() => {
+    if (!financials) return null;
+    return pickMostRecentPeriod(
+      financials.cash_flow.annual,
+      financials.cash_flow.quarterly
+    );
+  }, [financials]);
+
+  useEffect(() => {
+    if (!financials || hasAutoSelectedPeriod.current) return;
+
+    const latestAnnualIncome = getMostRecentByDate(financials.income_statement.annual);
+    const latestQuarterlyIncome = getMostRecentByDate(financials.income_statement.quarterly);
+
+    if (!latestQuarterlyIncome) {
+      hasAutoSelectedPeriod.current = true;
+      return;
+    }
+
+    const annualTs = latestAnnualIncome
+      ? new Date(latestAnnualIncome.date).getTime()
+      : 0;
+    const quarterlyTs = new Date(latestQuarterlyIncome.date).getTime();
+    const staleThresholdMs = 420 * 24 * 60 * 60 * 1000;
+
+    if (quarterlyTs > annualTs && Date.now() - annualTs > staleThresholdMs) {
+      setPeriodType("quarterly");
+    }
+
+    hasAutoSelectedPeriod.current = true;
+  }, [financials]);
 
   // Build all chart series from selected period
   const charts = useMemo(() => {
     if (!financials) return null;
 
-    const incomeAnnual = sortByDateAsc(financials.income_statement.annual);
-    const incomeQuarterly = sortByDateAsc(financials.income_statement.quarterly);
-    const balanceAnnual = sortByDateAsc(financials.balance_sheet.annual);
-    const balanceQuarterly = sortByDateAsc(financials.balance_sheet.quarterly);
-    const cashFlowAnnual = sortByDateAsc(financials.cash_flow.annual);
-    const cashFlowQuarterly = sortByDateAsc(financials.cash_flow.quarterly);
+    const incomeAnnual = sortByDateAsc(
+      filterByYearRange(financials.income_statement.annual, yearRange)
+    );
+    const incomeQuarterly = sortByDateAsc(
+      filterByYearRange(financials.income_statement.quarterly, yearRange)
+    );
+    const balanceAnnual = sortByDateAsc(
+      filterByYearRange(financials.balance_sheet.annual, yearRange)
+    );
+    const balanceQuarterly = sortByDateAsc(
+      filterByYearRange(financials.balance_sheet.quarterly, yearRange)
+    );
+    const cashFlowAnnual = sortByDateAsc(
+      filterByYearRange(financials.cash_flow.annual, yearRange)
+    );
+    const cashFlowQuarterly = sortByDateAsc(
+      filterByYearRange(financials.cash_flow.quarterly, yearRange)
+    );
 
     const fmt = (p: string, type: PeriodType) =>
       type === "annual" ? p.replace("FY", "'") : p;
@@ -70,91 +167,127 @@ export default function OverviewPage() {
     const revenueAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
       value: is.revenue,
+      date: is.date,
     }));
     const revenueQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
       period: fmt(is.period, "quarterly"),
       value: is.revenue,
+      date: is.date,
     }));
 
     const ebitdaAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
       value: is.ebitda,
+      date: is.date,
     }));
     const ebitdaQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
       period: fmt(is.period, "quarterly"),
       value: is.ebitda,
+      date: is.date,
     }));
 
     const fcfAnnual: MetricChartCardData[] = cashFlowAnnual.map((cf) => ({
       period: fmt(cf.period, "annual"),
       value: cf.free_cash_flow,
+      date: cf.date,
     }));
     const fcfQuarterly: MetricChartCardData[] = cashFlowQuarterly.map((cf) => ({
       period: fmt(cf.period, "quarterly"),
       value: cf.free_cash_flow,
+      date: cf.date,
     }));
 
     const netIncomeAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
       value: is.net_income,
+      date: is.date,
     }));
     const netIncomeQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
       period: fmt(is.period, "quarterly"),
       value: is.net_income,
+      date: is.date,
     }));
 
     const epsAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
-      value: is.eps_diluted,
+      value:
+        is.eps_diluted ||
+        (is.shares_outstanding_diluted > 0
+          ? is.net_income / is.shares_outstanding_diluted
+          : 0),
+      date: is.date,
     }));
     const epsQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
       period: fmt(is.period, "quarterly"),
-      value: is.eps_diluted,
+      value:
+        is.eps_diluted ||
+        (is.shares_outstanding_diluted > 0
+          ? is.net_income / is.shares_outstanding_diluted
+          : 0),
+      date: is.date,
     }));
 
     const cashDebtAnnual: MetricChartCardData[] = balanceAnnual.map((bs) => ({
       period: fmt(bs.period, "annual"),
       value: bs.cash_and_equivalents,
+      date: bs.date,
     }));
     const cashDebtQuarterly: MetricChartCardData[] = balanceQuarterly.map((bs) => ({
       period: fmt(bs.period, "quarterly"),
       value: bs.cash_and_equivalents,
+      date: bs.date,
     }));
 
     const dividendsAnnual: MetricChartCardData[] = cashFlowAnnual.map((cf) => ({
       period: fmt(cf.period, "annual"),
       value: Math.abs(cf.dividends_paid),
+      date: cf.date,
     }));
     const dividendsQuarterly: MetricChartCardData[] = cashFlowQuarterly.map((cf) => ({
       period: fmt(cf.period, "quarterly"),
       value: Math.abs(cf.dividends_paid),
+      date: cf.date,
     }));
 
     const sharesOutAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
-      value: is.shares_outstanding_diluted,
+      value:
+        is.shares_outstanding_diluted ||
+        balanceAnnual.find((bs) => bs.date === is.date)?.shares_outstanding ||
+        quote?.shares_outstanding ||
+        0,
+      date: is.date,
     }));
     const sharesOutQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
+      value:
+        is.shares_outstanding_diluted ||
+        balanceQuarterly.find((bs) => bs.date === is.date)?.shares_outstanding ||
+        quote?.shares_outstanding ||
+        0,
       period: fmt(is.period, "quarterly"),
-      value: is.shares_outstanding_diluted,
+      date: is.date,
     }));
 
     const grossMarginAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
       value: is.revenue > 0 ? is.gross_profit / is.revenue : 0,
+      date: is.date,
     }));
     const grossMarginQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
       period: fmt(is.period, "quarterly"),
       value: is.revenue > 0 ? is.gross_profit / is.revenue : 0,
+      date: is.date,
     }));
 
     const opMarginAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
       period: fmt(is.period, "annual"),
       value: is.revenue > 0 ? is.operating_income / is.revenue : 0,
+      date: is.date,
     }));
     const opMarginQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => ({
       period: fmt(is.period, "quarterly"),
       value: is.revenue > 0 ? is.operating_income / is.revenue : 0,
+      date: is.date,
     }));
 
     return {
@@ -219,10 +352,10 @@ export default function OverviewPage() {
         growth: null as number | null,
       },
     };
-  }, [financials, periodType]);
+  }, [financials, periodType, quote?.shares_outstanding, yearRange]);
 
-  if (isLoading) {
-    return <OverviewSkeleton />;
+  if (quoteLoading && !quote) {
+    return <DataHuntingLoader ticker={ticker} />;
   }
 
   const dollarFmt = (v: number) => formatCurrency(v, { compact: true });
@@ -248,11 +381,30 @@ export default function OverviewPage() {
 
       {/* Controls */}
       <div className="flex items-center justify-end gap-3">
+        <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
+          {([5, 10, 15, 20] as const).map((years) => (
+            <button
+              key={years}
+              type="button"
+              onClick={() => setYearRange(years)}
+              className={cn(
+                "px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                yearRange === years
+                  ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
+                  : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+              )}
+            >
+              {years}Y
+            </button>
+          ))}
+        </div>
         <PeriodToggle value={periodType} onChange={setPeriodType} />
       </div>
 
       {/* Charts Grid — 5 columns × 2 rows */}
-      {charts && (
+      {finLoading && !charts ? (
+        <DataHuntingLoader ticker={ticker} compact />
+      ) : charts ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
           <MetricChartCard
             title="Revenue"
@@ -353,7 +505,7 @@ export default function OverviewPage() {
             formatter={pctFmt}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Company Description */}
       {profile?.description && (
@@ -378,25 +530,6 @@ export default function OverviewPage() {
           </CardContent>
         </Card>
       )}
-    </div>
-  );
-}
-
-function OverviewSkeleton() {
-  return (
-    <div className="space-y-6">
-      {/* Metrics bar skeleton */}
-      <Skeleton className="h-36 rounded-xl" />
-      {/* Period toggle */}
-      <div className="flex justify-end">
-        <Skeleton className="h-8 w-40" />
-      </div>
-      {/* Charts grid skeleton */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-        {Array.from({ length: 10 }).map((_, i) => (
-          <Skeleton key={i} className="h-52 rounded-xl" />
-        ))}
-      </div>
     </div>
   );
 }

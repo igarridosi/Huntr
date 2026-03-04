@@ -19,7 +19,7 @@ export function Footer() {
 
         {/* Tagline */}
         <p className="text-xs text-mist/60 text-center">
-          The Wolf of Value Street — Tactical financial analysis.
+          Tactical stock intelligence for premium investors.
         </p>
 
         {/* Copyright */}

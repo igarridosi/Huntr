@@ -23,6 +23,7 @@ import { cn, formatPercent } from "@/lib/utils";
 export interface MetricChartCardData {
   period: string;
   value: number;
+  date?: string;
 }
 
 export interface MetricChartCardProps {
@@ -47,6 +48,7 @@ export interface MetricChartCardProps {
 }
 
 type ChartPeriodFilter = "annual" | "quarterly";
+type YearRangeFilter = 5 | 10 | 15 | 20;
 
 /**
  * Compact metric chart card — Qualtrim-inspired.
@@ -69,12 +71,23 @@ export function MetricChartCard({
   const miniGradientId = `mc-grad-${chartId}-mini`;
   const expandedGradientId = `mc-grad-${chartId}-expanded`;
   const [dialogPeriod, setDialogPeriod] = useState<ChartPeriodFilter>("annual");
+  const [yearRange, setYearRange] = useState<YearRangeFilter>(10);
 
   const annualSeries = annualData ?? data;
   const quarterlySeries = quarterlyData ?? annualSeries;
+
+  const annualFiltered = useMemo(
+    () => filterSeriesByYearRange(annualSeries, yearRange),
+    [annualSeries, yearRange]
+  );
+  const quarterlyFiltered = useMemo(
+    () => filterSeriesByYearRange(quarterlySeries, yearRange),
+    [quarterlySeries, yearRange]
+  );
+
   const dialogData = useMemo(
-    () => (dialogPeriod === "annual" ? annualSeries : quarterlySeries),
-    [dialogPeriod, annualSeries, quarterlySeries]
+    () => (dialogPeriod === "annual" ? annualFiltered : quarterlyFiltered),
+    [dialogPeriod, annualFiltered, quarterlyFiltered]
   );
   const performance = useMemo(() => buildPerformanceBadges(dialogData), [dialogData]);
   const showPerformanceFooter = dialogPeriod === "annual";
@@ -98,31 +111,51 @@ export function MetricChartCard({
           <ExpandChartDialog
             title={title}
             headerRight={
-              <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
-                <button
-                  type="button"
-                  onClick={() => setDialogPeriod("annual")}
-                  className={cn(
-                    "px-3 py-1 text-xs font-medium rounded-lg transition-all duration-150",
-                    dialogPeriod === "annual"
-                      ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                      : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
-                  )}
-                >
-                  Annual
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDialogPeriod("quarterly")}
-                  className={cn(
-                    "px-3 py-1 text-xs font-medium rounded-lg transition-all duration-150",
-                    dialogPeriod === "quarterly"
-                      ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                      : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
-                  )}
-                >
-                  Quarterly
-                </button>
+              <div className="flex items-center gap-2">
+                <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
+                  {([5, 10, 15, 20] as const).map((years) => (
+                    <button
+                      key={years}
+                      type="button"
+                      onClick={() => setYearRange(years)}
+                      className={cn(
+                        "px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                        yearRange === years
+                          ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
+                          : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+                      )}
+                    >
+                      {years}Y
+                    </button>
+                  ))}
+                </div>
+
+                <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
+                  <button
+                    type="button"
+                    onClick={() => setDialogPeriod("annual")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                      dialogPeriod === "annual"
+                        ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
+                        : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+                    )}
+                  >
+                    Annual
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDialogPeriod("quarterly")}
+                    className={cn(
+                      "px-3 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                      dialogPeriod === "quarterly"
+                        ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
+                        : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+                    )}
+                  >
+                    Quarterly
+                  </button>
+                </div>
               </div>
             }
             footer={showPerformanceFooter ? (
@@ -160,7 +193,7 @@ export function MetricChartCard({
       </div>
 
       {/* Chart */}
-      <div className="w-full" style={{ height: 160 }}>
+      <div className="w-full h-40">
         <MetricChartRender
           data={data}
           type={type}
@@ -312,6 +345,35 @@ function compactFormat(v: number): string {
 
 function defaultFormatter(v: number): string {
   return `$${compactFormat(v)}`;
+}
+
+function filterSeriesByYearRange(
+  rows: MetricChartCardData[],
+  years: YearRangeFilter
+): MetricChartCardData[] {
+  if (!rows.length) return rows;
+
+  const latestDateMs = rows.reduce((latest, row) => {
+    const ts = row.date ? new Date(row.date).getTime() : NaN;
+    if (!Number.isFinite(ts)) return latest;
+    return Math.max(latest, ts);
+  }, Number.NEGATIVE_INFINITY);
+
+  if (!Number.isFinite(latestDateMs)) {
+    return rows.slice(-years);
+  }
+
+  const cutoff = new Date(latestDateMs);
+  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
+  const cutoffMs = cutoff.getTime();
+
+  const filtered = rows.filter((row) => {
+    const ts = row.date ? new Date(row.date).getTime() : NaN;
+    if (!Number.isFinite(ts)) return false;
+    return ts >= cutoffMs;
+  });
+
+  return filtered.length ? filtered : rows;
 }
 
 function calculateChange(

@@ -11,8 +11,10 @@ import type { SearchEntry } from "@/lib/mock-data/search-index";
 import {
   fetchStockProfile,
   fetchStockQuote,
+  fetchFullStockData,
   fetchAllQuotes,
   fetchBatchPeriodPerformance,
+  fetchBatchIntradayTrend,
   fetchBatchBuybackStrength,
   fetchMarketIndices,
   fetchAllProfiles,
@@ -45,6 +47,19 @@ export function useStockQuote(ticker: string) {
   return useQuery<StockQuote | null>({
     queryKey: QUERY_KEYS.STOCK_QUOTE(ticker),
     queryFn: () => fetchStockQuote(ticker),
+    staleTime: STALE_TIMES.QUOTE,
+    enabled: !!ticker,
+  });
+}
+
+export function useFullStockData(ticker: string) {
+  return useQuery<{
+    profile: StockProfile | null;
+    quote: StockQuote | null;
+    financials: CompanyFinancials | null;
+  }>({
+    queryKey: ["stock", "full", ticker],
+    queryFn: () => fetchFullStockData(ticker),
     staleTime: STALE_TIMES.QUOTE,
     enabled: !!ticker,
   });
@@ -86,6 +101,23 @@ export function useBatchPeriodPerformance(
   });
 }
 
+export function useBatchIntradayTrend(
+  tickers: string[],
+  enabled: boolean = true
+) {
+  const normalized = Array.from(
+    new Set(tickers.map((ticker) => ticker.toUpperCase()).filter(Boolean))
+  );
+  const tickersKey = normalized.join(",");
+
+  return useQuery<Record<string, number[]>>({
+    queryKey: QUERY_KEYS.STOCK_INTRADAY_TREND(tickersKey),
+    queryFn: () => fetchBatchIntradayTrend(normalized),
+    staleTime: STALE_TIMES.QUOTE,
+    enabled: enabled && normalized.length > 0,
+  });
+}
+
 export function useBatchBuybackStrength(
   tickers: string[],
   enabled: boolean = true
@@ -107,10 +139,10 @@ export function useBatchBuybackStrength(
 
 export function useFinancials(
   ticker: string,
-  periodType: PeriodType = "annual"
+  _periodType: PeriodType = "annual"
 ) {
   return useQuery<CompanyFinancials | null>({
-    queryKey: QUERY_KEYS.FINANCIALS(ticker, periodType),
+    queryKey: QUERY_KEYS.FINANCIALS(ticker),
     queryFn: () => fetchCompanyFinancials(ticker),
     staleTime: STALE_TIMES.STATIC,
     enabled: !!ticker,
@@ -123,7 +155,7 @@ export function useSearch(query: string, limit = 10) {
   return useQuery<SearchEntry[]>({
     queryKey: QUERY_KEYS.SEARCH(query),
     queryFn: () => fetchSearchTickers(query, limit),
-    staleTime: STALE_TIMES.STATIC,
+    staleTime: STALE_TIMES.SEARCH,
     // Search is always enabled — returns popular results for empty query
     enabled: true,
   });

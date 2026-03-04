@@ -15,7 +15,7 @@ import {
   Crosshair,
   Search,
 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
@@ -40,6 +40,7 @@ const navItems = [
 
 export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const { data: profiles = [] } = useAllProfiles();
   const recentSearches = getRecentSearches();
 
@@ -59,6 +60,13 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
       document.body.style.overflow = "";
     };
   }, [open]);
+
+  useEffect(() => {
+    if (!open) return;
+    for (const ticker of recentSearches.slice(0, 6)) {
+      router.prefetch(ROUTES.SYMBOL(ticker));
+    }
+  }, [open, recentSearches, router]);
 
   if (!open) return null;
 
