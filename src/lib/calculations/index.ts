@@ -14,3 +14,21 @@ export {
   calculateFCFMargin,
   calculateCapexToRevenue,
 } from "./margins";
+export {
+  runDCF,
+  buildSensitivityMatrix,
+  runMonteCarlo,
+  estimateWACC,
+  generateDCFScenarios,
+} from "./dcf";
+export type {
+  DCFInputs,
+  DCFResult,
+  DCFProjectionYear,
+  SensitivityCell,
+  MonteCarloResult,
+  WACCEstimate,
+  DCFScenarioKey,
+  DCFScenarioPreset,
+  DCFScenarioSet,
+} from "./dcf";

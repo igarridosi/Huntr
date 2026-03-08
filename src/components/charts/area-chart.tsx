@@ -22,6 +22,8 @@ interface AreaChartProps {
   labelFormatter?: (label: string) => string;
   showGrid?: boolean;
   showYAxis?: boolean;
+  tightX?: boolean;
+  xTickInterval?: number | "preserveStartEnd";
 }
 
 /**
@@ -38,6 +40,8 @@ export function AreaChart({
   labelFormatter,
   showGrid = true,
   showYAxis = true,
+  tightX = false,
+  xTickInterval,
 }: AreaChartProps) {
   const gId = gradientId ?? `gradient-${dataKey}`;
 
@@ -45,7 +49,7 @@ export function AreaChart({
     <ResponsiveContainer width="100%" height={height}>
       <RechartsAreaChart
         data={data}
-        margin={{ top: 8, right: 8, left: 0, bottom: 0 }}
+        margin={{ top: 8, right: tightX ? 0 : 8, left: tightX ? 0 : 0, bottom: 0 }}
       >
         <defs>
           <linearGradient id={gId} x1="0" y1="0" x2="0" y2="1">
@@ -69,6 +73,8 @@ export function AreaChart({
           tickLine={false}
           tick={{ fill: "#8C9DA1", fontSize: 11 }}
           dy={8}
+          interval={xTickInterval}
+          padding={tightX ? { left: 0, right: 0 } : undefined}
         />
 
         {showYAxis && (

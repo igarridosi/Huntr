@@ -9,10 +9,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AreaChart } from "@/components/charts/area-chart";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
+import { MetricChart } from "@/components/financials/metric-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   formatPercent,
-  formatCurrency,
   formatCompactNumber,
 } from "@/lib/utils";
 import {
@@ -20,6 +20,12 @@ import {
   calculateFCFYield,
   calculateAllCAGRs,
 } from "@/lib/calculations";
+
+function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
+  return rows
+    .slice()
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+}
 
 export default function ValuationPage() {
   const params = useParams<{ ticker: string }>();
@@ -40,13 +46,13 @@ export default function ValuationPage() {
     );
   }
 
-  const annualIncome = financials.income_statement.annual;
-  const annualBalance = financials.balance_sheet.annual;
-  const annualCashFlow = financials.cash_flow.annual;
+  const annualIncome = sortByDateAsc(financials.income_statement.annual);
+  const annualBalance = sortByDateAsc(financials.balance_sheet.annual);
+  const annualCashFlow = sortByDateAsc(financials.cash_flow.annual);
 
-  const latest = annualIncome[0];
-  const latestBal = annualBalance[0];
-  const latestCF = annualCashFlow[0];
+  const latest = annualIncome.at(-1);
+  const latestBal = annualBalance.at(-1);
+  const latestCF = annualCashFlow.at(-1);
 
   // ---- Valuation Metrics ----
   const marketCap = quote.market_cap;
@@ -103,10 +109,8 @@ export default function ValuationPage() {
 
   // ---- Historical P/E (approximate from earnings) ----
   // Use price ÷ EPS from each annual period (simplification)
-  const historicalPE = annualIncome
+  const historicalPE = sortByDateAsc(annualIncome)
     .filter((is) => is.eps_diluted > 0)
-    .slice()
-    .reverse()
     .map((is) => ({
       period: is.period.replace("FY", ""),
       pe: +(quote.price / is.eps_diluted).toFixed(1),
@@ -118,9 +122,22 @@ export default function ValuationPage() {
       : null;
 
   // ---- CAGR Indicators ----
-  const revenueSeries = annualIncome.slice().reverse().map((is) => is.revenue);
-  const epsSeries = annualIncome.slice().reverse().map((is) => is.eps_diluted);
-  const fcfSeries = annualCashFlow.slice().reverse().map((cf) => cf.free_cash_flow);
+  const revenueSeries = annualIncome.map((is) => is.revenue);
+  const epsSeries = annualIncome.map((is) => is.eps_diluted);
+  const fcfSeries = annualCashFlow.map((cf) => cf.free_cash_flow);
+
+  const revenueChartData = annualIncome.map((is) => ({
+    period: is.period.replace("FY", ""),
+    value: is.revenue,
+  }));
+  const epsChartData = annualIncome.map((is) => ({
+    period: is.period.replace("FY", ""),
+    value: is.eps_diluted,
+  }));
+  const fcfChartData = annualCashFlow.map((cf) => ({
+    period: cf.period.replace("FY", ""),
+    value: cf.free_cash_flow,
+  }));
 
   const revenueCAGRs = calculateAllCAGRs(revenueSeries);
   const epsCAGRs = calculateAllCAGRs(epsSeries);
@@ -197,9 +214,24 @@ export default function ValuationPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            <CAGRBlock label="Revenue" cagrs={revenueCAGRs} />
-            <CAGRBlock label="EPS" cagrs={epsCAGRs} />
-            <CAGRBlock label="Free Cash Flow" cagrs={fcfCAGRs} />
+            <CAGRBlock
+              label="Revenue"
+              cagrs={revenueCAGRs}
+              chartData={revenueChartData}
+              color="#FF8C42"
+            />
+            <CAGRBlock
+              label="EPS"
+              cagrs={epsCAGRs}
+              chartData={epsChartData}
+              color="#9FD5CC"
+            />
+            <CAGRBlock
+              label="Free Cash Flow"
+              cagrs={fcfCAGRs}
+              chartData={fcfChartData}
+              color="#4DC990"
+            />
           </div>
         </CardContent>
       </Card>
@@ -212,9 +244,13 @@ export default function ValuationPage() {
 function CAGRBlock({
   label,
   cagrs,
+  chartData,
+  color,
 }: {
   label: string;
   cagrs: { cagr3Y: number | null; cagr5Y: number | null; cagr10Y: number | null };
+  chartData: { period: string; value: number }[];
+  color: string;
 }) {
   const windows = [
     { label: "3Y", value: cagrs.cagr3Y },
@@ -224,9 +260,13 @@ function CAGRBlock({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-mist font-medium uppercase tracking-wider">
-        {label}
-      </p>
+      <MetricChart
+        title={label}
+        data={chartData}
+        dataKey="value"
+        type="area"
+        color={color}
+      />
       <div className="flex items-center gap-2">
         {windows.map((w) => (
           <Badge
