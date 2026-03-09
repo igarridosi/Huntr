@@ -27,6 +27,14 @@ export type {
 } from "./watchlist";
 
 export type {
+  PortfolioPosition,
+  Portfolio,
+  PortfolioStore,
+  EnrichedPosition,
+  PortfolioSummary,
+} from "./portfolio";
+
+export type {
   YahooPrice,
   YahooSummaryProfile,
   YahooSummaryDetail,

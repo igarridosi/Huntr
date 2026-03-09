@@ -313,24 +313,24 @@ export default function EarningsPage() {
                           {section.items.length === 0 ? (
                             <p className="text-xs text-mist/70">No reports</p>
                           ) : (
-                            <div className="grid grid-cols-4 gap-2">
+                            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4">
                               {section.items.slice(0, 16).map((item) => (
                                 <Link
                                   href={`/symbol/${item.ticker.toUpperCase()}`}
                                   key={`${item.ticker}-${item.date.toISOString()}-${section.key}`}
-                                  className="rounded-md border border-wolf-border/45 bg-wolf-surface/90 p-2.5 min-h-[68px] flex justify-center text-center hover:border-sunset-orange/30 transition-colors"
+                                  className="rounded-md border border-wolf-border/45 bg-wolf-surface/90 p-2 min-h-[74px] sm:min-h-[76px] flex justify-center text-center hover:border-sunset-orange/30 transition-colors"
                                   aria-label={`Open ${item.ticker} details`}
                                 >
-                                  <div className="grid grid-cols-1 gap-2">
+                                  <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
                                     <TickerLogo
                                       ticker={item.ticker}
                                       src={item.profile?.logo_url}
-                                      className="h-[2.5rem] w-[2.5rem]"
+                                      className="h-8 w-8 sm:h-9 sm:w-9"
                                       imageClassName="rounded-[6px]"
                                       fallbackClassName="rounded-[6px] text-[10px]"
                                     />
-                                    <div className="min-w-0">
-                                      <p className="text-xs font-semibold text-snow-peak truncate">{item.ticker}</p>
+                                    <div className="w-full">
+                                      <p className="text-[11px] sm:text-xs font-semibold text-snow-peak leading-tight">{item.ticker}</p>
                                     </div>
                                   </div>
                                 </Link>
