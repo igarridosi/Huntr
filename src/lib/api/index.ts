@@ -102,7 +102,7 @@ export async function getMarketIndices(): Promise<MarketIndexQuote[]> {
 
 export async function getBatchPeriodPerformance(
   tickers: string[],
-  window: "1D" | "1W" | "1M" | "YTD"
+  window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL"
 ): Promise<Record<string, number>> {
   if (FEATURES.ENABLE_REAL_API) {
     return yahoo.getBatchPeriodPerformance(tickers, window);
@@ -110,6 +110,19 @@ export async function getBatchPeriodPerformance(
 
   return Object.fromEntries(
     tickers.map((ticker) => [ticker.toUpperCase(), 0])
+  );
+}
+
+export async function getBatchDailyHistory(
+  tickers: string[],
+  window: "1W" | "1M" | "YTD" | "1Y" | "ALL"
+): Promise<Record<string, Array<{ date: string; close: number }>>> {
+  if (FEATURES.ENABLE_REAL_API) {
+    return yahoo.getBatchDailyHistory(tickers, window);
+  }
+
+  return Object.fromEntries(
+    tickers.map((ticker) => [ticker.toUpperCase(), []])
   );
 }
 

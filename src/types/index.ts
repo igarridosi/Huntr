@@ -32,6 +32,7 @@ export type {
   PortfolioStore,
   EnrichedPosition,
   PortfolioSummary,
+  PortfolioImportResult,
 } from "./portfolio";
 
 export type {

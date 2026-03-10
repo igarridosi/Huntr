@@ -26,8 +26,10 @@ export const QUERY_KEYS = {
   STOCK_QUOTE: (ticker: string) => ["stock", "quote", ticker] as const,
   STOCK_INTRADAY_TREND: (tickersKey: string) =>
     ["stock", "intraday-trend", tickersKey] as const,
-  STOCK_PERFORMANCE: (window: "1D" | "1W" | "1M" | "YTD", tickersKey: string) =>
+  STOCK_PERFORMANCE: (window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL", tickersKey: string) =>
     ["stock", "performance", window, tickersKey] as const,
+  STOCK_DAILY_HISTORY: (window: "1W" | "1M" | "YTD" | "1Y" | "ALL", tickersKey: string) =>
+    ["stock", "daily-history", window, tickersKey] as const,
   STOCK_BUYBACK: (tickersKey: string) => ["stock", "buyback", tickersKey] as const,
   MARKET_INDICES: ["market", "indices"] as const,
   FINANCIALS: (ticker: string) => ["financials", ticker] as const,

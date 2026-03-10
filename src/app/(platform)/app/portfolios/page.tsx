@@ -24,7 +24,21 @@ import {
   Activity,
   Target,
   Info,
+  MoreVertical,
+  PlusCircle,
+  MinusCircle,
+  ExternalLink,
+  History,
 } from "lucide-react";
+import {
+  ResponsiveContainer,
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+} from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,10 +52,16 @@ import {
 } from "@/components/ui/dialog";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { Skeleton } from "@/components/ui/skeleton";
+import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { usePortfolio } from "@/hooks/use-portfolio";
-import { useSearch } from "@/hooks/use-stock-data";
+import { useBatchDailyHistory, useSearch } from "@/hooks/use-stock-data";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
-import type { EnrichedPosition, PortfolioSummary } from "@/types/portfolio";
+import type {
+  EnrichedPosition,
+  PortfolioImportResult,
+  PortfolioSummary,
+  PortfolioTransaction,
+} from "@/types/portfolio";
 
 // ═══════════════════════════════════════════════════════
 // TYPES
@@ -62,6 +82,12 @@ type SortKey =
 type SortDir = "asc" | "desc";
 
 type ViewMode = "table" | "cards";
+type PerformanceRange = "1W" | "1M" | "YTD" | "1Y" | "ALL";
+
+function normalizeDividendYield(raw: number | null | undefined): number {
+  if (!Number.isFinite(raw) || raw === null || raw === undefined || raw <= 0) return 0;
+  return raw > 1 ? raw / 100 : raw;
+}
 
 // ═══════════════════════════════════════════════════════
 // HELPER: color classes for gain/loss
@@ -87,12 +113,13 @@ function AddPositionPanel({
   onAdd,
   onClose,
 }: {
-  onAdd: (ticker: string, shares: number, avgCost: number) => void;
+  onAdd: (ticker: string, shares: number, avgCost: number, purchaseDate: string) => void;
   onClose: () => void;
 }) {
   const [ticker, setTicker] = useState("");
   const [shares, setShares] = useState("");
   const [avgCost, setAvgCost] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [searchQuery, setSearchQuery] = useState("");
   const [showSearch, setShowSearch] = useState(true);
 
@@ -109,10 +136,11 @@ function AddPositionPanel({
     const s = parseFloat(shares);
     const c = parseFloat(avgCost);
     if (!ticker || isNaN(s) || s <= 0 || isNaN(c) || c <= 0) return;
-    onAdd(ticker, s, c);
+    onAdd(ticker, s, c, purchaseDate);
     setTicker("");
     setShares("");
     setAvgCost("");
+    setPurchaseDate(new Date().toISOString().slice(0, 10));
     setSearchQuery("");
     setShowSearch(true);
   };
@@ -171,7 +199,7 @@ function AddPositionPanel({
             )}
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div>
               <label className="text-[11px] text-mist mb-1 block">Shares</label>
               <Input
@@ -193,6 +221,16 @@ function AddPositionPanel({
                 placeholder="150.00"
                 value={avgCost}
                 onChange={(e) => setAvgCost(e.target.value)}
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] text-mist mb-1 block">Purchase Date</label>
+              <Input
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                value={purchaseDate}
+                onChange={(e) => setPurchaseDate(e.target.value)}
                 className="h-9 text-xs font-mono"
               />
             </div>
@@ -225,18 +263,21 @@ function EditPositionDialog({
   position: EnrichedPosition | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (ticker: string, shares: number, avgCost: number, notes: string) => void;
+  onSave: (ticker: string, shares: number, avgCost: number, notes: string, purchaseDate: string) => void;
   onRemove: (ticker: string) => void;
 }) {
   const [shares, setShares] = useState("");
   const [avgCost, setAvgCost] = useState("");
   const [notes, setNotes] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState("");
 
   useEffect(() => {
     if (!position) return;
     setShares(position.shares.toString());
     setAvgCost(position.avg_cost.toString());
     setNotes(position.notes ?? "");
+    const parsed = new Date(position.added_at);
+    setPurchaseDate(Number.isNaN(parsed.getTime()) ? new Date().toISOString().slice(0, 10) : parsed.toISOString().slice(0, 10));
   }, [position]);
 
   const handleSave = (e: React.FormEvent) => {
@@ -256,7 +297,7 @@ function EditPositionDialog({
 
     if (parsedAvgCost <= 0) return;
 
-    onSave(position.ticker, parsedShares, parsedAvgCost, notes.trim());
+    onSave(position.ticker, parsedShares, parsedAvgCost, notes.trim(), purchaseDate);
     onOpenChange(false);
   };
 
@@ -286,7 +327,7 @@ function EditPositionDialog({
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>
                 <label className="text-[11px] text-mist mb-1 block">Shares</label>
                 <Input
@@ -306,6 +347,16 @@ function EditPositionDialog({
                   min="0"
                   value={avgCost}
                   onChange={(e) => setAvgCost(e.target.value)}
+                  className="h-9 text-xs font-mono"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] text-mist mb-1 block">Purchase Date</label>
+                <Input
+                  type="date"
+                  max={new Date().toISOString().slice(0, 10)}
+                  value={purchaseDate}
+                  onChange={(e) => setPurchaseDate(e.target.value)}
                   className="h-9 text-xs font-mono"
                 />
               </div>
@@ -383,34 +434,78 @@ function ImportCsvDialog({
   open,
   onOpenChange,
   onImportFile,
+  onNotify,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImportFile: (file: File) => Promise<void>;
+  onImportFile: (file: File) => Promise<PortfolioImportResult>;
+  onNotify: (payload: {
+    title: string;
+    message?: string;
+    variant: FeedbackToastVariant;
+  }) => void;
 }) {
   const [isDragActive, setIsDragActive] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleFile = useCallback(
     async (file: File) => {
       if (!file.name.toLowerCase().endsWith(".csv")) {
-        setStatus("Please upload a .csv file.");
+        onNotify({
+          title: "Import failed",
+          message: "Please upload a .csv file.",
+          variant: "error",
+        });
+        onOpenChange(false);
         return;
       }
       setIsImporting(true);
-      setStatus(null);
       try {
-        await onImportFile(file);
-        setStatus(`Imported ${file.name} successfully.`);
+        const result = await onImportFile(file);
+
+        if (result.mode === "unknown-format") {
+          onNotify({
+            title: "Unsupported CSV structure",
+            message: "Use Huntr export format or Trading 212 transaction export.",
+            variant: "error",
+          });
+          return;
+        }
+
+        if (result.importedCount === 0) {
+          const suffix = result.skippedUnknownTickers.length
+            ? ` Unknown tickers: ${result.skippedUnknownTickers.join(", ")}.`
+            : "";
+          onNotify({
+            title: "No positions imported",
+            message: `No valid rows were found.${suffix}`,
+            variant: "warning",
+          });
+          return;
+        }
+
+        const skippedUnknownMessage = result.skippedUnknownTickers.length
+          ? ` Not found in Huntr: ${result.skippedUnknownTickers.join(", ")}.`
+          : "";
+
+        onNotify({
+          title: "CSV imported correctly",
+          message: `${result.importedCount} positions imported.${skippedUnknownMessage}`,
+          variant: result.skippedUnknownTickers.length ? "warning" : "success",
+        });
       } catch {
-        setStatus("Could not import this file. Please verify CSV format.");
+        onNotify({
+          title: "Import failed",
+          message: "Please verify the CSV format and try again.",
+          variant: "error",
+        });
       } finally {
         setIsImporting(false);
+        onOpenChange(false);
       }
     },
-    [onImportFile]
+    [onImportFile, onNotify, onOpenChange]
   );
 
   return (
@@ -421,7 +516,6 @@ function ImportCsvDialog({
         if (!nextOpen) {
           setIsDragActive(false);
           setIsImporting(false);
-          setStatus(null);
         }
       }}
     >
@@ -493,22 +587,704 @@ function ImportCsvDialog({
               1. Huntr export format: <span className="font-mono">Ticker,Shares,Avg Cost,Added At,Notes</span>
             </p>
             <p className="text-[11px] text-mist">
-              2. Broker transactions format: <span className="font-mono">Action,Time,ISIN,Ticker,Name,ID,No. of shares,Price / share,...</span>
+              2. Broker transactions format: 
+            </p>
+            <p className="text-[11px] text-mist">
+              Action,Time,ISIN,Ticker,Name,ID,No. of shares,Price / share
+            </p>
+            <p className="font-mono text-[11px] text-mist">
+              Buy,2024-03-05 14:20:00,US67066G1040,NVDA,NVIDIA Corporation,TXN-0008,10,822.10
+              Sell,2024-03-10 11:05:00,NL0010273215,ASML,ASML Holding N.V.,TXN-0009,2,910.00
+              Buy,2024-03-15 15:45:00,US88160R1014,TSLA,Tesla Inc.,TXN-0010,25,175.30
             </p>
             <p className="text-[11px] text-sunset-orange">
               Trading 212 users: no changes needed, your exported CSV is already compatible.
             </p>
           </div>
-
-          {status && (
-            <p className="text-xs text-mist">{status}</p>
-          )}
-
           <div className="flex justify-end">
             <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
               Close
             </Button>
           </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// PORTFOLIO EVOLUTION CHART
+// ═══════════════════════════════════════════════════════
+
+function PortfolioEvolutionChart({
+  positions,
+  transactionHistory,
+}: {
+  positions: EnrichedPosition[];
+  transactionHistory: PortfolioTransaction[];
+}) {
+  const [range, setRange] = useState<PerformanceRange>("1M");
+  const [compareBenchmark, setCompareBenchmark] = useState(true);
+
+  const tickers = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...positions.map((p) => p.ticker.toUpperCase()),
+          ...transactionHistory.map((tx) => tx.ticker.toUpperCase()),
+        ])
+      ),
+    [positions, transactionHistory]
+  );
+  const benchmarkTicker = "SPY";
+
+  const { data: historyByTicker = {}, isLoading } = useBatchDailyHistory(
+    [...tickers, benchmarkTicker],
+    range,
+    tickers.length > 0
+  );
+
+  const chartData = useMemo(() => {
+    if (tickers.length === 0) return [];
+
+    const txEvents = (transactionHistory.length > 0
+      ? transactionHistory
+      : positions.map((p) => ({
+          id: `fallback-${p.ticker}`,
+          ticker: p.ticker,
+          side: "buy" as const,
+          shares: p.shares,
+          price: p.avg_cost,
+          executed_at: p.added_at,
+          realized_gain_loss: 0,
+        }))
+    )
+      .map((tx) => {
+        const parsed = new Date(tx.executed_at);
+        return {
+          ...tx,
+          isoDate: Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10),
+        };
+      })
+      .filter((tx) => tx.isoDate.length > 0)
+      .sort((a, b) => a.isoDate.localeCompare(b.isoDate));
+
+    const dates = new Set<string>();
+    const closesByTicker = new Map<string, Map<string, number>>();
+
+    for (const ticker of tickers) {
+      const rows = historyByTicker[ticker] ?? [];
+      if (rows.length < 2) continue;
+
+      const closeMap = new Map<string, number>();
+      rows.forEach((row) => {
+        if (Number.isFinite(row.close) && row.close > 0) {
+          closeMap.set(row.date, row.close);
+          dates.add(row.date);
+        }
+      });
+
+      if (closeMap.size > 1) {
+        closesByTicker.set(ticker, closeMap);
+      }
+    }
+
+    const benchmarkRows = historyByTicker[benchmarkTicker] ?? [];
+    const benchmarkCloseMap = new Map<string, number>();
+    benchmarkRows.forEach((row) => {
+      if (Number.isFinite(row.close) && row.close > 0) {
+        benchmarkCloseMap.set(row.date, row.close);
+        dates.add(row.date);
+      }
+    });
+
+    const orderedDates = Array.from(dates).sort((a, b) => a.localeCompare(b));
+    if (orderedDates.length < 2) return [];
+
+    const allStartDate = (() => {
+      if (range !== "ALL") return null;
+
+      const dates = txEvents.map((tx) => tx.isoDate).sort((a, b) => a.localeCompare(b));
+
+      return dates[0] ?? null;
+    })();
+
+    const filteredDates = allStartDate
+      ? orderedDates.filter((d) => d >= allStartDate)
+      : orderedDates;
+
+    const effectiveDates = filteredDates.length >= 2 ? filteredDates : orderedDates;
+
+    if (effectiveDates.length < 2) return [];
+
+    const lastCloseByTicker = new Map<string, number>();
+    const liveSharesByTicker = new Map<string, number>();
+    let txCursor = 0;
+    let cashBalance = 0;
+    let lastBenchmarkClose = 0;
+    const points: Array<{ isoDate: string; portfolioValue: number; benchmarkClose: number }> = [];
+
+    for (const isoDate of effectiveDates) {
+      while (txCursor < txEvents.length && txEvents[txCursor].isoDate <= isoDate) {
+        const tx = txEvents[txCursor];
+        const ticker = tx.ticker.toUpperCase();
+        const currentShares = liveSharesByTicker.get(ticker) ?? 0;
+
+        if (tx.side === "buy") {
+          liveSharesByTicker.set(ticker, currentShares + tx.shares);
+          cashBalance -= tx.shares * tx.price;
+        } else {
+          const sellShares = Math.min(tx.shares, currentShares);
+          if (sellShares > 0) {
+            const nextShares = currentShares - sellShares;
+            if (nextShares <= 1e-9) {
+              liveSharesByTicker.delete(ticker);
+            } else {
+              liveSharesByTicker.set(ticker, nextShares);
+            }
+            cashBalance += sellShares * tx.price;
+          }
+        }
+
+        txCursor += 1;
+      }
+
+      let holdingsValue = 0;
+
+      for (const ticker of tickers) {
+        const closeMap = closesByTicker.get(ticker);
+        if (!closeMap) continue;
+
+        const close = closeMap.get(isoDate);
+        if (typeof close === "number") {
+          lastCloseByTicker.set(ticker, close);
+        }
+
+        const effectiveClose = lastCloseByTicker.get(ticker);
+        if (typeof effectiveClose === "number") {
+          holdingsValue += (liveSharesByTicker.get(ticker) ?? 0) * effectiveClose;
+        }
+      }
+
+      const benchmarkClose = benchmarkCloseMap.get(isoDate);
+      if (typeof benchmarkClose === "number") {
+        lastBenchmarkClose = benchmarkClose;
+      }
+
+      points.push({
+        isoDate,
+        portfolioValue: holdingsValue + cashBalance,
+        benchmarkClose: lastBenchmarkClose,
+      });
+    }
+
+    const initialPortfolioValue =
+      points.find((p) => Math.abs(p.portfolioValue) > 1e-9)?.portfolioValue ?? 0;
+
+    const initialBenchmarkValue = points.find((p) => p.benchmarkClose > 0)?.benchmarkClose ?? 0;
+
+    if (initialPortfolioValue <= 0) return [];
+
+    return points.map((point) => {
+      const parsed = new Date(`${point.isoDate}T00:00:00Z`);
+
+      // Critical formula: ((current / initial_period_value) - 1) * 100
+      const portfolioPct = ((point.portfolioValue / initialPortfolioValue) - 1) * 100;
+      const benchmarkPct = initialBenchmarkValue > 0
+        ? ((point.benchmarkClose / initialBenchmarkValue) - 1) * 100
+        : 0;
+
+      return {
+        isoDate: point.isoDate,
+        tooltipDate: parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
+        portfolioPct,
+        benchmarkPct,
+      };
+    });
+  }, [benchmarkTicker, historyByTicker, positions, range, tickers, transactionHistory]);
+
+  const periodReturns = useMemo(() => {
+    if (chartData.length === 0) {
+      return { portfolio: 0, benchmark: 0 };
+    }
+
+    const last = chartData[chartData.length - 1];
+    return {
+      portfolio: Number.isFinite(last.portfolioPct) ? last.portfolioPct : 0,
+      benchmark: Number.isFinite(last.benchmarkPct) ? last.benchmarkPct : 0,
+    };
+  }, [chartData]);
+
+  const yAxisConfig = useMemo(() => {
+    const values = chartData.flatMap((row) =>
+      compareBenchmark ? [row.portfolioPct, row.benchmarkPct] : [row.portfolioPct]
+    );
+
+    if (values.length === 0) {
+      return { domain: [-1, 1] as [number, number], ticks: [-1, 0, 1] };
+    }
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = Math.max(max - min, 0.5);
+    const paddedMin = min - span * 0.14;
+    const paddedMax = max + span * 0.14;
+    const rawStep = Math.max((paddedMax - paddedMin) / 4, 0.25);
+
+    const magnitude = 10 ** Math.floor(Math.log10(rawStep));
+    const normalized = rawStep / magnitude;
+    const niceBase = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+    const step = niceBase * magnitude;
+
+    const start = Math.floor(paddedMin / step) * step;
+    const end = Math.ceil(paddedMax / step) * step;
+
+    const ticks: number[] = [];
+    for (let current = start; current <= end + step * 0.1; current += step) {
+      ticks.push(Number(current.toFixed(4)));
+    }
+
+    return {
+      domain: [start, end] as [number, number],
+      ticks,
+    };
+  }, [chartData, compareBenchmark]);
+
+  const formatPct = useCallback((value: number) => {
+    const precision = Math.abs(value) >= 100 ? 0 : Math.abs(value) >= 10 ? 1 : 2;
+    const rounded = Number(value.toFixed(precision));
+    return `${rounded}%`;
+  }, []);
+
+  const formatXAxis = useCallback((isoDate: string) => {
+    const parsed = new Date(`${isoDate}T00:00:00Z`);
+    const month = parsed.toLocaleDateString("en-US", { month: "short" });
+    const year = parsed.toLocaleDateString("en-US", { year: "2-digit" });
+    return `${month} '${year}`;
+  }, []);
+
+  const renderTooltip = useCallback(
+    ({ active, payload, label }: { active?: boolean; payload?: ReadonlyArray<{ dataKey?: string; value?: number }>; label?: string | number }) => {
+      if (!active || !payload || payload.length === 0) return null;
+
+      const portfolio = Number(payload.find((p) => p.dataKey === "portfolioPct")?.value ?? 0);
+      const benchmark = Number(payload.find((p) => p.dataKey === "benchmarkPct")?.value ?? 0);
+      const tooltipDate = (payload[0] as { payload?: { tooltipDate?: string } })?.payload?.tooltipDate ?? String(label ?? "");
+
+      return (
+        <div className="min-w-[152px] rounded-md border border-wolf-border/60 bg-wolf-black/95 px-2.5 py-2 shadow-lg">
+          <p className="text-[10px] text-mist mb-1">{tooltipDate}</p>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2 text-[11px]">
+              <span className="inline-flex items-center gap-1.5 text-snow-peak/90">
+                <span className="h-2 w-2 rounded-full bg-sunset-orange" /> Portfolio
+              </span>
+                <span className="font-mono text-sunset-orange">{portfolio >= 0 ? "+" : ""}{formatPct(portfolio)}</span>
+            </div>
+            {compareBenchmark && (
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <span className="inline-flex items-center gap-1.5 text-snow-peak/90">
+                    <span className="h-2 w-2 rounded-full bg-slate-400" /> S&P 500
+                </span>
+                  <span className="font-mono text-slate-300">{benchmark >= 0 ? "+" : ""}{formatPct(benchmark)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    },
+    [compareBenchmark, formatPct]
+  );
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] items-center gap-3">
+          <CardTitle className="text-sm flex items-center gap-2 lg:justify-self-start">
+            <TrendingUp className="w-4 h-4 text-sunset-orange" /> Portfolio Evolution
+          </CardTitle>
+
+          <div className="flex items-center justify-center gap-2 lg:justify-self-center">
+            <div className="rounded-md border border-wolf-border/50 bg-wolf-black/50 px-2.5 py-1">
+              <p className="text-[10px] text-mist leading-none">Portfolio</p>
+              <p className={cn("text-xs font-mono font-semibold mt-1", periodReturns.portfolio >= 0 ? "text-sunset-orange" : "text-bearish")}>
+                {periodReturns.portfolio >= 0 ? "+" : ""}{formatPct(periodReturns.portfolio)}
+              </p>
+            </div>
+            <div className="rounded-md border border-wolf-border/50 bg-wolf-black/50 px-2.5 py-1">
+              <p className="text-[10px] text-mist leading-none">S&P 500</p>
+              <p className={cn("text-xs font-mono font-semibold mt-1", periodReturns.benchmark >= 0 ? "text-slate-300" : "text-bearish")}>
+                {periodReturns.benchmark >= 0 ? "+" : ""}{formatPct(periodReturns.benchmark)}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 lg:justify-self-end">
+            <div className="flex rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5">
+              {(["1W", "1M", "YTD", "1Y", "ALL"] as PerformanceRange[]).map((w) => (
+                <button
+                  key={w}
+                  type="button"
+                  onClick={() => setRange(w)}
+                  className={cn(
+                    "px-2 py-1 text-[11px] rounded-sm transition-colors",
+                    range === w ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak"
+                  )}
+                >
+                  {w}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => setCompareBenchmark((v) => !v)}
+              className={cn(
+                "px-2 py-1 text-[11px] rounded-md border transition-colors",
+                compareBenchmark
+                  ? "border-sunset-orange/40 text-sunset-orange bg-sunset-orange/10"
+                  : "border-wolf-border/40 text-mist"
+              )}
+            >
+              Benchmark (S&P 500)
+            </button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading || chartData.length === 0 ? (
+          <Skeleton className="h-64 w-full" />
+        ) : (
+          <ResponsiveContainer width="100%" height={260}>
+            <AreaChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id="portfolioArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FF8C42" stopOpacity={0.4} />
+                  <stop offset="100%" stopColor="#FF8C42" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" strokeOpacity={0.35} vertical={false} />
+              <XAxis
+                dataKey="isoDate"
+                axisLine={false}
+                tickLine={false}
+                minTickGap={68}
+                tickMargin={8}
+                tick={{ fill: "#6b7280", fontSize: 11 }}
+                tickFormatter={formatXAxis}
+              />
+              <YAxis
+                orientation="left"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "#6b7280", fontSize: 11 }}
+                domain={yAxisConfig.domain}
+                ticks={yAxisConfig.ticks}
+                tickFormatter={(v: number) => formatPct(v)}
+              />
+              <Tooltip
+                cursor={{ stroke: "#8C9DA1", strokeWidth: 1, strokeDasharray: "4 4" }}
+                content={renderTooltip}
+                labelFormatter={(_, payload) => {
+                  const row = payload?.[0]?.payload as { tooltipDate?: string } | undefined;
+                  return row?.tooltipDate ?? "";
+                }}
+              />
+              <Area
+                type="linear"
+                dataKey="portfolioPct"
+                stroke="#FF8C42"
+                strokeWidth={2.9}
+                fill="url(#portfolioArea)"
+                dot={false}
+                activeDot={{ r: 3.5, stroke: "#FF8C42", strokeWidth: 2, fill: "#0B1416" }}
+              />
+              {compareBenchmark && (
+                <Area
+                  type="linear"
+                  dataKey="benchmarkPct"
+                  stroke="#7A8FA8"
+                  strokeWidth={2.7}
+                  fill="transparent"
+                  dot={false}
+                  activeDot={{ r: 3, stroke: "#7A8FA8", strokeWidth: 2, fill: "#0B1416" }}
+                />
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// ROW QUICK ACTIONS + TRANSACTION DIALOG
+// ═══════════════════════════════════════════════════════
+
+function RowQuickActions({
+  position,
+  onAddTransaction,
+  onDelete,
+}: {
+  position: EnrichedPosition;
+  onAddTransaction: (position: EnrichedPosition) => void;
+  onDelete: (ticker: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onDocClick(event: MouseEvent) {
+      if (!menuRef.current) return;
+      if (!menuRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
+  return (
+    <div ref={menuRef} className="relative inline-block text-left">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="text-mist hover:text-snow-peak transition-colors"
+        title={`Actions for ${position.ticker}`}
+        aria-label={`Actions for ${position.ticker}`}
+      >
+        <MoreVertical className="w-3.5 h-3.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 z-40 mt-1 w-44 rounded-md border border-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-wolf-black/40 flex items-center gap-2"
+            onClick={() => {
+              setOpen(false);
+              onAddTransaction(position);
+            }}
+          >
+            <PlusCircle className="w-3.5 h-3.5 text-sunset-orange" /> Add Transaction (Buy/Sell)
+          </button>
+          <Link
+            href={`/symbol/${position.ticker}`}
+            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-wolf-black/40 flex items-center gap-2"
+            onClick={() => setOpen(false)}
+          >
+            <ExternalLink className="w-3.5 h-3.5 text-mist" /> View Details
+          </Link>
+          <button
+            type="button"
+            className="w-full px-3 py-2 text-left text-xs text-bearish hover:bg-wolf-black/40 flex items-center gap-2"
+            onClick={() => {
+              setOpen(false);
+              onDelete(position.ticker);
+            }}
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete Position
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AddTransactionDialog({
+  open,
+  position,
+  onOpenChange,
+  onSubmit,
+}: {
+  open: boolean;
+  position: EnrichedPosition | null;
+  onOpenChange: (open: boolean) => void;
+  onSubmit: (ticker: string, side: "buy" | "sell", shares: number, price: number, transactionDate: string) => void;
+}) {
+  const [side, setSide] = useState<"buy" | "sell">("buy");
+  const [shares, setShares] = useState("");
+  const [price, setPrice] = useState("");
+  const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().slice(0, 10));
+
+  useEffect(() => {
+    if (!position) return;
+    setShares("");
+    setPrice((position.quote?.price ?? position.avg_cost).toString());
+    setTransactionDate(new Date().toISOString().slice(0, 10));
+    setSide("buy");
+  }, [position]);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md p-0 overflow-hidden">
+        <DialogHeader className="px-5 py-4 border-b border-wolf-border/40">
+          <DialogTitle className="text-base">Add Transaction</DialogTitle>
+          <DialogDescription className="text-xs">
+            Register a buy or sell directly from the position row.
+          </DialogDescription>
+        </DialogHeader>
+        {position && (
+          <form
+            className="p-5 space-y-4"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const parsedShares = parseFloat(shares);
+              const parsedPrice = parseFloat(price);
+              if (!Number.isFinite(parsedShares) || parsedShares <= 0 || !Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+                return;
+              }
+              onSubmit(position.ticker, side, parsedShares, parsedPrice, transactionDate);
+              onOpenChange(false);
+            }}
+          >
+            <div className="flex items-center gap-2">
+              <TickerLogo ticker={position.ticker} src={position.profile?.logo_url} className="w-7 h-7" />
+              <p className="text-sm font-semibold text-snow-peak font-mono">{position.ticker}</p>
+            </div>
+
+            <div className="flex rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5 w-fit">
+              <button
+                type="button"
+                onClick={() => setSide("buy")}
+                className={cn(
+                  "px-3 py-1 text-xs rounded-sm",
+                  side === "buy" ? "bg-bullish/15 text-bullish" : "text-mist"
+                )}
+              >
+                <PlusCircle className="w-3.5 h-3.5 inline mr-1" /> Buy
+              </button>
+              <button
+                type="button"
+                onClick={() => setSide("sell")}
+                className={cn(
+                  "px-3 py-1 text-xs rounded-sm",
+                  side === "sell" ? "bg-bearish/15 text-bearish" : "text-mist"
+                )}
+              >
+                <MinusCircle className="w-3.5 h-3.5 inline mr-1" /> Sell
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[11px] text-mist mb-1 block">Shares</label>
+                <Input value={shares} onChange={(e) => setShares(e.target.value)} type="number" step="any" min="0.0001" className="h-9 text-xs font-mono" />
+              </div>
+              <div>
+                <label className="text-[11px] text-mist mb-1 block">Price</label>
+                <Input value={price} onChange={(e) => setPrice(e.target.value)} type="number" step="any" min="0.01" className="h-9 text-xs font-mono" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-[11px] text-mist mb-1 block">Purchase Date</label>
+              <Input
+                value={transactionDate}
+                onChange={(e) => setTransactionDate(e.target.value)}
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                className="h-9 text-xs font-mono"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
+              <Button type="submit">Save Transaction</Button>
+            </div>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function TransactionHistoryDialog({
+  open,
+  onOpenChange,
+  transactions,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  transactions: PortfolioTransaction[];
+}) {
+  const sortedTransactions = useMemo(
+    () =>
+      [...transactions].sort(
+        (a, b) =>
+          new Date(b.executed_at).getTime() - new Date(a.executed_at).getTime()
+      ),
+    [transactions]
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl p-0 overflow-hidden">
+        <DialogHeader className="px-5 py-4 border-b border-wolf-border/40">
+          <DialogTitle className="text-base">Transaction History</DialogTitle>
+          <DialogDescription className="text-xs">
+            Ordered by most recent transaction date.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="p-5">
+          {sortedTransactions.length === 0 ? (
+            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
+              No transactions recorded yet.
+            </div>
+          ) : (
+            <div className="max-h-[420px] overflow-y-auto rounded-lg border border-wolf-border/40">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-wolf-surface/95 backdrop-blur border-b border-wolf-border/40">
+                  <tr className="text-left text-mist">
+                    <th className="px-3 py-2 font-medium">Date</th>
+                    <th className="px-3 py-2 font-medium">Ticker</th>
+                    <th className="px-3 py-2 font-medium">Side</th>
+                    <th className="px-3 py-2 font-medium text-right">Shares</th>
+                    <th className="px-3 py-2 font-medium text-right">Price</th>
+                    <th className="px-3 py-2 font-medium text-right">Realized P&L</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sortedTransactions.map((tx) => {
+                    const parsed = new Date(tx.executed_at);
+                    const dateLabel = Number.isNaN(parsed.getTime())
+                      ? "-"
+                      : parsed.toLocaleDateString("en-US", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric",
+                        });
+
+                    return (
+                      <tr key={tx.id} className="border-b border-wolf-border/20 last:border-b-0">
+                        <td className="px-3 py-2 font-mono text-mist">{dateLabel}</td>
+                        <td className="px-3 py-2 font-semibold text-snow-peak font-mono">{tx.ticker}</td>
+                        <td className="px-3 py-2">
+                          <Badge
+                            variant="secondary"
+                            className={cn(
+                              "text-[10px] uppercase",
+                              tx.side === "buy"
+                                ? "bg-bullish/10 text-bullish"
+                                : "bg-bearish/10 text-bearish"
+                            )}
+                          >
+                            {tx.side}
+                          </Badge>
+                        </td>
+                        <td className="px-3 py-2 text-right font-mono text-snow-peak">{tx.shares.toFixed(4)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-snow-peak">{formatCurrency(tx.price)}</td>
+                        <td className={cn("px-3 py-2 text-right font-mono", glColor(tx.realized_gain_loss))}>
+                          {tx.realized_gain_loss >= 0 ? "+" : ""}
+                          {formatCurrency(tx.realized_gain_loss)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       </DialogContent>
     </Dialog>
@@ -529,10 +1305,10 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
     },
     {
       label: "Total Return",
-      value: `${summary.total_gain_loss >= 0 ? "+" : ""}${formatCurrency(summary.total_gain_loss, { compact: true })}`,
+      value: `${summary.total_return_gain_loss >= 0 ? "+" : ""}${formatCurrency(summary.total_return_gain_loss, { compact: true })}`,
       sub: formatPercent(summary.total_gain_loss_percent),
-      icon: summary.total_gain_loss >= 0 ? TrendingUp : TrendingDown,
-      color: summary.total_gain_loss >= 0 ? "text-bullish" : "text-bearish",
+      icon: summary.total_return_gain_loss >= 0 ? TrendingUp : TrendingDown,
+      color: summary.total_return_gain_loss >= 0 ? "text-bullish" : "text-bearish",
     },
     {
       label: "Today",
@@ -738,17 +1514,30 @@ function PortfolioMetrics({
   const annualDividendIncome = useMemo(() => {
     return positions.reduce((sum, p) => {
       if (!p.quote || !p.quote.dividend_yield) return sum;
-      return sum + p.market_value * (p.quote.dividend_yield / 100);
+      return sum + p.market_value * normalizeDividendYield(p.quote.dividend_yield);
     }, 0);
   }, [positions]);
+
+  const topHolding = useMemo(() => {
+    return [...positions].sort((a, b) => b.weight - a.weight)[0] ?? null;
+  }, [positions]);
+
+  const topSector = useMemo(() => {
+    const entries = Object.entries(summary.sector_allocation);
+    if (entries.length === 0) return null;
+    const [name, weight] = entries.sort(([, a], [, b]) => b - a)[0];
+    return { name, weight };
+  }, [summary.sector_allocation]);
 
   const metrics = [
     { label: "Weighted P/E", value: summary.weighted_pe > 0 ? summary.weighted_pe.toFixed(1) + "x" : "—", icon: BarChart3 },
     { label: "Weighted Beta", value: summary.weighted_beta > 0 ? summary.weighted_beta.toFixed(2) : "—", icon: Activity },
-    { label: "Div Yield (Wgt)", value: summary.weighted_dividend_yield > 0 ? summary.weighted_dividend_yield.toFixed(2) + "%" : "—", icon: DollarSign },
+    { label: "Div Yield (Wgt)", value: summary.weighted_dividend_yield > 0 ? formatPercent(summary.weighted_dividend_yield, 2) : "—", icon: DollarSign },
     { label: "Est Annual Income", value: annualDividendIncome > 0 ? formatCurrency(annualDividendIncome, { compact: true }) : "—", icon: TrendingUp },
-    { label: "Concentration Risk", value: concentrationRisk, icon: concentrationRisk === "Low" ? Shield : AlertTriangle, color: concentrationColor },
+    { label: "Concentration Risk", value: concentrationRisk, icon: concentrationRisk === "Low" ? Shield : AlertTriangle, color: concentrationColor, riskTooltip: true },
     { label: "Positions", value: summary.position_count.toString(), icon: Target },
+    { label: "Realized P&L", value: formatCurrency(summary.realized_gain_loss, { compact: true }), icon: DollarSign, color: glColor(summary.realized_gain_loss) },
+    { label: "Unrealized P&L", value: formatCurrency(summary.unrealized_gain_loss, { compact: true }), icon: Activity, color: glColor(summary.unrealized_gain_loss) },
   ];
 
   return (
@@ -770,9 +1559,22 @@ function PortfolioMetrics({
                     <m.icon className="w-3 h-3 text-mist/70" />
                     <p className="text-[10px] uppercase tracking-wide text-mist">{m.label}</p>
                   </div>
-                  <p className={cn("text-sm font-semibold font-mono", m.color ?? "text-snow-peak")}>
-                    {m.value}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className={cn("text-sm font-semibold font-mono", m.color ?? "text-snow-peak")}>
+                      {m.value}
+                    </p>
+                    {"riskTooltip" in m && m.riskTooltip && concentrationRisk !== "Low" && (
+                      <div className="relative group/risk">
+                        <Info className="w-3 h-3 text-mist/60 cursor-help" />
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2 rounded-lg bg-wolf-black border border-wolf-border/50 shadow-xl opacity-0 pointer-events-none group-hover/risk:opacity-100 group-hover/risk:pointer-events-auto transition-opacity z-50">
+                          <p className="text-[11px] text-mist leading-relaxed">
+                            {topHolding?.ticker ?? "Top position"} represents <span className="text-snow-peak font-medium">{((topHolding?.weight ?? 0) * 100).toFixed(1)}%</span> of your portfolio. {topSector?.name ?? "Top sector"} is <span className="text-snow-peak font-medium">{((topSector?.weight ?? 0) * 100).toFixed(1)}%</span> of allocation.
+                          </p>
+                          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px w-0 h-0 border-x-4 border-x-transparent border-t-4 border-t-wolf-border/50" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </div>
@@ -790,16 +1592,18 @@ function PortfolioMetrics({
 function PositionTable({
   positions,
   isLoading,
-  onEdit,
+  onAddTransaction,
   onRemove,
+  groupBySector,
   sortKey,
   sortDir,
   onSort,
 }: {
   positions: EnrichedPosition[];
   isLoading: boolean;
-  onEdit: (position: EnrichedPosition) => void;
+  onAddTransaction: (position: EnrichedPosition) => void;
   onRemove: (ticker: string) => void;
+  groupBySector: boolean;
   sortKey: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
@@ -816,8 +1620,74 @@ function PositionTable({
     { key: "day_gain_loss", label: "Day P&L", headerClass: "text-right" },
   ];
 
+  const grouped = useMemo(() => {
+    if (!groupBySector) return null;
+    const map = new Map<string, EnrichedPosition[]>();
+    positions.forEach((pos) => {
+      const key = pos.profile?.sector || "Unknown";
+      const current = map.get(key) ?? [];
+      current.push(pos);
+      map.set(key, current);
+    });
+    return Array.from(map.entries()).sort((a, b) => {
+      const totalA = a[1].reduce((sum, p) => sum + p.market_value, 0);
+      const totalB = b[1].reduce((sum, p) => sum + p.market_value, 0);
+      return totalB - totalA;
+    });
+  }, [groupBySector, positions]);
+
+  const renderRow = (pos: EnrichedPosition) => (
+    <tr
+      key={pos.ticker}
+      className="border-b border-wolf-border/20 hover:bg-wolf-surface/50 transition-colors group"
+    >
+      <td className="py-2.5 px-2">
+        <Link href={`/symbol/${pos.ticker}`} className="flex items-center gap-2 min-w-0">
+          <TickerLogo
+            ticker={pos.ticker}
+            src={pos.profile?.logo_url}
+            className="w-6 h-6 shrink-0"
+            imageClassName="rounded-md"
+            fallbackClassName="rounded-md text-[8px]"
+          />
+          <div className="min-w-0">
+            <p className="font-semibold text-snow-peak font-mono">{pos.ticker}</p>
+            <p className="text-[10px] text-mist truncate max-w-[120px]">{pos.profile?.name}</p>
+          </div>
+        </Link>
+      </td>
+      <td className="py-2.5 px-2 text-right font-mono text-snow-peak">{pos.shares.toLocaleString("en-US", { maximumFractionDigits: 4 })}</td>
+      <td className="py-2.5 px-2 text-right font-mono text-mist">{formatCurrency(pos.avg_cost)}</td>
+      <td className="py-2.5 px-2 text-right font-mono text-snow-peak">{formatCurrency(pos.quote?.price ?? 0)}</td>
+      <td className="py-2.5 px-2 text-right font-mono text-snow-peak">{formatCurrency(pos.market_value, { compact: pos.market_value >= 1_000_000 })}</td>
+      <td className="py-2.5 px-2 text-right">
+        <Badge variant="secondary" className="text-[10px] font-mono">{(pos.weight * 100).toFixed(1)}%</Badge>
+      </td>
+      <td className={cn("py-2.5 px-2 text-right font-mono", glColor(pos.gain_loss))}>
+        {pos.gain_loss >= 0 ? "+" : ""}{formatCurrency(pos.gain_loss, { compact: Math.abs(pos.gain_loss) >= 1_000_000 })}
+      </td>
+      <td className="py-2.5 px-2 text-right">
+        <span className={cn("text-[11px] font-mono px-1.5 py-0.5 rounded", glBg(pos.gain_loss_percent))}>
+          {pos.gain_loss_percent >= 0 ? "+" : ""}{(pos.gain_loss_percent * 100).toFixed(2)}%
+        </span>
+      </td>
+      <td className={cn("py-2.5 px-2 text-right font-mono", glColor(pos.day_gain_loss))}>
+        {pos.day_gain_loss >= 0 ? "+" : ""}{formatCurrency(pos.day_gain_loss, { compact: Math.abs(pos.day_gain_loss) >= 100_000 })}
+      </td>
+      <td className="py-2.5 px-2 text-center">
+        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+          <RowQuickActions
+            position={pos}
+            onAddTransaction={onAddTransaction}
+            onDelete={onRemove}
+          />
+        </div>
+      </td>
+    </tr>
+  );
+
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto min-h-[260px]">
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-wolf-border/30">
@@ -854,83 +1724,25 @@ function PositionTable({
             ))
           ) : positions.length === 0 ? (
             <tr>
-              <td colSpan={columns.length + 1} className="py-12 text-center text-mist/70">
+              <td colSpan={columns.length + 1} className="py-24 text-center text-mist/70">
                 No positions yet. Add your first position above.
               </td>
             </tr>
-          ) : (
-            positions.map((pos) => (
-              <tr
-                key={pos.ticker}
-                className="border-b border-wolf-border/20 hover:bg-wolf-surface/50 transition-colors group"
-              >
-                {/* Ticker */}
-                <td className="py-2.5 px-2">
-                  <Link href={`/symbol/${pos.ticker}`} className="flex items-center gap-2 min-w-0">
-                    <TickerLogo
-                      ticker={pos.ticker}
-                      src={pos.profile?.logo_url}
-                      className="w-6 h-6 shrink-0"
-                      imageClassName="rounded-md"
-                      fallbackClassName="rounded-md text-[8px]"
-                    />
-                    <div className="min-w-0">
-                      <p className="font-semibold text-snow-peak font-mono">{pos.ticker}</p>
-                      <p className="text-[10px] text-mist truncate max-w-[120px]">{pos.profile?.name}</p>
-                    </div>
-                  </Link>
-                </td>
-                {/* Shares */}
-                <td className="py-2.5 px-2 text-right font-mono text-snow-peak">{pos.shares.toLocaleString("en-US", { maximumFractionDigits: 4 })}</td>
-                {/* Avg Cost */}
-                <td className="py-2.5 px-2 text-right font-mono text-mist">{formatCurrency(pos.avg_cost)}</td>
-                {/* Price */}
-                <td className="py-2.5 px-2 text-right font-mono text-snow-peak">{formatCurrency(pos.quote?.price ?? 0)}</td>
-                {/* Market Value */}
-                <td className="py-2.5 px-2 text-right font-mono text-snow-peak">{formatCurrency(pos.market_value, { compact: pos.market_value >= 1_000_000 })}</td>
-                {/* Weight */}
-                <td className="py-2.5 px-2 text-right">
-                  <Badge variant="secondary" className="text-[10px] font-mono">
-                    {(pos.weight * 100).toFixed(1)}%
-                  </Badge>
-                </td>
-                {/* Gain/Loss */}
-                <td className={cn("py-2.5 px-2 text-right font-mono", glColor(pos.gain_loss))}>
-                  {pos.gain_loss >= 0 ? "+" : ""}{formatCurrency(pos.gain_loss, { compact: Math.abs(pos.gain_loss) >= 1_000_000 })}
-                </td>
-                {/* Return % */}
-                <td className="py-2.5 px-2 text-right">
-                  <span className={cn("text-[11px] font-mono px-1.5 py-0.5 rounded", glBg(pos.gain_loss_percent))}>
-                    {pos.gain_loss_percent >= 0 ? "+" : ""}{(pos.gain_loss_percent * 100).toFixed(2)}%
+          ) : groupBySector && grouped ? (
+            grouped.flatMap(([sector, rows]) => [
+              <tr key={`sector-${sector}`} className="bg-wolf-surface/80 border-t-2 border-b border-wolf-border/40">
+                <td colSpan={columns.length + 1} className="px-3 py-2.5 text-[11px] font-bold text-sunset-orange uppercase tracking-wider">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-sunset-orange/70" />
+                    {sector}
+                    <span className="text-mist font-normal">({rows.length})</span>
                   </span>
                 </td>
-                {/* Day P&L */}
-                <td className={cn("py-2.5 px-2 text-right font-mono", glColor(pos.day_gain_loss))}>
-                  {pos.day_gain_loss >= 0 ? "+" : ""}{formatCurrency(pos.day_gain_loss, { compact: Math.abs(pos.day_gain_loss) >= 100_000 })}
-                </td>
-                {/* Actions */}
-                <td className="py-2.5 px-2 text-center">
-                  <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      type="button"
-                      onClick={() => onEdit(pos)}
-                      className="text-mist hover:text-snow-peak transition-all"
-                      title={`Edit ${pos.ticker}`}
-                    >
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => onRemove(pos.ticker)}
-                      className="text-mist hover:text-bearish transition-all"
-                      title={`Remove ${pos.ticker}`}
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))
+              </tr>,
+              ...rows.map((pos) => renderRow(pos)),
+            ])
+          ) : (
+            positions.map((pos) => renderRow(pos))
           )}
         </tbody>
       </table>
@@ -1115,7 +1927,7 @@ function PortfolioSelector({
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-72 rounded-lg border border-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
+        <div className="absolute right-0 origin-top-right z-50 mt-1 w-72 rounded-lg border border-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
           <div className="max-h-48 overflow-y-auto">
             {portfolios.map((p) => (
               <div
@@ -1215,7 +2027,15 @@ export default function PortfoliosPage() {
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<EnrichedPosition | null>(null);
+  const [transactionPosition, setTransactionPosition] = useState<EnrichedPosition | null>(null);
+  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [toast, setToast] = useState<{
+    title: string;
+    message?: string;
+    variant: FeedbackToastVariant;
+  } | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("table");
+  const [groupBySector, setGroupBySector] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("market_value");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -1259,9 +2079,16 @@ export default function PortfoliosPage() {
   const handleImportFile = useCallback(
     async (file: File) => {
       const csv = await file.text();
-      portfolio.importFromCSV(csv);
+      return portfolio.importFromCSV(csv);
     },
     [portfolio]
+  );
+
+  const pushToast = useCallback(
+    (payload: { title: string; message?: string; variant: FeedbackToastVariant }) => {
+      setToast(payload);
+    },
+    []
   );
 
   return (
@@ -1293,6 +2120,11 @@ export default function PortfoliosPage() {
       </div>
 
       {/* ── KPI Summary ── */}
+      <PortfolioEvolutionChart
+        positions={portfolio.positions}
+        transactionHistory={portfolio.transactionHistory}
+      />
+
       <SummaryKPIs summary={portfolio.summary} isLoading={portfolio.isLoading} />
 
       {/* ── Allocation & Top Holdings ── */}
@@ -1349,6 +2181,24 @@ export default function PortfoliosPage() {
                 <Download className="w-3.5 h-3.5" /> Export
               </Button>
 
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsHistoryDialogOpen(true)}
+                className="text-xs gap-1.5"
+              >
+                <History className="w-3.5 h-3.5" /> Transactions
+              </Button>
+
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setGroupBySector((v) => !v)}
+                className={cn("text-xs gap-1.5", groupBySector && "text-sunset-orange")}
+              >
+                <BarChart3 className="w-3.5 h-3.5" /> Group by Sector
+              </Button>
+
               {/* Add button */}
               <Button size="sm" onClick={() => setShowAddPanel(!showAddPanel)} className="text-xs gap-1.5">
                 <Plus className="w-3.5 h-3.5" /> Add Position
@@ -1359,8 +2209,8 @@ export default function PortfoliosPage() {
           {showAddPanel && (
             <div className="px-4 py-3 border-b border-wolf-border/30">
               <AddPositionPanel
-                onAdd={(ticker, shares, avgCost) => {
-                  portfolio.addPosition(ticker, shares, avgCost);
+                onAdd={(ticker, shares, avgCost, purchaseDate) => {
+                  portfolio.addPosition(ticker, shares, avgCost, purchaseDate);
                   setShowAddPanel(false);
                 }}
                 onClose={() => setShowAddPanel(false)}
@@ -1373,8 +2223,9 @@ export default function PortfoliosPage() {
               <PositionTable
                 positions={sortedPositions}
                 isLoading={portfolio.isLoading}
-                onEdit={setEditingPosition}
+                onAddTransaction={setTransactionPosition}
                 onRemove={portfolio.removePosition}
+                groupBySector={groupBySector}
                 sortKey={sortKey}
                 sortDir={sortDir}
                 onSort={handleSort}
@@ -1397,11 +2248,12 @@ export default function PortfoliosPage() {
         onOpenChange={(open) => {
           if (!open) setEditingPosition(null);
         }}
-        onSave={(ticker, shares, avgCost, notes) => {
+        onSave={(ticker, shares, avgCost, notes, purchaseDate) => {
           portfolio.updatePosition(ticker, {
             shares,
             avg_cost: avgCost,
             notes,
+            added_at: purchaseDate,
           });
         }}
         onRemove={portfolio.removePosition}
@@ -1411,6 +2263,37 @@ export default function PortfoliosPage() {
         open={isImportDialogOpen}
         onOpenChange={setIsImportDialogOpen}
         onImportFile={handleImportFile}
+        onNotify={pushToast}
+      />
+
+      <AddTransactionDialog
+        open={!!transactionPosition}
+        position={transactionPosition}
+        onOpenChange={(open) => {
+          if (!open) setTransactionPosition(null);
+        }}
+        onSubmit={(ticker, side, shares, price, transactionDate) => {
+          portfolio.applyTransaction(ticker, side, shares, price, transactionDate);
+          pushToast({
+            title: "Transaction added",
+            message: `${side.toUpperCase()} ${shares} ${ticker} @ ${formatCurrency(price)} registered successfully.`,
+            variant: "success",
+          });
+        }}
+      />
+
+      <TransactionHistoryDialog
+        open={isHistoryDialogOpen}
+        onOpenChange={setIsHistoryDialogOpen}
+        transactions={portfolio.transactionHistory}
+      />
+
+      <FeedbackToast
+        open={!!toast}
+        title={toast?.title ?? ""}
+        message={toast?.message}
+        variant={toast?.variant ?? "success"}
+        onClose={() => setToast(null)}
       />
     </div>
   );

@@ -41,9 +41,16 @@ export async function fetchMarketIndices(): Promise<MarketIndexQuote[]> {
 
 export async function fetchBatchPeriodPerformance(
   tickers: string[],
-  window: "1D" | "1W" | "1M" | "YTD"
+  window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL"
 ): Promise<Record<string, number>> {
   return dataService.getBatchPeriodPerformance(tickers, window);
+}
+
+export async function fetchBatchDailyHistory(
+  tickers: string[],
+  window: "1W" | "1M" | "YTD" | "1Y" | "ALL"
+): Promise<Record<string, Array<{ date: string; close: number }>>> {
+  return dataService.getBatchDailyHistory(tickers, window);
 }
 
 export async function fetchBatchIntradayTrend(

@@ -10,11 +10,23 @@ export interface PortfolioPosition {
   notes: string;
 }
 
+export interface PortfolioTransaction {
+  id: string;
+  ticker: string;
+  side: "buy" | "sell";
+  shares: number;
+  price: number;
+  executed_at: string; // ISO date
+  realized_gain_loss: number;
+}
+
 export interface Portfolio {
   id: string;
   name: string;
   positions: PortfolioPosition[];
+  transaction_history: PortfolioTransaction[];
   created_at: string;       // ISO date
+  realized_gain_loss: number;
 }
 
 export interface PortfolioStore {
@@ -54,4 +66,16 @@ export interface PortfolioSummary {
   weighted_pe: number;
   weighted_dividend_yield: number;
   weighted_beta: number;
+  realized_gain_loss: number;
+  unrealized_gain_loss: number;
+  total_return_gain_loss: number;
+}
+
+export interface PortfolioImportResult {
+  success: boolean;
+  mode: "legacy" | "broker" | "unknown-format";
+  importedCount: number;
+  skippedInvalidRows: number;
+  skippedUnknownTickers: string[];
+  replacedPortfolio: boolean;
 }

@@ -11,8 +11,10 @@ import type {
   PortfolioStore,
   Portfolio,
   PortfolioPosition,
+  PortfolioTransaction,
   EnrichedPosition,
   PortfolioSummary,
+  PortfolioImportResult,
 } from "@/types/portfolio";
 
 // ---- Storage Key ----
@@ -28,10 +30,39 @@ function createDefaultStore(): PortfolioStore {
         id: "default",
         name: "My Portfolio",
         positions: [],
+        transaction_history: [],
         created_at: new Date().toISOString(),
+        realized_gain_loss: 0,
       },
     ],
     activePortfolioId: "default",
+  };
+}
+
+function normalizePortfolio(portfolio: Portfolio): Portfolio {
+  return {
+    ...portfolio,
+    transaction_history: Array.isArray(portfolio.transaction_history)
+      ? portfolio.transaction_history
+      : [],
+    realized_gain_loss: Number.isFinite(portfolio.realized_gain_loss)
+      ? portfolio.realized_gain_loss
+      : 0,
+  };
+}
+
+function normalizeStore(store: PortfolioStore): PortfolioStore {
+  const normalizedPortfolios = Array.isArray(store.portfolios)
+    ? store.portfolios.map(normalizePortfolio)
+    : createDefaultStore().portfolios;
+
+  return {
+    ...store,
+    portfolios: normalizedPortfolios,
+    activePortfolioId:
+      normalizedPortfolios.find((p) => p.id === store.activePortfolioId)?.id ??
+      normalizedPortfolios[0]?.id ??
+      "default",
   };
 }
 
@@ -41,7 +72,12 @@ function getStore(): PortfolioStore {
   if (typeof window === "undefined") return createDefaultStore();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw) as PortfolioStore;
+    if (raw) {
+      const parsed = JSON.parse(raw) as PortfolioStore;
+      const normalized = normalizeStore(parsed);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
+      return normalized;
+    }
     const fresh = createDefaultStore();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
     return fresh;
@@ -102,6 +138,14 @@ function parseCSVRows(csv: string): string[][] {
     .map((l) => l.trim())
     .filter((l) => l.length > 0)
     .map(parseCSVLine);
+}
+
+function normalizeDividendYield(raw: number | null | undefined): number {
+  if (!Number.isFinite(raw) || raw === null || raw === undefined || raw <= 0) {
+    return 0;
+  }
+  // Some providers return 0.034 (3.4%), others return 3.4
+  return raw > 1 ? raw / 100 : raw;
 }
 
 // ---- Query Keys ----
@@ -185,7 +229,7 @@ function computeSummary(positions: EnrichedPosition[]): PortfolioSummary {
       weighted_pe += p.quote.pe_ratio * p.weight;
       peWeightSum += p.weight;
     }
-    weighted_dividend_yield += (p.quote.dividend_yield ?? 0) * p.weight;
+    weighted_dividend_yield += normalizeDividendYield(p.quote.dividend_yield ?? 0) * p.weight;
     weighted_beta += (p.quote.beta ?? 1) * p.weight;
   }
   if (peWeightSum > 0) weighted_pe /= peWeightSum;
@@ -203,6 +247,9 @@ function computeSummary(positions: EnrichedPosition[]): PortfolioSummary {
     weighted_pe: peWeightSum > 0 ? weighted_pe * peWeightSum : 0,
     weighted_dividend_yield,
     weighted_beta,
+    realized_gain_loss: 0,
+    unrealized_gain_loss: total_gain_loss,
+    total_return_gain_loss: total_gain_loss,
   };
 }
 
@@ -235,7 +282,6 @@ export function usePortfolio() {
       const updated = updater(current);
       saveStore(updated);
       queryClient.setQueryData(PORTFOLIO_KEY, updated);
-      queryClient.invalidateQueries({ queryKey: PORTFOLIO_ENRICHED_KEY });
     },
     [queryClient]
   );
@@ -259,7 +305,14 @@ export function usePortfolio() {
         ...s,
         portfolios: [
           ...s.portfolios,
-          { id, name, positions: [], created_at: new Date().toISOString() },
+          {
+            id,
+            name,
+            positions: [],
+            transaction_history: [],
+            created_at: new Date().toISOString(),
+            realized_gain_loss: 0,
+          },
         ],
         activePortfolioId: id,
       }));
@@ -297,14 +350,28 @@ export function usePortfolio() {
   // ── Position CRUD ──
 
   const addPosition = useCallback(
-    (ticker: string, shares: number, avg_cost: number, portfolioId?: string) => {
+    (ticker: string, shares: number, avg_cost: number, added_at?: string, portfolioId?: string) => {
       const targetId = portfolioId ?? activePortfolioId;
       const upper = ticker.toUpperCase();
+      const normalizedAddedAt = (() => {
+        if (!added_at) return new Date().toISOString();
+        const parsed = new Date(added_at);
+        return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+      })();
       updateStore((s) => ({
         ...s,
         portfolios: s.portfolios.map((p) => {
           if (p.id !== targetId) return p;
           const existing = p.positions.find((pos) => pos.ticker === upper);
+          const transaction: PortfolioTransaction = {
+            id: uid(),
+            ticker: upper,
+            side: "buy",
+            shares,
+            price: avg_cost,
+            executed_at: normalizedAddedAt,
+            realized_gain_loss: 0,
+          };
           if (existing) {
             // Average up/down: recalculate avg_cost
             const totalShares = existing.shares + shares;
@@ -312,6 +379,7 @@ export function usePortfolio() {
             const newAvgCost = totalShares > 0 ? totalCost / totalShares : 0;
             return {
               ...p,
+              transaction_history: [...p.transaction_history, transaction],
               positions: p.positions.map((pos) =>
                 pos.ticker === upper
                   ? { ...pos, shares: totalShares, avg_cost: newAvgCost }
@@ -321,13 +389,14 @@ export function usePortfolio() {
           }
           return {
             ...p,
+            transaction_history: [...p.transaction_history, transaction],
             positions: [
               ...p.positions,
               {
                 ticker: upper,
                 shares,
                 avg_cost,
-                added_at: new Date().toISOString(),
+                added_at: normalizedAddedAt,
                 notes: "",
               },
             ],
@@ -339,7 +408,7 @@ export function usePortfolio() {
   );
 
   const updatePosition = useCallback(
-    (ticker: string, updates: Partial<Pick<PortfolioPosition, "shares" | "avg_cost" | "notes">>) => {
+    (ticker: string, updates: Partial<Pick<PortfolioPosition, "shares" | "avg_cost" | "notes" | "added_at">>) => {
       const upper = ticker.toUpperCase();
       updateStore((s) => ({
         ...s,
@@ -367,6 +436,115 @@ export function usePortfolio() {
           return {
             ...p,
             positions: p.positions.filter((pos) => pos.ticker !== upper),
+          };
+        }),
+      }));
+    },
+    [activePortfolioId, updateStore]
+  );
+
+  const applyTransaction = useCallback(
+    (
+      ticker: string,
+      side: "buy" | "sell",
+      shares: number,
+      price: number,
+      transactionDate?: string,
+      portfolioId?: string
+    ) => {
+      if (!Number.isFinite(shares) || shares <= 0 || !Number.isFinite(price) || price <= 0) {
+        return;
+      }
+
+      const targetId = portfolioId ?? activePortfolioId;
+      const upper = ticker.toUpperCase();
+      const normalizedTransactionDate = (() => {
+        if (!transactionDate) return new Date().toISOString();
+        const parsed = new Date(transactionDate);
+        return Number.isNaN(parsed.getTime()) ? new Date().toISOString() : parsed.toISOString();
+      })();
+
+      updateStore((s) => ({
+        ...s,
+        portfolios: s.portfolios.map((p) => {
+          if (p.id !== targetId) return p;
+
+          const existing = p.positions.find((pos) => pos.ticker === upper);
+          const currentRealized = p.realized_gain_loss ?? 0;
+
+          if (side === "buy") {
+            const transaction: PortfolioTransaction = {
+              id: uid(),
+              ticker: upper,
+              side: "buy",
+              shares,
+              price,
+              executed_at: normalizedTransactionDate,
+              realized_gain_loss: 0,
+            };
+
+            if (existing) {
+              const totalShares = existing.shares + shares;
+              const totalCost = existing.avg_cost * existing.shares + shares * price;
+              const newAvgCost = totalShares > 0 ? totalCost / totalShares : existing.avg_cost;
+              return {
+                ...p,
+                transaction_history: [...p.transaction_history, transaction],
+                positions: p.positions.map((pos) =>
+                  pos.ticker === upper
+                    ? { ...pos, shares: totalShares, avg_cost: newAvgCost }
+                    : pos
+                ),
+              };
+            }
+
+            return {
+              ...p,
+              transaction_history: [...p.transaction_history, transaction],
+              positions: [
+                ...p.positions,
+                {
+                  ticker: upper,
+                  shares,
+                  avg_cost: price,
+                  added_at: normalizedTransactionDate,
+                  notes: "",
+                },
+              ],
+            };
+          }
+
+          // Sell
+          if (!existing || existing.shares <= 0) return p;
+
+          const sellShares = Math.min(shares, existing.shares);
+          const costBasisPerShare = existing.avg_cost;
+          const realized = (price - costBasisPerShare) * sellShares;
+          const totalCostBefore = existing.shares * costBasisPerShare;
+          const totalCostAfter = totalCostBefore - sellShares * costBasisPerShare;
+          const nextShares = existing.shares - sellShares;
+          const nextAvgCost = nextShares > 0 ? totalCostAfter / nextShares : existing.avg_cost;
+
+          const transaction: PortfolioTransaction = {
+            id: uid(),
+            ticker: upper,
+            side: "sell",
+            shares: sellShares,
+            price,
+            executed_at: normalizedTransactionDate,
+            realized_gain_loss: realized,
+          };
+
+          return {
+            ...p,
+            realized_gain_loss: currentRealized + realized,
+            transaction_history: [...p.transaction_history, transaction],
+            positions:
+              nextShares <= 1e-9
+                ? p.positions.filter((pos) => pos.ticker !== upper)
+                : p.positions.map((pos) =>
+                    pos.ticker === upper ? { ...pos, shares: nextShares, avg_cost: nextAvgCost } : pos
+                  ),
           };
         }),
       }));
@@ -416,29 +594,46 @@ export function usePortfolio() {
     },
     staleTime: STALE_TIMES.WATCHLIST,
     enabled: activeTickers.length > 0,
+    placeholderData: (previousData) => previousData,
   });
 
   // Merge enriched data with latest store metadata
-  const positions = useMemo(() => {
+  const positions = useMemo<EnrichedPosition[]>(() => {
     const enriched = enrichedQuery.data ?? [];
     if (!activePortfolio) return enriched;
-    return enriched.map((e) => {
-      const storePos = activePortfolio.positions.find(
-        (p) => p.ticker === e.ticker
-      );
-      if (!storePos) return e;
+
+    const storeByTicker = new Map(
+      activePortfolio.positions.map((p) => [p.ticker, p] as const)
+    );
+
+    // Keep only positions that still exist in the store.
+    return enriched
+      .filter((e) => storeByTicker.has(e.ticker))
+      .map((e) => {
+        const storePos = storeByTicker.get(e.ticker);
+        if (!storePos) return e;
       return {
         ...e,
         shares: storePos.shares,
         avg_cost: storePos.avg_cost,
+        added_at: storePos.added_at,
         notes: storePos.notes,
       };
-    });
+      });
   }, [enrichedQuery.data, activePortfolio]);
 
   // ── Summary ──
 
-  const summary = useMemo(() => computeSummary(positions), [positions]);
+  const summary = useMemo(() => {
+    const base = computeSummary(positions);
+    const realized = activePortfolio?.realized_gain_loss ?? 0;
+    return {
+      ...base,
+      realized_gain_loss: realized,
+      unrealized_gain_loss: base.total_gain_loss,
+      total_return_gain_loss: realized + base.total_gain_loss,
+    };
+  }, [activePortfolio?.realized_gain_loss, positions]);
 
   // ── Import / Export ──
 
@@ -456,11 +651,36 @@ export function usePortfolio() {
   }, [activePortfolio]);
 
   const importFromCSV = useCallback(
-    (csv: string) => {
+    async (csv: string): Promise<PortfolioImportResult> => {
       const rows = parseCSVRows(csv);
-      if (rows.length < 2) return;
+      if (rows.length < 2) {
+        return {
+          success: false,
+          mode: "unknown-format",
+          importedCount: 0,
+          skippedInvalidRows: 0,
+          skippedUnknownTickers: [],
+          replacedPortfolio: false,
+        };
+      }
 
       const headers = rows[0].map((h) => h.toLowerCase());
+
+      const validateKnownTickers = async (
+        tickers: string[]
+      ): Promise<{ known: Set<string>; unknown: string[] }> => {
+        const unique = Array.from(new Set(tickers.map((t) => t.trim().toUpperCase()).filter(Boolean)));
+        const profiles = await Promise.all(unique.map((t) => fetchStockProfile(t)));
+        const known = new Set<string>();
+        const unknown: string[] = [];
+
+        unique.forEach((ticker, idx) => {
+          if (profiles[idx]) known.add(ticker);
+          else unknown.push(ticker);
+        });
+
+        return { known, unknown };
+      };
 
       // Format A (legacy app CSV): Ticker,Shares,Avg Cost,Added At,Notes
       const tickerIdx = headers.indexOf("ticker");
@@ -468,15 +688,68 @@ export function usePortfolio() {
       const avgCostIdx = headers.indexOf("avg cost");
 
       if (tickerIdx >= 0 && sharesIdx >= 0 && avgCostIdx >= 0) {
+        const parsed: Array<{ ticker: string; shares: number; avg_cost: number }> = [];
+        let skippedInvalidRows = 0;
+
         for (const cols of rows.slice(1)) {
           const ticker = cols[tickerIdx]?.trim().toUpperCase();
           const shares = parseFloat(cols[sharesIdx] ?? "0");
           const avg_cost = parseFloat(cols[avgCostIdx] ?? "0");
           if (ticker && shares > 0 && avg_cost > 0) {
-            addPosition(ticker, shares, avg_cost);
+            parsed.push({ ticker, shares, avg_cost });
+          } else {
+            skippedInvalidRows += 1;
           }
         }
-        return;
+
+        const { known, unknown } = await validateKnownTickers(parsed.map((p) => p.ticker));
+        const validRows = parsed.filter((p) => known.has(p.ticker));
+
+        updateStore((s) => ({
+          ...s,
+          portfolios: s.portfolios.map((p) => {
+            if (p.id !== activePortfolioId) return p;
+
+            const merged = new Map(
+              p.positions.map((pos) => [
+                pos.ticker,
+                { shares: pos.shares, totalCost: pos.shares * pos.avg_cost, notes: pos.notes },
+              ])
+            );
+
+            for (const row of validRows) {
+              const current = merged.get(row.ticker) ?? { shares: 0, totalCost: 0, notes: "" };
+              const totalShares = current.shares + row.shares;
+              const totalCost = current.totalCost + row.shares * row.avg_cost;
+              merged.set(row.ticker, {
+                shares: totalShares,
+                totalCost,
+                notes: current.notes,
+              });
+            }
+
+            const positions: PortfolioPosition[] = Array.from(merged.entries())
+              .map(([ticker, value]) => ({
+                ticker,
+                shares: value.shares,
+                avg_cost: value.shares > 0 ? value.totalCost / value.shares : 0,
+                added_at: new Date().toISOString(),
+                notes: value.notes,
+              }))
+              .filter((pos) => pos.shares > 0 && pos.avg_cost > 0);
+
+            return { ...p, positions };
+          }),
+        }));
+
+        return {
+          success: validRows.length > 0,
+          mode: "legacy",
+          importedCount: validRows.length,
+          skippedInvalidRows,
+          skippedUnknownTickers: unknown,
+          replacedPortfolio: false,
+        };
       }
 
       // Format B (broker transactions CSV):
@@ -495,6 +768,7 @@ export function usePortfolio() {
       ) {
         type RunningPos = { shares: number; totalCost: number };
         const running = new Map<string, RunningPos>();
+        let realizedGainLoss = activePortfolio?.realized_gain_loss ?? 0;
 
         // Start from existing active positions so imports can extend/update them.
         for (const pos of activePortfolio?.positions ?? []) {
@@ -514,11 +788,18 @@ export function usePortfolio() {
           });
         }
 
+        const importedTransactions: PortfolioTransaction[] = [];
+
         for (const cols of txRows) {
           const action = (cols[actionIdx] ?? "").trim().toLowerCase();
           const ticker = (cols[brokerTickerIdx] ?? "").trim().toUpperCase();
           const shares = parseFloat(cols[brokerSharesIdx] ?? "0");
           const price = parseFloat(cols[brokerPriceIdx] ?? "0");
+          const txDateRaw = timeIdx >= 0 ? (cols[timeIdx] ?? "") : "";
+          const parsedTxDate = txDateRaw ? new Date(txDateRaw) : new Date();
+          const executedAt = Number.isNaN(parsedTxDate.getTime())
+            ? new Date().toISOString()
+            : parsedTxDate.toISOString();
 
           if (!ticker || !Number.isFinite(shares) || shares <= 0 || !Number.isFinite(price) || price <= 0) {
             continue;
@@ -530,6 +811,15 @@ export function usePortfolio() {
             current.totalCost += shares * price;
             current.shares += shares;
             running.set(ticker, current);
+            importedTransactions.push({
+              id: uid(),
+              ticker,
+              side: "buy",
+              shares,
+              price,
+              executed_at: executedAt,
+              realized_gain_loss: 0,
+            });
             continue;
           }
 
@@ -538,8 +828,20 @@ export function usePortfolio() {
             if (current.shares <= 0) continue;
             const sellShares = Math.min(shares, current.shares);
             const avgCost = current.shares > 0 ? current.totalCost / current.shares : 0;
+            const realized = (price - avgCost) * sellShares;
+            realizedGainLoss += realized;
             current.shares -= sellShares;
             current.totalCost -= sellShares * avgCost;
+
+            importedTransactions.push({
+              id: uid(),
+              ticker,
+              side: "sell",
+              shares: sellShares,
+              price,
+              executed_at: executedAt,
+              realized_gain_loss: realized,
+            });
 
             if (current.shares <= 1e-9) {
               running.delete(ticker);
@@ -562,24 +864,55 @@ export function usePortfolio() {
           })
           .filter((p) => p.shares > 0 && p.avg_cost > 0);
 
+        const { known, unknown } = await validateKnownTickers(
+          importedPositions.map((p) => p.ticker)
+        );
+
+        const filteredPositions = importedPositions.filter((p) => known.has(p.ticker));
+
         updateStore((s) => ({
           ...s,
           portfolios: s.portfolios.map((p) =>
             p.id === activePortfolioId
-              ? { ...p, positions: importedPositions }
+              ? {
+                  ...p,
+                  positions: filteredPositions,
+                  realized_gain_loss: realizedGainLoss,
+                  transaction_history: importedTransactions,
+                }
               : p
           ),
         }));
+
+        return {
+          success: filteredPositions.length > 0,
+          mode: "broker",
+          importedCount: filteredPositions.length,
+          skippedInvalidRows: 0,
+          skippedUnknownTickers: unknown,
+          replacedPortfolio: true,
+        };
       }
+
+      return {
+        success: false,
+        mode: "unknown-format",
+        importedCount: 0,
+        skippedInvalidRows: 0,
+        skippedUnknownTickers: [],
+        replacedPortfolio: false,
+      };
     },
-    [activePortfolio?.positions, activePortfolioId, addPosition, updateStore]
+    [activePortfolioId, updateStore]
   );
 
   return {
     // Enriched positions
     positions,
     summary,
-    isLoading: enrichedQuery.isLoading || storeQuery.isLoading,
+    isLoading:
+      storeQuery.isLoading ||
+      (enrichedQuery.isLoading && positions.length === 0 && activeTickers.length > 0),
     isError: enrichedQuery.isError,
 
     // Portfolio management
@@ -595,6 +928,8 @@ export function usePortfolio() {
     addPosition,
     updatePosition,
     removePosition,
+    applyTransaction,
+    transactionHistory: activePortfolio?.transaction_history ?? [],
     hasPosition,
 
     // Import/Export

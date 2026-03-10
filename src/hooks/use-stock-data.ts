@@ -14,6 +14,7 @@ import {
   fetchFullStockData,
   fetchAllQuotes,
   fetchBatchPeriodPerformance,
+  fetchBatchDailyHistory,
   fetchBatchIntradayTrend,
   fetchBatchBuybackStrength,
   fetchMarketIndices,
@@ -85,7 +86,7 @@ export function useMarketIndices() {
 
 export function useBatchPeriodPerformance(
   tickers: string[],
-  window: "1D" | "1W" | "1M" | "YTD",
+  window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL",
   enabled: boolean = true
 ) {
   const normalized = Array.from(
@@ -96,6 +97,24 @@ export function useBatchPeriodPerformance(
   return useQuery<Record<string, number>>({
     queryKey: QUERY_KEYS.STOCK_PERFORMANCE(window, tickersKey),
     queryFn: () => fetchBatchPeriodPerformance(normalized, window),
+    staleTime: STALE_TIMES.QUOTE,
+    enabled: enabled && normalized.length > 0,
+  });
+}
+
+export function useBatchDailyHistory(
+  tickers: string[],
+  window: "1W" | "1M" | "YTD" | "1Y" | "ALL",
+  enabled: boolean = true
+) {
+  const normalized = Array.from(
+    new Set(tickers.map((ticker) => ticker.toUpperCase()).filter(Boolean))
+  );
+  const tickersKey = normalized.join(",");
+
+  return useQuery<Record<string, Array<{ date: string; close: number }>>>({
+    queryKey: QUERY_KEYS.STOCK_DAILY_HISTORY(window, tickersKey),
+    queryFn: () => fetchBatchDailyHistory(normalized, window),
     staleTime: STALE_TIMES.QUOTE,
     enabled: enabled && normalized.length > 0,
   });

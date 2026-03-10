@@ -597,7 +597,8 @@ export async function getBatchProfiles(
   }
 }
 
-type PerformanceWindow = "1D" | "1W" | "1M" | "YTD";
+type PerformanceWindow = "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL";
+type DailyHistoryWindow = "1W" | "1M" | "YTD" | "1Y" | "ALL";
 
 function normalizePct(raw: number): number {
   if (!Number.isFinite(raw)) return 0;
@@ -623,6 +624,18 @@ function getWindowStartDate(window: PerformanceWindow): string {
 
   if (window === "YTD") {
     return `${now.getFullYear()}-01-01`;
+  }
+
+  if (window === "1Y") {
+    const start = new Date(now);
+    start.setFullYear(start.getFullYear() - 1);
+    return start.toISOString().slice(0, 10);
+  }
+
+  if (window === "ALL") {
+    const start = new Date(now);
+    start.setFullYear(start.getFullYear() - 10);
+    return start.toISOString().slice(0, 10);
   }
 
   const days = window === "1W" ? 8 : 35;
@@ -728,6 +741,83 @@ export async function getBatchPeriodPerformance(
 
     for (const [symbol, pct] of values) {
       result[symbol] = pct;
+    }
+  }
+
+  return result;
+}
+
+async function getTickerDailyHistory(
+  ticker: string,
+  window: DailyHistoryWindow
+): Promise<Array<{ date: string; close: number }>> {
+  const key = ticker.toUpperCase();
+  const cacheKey = `${key}-${window}`;
+
+  const cached = await getCachedData<{ points: Array<{ date: string; close: number }> }>(
+    cacheKey,
+    "daily-history",
+    TTL.PERFORMANCE
+  );
+  if (cached && Array.isArray(cached.points) && cached.points.length > 1) {
+    return cached.points;
+  }
+
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rows: any[] = await (yahooFinance as any).historical(key, {
+      period1: getWindowStartDate(window),
+      period2: new Date().toISOString().slice(0, 10),
+      interval: "1d",
+    });
+
+    const points = (Array.isArray(rows) ? rows : [])
+      .map((row) => {
+        const rawDate = row?.date;
+        const parsedDate = rawDate instanceof Date ? rawDate : new Date(rawDate);
+        const date = Number.isNaN(parsedDate.getTime()) ? "" : parsedDate.toISOString().slice(0, 10);
+        const close = (row?.close as number) ?? 0;
+        return { date, close };
+      })
+      .filter((row) => Number.isFinite(row.close) && row.close > 0 && row.date.length > 0)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (points.length > 1) {
+      await setCachedData(
+        cacheKey,
+        "daily-history",
+        { points } as unknown as Record<string, unknown>
+      );
+    }
+
+    return points;
+  } catch (error) {
+    console.error(`[Yahoo] Daily history failed for ${key} (${window}):`, error);
+    return [];
+  }
+}
+
+export async function getBatchDailyHistory(
+  tickers: string[],
+  window: DailyHistoryWindow
+): Promise<Record<string, Array<{ date: string; close: number }>>> {
+  const symbols = Array.from(
+    new Set(tickers.map((ticker) => ticker.trim().toUpperCase()).filter(Boolean))
+  );
+
+  if (symbols.length === 0) return {};
+
+  const CHUNK_SIZE = 6;
+  const result: Record<string, Array<{ date: string; close: number }>> = {};
+
+  for (let i = 0; i < symbols.length; i += CHUNK_SIZE) {
+    const chunk = symbols.slice(i, i + CHUNK_SIZE);
+    const values = await Promise.all(
+      chunk.map(async (symbol) => [symbol, await getTickerDailyHistory(symbol, window)] as const)
+    );
+
+    for (const [symbol, points] of values) {
+      result[symbol] = points;
     }
   }
 
