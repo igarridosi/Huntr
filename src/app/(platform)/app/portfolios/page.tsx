@@ -647,7 +647,12 @@ function PortfolioEvolutionChart({
   const chartData = useMemo(() => {
     if (tickers.length === 0) return [];
 
-    const txEvents = (transactionHistory.length > 0
+    const toIsoDate = (rawDate: string) => {
+      const parsed = new Date(rawDate);
+      return Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10);
+    };
+
+    const baseEvents = transactionHistory.length > 0
       ? transactionHistory
       : positions.map((p) => ({
           id: `fallback-${p.ticker}`,
@@ -657,17 +662,52 @@ function PortfolioEvolutionChart({
           price: p.avg_cost,
           executed_at: p.added_at,
           realized_gain_loss: 0,
-        }))
-    )
+        }));
+
+    // Repair incomplete histories (common on migrated/localStorage portfolios)
+    // so reconstructed shares match current live positions in all environments.
+    const netSharesByTicker = new Map<string, number>();
+    for (const tx of baseEvents) {
+      const ticker = tx.ticker.toUpperCase();
+      const current = netSharesByTicker.get(ticker) ?? 0;
+      const delta = tx.side === "buy" ? tx.shares : -tx.shares;
+      netSharesByTicker.set(ticker, current + delta);
+    }
+
+    const syntheticAdjustments = positions
+      .map((position) => {
+        const ticker = position.ticker.toUpperCase();
+        const net = netSharesByTicker.get(ticker) ?? 0;
+        const diff = position.shares - net;
+
+        if (Math.abs(diff) <= 1e-9) return null;
+
+        return {
+          id: `synthetic-adjust-${ticker}`,
+          ticker,
+          side: diff > 0 ? ("buy" as const) : ("sell" as const),
+          shares: Math.abs(diff),
+          price: position.avg_cost,
+          executed_at: toIsoDate(position.added_at) ? position.added_at : new Date().toISOString(),
+          realized_gain_loss: 0,
+        };
+      })
+      .filter((tx): tx is NonNullable<typeof tx> => tx !== null);
+
+    const txEvents = [...baseEvents, ...syntheticAdjustments]
       .map((tx) => {
-        const parsed = new Date(tx.executed_at);
         return {
           ...tx,
-          isoDate: Number.isNaN(parsed.getTime()) ? "" : parsed.toISOString().slice(0, 10),
+          isoDate: toIsoDate(tx.executed_at),
         };
       })
       .filter((tx) => tx.isoDate.length > 0)
-      .sort((a, b) => a.isoDate.localeCompare(b.isoDate));
+      .sort((a, b) => {
+        const byDate = a.isoDate.localeCompare(b.isoDate);
+        if (byDate !== 0) return byDate;
+        if (a.side === b.side) return 0;
+        return a.side === "buy" ? -1 : 1;
+      });
 
     const dates = new Set<string>();
     const closesByTicker = new Map<string, Map<string, number>>();
@@ -706,7 +746,11 @@ function PortfolioEvolutionChart({
     const allStartDate = (() => {
       if (range !== "ALL") return null;
 
-      const dates = txEvents.map((tx) => tx.isoDate).sort((a, b) => a.localeCompare(b));
+      const positionDates = positions
+        .map((p) => toIsoDate(p.added_at))
+        .filter((d): d is string => d.length > 0);
+
+      const dates = [...txEvents.map((tx) => tx.isoDate), ...positionDates].sort((a, b) => a.localeCompare(b));
 
       return dates[0] ?? null;
     })();
