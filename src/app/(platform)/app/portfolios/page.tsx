@@ -689,6 +689,8 @@ function PortfolioEvolutionChart({
       }
     }
 
+    const tickersWithHistory = new Set(closesByTicker.keys());
+
     const benchmarkRows = historyByTicker[benchmarkTicker] ?? [];
     const benchmarkCloseMap = new Map<string, number>();
     benchmarkRows.forEach((row) => {
@@ -720,19 +722,32 @@ function PortfolioEvolutionChart({
     const lastCloseByTicker = new Map<string, number>();
     const liveSharesByTicker = new Map<string, number>();
     let txCursor = 0;
-    let cashBalance = 0;
     let lastBenchmarkClose = 0;
-    const points: Array<{ isoDate: string; portfolioValue: number; benchmarkClose: number }> = [];
+    const dailySnapshots: Array<{
+      isoDate: string;
+      holdingsValue: number;
+      flowValue: number;
+      benchmarkClose: number;
+    }> = [];
 
     for (const isoDate of effectiveDates) {
+      let flowValue = 0;
+
       while (txCursor < txEvents.length && txEvents[txCursor].isoDate <= isoDate) {
         const tx = txEvents[txCursor];
         const ticker = tx.ticker.toUpperCase();
+
+        // Ignore events for symbols without price history in this window.
+        if (!tickersWithHistory.has(ticker)) {
+          txCursor += 1;
+          continue;
+        }
+
         const currentShares = liveSharesByTicker.get(ticker) ?? 0;
 
         if (tx.side === "buy") {
           liveSharesByTicker.set(ticker, currentShares + tx.shares);
-          cashBalance -= tx.shares * tx.price;
+          flowValue += tx.shares * tx.price;
         } else {
           const sellShares = Math.min(tx.shares, currentShares);
           if (sellShares > 0) {
@@ -742,7 +757,7 @@ function PortfolioEvolutionChart({
             } else {
               liveSharesByTicker.set(ticker, nextShares);
             }
-            cashBalance += sellShares * tx.price;
+            flowValue -= sellShares * tx.price;
           }
         }
 
@@ -771,25 +786,58 @@ function PortfolioEvolutionChart({
         lastBenchmarkClose = benchmarkClose;
       }
 
-      points.push({
+      dailySnapshots.push({
         isoDate,
-        portfolioValue: holdingsValue + cashBalance,
+        holdingsValue,
+        flowValue,
         benchmarkClose: lastBenchmarkClose,
       });
     }
 
-    const initialPortfolioValue =
-      points.find((p) => Math.abs(p.portfolioValue) > 1e-9)?.portfolioValue ?? 0;
+    if (dailySnapshots.length < 2) return [];
+
+    let started = false;
+    let previousValue = 0;
+    let cumulative = 1;
+    const points: Array<{ isoDate: string; portfolioPct: number; benchmarkClose: number }> = [];
+
+    for (const snapshot of dailySnapshots) {
+      if (!started) {
+        if (snapshot.holdingsValue > 0) {
+          started = true;
+          previousValue = snapshot.holdingsValue;
+          points.push({
+            isoDate: snapshot.isoDate,
+            portfolioPct: 0,
+            benchmarkClose: snapshot.benchmarkClose,
+          });
+        }
+        continue;
+      }
+
+      if (previousValue > 1e-9) {
+        const rawDailyReturn =
+          (snapshot.holdingsValue - previousValue - snapshot.flowValue) /
+          previousValue;
+        const dailyReturn = Number.isFinite(rawDailyReturn) ? rawDailyReturn : 0;
+        cumulative *= 1 + dailyReturn;
+      }
+
+      previousValue = snapshot.holdingsValue;
+
+      points.push({
+        isoDate: snapshot.isoDate,
+        portfolioPct: (cumulative - 1) * 100,
+        benchmarkClose: snapshot.benchmarkClose,
+      });
+    }
+
+    if (points.length < 2) return [];
 
     const initialBenchmarkValue = points.find((p) => p.benchmarkClose > 0)?.benchmarkClose ?? 0;
 
-    if (initialPortfolioValue <= 0) return [];
-
     return points.map((point) => {
       const parsed = new Date(`${point.isoDate}T00:00:00Z`);
-
-      // Critical formula: ((current / initial_period_value) - 1) * 100
-      const portfolioPct = ((point.portfolioValue / initialPortfolioValue) - 1) * 100;
       const benchmarkPct = initialBenchmarkValue > 0
         ? ((point.benchmarkClose / initialBenchmarkValue) - 1) * 100
         : 0;
@@ -797,7 +845,7 @@ function PortfolioEvolutionChart({
       return {
         isoDate: point.isoDate,
         tooltipDate: parsed.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }),
-        portfolioPct,
+        portfolioPct: point.portfolioPct,
         benchmarkPct,
       };
     });
@@ -951,8 +999,12 @@ function PortfolioEvolutionChart({
         </div>
       </CardHeader>
       <CardContent>
-        {isLoading || chartData.length === 0 ? (
+        {isLoading ? (
           <Skeleton className="h-64 w-full" />
+        ) : chartData.length === 0 ? (
+          <div className="h-64 w-full rounded-md border border-wolf-border/30 bg-wolf-black/30 flex items-center justify-center text-sm text-mist">
+            No historical data available for this range.
+          </div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
