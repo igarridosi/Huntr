@@ -1,12 +1,14 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { STALE_TIMES } from "@/lib/constants";
+import { useSupabase } from "@/providers/supabase-provider";
 import {
   fetchStockProfile,
   fetchStockQuote,
 } from "@/app/actions/stock";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   WatchlistStore,
   WatchlistEntry,
@@ -126,6 +128,64 @@ function saveAlerts(alerts: PriceAlert[]) {
   localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
 }
 
+type CloudWatchlistState = {
+  data: WatchlistStore;
+  alerts: PriceAlert[];
+};
+
+async function persistCloudWatchlistState(
+  supabase: SupabaseClient,
+  userId: string,
+  state: CloudWatchlistState
+): Promise<void> {
+  const payload: CloudWatchlistState = {
+    data: state.data,
+    alerts: state.alerts,
+  };
+
+  const { error } = await supabase
+    .from("user_watchlist_state")
+    .upsert({ user_id: userId, data: payload.data, alerts: payload.alerts }, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("[Watchlist] Failed to persist cloud state:", error.message);
+  }
+}
+
+async function fetchCloudWatchlistState(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<CloudWatchlistState> {
+  const { data, error } = await supabase
+    .from("user_watchlist_state")
+    .select("data, alerts")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[Watchlist] Failed to fetch cloud state:", error.message);
+    return {
+      data: getStore(),
+      alerts: getAlerts(),
+    };
+  }
+
+  if (data?.data) {
+    return {
+      data: data.data as WatchlistStore,
+      alerts: Array.isArray(data.alerts) ? (data.alerts as PriceAlert[]) : [],
+    };
+  }
+
+  const initial: CloudWatchlistState = {
+    data: getStore(),
+    alerts: getAlerts(),
+  };
+
+  await persistCloudWatchlistState(supabase, userId, initial);
+  return initial;
+}
+
 // ---- Unique ID ----
 
 function uid(): string {
@@ -141,20 +201,27 @@ const ALERTS_QUERY_KEY = ["watchlist", "alerts"] as const;
 // ---- The Hook ----
 
 export function useWatchlist() {
+  const { supabase, user, isLoading: isAuthLoading } = useSupabase();
   const queryClient = useQueryClient();
-  const [activeListId, setActiveListIdState] = useState<string>(() =>
-    typeof window !== "undefined" ? getStore().activeListId : "default"
-  );
+  const watchlistQueryKey = [...WATCHLIST_KEY, user?.id ?? "anon"] as const;
+  const alertsQueryKey = [...ALERTS_QUERY_KEY, user?.id ?? "anon"] as const;
 
   // ── Store query ──
 
   const storeQuery = useQuery<WatchlistStore>({
-    queryKey: WATCHLIST_KEY,
-    queryFn: () => getStore(),
+    queryKey: watchlistQueryKey,
+    queryFn: async () => {
+      if (!user) return getStore();
+      const cloud = await fetchCloudWatchlistState(supabase, user.id);
+      queryClient.setQueryData(alertsQueryKey, cloud.alerts);
+      return cloud.data;
+    },
     staleTime: Infinity,
+    enabled: !isAuthLoading,
   });
 
   const store = storeQuery.data ?? createDefaultStore();
+  const activeListId = store.activeListId;
   const lists = store.lists;
   const customTags = store.customTags;
   const activeList = lists.find((l) => l.id === activeListId) ?? lists[0];
@@ -163,20 +230,27 @@ export function useWatchlist() {
 
   const updateStore = useCallback(
     (updater: (s: WatchlistStore) => WatchlistStore) => {
-      const current = getStore();
-      const updated = updater(current);
-      saveStore(updated);
-      queryClient.setQueryData(WATCHLIST_KEY, updated);
+      if (!user) return;
+
+      queryClient.setQueryData<WatchlistStore>(watchlistQueryKey, (previous) => {
+        const current = previous ?? createDefaultStore();
+        const updated = updater(current);
+        const currentAlerts = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? [];
+        void persistCloudWatchlistState(supabase, user.id, {
+          data: updated,
+          alerts: currentAlerts,
+        });
+        return updated;
+      });
       queryClient.invalidateQueries({ queryKey: WATCHLIST_ENRICHED_KEY });
     },
-    [queryClient]
+    [alertsQueryKey, queryClient, supabase, user, watchlistQueryKey]
   );
 
   // ── Set active list ──
 
   const setActiveList = useCallback(
     (id: string) => {
-      setActiveListIdState(id);
       updateStore((s) => ({ ...s, activeListId: id }));
     },
     [updateStore]
@@ -201,7 +275,6 @@ export function useWatchlist() {
           },
         ],
       }));
-      setActiveListIdState(id);
       return id;
     },
     [lists.length, updateStore]
@@ -225,9 +298,8 @@ export function useWatchlist() {
         lists: s.lists.filter((l) => l.id !== id),
         activeListId: s.activeListId === id ? "default" : s.activeListId,
       }));
-      if (activeListId === id) setActiveListIdState("default");
     },
-    [activeListId, updateStore]
+    [updateStore]
   );
 
   // ── Ticker CRUD ──
@@ -408,43 +480,73 @@ export function useWatchlist() {
   // ── Alerts ──
 
   const alertsQuery = useQuery<PriceAlert[]>({
-    queryKey: ALERTS_QUERY_KEY,
-    queryFn: () => getAlerts(),
+    queryKey: alertsQueryKey,
+    queryFn: async () => {
+      if (!user) return getAlerts();
+      const cloud = await fetchCloudWatchlistState(supabase, user.id);
+      return cloud.alerts;
+    },
     staleTime: Infinity,
+    enabled: !isAuthLoading,
   });
 
   const alerts = alertsQuery.data ?? [];
 
   const addAlert = useCallback(
     (alert: Omit<PriceAlert, "id" | "created_at">) => {
+      const current = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? alerts;
       const updated = [
-        ...getAlerts(),
+        ...current,
         { ...alert, id: uid(), created_at: new Date().toISOString() },
       ];
-      saveAlerts(updated);
-      queryClient.setQueryData(ALERTS_QUERY_KEY, updated);
+      queryClient.setQueryData(alertsQueryKey, updated);
+
+      if (user) {
+        const currentStore = queryClient.getQueryData<WatchlistStore>(watchlistQueryKey) ?? store;
+        void persistCloudWatchlistState(supabase, user.id, {
+          data: currentStore,
+          alerts: updated,
+        });
+      }
     },
-    [queryClient]
+    [alerts, alertsQueryKey, queryClient, store, supabase, user, watchlistQueryKey]
   );
 
   const removeAlert = useCallback(
     (id: string) => {
-      const updated = getAlerts().filter((a) => a.id !== id);
-      saveAlerts(updated);
-      queryClient.setQueryData(ALERTS_QUERY_KEY, updated);
+      const current = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? alerts;
+      const updated = current.filter((a) => a.id !== id);
+      queryClient.setQueryData(alertsQueryKey, updated);
+
+      if (user) {
+        const currentStore = queryClient.getQueryData<WatchlistStore>(watchlistQueryKey) ?? store;
+        void persistCloudWatchlistState(supabase, user.id, {
+          data: currentStore,
+          alerts: updated,
+        });
+      }
     },
-    [queryClient]
+    [alerts, alertsQueryKey, queryClient, store, supabase, user, watchlistQueryKey]
   );
 
   const toggleAlert = useCallback(
     (id: string) => {
-      const updated = getAlerts().map((a) =>
+      const current = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? alerts;
+      const updated = current.map((a) =>
         a.id === id ? { ...a, active: !a.active } : a
       );
-      saveAlerts(updated);
-      queryClient.setQueryData(ALERTS_QUERY_KEY, updated);
+
+      queryClient.setQueryData(alertsQueryKey, updated);
+
+      if (user) {
+        const currentStore = queryClient.getQueryData<WatchlistStore>(watchlistQueryKey) ?? store;
+        void persistCloudWatchlistState(supabase, user.id, {
+          data: currentStore,
+          alerts: updated,
+        });
+      }
     },
-    [queryClient]
+    [alerts, alertsQueryKey, queryClient, store, supabase, user, watchlistQueryKey]
   );
 
   // ── Data Enrichment ──
@@ -540,7 +642,7 @@ export function useWatchlist() {
   return {
     // Enriched data (with instant metadata sync)
     data,
-    isLoading: enrichedQuery.isLoading || storeQuery.isLoading,
+    isLoading: isAuthLoading || enrichedQuery.isLoading || storeQuery.isLoading,
     isError: enrichedQuery.isError,
 
     // List management

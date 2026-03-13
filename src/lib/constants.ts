@@ -12,6 +12,7 @@ export const ROUTES = {
   APP_TRANSCRIPTS: "/app/transcripts",
   APP_DCF_CALCULATOR: "/app/dcf-calculator",
   APP_PORTFOLIOS: "/app/portfolios",
+  APP_SETTINGS: "/app/settings",
   LOGIN: "/login",
   SIGNUP: "/signup",
   SYMBOL: (ticker: string) => `/symbol/${ticker}`,

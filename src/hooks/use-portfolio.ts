@@ -1,8 +1,9 @@
 "use client";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { STALE_TIMES } from "@/lib/constants";
+import { useSupabase } from "@/providers/supabase-provider";
 import {
   fetchStockProfile,
   fetchStockQuote,
@@ -16,10 +17,11 @@ import type {
   PortfolioSummary,
   PortfolioImportResult,
 } from "@/types/portfolio";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-// ---- Storage Key ----
+// ---- Legacy migration key ----
 
-const STORAGE_KEY = "huntr_portfolio_v1";
+const LEGACY_STORAGE_KEY = "huntr_portfolio_v1";
 
 // ---- Default Store ----
 
@@ -66,29 +68,56 @@ function normalizeStore(store: PortfolioStore): PortfolioStore {
   };
 }
 
-// ---- Store Access ----
-
-function getStore(): PortfolioStore {
-  if (typeof window === "undefined") return createDefaultStore();
+function getLegacyLocalStore(): PortfolioStore | null {
+  if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as PortfolioStore;
-      const normalized = normalizeStore(parsed);
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(normalized));
-      return normalized;
-    }
-    const fresh = createDefaultStore();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(fresh));
-    return fresh;
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PortfolioStore;
+    return normalizeStore(parsed);
   } catch {
-    return createDefaultStore();
+    return null;
   }
 }
 
-function saveStore(store: PortfolioStore) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+async function persistPortfolioStore(
+  supabase: SupabaseClient,
+  userId: string,
+  store: PortfolioStore
+): Promise<void> {
+  const payload = normalizeStore(store);
+  const { error } = await supabase
+    .from("user_portfolio_state")
+    .upsert({ user_id: userId, data: payload }, { onConflict: "user_id" });
+
+  if (error) {
+    console.error("[Portfolio] Failed to persist store:", error.message);
+  }
+}
+
+async function fetchPortfolioStore(
+  supabase: SupabaseClient,
+  userId: string
+): Promise<PortfolioStore> {
+  const { data, error } = await supabase
+    .from("user_portfolio_state")
+    .select("data")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[Portfolio] Failed to fetch store:", error.message);
+    return getLegacyLocalStore() ?? createDefaultStore();
+  }
+
+  if (data?.data) {
+    return normalizeStore(data.data as PortfolioStore);
+  }
+
+  const legacy = getLegacyLocalStore();
+  const initial = legacy ?? createDefaultStore();
+  await persistPortfolioStore(supabase, userId, initial);
+  return normalizeStore(initial);
 }
 
 // ---- Unique ID ----
@@ -256,20 +285,24 @@ function computeSummary(positions: EnrichedPosition[]): PortfolioSummary {
 // ---- The Hook ----
 
 export function usePortfolio() {
+  const { supabase, user, isLoading: isAuthLoading } = useSupabase();
   const queryClient = useQueryClient();
-  const [activePortfolioId, setActiveIdState] = useState<string>(() =>
-    typeof window !== "undefined" ? getStore().activePortfolioId : "default"
-  );
+  const portfolioQueryKey = [...PORTFOLIO_KEY, user?.id ?? "anon"] as const;
 
   // ── Store query ──
 
   const storeQuery = useQuery<PortfolioStore>({
-    queryKey: PORTFOLIO_KEY,
-    queryFn: () => getStore(),
+    queryKey: portfolioQueryKey,
+    queryFn: async () => {
+      if (!user) return createDefaultStore();
+      return fetchPortfolioStore(supabase, user.id);
+    },
     staleTime: Infinity,
+    enabled: !isAuthLoading,
   });
 
   const store = storeQuery.data ?? createDefaultStore();
+  const activePortfolioId = store.activePortfolioId;
   const portfolios = store.portfolios;
   const activePortfolio =
     portfolios.find((p) => p.id === activePortfolioId) ?? portfolios[0];
@@ -278,19 +311,22 @@ export function usePortfolio() {
 
   const updateStore = useCallback(
     (updater: (s: PortfolioStore) => PortfolioStore) => {
-      const current = getStore();
-      const updated = updater(current);
-      saveStore(updated);
-      queryClient.setQueryData(PORTFOLIO_KEY, updated);
+      if (!user) return;
+
+      queryClient.setQueryData<PortfolioStore>(portfolioQueryKey, (previous) => {
+        const current = normalizeStore(previous ?? createDefaultStore());
+        const updated = normalizeStore(updater(current));
+        void persistPortfolioStore(supabase, user.id, updated);
+        return updated;
+      });
     },
-    [queryClient]
+    [portfolioQueryKey, queryClient, supabase, user]
   );
 
   // ── Set active portfolio ──
 
   const setActivePortfolio = useCallback(
     (id: string) => {
-      setActiveIdState(id);
       updateStore((s) => ({ ...s, activePortfolioId: id }));
     },
     [updateStore]
@@ -316,7 +352,6 @@ export function usePortfolio() {
         ],
         activePortfolioId: id,
       }));
-      setActiveIdState(id);
       return id;
     },
     [updateStore]
@@ -342,9 +377,8 @@ export function usePortfolio() {
         portfolios: s.portfolios.filter((p) => p.id !== id),
         activePortfolioId: s.activePortfolioId === id ? "default" : s.activePortfolioId,
       }));
-      if (activePortfolioId === id) setActiveIdState("default");
     },
-    [activePortfolioId, updateStore]
+    [updateStore]
   );
 
   // ── Position CRUD ──
@@ -911,6 +945,7 @@ export function usePortfolio() {
     positions,
     summary,
     isLoading:
+      isAuthLoading ||
       storeQuery.isLoading ||
       (enrichedQuery.isLoading && positions.length === 0 && activeTickers.length > 0),
     isError: enrichedQuery.isError,

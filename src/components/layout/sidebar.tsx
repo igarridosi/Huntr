@@ -21,6 +21,7 @@ import { Separator } from "@/components/ui/separator";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { useAllProfiles } from "@/hooks/use-stock-data";
 import { getRecentSearches } from "@/lib/recent-searches";
+import { useSupabase } from "@/providers/supabase-provider";
 
 interface SidebarProps {
   onSearchClick?: () => void;
@@ -70,6 +71,7 @@ const mainNav: NavItem[] = [
 export function Sidebar({ onSearchClick }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
+  const { supabase } = useSupabase();
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { data: profiles = [] } = useAllProfiles();
 
@@ -191,15 +193,19 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
       {/* ---- Bottom Section ---- */}
       <div className="px-3 py-3 space-y-1 shrink-0">
         <Separator className="opacity-50 mb-3" />
-        <button
-          type="button"
+        <Link
+          href={ROUTES.APP_SETTINGS}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all duration-200 cursor-pointer"
         >
           <Settings className="w-4 h-4 shrink-0" />
           Settings
-        </button>
+        </Link>
         <button
           type="button"
+          onClick={async () => {
+            await supabase.auth.signOut();
+            router.push(ROUTES.LOGIN);
+          }}
           className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-mist hover:text-bearish hover:bg-bearish/10 transition-all duration-200 cursor-pointer"
         >
           <LogOut className="w-4 h-4 shrink-0" />
