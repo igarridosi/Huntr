@@ -16,10 +16,19 @@
 
 import YahooFinance from "yahoo-finance2";
 import type { YahooQuoteSummaryResult, TimeSeriesFinancialsCache, FundamentalsTimeSeriesRow } from "@/types/yahoo";
-import type { StockProfile, StockQuote, MarketIndexQuote } from "@/types/stock";
+import type {
+  StockProfile,
+  StockQuote,
+  MarketIndexQuote,
+  EarningsHistoryPoint,
+  EarningsInsight,
+} from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
 import { buildTickerLogoUrl } from "@/lib/logo";
-import { getFinancialsFromAlphaVantage } from "@/lib/api/alphavantage";
+import {
+  getFinancialsFromAlphaVantage,
+  getEarningsInsightFromAlphaVantage,
+} from "@/lib/api/alphavantage";
 import {
   mapToStockProfile,
   mapToStockQuote,
@@ -32,6 +41,15 @@ import { getCachedData, setCachedData } from "./cache";
 // ─────────────────────────────────────────────────────────
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
+
+type YahooHistoricalClient = {
+  historical: (
+    symbol: string,
+    options: { period1: string; period2: string; interval: string }
+  ) => Promise<unknown>;
+};
+
+const yahooHistoricalClient = yahooFinance as unknown as YahooHistoricalClient;
 
 // ─────────────────────────────────────────────────────────
 // Module sets for each data type
@@ -56,6 +74,16 @@ const PROFILE_QUOTE_MODULES = [
   ...new Set([...PROFILE_MODULES, ...QUOTE_MODULES]),
 ] as const;
 
+const EARNINGS_INSIGHT_MODULES = [
+  "price",
+  "summaryProfile",
+  "calendarEvents",
+  "earnings",
+  "earningsHistory",
+  "earningsTrend",
+  "financialData",
+] as const;
+
 // ─────────────────────────────────────────────────────────
 // Cache TTLs (in ms)
 // ─────────────────────────────────────────────────────────
@@ -67,6 +95,7 @@ const TTL = {
   PERFORMANCE: 30 * 60 * 1000,         // 30 minutes — period performance
   INTRADAY_TREND: 2 * 60 * 1000,       // 2 minutes — watchlist sparkline
   BUYBACK: 24 * 60 * 60 * 1000,        // 24 hours — capital allocation changes slowly
+  EARNINGS_INSIGHT: 8 * 60 * 60 * 1000, // 8 hours — estimates/last results
   FINANCIALS: 24 * 60 * 60 * 1000,     // 24 hours — earnings cycle
   FINANCIALS_ALPHA: 30 * 24 * 60 * 60 * 1000, // 30 days — avoid repeated Alpha throttling
 } as const;
@@ -426,7 +455,13 @@ export async function getBatchQuotes(
         .map((entry) => toIsoDate(entry))
         .filter((entry): entry is string => !!entry)
         .sort();
-      return parsed[0] ?? null;
+
+      const future = parsed.find((entry) => {
+        const ts = new Date(`${entry}T00:00:00Z`).getTime();
+        return Number.isFinite(ts) && ts >= now - 12 * 60 * 60 * 1000;
+      });
+
+      return future ?? parsed[parsed.length - 1] ?? null;
     }
 
     return candidates.length > 0
@@ -597,6 +632,462 @@ export async function getBatchProfiles(
   }
 }
 
+function numFromUnknown(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  if (typeof value === "object" && value !== null) {
+    const asRecord = value as Record<string, unknown>;
+    return numFromUnknown(asRecord.raw ?? asRecord.fmt ?? null);
+  }
+
+  return null;
+}
+
+function parseQuarterLabelFromDate(date: Date): string {
+  const q = Math.floor(date.getUTCMonth() / 3) + 1;
+  return `Q${q} ${date.getUTCFullYear()}`;
+}
+
+function parseYahooHistoryRow(row: Record<string, unknown>): EarningsHistoryPoint | null {
+  const quarterRaw = (row.quarter as Record<string, unknown> | undefined)?.raw ?? row.quarter;
+  const quarterDate = new Date(String(quarterRaw ?? ""));
+  const hasQuarterDate = !Number.isNaN(quarterDate.getTime());
+
+  const rawEpsActual = numFromUnknown(row.epsActual);
+  const epsEstimate = numFromUnknown(row.epsEstimate);
+  const directSurprise = numFromUnknown(row.surprisePercent);
+  const isFutureQuarter = hasQuarterDate && quarterDate.getTime() > Date.now();
+  const epsActual =
+    isFutureQuarter && rawEpsActual === 0 && epsEstimate != null
+      ? null
+      : rawEpsActual;
+  const computedSurprise =
+    epsActual != null && epsEstimate != null && Math.abs(epsEstimate) > 0
+      ? ((epsActual - epsEstimate) / Math.abs(epsEstimate)) * 100
+      : null;
+
+  if (epsActual == null && epsEstimate == null) return null;
+
+  return {
+    quarter: hasQuarterDate ? parseQuarterLabelFromDate(quarterDate) : "Unknown",
+    report_date: hasQuarterDate ? quarterDate.toISOString().slice(0, 10) : null,
+    eps_actual: epsActual,
+    eps_estimate: epsEstimate,
+    revenue_estimate: null,
+    revenue_actual: null,
+    surprise_percent: directSurprise ?? computedSurprise,
+  };
+}
+
+function parseTrendQuarterRows(rawTrend: unknown): EarningsHistoryPoint[] {
+  if (!Array.isArray(rawTrend)) return [];
+
+  return rawTrend
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+      const period = String(row.period ?? "").toLowerCase();
+
+      // Keep only quarterly periods (e.g. -1q, 0q, +1q).
+      if (!period.includes("q")) return null;
+
+      const endDateRaw = row.endDate;
+      const endDate = new Date(String(endDateRaw ?? ""));
+      if (Number.isNaN(endDate.getTime())) return null;
+
+      const epsEstimate = numFromUnknown(
+        (row.earningsEstimate as Record<string, unknown> | undefined)?.avg
+      );
+      const revenueEstimate = numFromUnknown(
+        (row.revenueEstimate as Record<string, unknown> | undefined)?.avg
+      );
+
+      if (epsEstimate == null && revenueEstimate == null) return null;
+
+      const point: EarningsHistoryPoint = {
+        quarter: parseQuarterLabelFromDate(endDate),
+        report_date: endDate.toISOString().slice(0, 10),
+        eps_actual: null,
+        eps_estimate: epsEstimate,
+        revenue_estimate: revenueEstimate,
+        revenue_actual: null,
+        surprise_percent: null,
+      };
+
+      return point;
+    })
+    .filter((value): value is EarningsHistoryPoint => value !== null);
+}
+
+function parseEarningsChartQuarterRows(rawEarnings: unknown): EarningsHistoryPoint[] {
+  if (!rawEarnings || typeof rawEarnings !== "object") return [];
+
+  const quarterly = (
+    (rawEarnings as Record<string, unknown>).earningsChart as Record<string, unknown> | undefined
+  )?.quarterly;
+
+  if (!Array.isArray(quarterly)) return [];
+
+  return quarterly
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+
+      const fiscalQuarter = row.fiscalQuarter;
+      const normalizedQuarter =
+        typeof fiscalQuarter === "string"
+          ? fiscalQuarter.replace(/^([1-4])Q(\d{4})$/, "Q$1 $2")
+          : null;
+
+      const periodEndRaw = row.periodEndDate;
+      const periodEndDate =
+        typeof periodEndRaw === "number"
+          ? new Date(periodEndRaw < 1e12 ? periodEndRaw * 1000 : periodEndRaw)
+          : null;
+
+      const quarter =
+        normalizedQuarter ??
+        (periodEndDate && !Number.isNaN(periodEndDate.getTime())
+          ? parseQuarterLabelFromDate(periodEndDate)
+          : null);
+
+      if (!quarter) return null;
+
+      const epsActual = numFromUnknown(row.actual);
+      const epsEstimate = numFromUnknown(row.estimate);
+      const surprise = numFromUnknown(row.surprisePct);
+
+      const reportDateRaw = row.reportedDate;
+      const reportDate =
+        typeof reportDateRaw === "number"
+          ? new Date(reportDateRaw < 1e12 ? reportDateRaw * 1000 : reportDateRaw)
+          : null;
+
+      const reportDateIso =
+        reportDate && !Number.isNaN(reportDate.getTime())
+          ? reportDate.toISOString().slice(0, 10)
+          : periodEndDate && !Number.isNaN(periodEndDate.getTime())
+            ? periodEndDate.toISOString().slice(0, 10)
+            : null;
+
+      const point: EarningsHistoryPoint = {
+        quarter,
+        report_date: reportDateIso,
+        eps_actual: epsActual,
+        eps_estimate: epsEstimate,
+        revenue_estimate: null,
+        revenue_actual: null,
+        surprise_percent: surprise,
+      };
+
+      return point;
+    })
+    .filter((value): value is EarningsHistoryPoint => value !== null);
+}
+
+function parseFinancialsChartQuarterRows(rawEarnings: unknown): EarningsHistoryPoint[] {
+  if (!rawEarnings || typeof rawEarnings !== "object") return [];
+
+  const quarterly = (
+    (rawEarnings as Record<string, unknown>).financialsChart as Record<string, unknown> | undefined
+  )?.quarterly;
+
+  if (!Array.isArray(quarterly)) return [];
+
+  return quarterly
+    .map((entry) => {
+      if (!entry || typeof entry !== "object") return null;
+      const row = entry as Record<string, unknown>;
+
+      const fiscalQuarter = row.fiscalQuarter;
+      const normalizedQuarter =
+        typeof fiscalQuarter === "string"
+          ? fiscalQuarter.replace(/^([1-4])Q(\d{4})$/, "Q$1 $2")
+          : null;
+
+      const periodEndRaw = row.periodEndDate;
+      const periodEndDate =
+        typeof periodEndRaw === "number"
+          ? new Date(periodEndRaw < 1e12 ? periodEndRaw * 1000 : periodEndRaw)
+          : null;
+
+      const quarter =
+        normalizedQuarter ??
+        (periodEndDate && !Number.isNaN(periodEndDate.getTime())
+          ? parseQuarterLabelFromDate(periodEndDate)
+          : null);
+
+      if (!quarter) return null;
+
+      const revenue = numFromUnknown(row.revenue);
+      if (revenue == null) return null;
+
+      const reportDate =
+        periodEndDate && !Number.isNaN(periodEndDate.getTime())
+          ? periodEndDate.toISOString().slice(0, 10)
+          : null;
+
+      const point: EarningsHistoryPoint = {
+        quarter,
+        report_date: reportDate,
+        eps_actual: null,
+        eps_estimate: null,
+        revenue_estimate: null,
+        revenue_actual: revenue,
+        surprise_percent: null,
+      };
+
+      return point;
+    })
+    .filter((value): value is EarningsHistoryPoint => value !== null);
+}
+
+function mergeEarningsHistoryRows(
+  ...groups: EarningsHistoryPoint[][]
+): EarningsHistoryPoint[] {
+  const byQuarter = new Map<string, EarningsHistoryPoint>();
+
+  for (const group of groups) {
+    for (const row of group) {
+      const existing = byQuarter.get(row.quarter);
+      if (!existing) {
+        byQuarter.set(row.quarter, { ...row });
+        continue;
+      }
+
+      byQuarter.set(row.quarter, {
+        quarter: row.quarter,
+        report_date: existing.report_date ?? row.report_date,
+        eps_actual: existing.eps_actual ?? row.eps_actual,
+        eps_estimate: existing.eps_estimate ?? row.eps_estimate,
+        revenue_estimate: existing.revenue_estimate ?? row.revenue_estimate ?? null,
+        revenue_actual: existing.revenue_actual ?? row.revenue_actual ?? null,
+        surprise_percent: existing.surprise_percent ?? row.surprise_percent,
+      });
+    }
+  }
+
+  return Array.from(byQuarter.values())
+    .sort((a, b) => {
+      const da = a.report_date ? new Date(`${a.report_date}T00:00:00Z`).getTime() : 0;
+      const db = b.report_date ? new Date(`${b.report_date}T00:00:00Z`).getTime() : 0;
+      return db - da;
+    })
+    .slice(0, 20);
+}
+
+function parseNextEarningsDate(data: YahooQuoteSummaryResult): string | null {
+  const asAny = data as unknown as Record<string, unknown>;
+  const events = (asAny.calendarEvents as Record<string, unknown> | undefined)?.earnings;
+  const earnings = events as Record<string, unknown> | undefined;
+  const earningsDate = (earnings?.earningsDate ?? []) as unknown;
+
+  const parsed = Array.isArray(earningsDate)
+    ? earningsDate
+        .map((entry) => {
+          if (entry == null) return null;
+          if (entry instanceof Date) return Number.isNaN(entry.getTime()) ? null : entry.toISOString().slice(0, 10);
+          if (typeof entry === "number") {
+            const ms = entry < 1e12 ? entry * 1000 : entry;
+            const date = new Date(ms);
+            return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+          }
+          if (typeof entry === "string") {
+            const date = new Date(entry);
+            return Number.isNaN(date.getTime()) ? null : date.toISOString().slice(0, 10);
+          }
+          if (typeof entry === "object") {
+            const value = (entry as Record<string, unknown>).raw ?? (entry as Record<string, unknown>).fmt;
+            return typeof value === "string" ? value.slice(0, 10) : null;
+          }
+          return null;
+        })
+        .filter((value): value is string => value != null)
+        .sort()
+    : [];
+
+  const now = Date.now();
+  const future = parsed.find((value) => new Date(`${value}T00:00:00Z`).getTime() >= now);
+  return future ?? parsed[parsed.length - 1] ?? null;
+}
+
+function parseEarningsTimingFromSummary(data: YahooQuoteSummaryResult): "Before Open" | "After Close" | "Time TBD" {
+  const nextDate = parseNextEarningsDate(data);
+  if (!nextDate) return "Time TBD";
+  return "Time TBD";
+}
+
+async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
+  const key = ticker.toUpperCase();
+  const cacheNamespace = "earnings-insight-v2";
+  const cached = await getCachedData<EarningsInsight>(key, cacheNamespace, TTL.EARNINGS_INSIGHT);
+  if (cached) return cached;
+
+  const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+
+  const empty: EarningsInsight = {
+    ticker: key,
+    company_name: null,
+    next_earnings_date: null,
+    earnings_timing: "Time TBD",
+    est_eps: null,
+    est_revenue: null,
+    history: [],
+    investor_relations_url: null,
+    webcast_url: null,
+    source: "none",
+  };
+
+  try {
+    let raw: YahooQuoteSummaryResult;
+
+    try {
+      raw = await fetchFromYahoo(key, EARNINGS_INSIGHT_MODULES);
+    } catch (err: unknown) {
+      const isInternalError = err instanceof Error && err.message === "internal-error";
+      if (!isInternalError) throw err;
+
+      // Retry with a reduced module set that still includes core earnings payload.
+      try {
+        raw = await fetchFromYahoo(key, ["price", "summaryProfile", "calendarEvents", "earnings"]);
+      } catch {
+        raw = await fetchFromYahoo(key, ["price", "summaryProfile", "calendarEvents"]);
+      }
+    }
+
+    const asAny = raw as unknown as Record<string, unknown>;
+    const website = raw.summaryProfile?.website ?? null;
+    const cleanWebsite =
+      typeof website === "string" && website.length > 0
+        ? website.startsWith("http")
+          ? website
+          : `https://${website}`
+        : null;
+
+    const trendRows = ((asAny.earningsTrend as Record<string, unknown> | undefined)?.trend ?? []) as unknown[];
+    const trendCurrent = Array.isArray(trendRows)
+      ? (trendRows.find((entry) => {
+          const period = (entry as Record<string, unknown>).period;
+          return typeof period === "string" && (period.toLowerCase().includes("0q") || period.toLowerCase().includes("current"));
+        }) as Record<string, unknown> | undefined)
+      : undefined;
+
+    const estEpsFromTrend = trendCurrent
+      ? numFromUnknown((trendCurrent.earningsEstimate as Record<string, unknown> | undefined)?.avg)
+      : null;
+    const estRevenueFromTrend = trendCurrent
+      ? numFromUnknown((trendCurrent.revenueEstimate as Record<string, unknown> | undefined)?.avg)
+      : null;
+
+    const calendarEarnings = (asAny.calendarEvents as Record<string, unknown> | undefined)?.earnings as
+      | Record<string, unknown>
+      | undefined;
+    const estEpsFromCalendar = numFromUnknown(calendarEarnings?.earningsAverage);
+    const estRevenueFromCalendar = numFromUnknown(calendarEarnings?.revenueAverage);
+
+    const earningsChart =
+      (asAny.earnings as Record<string, unknown> | undefined)?.earningsChart as
+        | Record<string, unknown>
+        | undefined;
+    const estEpsFromEarningsChart = numFromUnknown(earningsChart?.currentQuarterEstimate);
+
+    const yahooHistory =
+      ((asAny.earningsHistory as Record<string, unknown> | undefined)?.history ?? []) as Array<
+        Record<string, unknown>
+      >;
+    const parsedYahooHistory = yahooHistory
+      .map((row) => parseYahooHistoryRow(row))
+      .filter((value): value is EarningsHistoryPoint => value !== null);
+    const parsedEarningsChartRows = parseEarningsChartQuarterRows(asAny.earnings);
+    const parsedTrendRows = parseTrendQuarterRows(trendRows);
+    const parsedRevenueRows = parseFinancialsChartQuarterRows(asAny.earnings);
+
+    let mergedHistory: EarningsHistoryPoint[] = mergeEarningsHistoryRows(
+      parsedEarningsChartRows,
+      parsedYahooHistory,
+      parsedTrendRows,
+      parsedRevenueRows
+    );
+    let mergedEstEps: number | null =
+      estEpsFromEarningsChart ?? estEpsFromCalendar ?? estEpsFromTrend;
+    let source: EarningsInsight["source"] =
+      mergedHistory.length > 0 || mergedEstEps != null || estRevenueFromTrend != null
+        ? "yahoo"
+        : "none";
+
+    if (alphaVantageApiKey) {
+      const alpha = await getEarningsInsightFromAlphaVantage(key, alphaVantageApiKey);
+      if (alpha) {
+        mergedHistory = mergeEarningsHistoryRows(mergedHistory, alpha.history);
+        mergedEstEps = mergedEstEps ?? alpha.est_eps;
+
+        source =
+          source === "yahoo"
+            ? "mixed"
+            : "alphavantage";
+      }
+    }
+
+    const insight: EarningsInsight = {
+      ticker: key,
+      company_name: raw.price?.longName ?? raw.price?.shortName ?? key,
+      next_earnings_date: parseNextEarningsDate(raw),
+      earnings_timing: parseEarningsTimingFromSummary(raw),
+      est_eps: mergedEstEps,
+      est_revenue: estRevenueFromCalendar ?? estRevenueFromTrend,
+      history: mergedHistory,
+      investor_relations_url: cleanWebsite,
+      webcast_url: cleanWebsite,
+      source,
+    };
+
+    await setCachedData(key, cacheNamespace, insight as unknown as Record<string, unknown>);
+    return insight;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`[Yahoo] Failed to fetch earnings insight for ${key}: ${message}`);
+
+    if (alphaVantageApiKey) {
+      const alpha = await getEarningsInsightFromAlphaVantage(key, alphaVantageApiKey);
+      if (alpha) {
+        const fallback: EarningsInsight = {
+          ...empty,
+          history: alpha.history,
+          est_eps: alpha.est_eps,
+          source: "alphavantage",
+        };
+        await setCachedData(key, cacheNamespace, fallback as unknown as Record<string, unknown>);
+        return fallback;
+      }
+    }
+
+    return empty;
+  }
+}
+
+export async function getBatchEarningsInsights(
+  tickers: string[]
+): Promise<Record<string, EarningsInsight>> {
+  const normalized = Array.from(new Set(tickers.map((ticker) => ticker.toUpperCase()).filter(Boolean)));
+  if (normalized.length === 0) return {};
+
+  const entries = await Promise.all(
+    normalized.map(async (ticker) => {
+      const insight = await getEarningsInsight(ticker);
+      return [ticker, insight] as const;
+    })
+  );
+
+  return Object.fromEntries(entries);
+}
+
 type PerformanceWindow = "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL";
 type DailyHistoryWindow = "1W" | "1M" | "YTD" | "1Y" | "ALL";
 
@@ -664,12 +1155,11 @@ async function getTickerWindowPerformance(
 
   try {
     if (window === "1D") {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw: any = await yahooFinance.quote(key);
+      const raw: unknown = await yahooFinance.quote(key);
       const row = (raw ?? {}) as Record<string, unknown>;
       pct = computeIntradayPercentFromQuoteRow(row);
     } else {
-      const rows = await (yahooFinance as any).historical(key, {
+      const rows = await yahooHistoricalClient.historical(key, {
         period1: getWindowStartDate(window),
         period2: new Date().toISOString().slice(0, 10),
         interval: "1d",
@@ -713,8 +1203,7 @@ export async function getBatchPeriodPerformance(
 
   if (window === "1D") {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw: any = await yahooFinance.quote(symbols);
+      const raw: unknown = await yahooFinance.quote(symbols);
       const rows: Record<string, unknown>[] = Array.isArray(raw) ? raw : [raw];
 
       return Object.fromEntries(
@@ -764,17 +1253,25 @@ async function getTickerDailyHistory(
   }
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rows: any[] = await (yahooFinance as any).historical(key, {
+    const rowsUnknown = await yahooHistoricalClient.historical(key, {
       period1: getWindowStartDate(window),
       period2: new Date().toISOString().slice(0, 10),
       interval: "1d",
     });
+    const rows: Array<Record<string, unknown>> = Array.isArray(rowsUnknown)
+      ? (rowsUnknown as Array<Record<string, unknown>>)
+      : [];
 
-    const points = (Array.isArray(rows) ? rows : [])
+    const points = rows
       .map((row) => {
         const rawDate = row?.date;
-        const parsedDate = rawDate instanceof Date ? rawDate : new Date(rawDate);
+        const parsedDate =
+          rawDate instanceof Date
+            ? rawDate
+            : typeof rawDate === "string" || typeof rawDate === "number"
+              ? new Date(rawDate)
+              : null;
+        if (!parsedDate) return { date: "", close: 0 };
         const date = Number.isNaN(parsedDate.getTime()) ? "" : parsedDate.toISOString().slice(0, 10);
         const close = (row?.close as number) ?? 0;
         return { date, close };
@@ -841,7 +1338,7 @@ async function getTickerIntradayTrend(ticker: string): Promise<number[]> {
     const now = new Date();
     const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const rows = await (yahooFinance as any).historical(key, {
+    const rows = await yahooHistoricalClient.historical(key, {
       period1: start.toISOString().slice(0, 10),
       period2: now.toISOString().slice(0, 10),
       interval: "5m",

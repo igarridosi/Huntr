@@ -13,8 +13,13 @@
  */
 
 import { FEATURES } from "@/lib/constants";
-import type { StockProfile, StockQuote, MarketIndexQuote } from "@/types/stock";
-import type { CompanyFinancials, PeriodType } from "@/types/financials";
+import type {
+  StockProfile,
+  StockQuote,
+  MarketIndexQuote,
+  EarningsInsight,
+} from "@/types/stock";
+import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 
 // Yahoo Finance (real API)
@@ -29,8 +34,37 @@ import {
   getAllTickerSymbols,
   tickerRowsToProfiles,
   searchTickersFromDB,
-  type TickerSearchEntry,
 } from "./tickers";
+
+const MIN_MARKET_CAP = 10_000_000_000;
+
+const MANDATORY_US_LARGE_CAP_SYMBOLS = [
+  "AAPL",
+  "MSFT",
+  "NVDA",
+  "AMZN",
+  "GOOGL",
+  "META",
+  "BRK-B",
+  "JPM",
+  "XOM",
+  "NKE",
+  "WFC",
+  "MS",
+  "GS",
+  "BAC",
+  "V",
+  "MA",
+  "UNH",
+  "HD",
+  "COST",
+  "PG",
+  "JNJ",
+  "CVX",
+  "ABBV",
+  "KO",
+  "PEP",
+] as const;
 
 // ─────────────────────────────────────────────────────────
 // Profile
@@ -72,7 +106,15 @@ export async function getStockQuote(
 export async function getAllQuotes(): Promise<StockQuote[]> {
   if (FEATURES.ENABLE_REAL_API) {
     // Read ticker symbols from Supabase, then batch-fetch quotes from Yahoo
-    const symbols = await getAllTickerSymbols();
+    const symbolsFromDb = await getAllTickerSymbols();
+    const symbols = Array.from(
+      new Set(
+        [...symbolsFromDb, ...MANDATORY_US_LARGE_CAP_SYMBOLS].map((symbol) =>
+          symbol.toUpperCase()
+        )
+      )
+    );
+
     if (symbols.length > 0) {
       // Batch in chunks of 50 to avoid Yahoo rate limits
       const BATCH_SIZE = 50;
@@ -82,10 +124,12 @@ export async function getAllQuotes(): Promise<StockQuote[]> {
         const quotes = await yahoo.getBatchQuotes(batch);
         allQuotes.push(...quotes);
       }
-      return allQuotes;
+
+      return allQuotes.filter((quote) => quote.market_cap >= MIN_MARKET_CAP);
     }
   }
-  return mock.getAllQuotes();
+  const mockQuotes = await mock.getAllQuotes();
+  return mockQuotes.filter((quote) => quote.market_cap >= MIN_MARKET_CAP);
 }
 
 export async function getMarketIndices(): Promise<MarketIndexQuote[]> {
@@ -150,6 +194,32 @@ export async function getBatchBuybackStrength(
   );
 }
 
+export async function getBatchEarningsInsights(
+  tickers: string[]
+): Promise<Record<string, EarningsInsight>> {
+  if (FEATURES.ENABLE_REAL_API) {
+    return yahoo.getBatchEarningsInsights(tickers);
+  }
+
+  return Object.fromEntries(
+    tickers.map((ticker) => [
+      ticker.toUpperCase(),
+      {
+        ticker: ticker.toUpperCase(),
+        company_name: null,
+        next_earnings_date: null,
+        earnings_timing: "Time TBD",
+        est_eps: null,
+        est_revenue: null,
+        history: [],
+        investor_relations_url: null,
+        webcast_url: null,
+        source: "none",
+      } satisfies EarningsInsight,
+    ])
+  );
+}
+
 // ─────────────────────────────────────────────────────────
 // Financials
 // ─────────────────────────────────────────────────────────
@@ -191,18 +261,17 @@ export async function searchTickers(
   if (FEATURES.ENABLE_REAL_API) {
     // Search from Supabase tickers table
     const dbResults = await searchTickersFromDB(query, limit);
-    if (query.trim().length > 0) {
-      return dbResults.map((r) => ({
-        ticker: r.ticker,
-        name: r.name,
-        sector: r.sector,
-        logo_url: r.logo_url,
-        searchText: r.searchText,
-      }));
-    }
-
     if (dbResults.length > 0) {
-      return dbResults.map((r) => ({
+      // Keep search universe aligned with global >10B policy.
+      const caps = await yahoo.getBatchQuotes(dbResults.map((row) => row.ticker));
+      const capMap = new Map(caps.map((quote) => [quote.ticker.toUpperCase(), quote.market_cap]));
+
+      const filtered = dbResults.filter((row) => {
+        const cap = capMap.get(row.ticker.toUpperCase()) ?? 0;
+        return cap >= MIN_MARKET_CAP;
+      });
+
+      return filtered.map((r) => ({
         ticker: r.ticker,
         name: r.name,
         sector: r.sector,

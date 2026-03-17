@@ -2,7 +2,12 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
-import type { StockProfile, StockQuote, MarketIndexQuote } from "@/types/stock";
+import type {
+  StockProfile,
+  StockQuote,
+  MarketIndexQuote,
+  EarningsInsight,
+} from "@/types/stock";
 import type {
   CompanyFinancials,
   PeriodType,
@@ -17,6 +22,7 @@ import {
   fetchBatchDailyHistory,
   fetchBatchIntradayTrend,
   fetchBatchBuybackStrength,
+  fetchBatchEarningsInsights,
   fetchMarketIndices,
   fetchAllProfiles,
   fetchCompanyFinancials,
@@ -154,17 +160,35 @@ export function useBatchBuybackStrength(
   });
 }
 
+export function useBatchEarningsInsights(
+  tickers: string[],
+  enabled: boolean = true
+) {
+  const normalized = Array.from(
+    new Set(tickers.map((ticker) => ticker.toUpperCase()).filter(Boolean))
+  );
+  const tickersKey = normalized.join(",");
+
+  return useQuery<Record<string, EarningsInsight>>({
+    queryKey: QUERY_KEYS.STOCK_EARNINGS_INSIGHTS(tickersKey),
+    queryFn: () => fetchBatchEarningsInsights(normalized),
+    staleTime: STALE_TIMES.QUOTE,
+    enabled: enabled && normalized.length > 0,
+  });
+}
+
 // ---------- Financials ----------
 
 export function useFinancials(
   ticker: string,
-  _periodType: PeriodType = "annual"
+  periodType: PeriodType = "annual",
+  enabled: boolean = true
 ) {
   return useQuery<CompanyFinancials | null>({
-    queryKey: QUERY_KEYS.FINANCIALS(ticker),
+    queryKey: [...QUERY_KEYS.FINANCIALS(ticker), periodType],
     queryFn: () => fetchCompanyFinancials(ticker),
     staleTime: STALE_TIMES.STATIC,
-    enabled: !!ticker,
+    enabled: enabled && !!ticker,
   });
 }
 

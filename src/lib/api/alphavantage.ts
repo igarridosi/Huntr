@@ -30,6 +30,9 @@ interface AlphaFinancialResponse {
 interface AlphaEarningsPoint {
   fiscalDateEnding?: string;
   reportedEPS?: string;
+  reportedDate?: string;
+  estimatedEPS?: string;
+  surprisePercentage?: string;
 }
 
 interface AlphaEarningsResponse {
@@ -46,6 +49,17 @@ interface AlphaBundle {
   balance: AlphaFinancialResponse;
   cash: AlphaFinancialResponse;
   earnings: AlphaEarningsResponse;
+}
+
+export interface AlphaEarningsInsight {
+  history: Array<{
+    quarter: string;
+    report_date: string | null;
+    eps_actual: number | null;
+    eps_estimate: number | null;
+    surprise_percent: number | null;
+  }>;
+  est_eps: number | null;
 }
 
 function parseNumber(value: string | undefined): number {
@@ -397,5 +411,73 @@ export async function getFinancialsFromAlphaVantage(
       annual: cashAnnual,
       quarterly: cashQuarterly,
     },
+  };
+}
+
+export async function getEarningsInsightFromAlphaVantage(
+  ticker: string,
+  apiKey: string
+): Promise<AlphaEarningsInsight | null> {
+  const symbol = ticker.toUpperCase();
+
+  const parseNullable = (value: string | undefined): number | null => {
+    if (!value) return null;
+    const cleaned = value.trim();
+    if (!cleaned || cleaned.toLowerCase() === "none") return null;
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  let earnings: AlphaEarningsResponse;
+  try {
+    earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
+  } catch {
+    return null;
+  }
+
+  const history = (earnings.quarterlyEarnings ?? [])
+    .map((row) => {
+      const fiscalDate = getDate(row.fiscalDateEnding);
+      const reportDate = row.reportedDate ? getDate(row.reportedDate) : null;
+      const validFiscal = !Number.isNaN(fiscalDate.getTime());
+      const parsedActual = parseNullable(row.reportedEPS);
+      const parsedEstimate = parseNullable(row.estimatedEPS);
+      const isFutureReport =
+        !!reportDate && !Number.isNaN(reportDate.getTime()) && reportDate.getTime() > Date.now();
+
+      // Alpha can emit placeholder 0.00 for not-yet-reported quarters.
+      const epsActual = isFutureReport && parsedActual === 0 && parsedEstimate !== null
+        ? null
+        : parsedActual;
+
+      return {
+        quarter: validFiscal ? toPeriodLabel(fiscalDate, "quarterly") : "Unknown",
+        report_date:
+          reportDate && !Number.isNaN(reportDate.getTime())
+            ? toDateString(reportDate)
+            : null,
+        eps_actual: epsActual,
+        eps_estimate: parsedEstimate,
+        surprise_percent: parseNullable(row.surprisePercentage),
+      };
+    })
+    .filter((row) => row.eps_actual !== null || row.eps_estimate !== null)
+    .sort((a, b) => {
+      const da = a.report_date ? new Date(a.report_date).getTime() : 0;
+      const db = b.report_date ? new Date(b.report_date).getTime() : 0;
+      return db - da;
+    })
+    .slice(0, 16);
+
+  if (history.length === 0) return null;
+
+  const nextWithEstimate = history.find(
+    (row) => row.eps_estimate !== null && row.report_date && new Date(row.report_date).getTime() >= Date.now()
+  );
+  const latestWithEstimate = history.find((row) => row.eps_estimate !== null);
+
+  return {
+    history,
+    est_eps: nextWithEstimate?.eps_estimate ?? latestWithEstimate?.eps_estimate ?? null,
   };
 }

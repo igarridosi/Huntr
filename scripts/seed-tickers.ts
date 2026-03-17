@@ -21,6 +21,7 @@
 import { createClient } from "@supabase/supabase-js";
 import * as dotenv from "dotenv";
 import * as path from "path";
+import YahooFinance from "yahoo-finance2";
 
 // Load environment variables from .env.local (Node.js doesn't load them automatically)
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
@@ -46,6 +47,26 @@ const TICKER_SOURCES = {
   DOW:
     "https://raw.githubusercontent.com/datasets/dow-jones/master/data/dow-jones.csv",
 } as const;
+
+const MIN_MARKET_CAP = 10_000_000_000;
+
+const MANDATORY_US_LARGE_CAPS: SeedTickerRow[] = [
+  { symbol: "AAPL", name: "Apple Inc.", sector: "Technology", website: "" },
+  { symbol: "MSFT", name: "Microsoft Corporation", sector: "Technology", website: "" },
+  { symbol: "NVDA", name: "NVIDIA Corporation", sector: "Technology", website: "" },
+  { symbol: "AMZN", name: "Amazon.com, Inc.", sector: "Consumer Discretionary", website: "" },
+  { symbol: "GOOGL", name: "Alphabet Inc.", sector: "Communication Services", website: "" },
+  { symbol: "META", name: "Meta Platforms, Inc.", sector: "Communication Services", website: "" },
+  { symbol: "JPM", name: "JPMorgan Chase & Co.", sector: "Financials", website: "" },
+  { symbol: "XOM", name: "Exxon Mobil Corporation", sector: "Energy", website: "" },
+  { symbol: "NKE", name: "NIKE, Inc.", sector: "Consumer Discretionary", website: "" },
+  { symbol: "WFC", name: "Wells Fargo & Company", sector: "Financials", website: "" },
+  { symbol: "MS", name: "Morgan Stanley", sector: "Financials", website: "" },
+  { symbol: "GS", name: "The Goldman Sachs Group, Inc.", sector: "Financials", website: "" },
+  { symbol: "BAC", name: "Bank of America Corporation", sector: "Financials", website: "" },
+] as const;
+
+const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
 // ─────────────────────────────────────────────────────────
 // CSV Parser (minimal, no dependencies)
@@ -276,6 +297,68 @@ function mergeTickers(sources: SeedTickerRow[][]): SeedTickerRow[] {
   return Array.from(merged.values()).sort((a, b) => a.symbol.localeCompare(b.symbol));
 }
 
+function addMandatoryLargeCaps(rows: SeedTickerRow[]): SeedTickerRow[] {
+  return mergeTickers([rows, [...MANDATORY_US_LARGE_CAPS]]);
+}
+
+async function fetchMarketCapMap(symbols: string[]): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  const BATCH_SIZE = 100;
+
+  const ingestQuotes = (raw: unknown): void => {
+    const rows: Array<Record<string, unknown>> = Array.isArray(raw)
+      ? (raw as Array<Record<string, unknown>>)
+      : [raw as Record<string, unknown>];
+
+    for (const row of rows) {
+      const symbol = String(row.symbol ?? "").toUpperCase();
+      const marketCap = Number(row.marketCap ?? 0);
+      if (symbol && Number.isFinite(marketCap) && marketCap > 0) {
+        map.set(symbol, marketCap);
+      }
+    }
+  };
+
+  const fetchBatchSafely = async (batchSymbols: string[]): Promise<void> => {
+    if (batchSymbols.length === 0) return;
+
+    try {
+      const raw = await yahooFinance.quote(batchSymbols);
+      ingestQuotes(raw);
+      return;
+    } catch {
+      if (batchSymbols.length === 1) {
+        return;
+      }
+
+      const mid = Math.floor(batchSymbols.length / 2);
+      await fetchBatchSafely(batchSymbols.slice(0, mid));
+      await fetchBatchSafely(batchSymbols.slice(mid));
+    }
+  };
+
+  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
+    const batch = symbols.slice(i, i + BATCH_SIZE);
+    await fetchBatchSafely(batch);
+  }
+
+  return map;
+}
+
+async function filterByLargeCap(rows: SeedTickerRow[]): Promise<SeedTickerRow[]> {
+  const symbols = rows.map((row) => row.symbol.toUpperCase());
+  const capMap = await fetchMarketCapMap(symbols);
+
+  const mandatorySet = new Set(MANDATORY_US_LARGE_CAPS.map((row) => row.symbol.toUpperCase()));
+
+  return rows.filter((row) => {
+    const symbol = row.symbol.toUpperCase();
+    if (mandatorySet.has(symbol)) return true;
+    const marketCap = capMap.get(symbol) ?? 0;
+    return marketCap >= MIN_MARKET_CAP;
+  });
+}
+
 interface LogoSearchResult {
   symbol: string;
   website: string;
@@ -378,10 +461,10 @@ async function main() {
     fetchText(TICKER_SOURCES.DOW),
   ]);
 
-  let sp500Rows: SeedTickerRow[] = sp500Csv ? parseCSV(sp500Csv) : getFallbackTickers();
-  let nasdaqRows: SeedTickerRow[] = nasdaqTxt ? parseNasdaqListed(nasdaqTxt) : [];
-  let otherRows: SeedTickerRow[] = otherTxt ? parseOtherListed(otherTxt) : [];
-  let dowRows: SeedTickerRow[] = dowCsv ? parseDowCSV(dowCsv) : getDowFallbackTickers();
+  const sp500Rows: SeedTickerRow[] = sp500Csv ? parseCSV(sp500Csv) : getFallbackTickers();
+  const nasdaqRows: SeedTickerRow[] = nasdaqTxt ? parseNasdaqListed(nasdaqTxt) : [];
+  const otherRows: SeedTickerRow[] = otherTxt ? parseOtherListed(otherTxt) : [];
+  const dowRows: SeedTickerRow[] = dowCsv ? parseDowCSV(dowCsv) : getDowFallbackTickers();
 
   console.log(`   • S&P 500 rows: ${sp500Rows.length}${sp500Csv ? "" : " (fallback)"}`);
   console.log(`   • NASDAQ listed rows: ${nasdaqRows.length}${nasdaqTxt ? "" : " (failed)"}`);
@@ -393,7 +476,12 @@ async function main() {
   }
 
   let tickers = mergeTickers([sp500Rows, dowRows, nasdaqRows, otherRows]);
+  tickers = addMandatoryLargeCaps(tickers);
   console.log(`   ✅ Merged unique symbols: ${tickers.length}\n`);
+
+  console.log(`📊 Filtering to market cap >= ${MIN_MARKET_CAP.toLocaleString("en-US")}...`);
+  tickers = await filterByLargeCap(tickers);
+  console.log(`   ✅ Large-cap universe: ${tickers.length}\n`);
 
   // ── Step 1.5: Resolve website domains for ticker logos (AllInvestView) ──
   const prioritySymbols = new Set(sp500Rows.map((row) => row.symbol.toUpperCase()));

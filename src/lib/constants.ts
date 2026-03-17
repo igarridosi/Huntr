@@ -32,6 +32,7 @@ export const QUERY_KEYS = {
   STOCK_DAILY_HISTORY: (window: "1W" | "1M" | "YTD" | "1Y" | "ALL", tickersKey: string) =>
     ["stock", "daily-history", window, tickersKey] as const,
   STOCK_BUYBACK: (tickersKey: string) => ["stock", "buyback", tickersKey] as const,
+  STOCK_EARNINGS_INSIGHTS: (tickersKey: string) => ["stock", "earnings-insights", tickersKey] as const,
   MARKET_INDICES: ["market", "indices"] as const,
   FINANCIALS: (ticker: string) => ["financials", ticker] as const,
   WATCHLIST: (userId: string) => ["watchlist", userId] as const,

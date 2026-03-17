@@ -11,7 +11,12 @@
 "use server";
 
 import * as dataService from "@/lib/api";
-import type { StockProfile, StockQuote, MarketIndexQuote } from "@/types/stock";
+import type {
+  StockProfile,
+  StockQuote,
+  MarketIndexQuote,
+  EarningsInsight,
+} from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 
@@ -63,6 +68,12 @@ export async function fetchBatchBuybackStrength(
   tickers: string[]
 ): Promise<Record<string, number>> {
   return dataService.getBatchBuybackStrength(tickers);
+}
+
+export async function fetchBatchEarningsInsights(
+  tickers: string[]
+): Promise<Record<string, EarningsInsight>> {
+  return dataService.getBatchEarningsInsights(tickers);
 }
 
 export async function fetchCompanyFinancials(
