@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Calculator, RotateCcw, Zap } from "lucide-react";
+import { Calculator, ChevronDown, FolderOpen, RotateCcw, Save, Trash2, Zap } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,8 @@ import {
   useStockProfile,
   useFinancials,
 } from "@/hooks/use-stock-data";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useDCFScenarios } from "@/hooks/use-dcf-scenarios";
 import {
   runDCF,
   generateDCFScenarios,
@@ -69,7 +71,11 @@ export default function DcfCalculatorPage() {
   const [scenarios, setScenarios] = useState<DCFScenarioSet | null>(null);
   const [activeScenario, setActiveScenario] = useState<DCFScenarioKey>("base");
   const [isPopulated, setIsPopulated] = useState(false);
+  const [isSavedMenuOpen, setIsSavedMenuOpen] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const animationRef = useRef<number | null>(null);
+  const { user } = useSupabase();
+  const { savedScenarios, isLoading: savedScenariosLoading, saveScenario, deleteScenario } = useDCFScenarios();
 
   const {
     data: quote,
@@ -157,6 +163,27 @@ export default function DcfCalculatorPage() {
     animateInputsTo(scenarios[scenario].inputs, 420);
   }, [scenarios, animateInputsTo]);
 
+  useEffect(() => {
+    if (!scenarios || !isPopulated) return;
+
+    const current = scenarios[activeScenario];
+    if (!current) return;
+
+    const same = JSON.stringify(current.inputs) === JSON.stringify(inputs);
+    if (same) return;
+
+    setScenarios((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [activeScenario]: {
+          ...prev[activeScenario],
+          inputs: { ...inputs },
+        },
+      };
+    });
+  }, [activeScenario, inputs, isPopulated, scenarios]);
+
   const handleTickerSelect = useCallback((t: string) => {
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
@@ -168,8 +195,60 @@ export default function DcfCalculatorPage() {
     setWaccEstimate(null);
     setActiveScenario("base");
     setIsPopulated(false);
+    setIsSavedMenuOpen(false);
+    setSaveStatus("idle");
     setEpsInputs(DEFAULT_EPS_INPUTS);
   }, []);
+
+  const applySavedScenario = useCallback((payload: {
+    ticker: string;
+    scenarios: DCFScenarioSet;
+    activeScenario: DCFScenarioKey;
+    waccEstimate: WACCEstimate | null;
+  }) => {
+    if (animationRef.current !== null) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+
+    const normalizedTicker = payload.ticker.toUpperCase();
+    const selected = payload.scenarios[payload.activeScenario] ?? payload.scenarios.base;
+
+    setTicker(normalizedTicker);
+    setScenarios(payload.scenarios);
+    setActiveScenario(payload.activeScenario);
+    setWaccEstimate(payload.waccEstimate);
+    animateInputsTo(selected.inputs, 420);
+    setIsPopulated(true);
+    setIsSavedMenuOpen(false);
+    setSaveStatus("idle");
+  }, [animateInputsTo]);
+
+  const handleSaveScenarios = useCallback(async () => {
+    if (!user || !ticker || !scenarios) return;
+
+    const scenariosToSave: DCFScenarioSet = {
+      ...scenarios,
+      [activeScenario]: {
+        ...scenarios[activeScenario],
+        inputs: { ...inputs },
+      },
+    };
+
+    const ok = await saveScenario({
+      ticker: ticker.toUpperCase(),
+      scenarios: scenariosToSave,
+      activeScenario,
+      waccEstimate,
+    });
+
+    setScenarios(scenariosToSave);
+    setSaveStatus(ok ? "saved" : "error");
+  }, [activeScenario, inputs, saveScenario, scenarios, ticker, user, waccEstimate]);
+
+  const handleDeleteSavedScenario = useCallback(async (savedTicker: string) => {
+    await deleteScenario(savedTicker);
+  }, [deleteScenario]);
 
   const handlePopulateEPS = useCallback(() => {
     if (!quote || !financials) return;
@@ -223,6 +302,9 @@ export default function DcfCalculatorPage() {
       financialsFetching);
   const baseFCF = inputs.baseRevenue * inputs.baseFCFMargin;
   const canPopulateEPS = !!quote && !!financials;
+  const normalizedTicker = ticker.toUpperCase();
+  const savedForTicker = savedScenarios.find((entry) => entry.ticker === normalizedTicker);
+  const canLoadSavedTicker = !!savedForTicker;
 
   return (
     <div className="space-y-6 w-full">
@@ -315,6 +397,21 @@ export default function DcfCalculatorPage() {
                     Auto-Populate
                   </Button>
                 )}
+
+                {canLoadSavedTicker && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0"
+                    onClick={() => {
+                      if (!savedForTicker) return;
+                      applySavedScenario(savedForTicker);
+                    }}
+                  >
+                    <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
+                    Load Saved
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -399,7 +496,92 @@ export default function DcfCalculatorPage() {
                       Auto-Populate
                     </Button>
                   )}
+
+                  {canLoadSavedTicker && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={() => {
+                        if (!savedForTicker) return;
+                        applySavedScenario(savedForTicker);
+                      }}
+                    >
+                      <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
+                      Load Saved
+                    </Button>
+                  )}
+
+                  {isPopulated && user && scenarios && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="shrink-0"
+                      onClick={handleSaveScenarios}
+                    >
+                      <Save className="w-3.5 h-3.5 mr-1.5" />
+                      Save Scenarios
+                    </Button>
+                  )}
+
+                  {isPopulated && user && (
+                    <div className="relative shrink-0">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setIsSavedMenuOpen((value) => !value)}
+                        className="gap-1"
+                      >
+                        Saved ({savedScenarios.length})
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </Button>
+
+                      {isSavedMenuOpen && (
+                        <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-wolf-border/50 bg-midnight-rock/95 backdrop-blur p-1.5 shadow-xl">
+                          {savedScenariosLoading ? (
+                            <p className="px-2 py-2 text-xs text-mist">Loading saved scenarios...</p>
+                          ) : savedScenarios.length === 0 ? (
+                            <p className="px-2 py-2 text-xs text-mist">No saved scenarios yet.</p>
+                          ) : (
+                            <div className="max-h-64 overflow-y-auto space-y-1">
+                              {savedScenarios.map((entry) => (
+                                <div
+                                  key={`${entry.ticker}-${entry.updatedAt}`}
+                                  className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-sunset-orange/10 transition-colors"
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={() => applySavedScenario(entry)}
+                                    className="min-w-0 flex-1 text-left"
+                                  >
+                                    <p className="text-xs font-semibold text-snow-peak group-hover:text-sunset-orange transition-colors">{entry.ticker}</p>
+                                    <p className="text-[11px] text-mist group-hover:text-sunset-orange/80 transition-colors">Updated {new Date(entry.updatedAt).toLocaleDateString("en-US")}</p>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteSavedScenario(entry.ticker)}
+                                    className="ml-2 rounded p-1 text-mist hover:text-sunset-orange hover:bg-sunset-orange/10 transition-colors"
+                                    aria-label={`Delete saved scenarios for ${entry.ticker}`}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {saveStatus !== "idle" && isPopulated && user && (
+                  <p className={saveStatus === "saved" ? "mt-2 text-[11px] text-emerald-400" : "mt-2 text-[11px] text-rose-400"}>
+                    {saveStatus === "saved" ? "Scenarios saved to your account." : "Could not save scenarios. Please try again."}
+                  </p>
+                )}
               </CardContent>
             </Card>
 

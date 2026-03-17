@@ -441,51 +441,45 @@ function signToneClass(value: number | null): string {
 }
 
 interface DotProps {
-  x: string;
-  y: string;
-  delay: string;
-  duration: string;
+  className: string;
 }
 
-function PanelSkeleton() {
-  const [scatterDots, setScatterDots] = useState<DotProps[]>([]);
-
-  useEffect(() => {
-     const basePattern =[
-      { x: '3%', y: '72%' },
-      { x: '9%', y: '90%' },  // Punto más bajo (rojo en tu imagen)
-      { x: '15%', y: '86%' }, // Segundo punto más bajo (rojo)
-      { x: '21%', y: '76%' },
-      { x: '27%', y: '64%' },
-      { x: '33%', y: '51%' },
-      { x: '39%', y: '35%' }, // Primer pico alto
-      { x: '45%', y: '46%' }, // Caída
-      { x: '51%', y: '55%' }, // Caída más baja
-      { x: '57%', y: '42%' }, // Recuperación
-      { x: '63%', y: '42%' }, // Plano
-      { x: '69%', y: '44%' }, // Ligera caída
-      { x: '75%', y: '32%' }, // Subida
-      { x: '81%', y: '25%' }, // Sigue subiendo
-      { x: '87%', y: '28%' }, // Pequeño retroceso
-      { x: '93%', y: '24%' }, // Subida
-      { x: '98%', y: '18%' }, // Pico final más alto
-    ];
-
-    // Mapeamos el patrón base pero le añadimos tiempos de animación aleatorios
-    const patternedDots = basePattern.map((dot) => ({
-      x: dot.x,
-      y: dot.y,
-      delay: `${(Math.random() * 2).toFixed(2)}s`,
-      duration: `${(1.5 + Math.random() * 2).toFixed(2)}s`
-    }));
-    
-    setScatterDots(patternedDots);
-  },[]);
+function PanelSkeleton({ onClose }: { onClose: () => void }) {
+  const scatterDots: DotProps[] = [
+    { className: "left-[3%] top-[72%] [animation-delay:0.1s] [animation-duration:1.9s]" },
+    { className: "left-[9%] top-[90%] [animation-delay:0.3s] [animation-duration:2.2s]" },
+    { className: "left-[15%] top-[86%] [animation-delay:0.5s] [animation-duration:2.1s]" },
+    { className: "left-[21%] top-[76%] [animation-delay:0.2s] [animation-duration:1.8s]" },
+    { className: "left-[27%] top-[64%] [animation-delay:0.7s] [animation-duration:2.4s]" },
+    { className: "left-[33%] top-[51%] [animation-delay:0.4s] [animation-duration:2.0s]" },
+    { className: "left-[39%] top-[35%] [animation-delay:0.9s] [animation-duration:2.3s]" },
+    { className: "left-[45%] top-[46%] [animation-delay:0.6s] [animation-duration:1.9s]" },
+    { className: "left-[51%] top-[55%] [animation-delay:0.8s] [animation-duration:2.5s]" },
+    { className: "left-[57%] top-[42%] [animation-delay:0.4s] [animation-duration:2.1s]" },
+    { className: "left-[63%] top-[42%] [animation-delay:0.2s] [animation-duration:1.7s]" },
+    { className: "left-[69%] top-[44%] [animation-delay:0.5s] [animation-duration:2.2s]" },
+    { className: "left-[75%] top-[32%] [animation-delay:0.7s] [animation-duration:2.0s]" },
+    { className: "left-[81%] top-[25%] [animation-delay:0.35s] [animation-duration:2.3s]" },
+    { className: "left-[87%] top-[28%] [animation-delay:0.55s] [animation-duration:2.1s]" },
+    { className: "left-[93%] top-[24%] [animation-delay:0.15s] [animation-duration:1.8s]" },
+    { className: "left-[98%] top-[18%] [animation-delay:0.75s] [animation-duration:2.4s]" },
+  ];
 
   return (
     <div className="min-h-screen bg-[#081317] p-6 m-0 rounded-xl font-sans">
       <div className="mx-auto flex w-full max-w-[340px] sm:max-w-md flex-col gap-4">
         
+        <div className="flex justify-end">
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onClose}
+            aria-label="Close side panel"
+          >
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+
         {/* TOP SECTION: (Antes Next Estimate) */}
         <div className="rounded-2xl border border-slate-800/60 bg-[#0f1b23] p-5 shadow-lg">
           {/* Texto sustituido por esqueleto */}
@@ -512,14 +506,7 @@ function PanelSkeleton() {
               {scatterDots.map((dot, idx) => (
                 <div 
                   key={`dot-${idx}`} 
-                  className="absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/70 shadow-[0_0_8px_rgba(100,116,139,0.5)] animate-pulse"
-                  style={{ 
-                    left: dot.x, 
-                    top: dot.y, 
-                    // Sobrescribimos el timing de Tailwind para que cada punto sea distinto
-                    animationDelay: dot.delay,
-                    animationDuration: dot.duration
-                  }} 
+                  className={`absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/70 shadow-[0_0_8px_rgba(100,116,139,0.5)] animate-pulse ${dot.className}`}
                 />
               ))}
 
@@ -1307,7 +1294,7 @@ export default function EarningsPage() {
     }
 
     if (isPanelLoading || !selectedCache) {
-      return <PanelSkeleton />;
+      return <PanelSkeleton onClose={() => setIsPanelOpen(false)} />;
     }
 
     const highlightedQuarter =
