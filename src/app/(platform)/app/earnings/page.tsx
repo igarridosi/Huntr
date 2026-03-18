@@ -1,6 +1,6 @@
 "use client";
 
-import { fetchBatchEarningsInsights, fetchCompanyFinancials } from "@/app/actions/stock";
+import { fetchEarningsDetailData } from "@/app/actions/stock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -63,6 +63,7 @@ interface PersistedWeekItem {
   ticker: string;
   date: string;
   timing: EarningsTiming;
+  marketCap?: number | null;
 }
 
 interface PersistedWeekSnapshot {
@@ -90,6 +91,26 @@ interface SidePanelCache {
   nextEstRevenue: number | null;
   nextEarningsDate: string | null;
 }
+
+const PANEL_LOADING_DOTS = [
+  "left-[3%] top-[72%] [animation-delay:0.1s] [animation-duration:1.9s]",
+  "left-[9%] top-[90%] [animation-delay:0.3s] [animation-duration:2.2s]",
+  "left-[15%] top-[86%] [animation-delay:0.5s] [animation-duration:2.1s]",
+  "left-[21%] top-[76%] [animation-delay:0.2s] [animation-duration:1.8s]",
+  "left-[27%] top-[64%] [animation-delay:0.7s] [animation-duration:2.4s]",
+  "left-[33%] top-[51%] [animation-delay:0.4s] [animation-duration:2.0s]",
+  "left-[39%] top-[35%] [animation-delay:0.9s] [animation-duration:2.3s]",
+  "left-[45%] top-[46%] [animation-delay:0.6s] [animation-duration:1.9s]",
+  "left-[51%] top-[55%] [animation-delay:0.8s] [animation-duration:2.5s]",
+  "left-[57%] top-[42%] [animation-delay:0.4s] [animation-duration:2.1s]",
+  "left-[63%] top-[42%] [animation-delay:0.2s] [animation-duration:1.7s]",
+  "left-[69%] top-[44%] [animation-delay:0.5s] [animation-duration:2.2s]",
+  "left-[75%] top-[32%] [animation-delay:0.7s] [animation-duration:2.0s]",
+  "left-[81%] top-[25%] [animation-delay:0.35s] [animation-duration:2.3s]",
+  "left-[87%] top-[28%] [animation-delay:0.55s] [animation-duration:2.1s]",
+  "left-[93%] top-[24%] [animation-delay:0.15s] [animation-duration:1.8s]",
+  "left-[97%] top-[18%] [animation-delay:0.75s] [animation-duration:2.4s]",
+];
 
 const PERSISTED_WEEK_KEY = "huntr_earnings_current_week";
 
@@ -353,6 +374,32 @@ function writePersistedWeekSnapshot(weekStartIso: string, items: PersistedWeekIt
   window.localStorage.setItem(PERSISTED_WEEK_KEY, JSON.stringify(payload));
 }
 
+function createPersistedFallbackQuote(
+  ticker: string,
+  marketCap: number | null | undefined,
+  date: string,
+  timing: EarningsTiming
+): StockQuote {
+  return {
+    ticker,
+    price: 0,
+    current_volume: 0,
+    day_change: 0,
+    day_change_percent: 0,
+    next_earnings_date: date,
+    earnings_timing: timing,
+    // Keep persisted current-week reporters visible even if live quote vanished.
+    market_cap: marketCap && marketCap > 0 ? marketCap : 10_000_000_000,
+    shares_outstanding: 0,
+    pe_ratio: 0,
+    dividend_yield: 0,
+    fifty_two_week_high: 0,
+    fifty_two_week_low: 0,
+    avg_volume: 0,
+    beta: 0,
+  };
+}
+
 function formatDate(value: string | null): string {
   if (!value) return "-";
   const date = new Date(`${value}T00:00:00`);
@@ -445,26 +492,6 @@ interface DotProps {
 }
 
 function PanelSkeleton({ onClose }: { onClose: () => void }) {
-  const scatterDots: DotProps[] = [
-    { className: "left-[3%] top-[72%] [animation-delay:0.1s] [animation-duration:1.9s]" },
-    { className: "left-[9%] top-[90%] [animation-delay:0.3s] [animation-duration:2.2s]" },
-    { className: "left-[15%] top-[86%] [animation-delay:0.5s] [animation-duration:2.1s]" },
-    { className: "left-[21%] top-[76%] [animation-delay:0.2s] [animation-duration:1.8s]" },
-    { className: "left-[27%] top-[64%] [animation-delay:0.7s] [animation-duration:2.4s]" },
-    { className: "left-[33%] top-[51%] [animation-delay:0.4s] [animation-duration:2.0s]" },
-    { className: "left-[39%] top-[35%] [animation-delay:0.9s] [animation-duration:2.3s]" },
-    { className: "left-[45%] top-[46%] [animation-delay:0.6s] [animation-duration:1.9s]" },
-    { className: "left-[51%] top-[55%] [animation-delay:0.8s] [animation-duration:2.5s]" },
-    { className: "left-[57%] top-[42%] [animation-delay:0.4s] [animation-duration:2.1s]" },
-    { className: "left-[63%] top-[42%] [animation-delay:0.2s] [animation-duration:1.7s]" },
-    { className: "left-[69%] top-[44%] [animation-delay:0.5s] [animation-duration:2.2s]" },
-    { className: "left-[75%] top-[32%] [animation-delay:0.7s] [animation-duration:2.0s]" },
-    { className: "left-[81%] top-[25%] [animation-delay:0.35s] [animation-duration:2.3s]" },
-    { className: "left-[87%] top-[28%] [animation-delay:0.55s] [animation-duration:2.1s]" },
-    { className: "left-[93%] top-[24%] [animation-delay:0.15s] [animation-duration:1.8s]" },
-    { className: "left-[98%] top-[18%] [animation-delay:0.75s] [animation-duration:2.4s]" },
-  ];
-
   return (
     <div className="min-h-screen bg-[#081317] p-6 m-0 rounded-xl font-sans">
       <div className="mx-auto flex w-full max-w-[340px] sm:max-w-md flex-col gap-4">
@@ -503,10 +530,10 @@ function PanelSkeleton({ onClose }: { onClose: () => void }) {
               <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(51,65,85,0.15)_1px,transparent_1px),linear-gradient(to_bottom,rgba(51,65,85,0.15)_1px,transparent_1px)] bg-[size:30px_30px]" />
 
               {/* Puntos aleatorios animados */}
-              {scatterDots.map((dot, idx) => (
+              {PANEL_LOADING_DOTS.map((dotClassName, idx) => (
                 <div 
                   key={`dot-${idx}`} 
-                  className={`absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/70 shadow-[0_0_8px_rgba(100,116,139,0.5)] animate-pulse ${dot.className}`}
+                  className={`absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/70 shadow-[0_0_8px_rgba(100,116,139,0.5)] animate-pulse ${dotClassName}`}
                 />
               ))}
 
@@ -866,7 +893,7 @@ function EarningsTable({
 
   return (
     <div className="rounded-md border border-wolf-border/35 overflow-hidden">
-      <div className="max-h-[340px] overflow-auto">
+      <div className="max-h-[240px] overflow-auto">
         <table className="w-full text-xs">
           <thead className="bg-wolf-black sticky top-0">
             <tr className="text-mist">
@@ -1057,23 +1084,39 @@ export default function EarningsPage() {
     const weekIso = toWeekIso(currentWeekStart);
     const currentWeekEnd = addDays(currentWeekStart, 5);
 
-    const liveCurrentWeek = allUpcomingItems
-      .filter((item) => item.date >= currentWeekStart && item.date < currentWeekEnd)
+    const persistedCompletedItems = persistedCurrentWeekItems.filter((item) => {
+      const date = new Date(`${item.date}T00:00:00`);
+      if (Number.isNaN(date.getTime())) return false;
+      // Persist only events that are already in the past.
+      return date < today;
+    });
+
+    const liveCurrentWeekCompleted = allUpcomingItems
+      .filter(
+        (item) =>
+          item.date >= currentWeekStart &&
+          item.date < currentWeekEnd &&
+          item.date < today
+      )
       .map((item) => ({
         ticker: item.ticker,
         date: toLocalIsoDate(item.date),
         timing: item.timing,
+        marketCap: item.quote.market_cap,
       }));
 
     const mergedMap = new Map<string, PersistedWeekItem>();
-    for (const item of [...persistedCurrentWeekItems, ...liveCurrentWeek]) {
-      const key = `${item.ticker}|${item.date}|${item.timing}`;
-      mergedMap.set(key, item);
+    for (const item of [...persistedCompletedItems, ...liveCurrentWeekCompleted]) {
+      // Keep a single entry per ticker for the current week snapshot.
+      mergedMap.set(item.ticker, item);
     }
 
-    const merged = Array.from(mergedMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    const merged = Array.from(mergedMap.values()).sort((a, b) => {
+      if (a.date === b.date) return a.ticker.localeCompare(b.ticker);
+      return a.date.localeCompare(b.date);
+    });
     writePersistedWeekSnapshot(weekIso, merged);
-  }, [allUpcomingItems, currentWeekStart, persistedCurrentWeekItems]);
+  }, [allUpcomingItems, currentWeekStart, persistedCurrentWeekItems, today]);
 
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, index) => addDays(weekStart, index)),
@@ -1087,8 +1130,9 @@ export default function EarningsPage() {
     if (weekOffset !== 0) return live;
 
     const persisted = persistedCurrentWeekItems.reduce<EarningsItem[]>((acc, item) => {
-      const quote = quoteMap.get(item.ticker);
-      if (!quote) return acc;
+      const quote =
+        quoteMap.get(item.ticker) ??
+        createPersistedFallbackQuote(item.ticker, item.marketCap, item.date, item.timing);
 
       const date = new Date(`${item.date}T00:00:00`);
       if (Number.isNaN(date.getTime())) return acc;
@@ -1124,7 +1168,9 @@ export default function EarningsPage() {
           (item.profile?.name ?? "").toLowerCase().includes(term)
         );
       })
-      .filter((item) => capMatches(capFilter, item.quote.market_cap))
+      .filter((item) =>
+        item.source === "persisted" ? true : capMatches(capFilter, item.quote.market_cap)
+      )
       .filter((item) => {
         if (!watchlistTickerSet) return true;
         return watchlistTickerSet.has(item.ticker);
@@ -1246,20 +1292,16 @@ export default function EarningsPage() {
     setLoadingTicker(ticker);
 
     try {
-      const [financials, insightMap] = await Promise.all([
-        fetchCompanyFinancials(ticker),
-        fetchBatchEarningsInsights([ticker]),
-      ]);
-
-      const insight = insightMap[ticker.toUpperCase()] ?? null;
+      const detail = await fetchEarningsDetailData(ticker);
+      const insight = detail.insight ?? null;
       const rows = formatEarningsData(
-        financials?.income_statement?.quarterly,
+        detail.financials?.income_statement?.quarterly,
         insight?.history
       );
 
-      const marketCap = quoteMap.get(ticker)?.market_cap ?? null;
-      const peRatio = quoteMap.get(ticker)?.pe_ratio ?? null;
-      const annual = financials?.income_statement?.annual ?? [];
+      const marketCap = detail.quote?.market_cap ?? quoteMap.get(ticker)?.market_cap ?? null;
+      const peRatio = detail.quote?.pe_ratio ?? quoteMap.get(ticker)?.pe_ratio ?? null;
+      const annual = detail.financials?.income_statement?.annual ?? [];
       const latestAnnualRevenue = annual.length > 0 ? annual[annual.length - 1].revenue : null;
       const psRatio =
         marketCap != null && latestAnnualRevenue != null && latestAnnualRevenue > 0
@@ -1275,7 +1317,7 @@ export default function EarningsPage() {
           psRatio,
           nextEstEps: insight?.est_eps ?? null,
           nextEstRevenue: insight?.est_revenue ?? null,
-          nextEarningsDate: quoteMap.get(ticker)?.next_earnings_date ?? null,
+          nextEarningsDate: detail.quote?.next_earnings_date ?? quoteMap.get(ticker)?.next_earnings_date ?? null,
         },
       }));
     } finally {
@@ -1293,14 +1335,10 @@ export default function EarningsPage() {
       );
     }
 
-    if (isPanelLoading || !selectedCache) {
-      return <PanelSkeleton onClose={() => setIsPanelOpen(false)} />;
-    }
-
-    const highlightedQuarter =
-      hoveredChartIndex != null && hoveredChartIndex >= 0 && hoveredChartIndex < chartRows.length
-        ? chartRows[hoveredChartIndex].quarter
-        : null;
+    const panelMarketCap = selectedCache?.marketCap ?? selectedItem.quote.market_cap ?? null;
+    const panelPeRatio = selectedCache?.peRatio ?? selectedItem.quote.pe_ratio ?? null;
+    const panelPsRatio = selectedCache?.psRatio ?? null;
+    const hasHistoryLoaded = !!selectedCache;
 
     return (
       <div className="h-full min-h-0 flex flex-col">
@@ -1348,15 +1386,15 @@ export default function EarningsPage() {
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div>
               <p className="text-[10px] uppercase tracking-wide text-mist">Mkt Cap</p>
-              <p className="text-sm font-semibold text-snow-peak">{formatMarketCap(selectedCache.marketCap)}</p>
+              <p className="text-sm font-semibold text-snow-peak">{formatMarketCap(panelMarketCap)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-mist">P/E</p>
-              <p className="text-sm font-semibold text-snow-peak">{formatRatio(selectedCache.peRatio)}</p>
+              <p className="text-sm font-semibold text-snow-peak">{formatRatio(panelPeRatio)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-mist">P/S</p>
-              <p className="text-sm font-semibold text-snow-peak">{formatRatio(selectedCache.psRatio)}</p>
+              <p className="text-sm font-semibold text-snow-peak">{formatRatio(panelPsRatio)}</p>
             </div>
           </div>
         </div>
@@ -1394,35 +1432,55 @@ export default function EarningsPage() {
             <p className="text-[11px] uppercase tracking-wide text-mist">Next estimate</p>
             <p className="mt-1 text-sm font-semibold text-snow-peak">
               {chartMetric === "eps"
-                ? `EPS: ${formatEps(selectedCache.nextEstEps)}`
-                : `Revenue: ${formatCompactMoney(selectedCache.nextEstRevenue)}`}
+                ? `EPS: ${formatEps(selectedCache?.nextEstEps ?? null)}`
+                : `Revenue: ${formatCompactMoney(selectedCache?.nextEstRevenue ?? null)}`}
             </p>
-            <p className="mt-1 text-[10px] text-mist/80">EPS source: Yahoo consensus (Alpha fallback).</p>
           </div>
 
           <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-gradient-to-b from-[#0A171B] to-[#091215] px-2 py-0 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
-            <EarningsMetricChart
-              metric={chartMetric}
-              data={chartRows}
-              hoveredIndex={hoveredChartIndex}
-              hoverSeries={hoveredSeries}
-              onPointHover={(index, series) => {
-                setHoveredChartIndex(index);
-                setHoveredSeries(series);
-              }}
-              onPointLeave={() => {
-                setHoveredChartIndex(null);
-                setHoveredSeries(null);
-              }}
-            />
+            {hasHistoryLoaded ? (
+              <EarningsMetricChart
+                metric={chartMetric}
+                data={chartRows}
+                hoveredIndex={hoveredChartIndex}
+                hoverSeries={hoveredSeries}
+                onPointHover={(index, series) => {
+                  setHoveredChartIndex(index);
+                  setHoveredSeries(series);
+                }}
+                onPointLeave={() => {
+                  setHoveredChartIndex(null);
+                  setHoveredSeries(null);
+                }}
+              />
+            ) : isPanelLoading ? (
+              <div className="relative h-full w-full overflow-hidden">
+                {PANEL_LOADING_DOTS.map((dotClassName, idx) => (
+                  <div
+                    key={`panel-loading-dot-${idx}`}
+                    className={`absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/75 shadow-[0_0_10px_rgba(255,140,66,0.55)] animate-pulse ${dotClassName}`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="h-full w-full flex items-center justify-center text-xs text-mist">
+                No chart data available
+              </div>
+            )}
           </div>
 
-          <EarningsTable
-            rows={tableRows}
-            chartRows={chartRows}
-            metric={chartMetric}
-            onHover={setHoveredChartIndex}
-          />
+          {hasHistoryLoaded ? (
+            <EarningsTable
+              rows={tableRows}
+              chartRows={chartRows}
+              metric={chartMetric}
+              onHover={setHoveredChartIndex}
+            />
+          ) : (
+            <div className="rounded-md border border-wolf-border/35 px-3 py-4 text-xs text-mist">
+              Loading earnings history...
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1441,7 +1499,7 @@ export default function EarningsPage() {
       </div>
 
       <div className={isPanelOpen && selectedItem ? "grid grid-cols-1 2xl:grid-cols-[1fr_450px] gap-4 flex-1 min-h-0" : "grid grid-cols-1 gap-4 flex-1 min-h-0"}>
-        <Card className="h-[100vh] min-h-0">
+        <Card className="min-h-0">
           <CardContent className="p-2 h-full min-h-0 flex flex-col">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-wolf-border/30 p-3">
               <div className="flex items-center gap-2">
@@ -1490,23 +1548,23 @@ export default function EarningsPage() {
                 <select
                   value={capFilter}
                   onChange={(event) => setCapFilter(event.target.value as CapFilter)}
-                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black/40 px-3 text-xs text-snow-peak"
+                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black px-3 text-xs text-snow-peak [color-scheme:dark]"
                   aria-label="Market cap filter"
                 >
-                  <option value="all">Market Cap: 10B+</option>
-                  <option value="mega">Mega (200B+)</option>
-                  <option value="large">Large (10B-200B)</option>
+                  <option className="bg-wolf-surface text-snow-peak" value="all">Market Cap: 10B+</option>
+                  <option className="bg-wolf-surface text-snow-peak" value="mega">Mega (200B+)</option>
+                  <option className="bg-wolf-surface text-snow-peak" value="large">Large (10B-200B)</option>
                 </select>
 
                 <select
                   value={watchlistFilterId}
                   onChange={(event) => setWatchlistFilterId(event.target.value)}
-                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black/40 px-3 text-xs text-snow-peak"
+                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black px-3 text-xs text-snow-peak [color-scheme:dark]"
                   aria-label="Watchlist filter"
                 >
-                  <option value="all">Filter by Watchlist: All</option>
+                  <option className="bg-wolf-surface text-snow-peak" value="all">Filter by Watchlist: All</option>
                   {lists.map((list) => (
-                    <option key={list.id} value={list.id}>{list.name}</option>
+                    <option className="bg-wolf-surface text-snow-peak" key={list.id} value={list.id}>{list.name}</option>
                   ))}
                 </select>
               </div>
@@ -1643,8 +1701,8 @@ export default function EarningsPage() {
       </div>
 
       {isPanelOpen && selectedItem ? (
-        <div className="2xl:hidden fixed inset-0 z-40 bg-black/20">
-          <div className="absolute inset-y-0 right-0 w-full max-w-[480px] bg-midnight-rock border-l border-wolf-border/45 overflow-y-auto">
+        <div className="2xl:hidden fixed inset-0 z-40 backdrop-blur-[5px]">
+          <div className="absolute bg-wolf-black inset-y-0 right-0 w-full max-w-[480px] bg-midnight-rock border-l border-wolf-border/45 overflow-y-auto">
             {renderPanelContent()}
           </div>
         </div>

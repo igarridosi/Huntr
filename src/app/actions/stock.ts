@@ -19,6 +19,7 @@ import type {
 } from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
+import type { EarningsDetailData } from "@/lib/api";
 
 export async function fetchStockProfile(
   ticker: string
@@ -95,4 +96,10 @@ export async function fetchFullStockData(ticker: string) {
 
 export async function fetchDefaultWatchlistTickers(): Promise<string[]> {
   return dataService.getWatchlistTickers();
+}
+
+export async function fetchEarningsDetailData(
+  ticker: string
+): Promise<EarningsDetailData> {
+  return dataService.getEarningsDetailData(ticker);
 }

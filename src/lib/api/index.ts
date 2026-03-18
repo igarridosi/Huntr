@@ -35,6 +35,11 @@ import {
   tickerRowsToProfiles,
   searchTickersFromDB,
 } from "./tickers";
+import {
+  getEarningsDetailData,
+  prewarmEarningsDetailCacheForTickers,
+  type EarningsDetailData,
+} from "./earnings-detail";
 
 const MIN_MARKET_CAP = 10_000_000_000;
 
@@ -291,3 +296,12 @@ export async function searchTickers(
 export async function getWatchlistTickers(): Promise<string[]> {
   return mock.getDefaultWatchlistTickers();
 }
+
+export {
+  getEarningsDetailData,
+  prewarmEarningsDetailCacheForTickers,
+};
+
+export type {
+  EarningsDetailData,
+};
