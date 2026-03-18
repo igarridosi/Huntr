@@ -1429,7 +1429,7 @@ export default function EarningsPage() {
   };
 
   return (
-    <div className="w-full max-h-[calc(80vh)] flex flex-col gap-4 overflow-hidden">
+    <div className="w-full min-h-0 flex flex-col gap-4">
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
           <CalendarClock className="w-5 h-5 text-sunset-orange" />
@@ -1441,7 +1441,7 @@ export default function EarningsPage() {
       </div>
 
       <div className={isPanelOpen && selectedItem ? "grid grid-cols-1 2xl:grid-cols-[1fr_450px] gap-4 flex-1 min-h-0" : "grid grid-cols-1 gap-4 flex-1 min-h-0"}>
-        <Card className="h-full min-h-0">
+        <Card className="h-[100vh] min-h-0">
           <CardContent className="p-2 h-full min-h-0 flex flex-col">
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-wolf-border/30 p-3">
               <div className="flex items-center gap-2">
@@ -1476,21 +1476,21 @@ export default function EarningsPage() {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <div className="relative">
+              <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
+                <div className="relative w-full sm:w-auto sm:min-w-[220px]">
                   <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-mist/70" />
                   <Input
                     value={search}
                     onChange={(event) => setSearch(event.target.value)}
                     placeholder="Search ticker or company"
-                    className="h-9 w-[220px] pl-8 text-xs"
+                    className="h-9 w-full sm:w-[220px] pl-8 text-xs"
                   />
                 </div>
 
                 <select
                   value={capFilter}
                   onChange={(event) => setCapFilter(event.target.value as CapFilter)}
-                  className="h-9 rounded-md border border-wolf-border/40 bg-wolf-black/40 px-3 text-xs text-snow-peak"
+                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black/40 px-3 text-xs text-snow-peak"
                   aria-label="Market cap filter"
                 >
                   <option value="all">Market Cap: 10B+</option>
@@ -1501,7 +1501,7 @@ export default function EarningsPage() {
                 <select
                   value={watchlistFilterId}
                   onChange={(event) => setWatchlistFilterId(event.target.value)}
-                  className="h-9 rounded-md border border-wolf-border/40 bg-wolf-black/40 px-3 text-xs text-snow-peak"
+                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black/40 px-3 text-xs text-snow-peak"
                   aria-label="Watchlist filter"
                 >
                   <option value="all">Filter by Watchlist: All</option>
@@ -1512,8 +1512,8 @@ export default function EarningsPage() {
               </div>
             </div>
 
-            <div className="flex-1  overflow-hidden">
-              <div className="grid grid-cols-1 xl:grid-cols-5 gap-3 p-3">
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 p-3">
               <div className="hidden xl:grid xl:col-span-5 grid-cols-5 rounded-md border border-wolf-border/40 bg-wolf-black/35 overflow-hidden">
                 {weekDays.map((day) => (
                   <div key={`calendar-${day.toISOString()}`} className="px-3 py-2 border-r border-wolf-border/35 last:border-r-0 text-center">
@@ -1552,7 +1552,7 @@ export default function EarningsPage() {
                       </p>
                     </div>
 
-                    <div className="p-2 space-y-2 min-h-[380px] max-h-[520px] overflow-y-auto">
+                    <div className="p-2 space-y-2 min-h-[280px] sm:min-h-[320px] xl:min-h-[380px] max-h-[58vh] xl:max-h-[520px] overflow-y-auto">
                       {isLoading ? (
                         <div className="rounded-xl border border-wolf-border/45 bg-[#0A171B]/75 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
                           <div className="flex items-center gap-3">
@@ -1579,7 +1579,7 @@ export default function EarningsPage() {
                             {section.items.length === 0 ? (
                               <p className="text-xs text-mist/70">No reports</p>
                             ) : (
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-2 xl:grid-cols-auto">
+                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-2">
                                 {section.items.map((item) => {
                                   const isSelected = selectedTicker === item.ticker && isPanelOpen;
                                   const isInWatchlist = allWatchlistTickerSet.has(item.ticker);
@@ -1591,8 +1591,8 @@ export default function EarningsPage() {
                                       onClick={() => { void handleSelectTicker(item.ticker); }}
                                       className={
                                         isSelected
-                                          ? "rounded-md border border-sunset-orange/60 bg-wolf-surface/90 p-2 min-h-[78px] min-w-[4vw] gap-8 flex justify-center text-center"
-                                          : "rounded-md border border-wolf-border/45 bg-wolf-surface/90 p-2 min-h-[78px] min-w-[4vw] gap-2 flex justify-center text-center hover:border-sunset-orange/30 transition-colors"
+                                          ? "rounded-md border border-sunset-orange/60 bg-wolf-surface/90 p-2 min-h-[78px] w-full gap-3 flex justify-center text-center"
+                                          : "rounded-md border border-wolf-border/45 bg-wolf-surface/90 p-2 min-h-[78px] w-full gap-2 flex justify-center text-center hover:border-sunset-orange/30 transition-colors"
                                       }
                                       aria-label={`Open ${item.ticker} earnings quick view`}
                                     >
@@ -1643,7 +1643,7 @@ export default function EarningsPage() {
       </div>
 
       {isPanelOpen && selectedItem ? (
-        <div className="2xl:hidden fixed inset-0 z-40 bg-black/45">
+        <div className="2xl:hidden fixed inset-0 z-40 bg-black/20">
           <div className="absolute inset-y-0 right-0 w-full max-w-[480px] bg-midnight-rock border-l border-wolf-border/45 overflow-y-auto">
             {renderPanelContent()}
           </div>

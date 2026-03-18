@@ -1,18 +1,26 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
 import { CommandPalette } from "@/components/search/command-palette";
+import { cn } from "@/lib/utils";
+import { ROUTES } from "@/lib/constants";
 
 export default function PlatformLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   const [searchOpen, setSearchOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [desktopMenuOpen, setDesktopMenuOpen] = useState(false);
+
+  const isInsightsRoute = pathname === ROUTES.APP_INSIGHTS;
+  const useDesktopOverlaySidebar = pathname.startsWith("/app") && !isInsightsRoute;
 
   const handleSearchClick = useCallback(() => {
     setSearchOpen(true);
@@ -22,14 +30,29 @@ export default function PlatformLayout({
     setMobileMenuOpen((prev) => !prev);
   }, []);
 
+  const handleDesktopMenuClick = useCallback(() => {
+    if (useDesktopOverlaySidebar) {
+      setDesktopMenuOpen((prev) => !prev);
+    }
+  }, [useDesktopOverlaySidebar]);
+
   const handleCloseMobile = useCallback(() => {
     setMobileMenuOpen(false);
   }, []);
 
+  useEffect(() => {
+    setDesktopMenuOpen(false);
+  }, [pathname]);
+
   return (
     <div className="min-h-screen bg-wolf-black">
       {/* Desktop Sidebar */}
-      <Sidebar onSearchClick={handleSearchClick} />
+      <Sidebar
+        onSearchClick={handleSearchClick}
+        overlay={useDesktopOverlaySidebar}
+        open={useDesktopOverlaySidebar ? desktopMenuOpen : true}
+        onClose={() => setDesktopMenuOpen(false)}
+      />
 
       {/* Mobile Sidebar */}
       <MobileSidebar
@@ -39,11 +62,18 @@ export default function PlatformLayout({
       />
 
       {/* Main Content Area */}
-      <div className="lg:pl-64 flex flex-col min-h-screen">
+      <div
+        className={cn(
+          "flex flex-col min-h-screen",
+          !useDesktopOverlaySidebar && "lg:pl-64"
+        )}
+      >
         {/* Topbar */}
         <Topbar
           onSearchClick={handleSearchClick}
           onMenuClick={handleMenuClick}
+          onDesktopMenuClick={handleDesktopMenuClick}
+          showDesktopMenuToggle={useDesktopOverlaySidebar}
         />
 
         {/* Page Content */}

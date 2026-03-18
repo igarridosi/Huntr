@@ -14,6 +14,7 @@ import {
   Settings,
   LogOut,
   Crosshair,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -25,6 +26,9 @@ import { useSupabase } from "@/providers/supabase-provider";
 
 interface SidebarProps {
   onSearchClick?: () => void;
+  overlay?: boolean;
+  open?: boolean;
+  onClose?: () => void;
 }
 
 interface NavItem {
@@ -68,7 +72,12 @@ const mainNav: NavItem[] = [
   },
 ];
 
-export function Sidebar({ onSearchClick }: SidebarProps) {
+export function Sidebar({
+  onSearchClick,
+  overlay = false,
+  open = true,
+  onClose,
+}: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { supabase } = useSupabase();
@@ -90,8 +99,25 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
     }
   }, [recentSearches, router]);
 
+  if (!open) return null;
+
   return (
-    <aside className="hidden lg:flex flex-col w-64 h-screen bg-wolf-surface border-r border-wolf-border/50 fixed left-0 top-0 z-40">
+    <>
+      {overlay ? (
+        <button
+          type="button"
+          aria-label="Close desktop sidebar overlay"
+          onClick={onClose}
+          className="hidden lg:block fixed inset-0 z-40 bg-wolf-black/45 backdrop-blur-[1px]"
+        />
+      ) : null}
+
+      <aside
+        className={cn(
+          "hidden lg:flex flex-col w-64 h-screen bg-wolf-surface border-r border-wolf-border/50 fixed left-0 top-0",
+          overlay ? "z-50 shadow-2xl" : "z-40"
+        )}
+      >
       {/* ---- Logo / Brand ---- */}
       <div className="flex items-center gap-3 px-6 h-16 shrink-0">
         <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-sunset-orange/15">
@@ -105,6 +131,16 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
             Wolf of Value St.
           </p>
         </div>
+        {overlay ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close sidebar"
+            className="ml-auto p-1.5 rounded-md text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        ) : null}
       </div>
 
       <Separator className="opacity-50" />
@@ -212,6 +248,7 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
           Sign Out
         </button>
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }

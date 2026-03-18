@@ -7,21 +7,40 @@ import { Button } from "@/components/ui/button";
 interface TopbarProps {
   onSearchClick?: () => void;
   onMenuClick?: () => void;
+  onDesktopMenuClick?: () => void;
+  showDesktopMenuToggle?: boolean;
 }
 
-export function Topbar({ onSearchClick, onMenuClick }: TopbarProps) {
+export function Topbar({
+  onSearchClick,
+  onMenuClick,
+  onDesktopMenuClick,
+  showDesktopMenuToggle = false,
+}: TopbarProps) {
   return (
     <header className="sticky top-0 z-30 flex items-center h-14 px-4 lg:px-6 bg-wolf-black/80 backdrop-blur-md border-b border-wolf-border/30">
       {/* Mobile menu toggle */}
       <Button
         variant="ghost"
         size="icon-sm"
-        className="lg:hidden mr-2"
+        className="inline-flex lg:hidden mr-2"
         onClick={onMenuClick}
         aria-label="Toggle menu"
       >
         <Menu className="w-5 h-5" />
       </Button>
+
+      {showDesktopMenuToggle ? (
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="hidden lg:inline-flex mr-2"
+          onClick={onDesktopMenuClick}
+          aria-label="Toggle desktop menu"
+        >
+          <Menu className="w-5 h-5" />
+        </Button>
+      ) : null}
 
       {/* Mobile brand */}
       <div className="flex items-center gap-2 lg:hidden">

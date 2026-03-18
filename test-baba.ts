@@ -8,7 +8,8 @@ async function run() {
     console.log("YAHOO HISTORY:", JSON.stringify(raw.earningsHistory?.history, null, 2));
     console.log("YAHOO TREND:", JSON.stringify(raw.earningsTrend?.trend?.map(t => ({ p: t.period, e: t.earningsEstimate?.avg })), null, 2));
   } catch (err) {
-    console.log("YAHOO ERR:", err.message);
+    const message = err instanceof Error ? err.message : String(err);
+    console.log("YAHOO ERR:", message);
   }
 }
 run();
