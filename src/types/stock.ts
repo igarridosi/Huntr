@@ -20,6 +20,13 @@ export interface StockQuote {
   ticker: string;
   price: number;
   current_volume?: number;
+  dividend_rate?: number;
+  dividend_date?: string | null;
+  ex_dividend_date?: string | null;
+  payout_ratio?: number;
+  five_year_avg_dividend_yield?: number;
+  revenue_growth?: number;
+  earnings_growth?: number;
   day_change?: number;
   day_change_percent?: number;
   next_earnings_date?: string | null;

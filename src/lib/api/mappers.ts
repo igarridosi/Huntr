@@ -105,6 +105,7 @@ export function mapToStockQuote(
   const price = data.price;
   const detail = data.summaryDetail;
   const stats = data.defaultKeyStatistics;
+  const financial = data.financialData;
   const earningsDates = data.calendarEvents?.earnings?.earningsDate ?? [];
 
   const previousClose =
@@ -128,6 +129,8 @@ export function mapToStockQuote(
     .sort((a, b) => a.getTime() - b.getTime());
 
   const now = Date.now();
+  const dividendDate = parseMaybeDate(data.calendarEvents?.dividends?.dividendDate);
+  const exDividendDate = parseMaybeDate(detail?.exDividendDate);
   const nextEarnings =
     parsedEarnings.find((date) => date.getTime() >= now) ??
     parsedEarnings[parsedEarnings.length - 1] ??
@@ -139,6 +142,13 @@ export function mapToStockQuote(
     current_volume:
       (price?.regularMarketVolume as number | undefined) ??
       n(detail?.volume),
+    dividend_rate: n(detail?.dividendRate),
+    dividend_date: dividendDate ? dividendDate.toISOString().split("T")[0] : null,
+    ex_dividend_date: exDividendDate ? exDividendDate.toISOString().split("T")[0] : null,
+    payout_ratio: n(detail?.payoutRatio),
+    five_year_avg_dividend_yield: n(detail?.fiveYearAvgDividendYield),
+    revenue_growth: n(financial?.revenueGrowth),
+    earnings_growth: n(financial?.earningsGrowth),
     day_change: dayChange,
     day_change_percent: dayChangePercent,
     next_earnings_date: nextEarnings
@@ -150,7 +160,7 @@ export function mapToStockQuote(
     dividend_yield: n(detail?.dividendYield),
     fifty_two_week_high: n(detail?.fiftyTwoWeekHigh),
     fifty_two_week_low: n(detail?.fiftyTwoWeekLow),
-    avg_volume: n(detail?.averageVolume),
+    avg_volume: n(detail?.averageVolume) > 0 ? n(detail?.averageVolume) : n(detail?.averageVolume10days),
     beta: n(detail?.beta),
   };
 }

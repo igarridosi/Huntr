@@ -1910,7 +1910,7 @@ function PositionCards({
                 <button
                   type="button"
                   onClick={() => onEdit(pos)}
-                  className="opacity-0 group-hover:opacity-100 text-mist hover:text-snow-peak transition-all"
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-mist hover:text-snow-peak transition-all"
                   aria-label={`Edit ${pos.ticker}`}
                 >
                   <Pencil className="w-3.5 h-3.5" />
@@ -1918,7 +1918,7 @@ function PositionCards({
                 <button
                   type="button"
                   onClick={() => onRemove(pos.ticker)}
-                  className="opacity-0 group-hover:opacity-100 text-mist hover:text-bearish transition-all"
+                  className="opacity-100 sm:opacity-0 sm:group-hover:opacity-100 text-mist hover:text-bearish transition-all"
                   aria-label={`Remove ${pos.ticker}`}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
@@ -2134,6 +2134,18 @@ export default function PortfoliosPage() {
   const [groupBySector, setGroupBySector] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("market_value");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [isMobileViewport, setIsMobileViewport] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 767px)");
+    const sync = () => setIsMobileViewport(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  const effectiveViewMode: ViewMode = isMobileViewport ? "cards" : viewMode;
 
   // Sorting logic
   const sortedPositions = useMemo(() => {
@@ -2188,7 +2200,7 @@ export default function PortfoliosPage() {
   );
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="space-y-4 sm:space-y-6 w-full">
       {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
@@ -2240,19 +2252,21 @@ export default function PortfoliosPage() {
       {/* ── Positions ── */}
       <Card>
         <CardContent className="p-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-wolf-border/30 px-4 py-3">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-wolf-border/30 px-3 sm:px-4 py-3">
             <p className="text-sm font-semibold text-snow-peak">
               Positions ({portfolio.positions.length})
             </p>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
               {/* View toggle */}
               <div className="flex bg-wolf-black/40 rounded-md border border-wolf-border/40 p-0.5">
                 <button
                   type="button"
                   onClick={() => setViewMode("table")}
+                  disabled={isMobileViewport}
                   className={cn(
                     "px-2 py-1 text-[11px] rounded-sm transition-colors",
-                    viewMode === "table" ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak"
+                    effectiveViewMode === "table" ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak",
+                    isMobileViewport && "opacity-40 cursor-not-allowed"
                   )}
                 >
                   Table
@@ -2262,7 +2276,7 @@ export default function PortfoliosPage() {
                   onClick={() => setViewMode("cards")}
                   className={cn(
                     "px-2 py-1 text-[11px] rounded-sm transition-colors",
-                    viewMode === "cards" ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak"
+                    effectiveViewMode === "cards" ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak"
                   )}
                 >
                   Cards
@@ -2271,10 +2285,10 @@ export default function PortfoliosPage() {
 
               {/* Import/Export */}
               <Button variant="ghost" size="sm" onClick={() => setIsImportDialogOpen(true)} className="text-xs gap-1.5">
-                <Upload className="w-3.5 h-3.5" /> Import
+                <Upload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Import</span>
               </Button>
               <Button variant="ghost" size="sm" onClick={handleExport} className="text-xs gap-1.5">
-                <Download className="w-3.5 h-3.5" /> Export
+                <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
               </Button>
 
               <Button
@@ -2283,7 +2297,7 @@ export default function PortfoliosPage() {
                 onClick={() => setIsHistoryDialogOpen(true)}
                 className="text-xs gap-1.5"
               >
-                <History className="w-3.5 h-3.5" /> Transactions
+                <History className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Transactions</span>
               </Button>
 
               <Button
@@ -2292,12 +2306,12 @@ export default function PortfoliosPage() {
                 onClick={() => setGroupBySector((v) => !v)}
                 className={cn("text-xs gap-1.5", groupBySector && "text-sunset-orange")}
               >
-                <BarChart3 className="w-3.5 h-3.5" /> Group by Sector
+                <BarChart3 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Group by Sector</span>
               </Button>
 
               {/* Add button */}
               <Button size="sm" onClick={() => setShowAddPanel(!showAddPanel)} className="text-xs gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> Add Position
+                <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Position</span>
               </Button>
             </div>
           </div>
@@ -2315,7 +2329,7 @@ export default function PortfoliosPage() {
           )}
 
           <div className="p-4">
-            {viewMode === "table" ? (
+            {effectiveViewMode === "table" ? (
               <PositionTable
                 positions={sortedPositions}
                 isLoading={portfolio.isLoading}

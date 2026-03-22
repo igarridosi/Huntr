@@ -4,6 +4,8 @@ import { useCallback, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import {
   BarChart3,
+  BellRing,
+  BookOpen,
   DollarSign,
   LayoutGrid,
   Pencil,
@@ -12,7 +14,6 @@ import {
   Star,
   Trash2,
   TrendingUp,
-  X,
 } from "lucide-react";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import {
@@ -21,10 +22,10 @@ import {
 import {
   WatchlistTable,
   WatchlistTableSkeleton,
-} from "@/components/watchlist/watchlist-table";
-import { EmptyState } from "@/components/watchlist/empty-state";
-import { HeatmapView } from "@/components/watchlist/heatmap-view";
-import { ImportExportActions } from "@/components/watchlist/import-export";
+} from "../../../../components/watchlist/watchlist-table";
+import { EmptyState } from "../../../../components/watchlist/empty-state";
+import { HeatmapView } from "../../../../components/watchlist/heatmap-view";
+import { ImportExportActions } from "../../../../components/watchlist/import-export";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,10 @@ export default function WatchlistsPage() {
     renameList,
     deleteList,
     removeTicker,
+    setTargetPrice,
+    alerts,
+    addAlert,
+    removeAlert,
     exportToCSV,
     importFromCSV,
     isRemoving,
@@ -66,6 +71,12 @@ export default function WatchlistsPage() {
   const [isCreateListDialogOpen, setIsCreateListDialogOpen] = useState(false);
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editListName, setEditListName] = useState("");
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [alertTicker, setAlertTicker] = useState<string>("");
+  const [alertType, setAlertType] = useState<"above" | "below">("below");
+  const [alertPrice, setAlertPrice] = useState<string>("");
+  const [isInboxOpen, setIsInboxOpen] = useState(false);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
 
   const tickers = useMemo(() => entries?.map((entry) => entry.ticker) ?? [], [entries]);
 
@@ -122,6 +133,125 @@ export default function WatchlistsPage() {
   };
 
   const isEmpty = !isLoading && (!entries || entries.length === 0);
+
+  const activeAlertsByTicker = useMemo(() => {
+    return alerts.reduce<Record<string, number>>((acc, alert) => {
+      if (!alert.active) return acc;
+      acc[alert.ticker] = (acc[alert.ticker] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [alerts]);
+
+  const notificationInbox = useMemo(() => {
+    if (!entries) return [];
+
+    const byTicker = new Map(entries.map((entry) => [entry.ticker, entry]));
+
+    const alertNotifications = alerts
+      .filter((alert) => alert.active)
+      .map((alert) => {
+        const entry = byTicker.get(alert.ticker);
+        const price = entry?.quote?.price;
+        if (price == null) return null;
+
+        const triggered = alert.type === "below" ? price <= alert.price : price >= alert.price;
+        if (!triggered) return null;
+
+        return {
+          id: `alert-${alert.id}`,
+          ticker: alert.ticker,
+          text:
+            alert.type === "below"
+              ? `${alert.ticker} reached alert below ${alert.price.toFixed(2)}`
+              : `${alert.ticker} reached alert above ${alert.price.toFixed(2)}`,
+        };
+      })
+      .filter((item): item is { id: string; ticker: string; text: string } => item !== null);
+
+    const targetNotifications = entries
+      .map((entry) => {
+        if (entry.target_price == null || entry.quote == null) return null;
+        if (entry.quote.price > entry.target_price) return null;
+
+        return {
+          id: `target-${entry.ticker}`,
+          ticker: entry.ticker,
+          text: `${entry.ticker} reached target ${entry.target_price.toFixed(2)}`,
+        };
+      })
+      .filter((item): item is { id: string; ticker: string; text: string } => item !== null);
+
+    return [...alertNotifications, ...targetNotifications];
+  }, [alerts, entries]);
+
+  const openAlertDialog = useCallback(
+    (ticker: string, currentPrice: number, targetPrice: number | null) => {
+      setAlertTicker(ticker);
+      setAlertType("below");
+      const base = targetPrice ?? currentPrice * 0.95;
+      setAlertPrice(base.toFixed(2));
+      setIsAlertDialogOpen(true);
+    },
+    []
+  );
+
+  const parsedAlertPrice = Number(alertPrice);
+  const isValidAlertPrice = Number.isFinite(parsedAlertPrice) && parsedAlertPrice > 0;
+
+  const saveTargetFromDialog = useCallback(() => {
+    if (!isValidAlertPrice || !alertTicker) return;
+    setTargetPrice(alertTicker, parsedAlertPrice);
+    setIsAlertDialogOpen(false);
+  }, [alertTicker, isValidAlertPrice, parsedAlertPrice, setTargetPrice]);
+
+  const saveAlertFromDialog = useCallback(() => {
+    if (!isValidAlertPrice || !alertTicker) return;
+    addAlert({
+      ticker: alertTicker,
+      type: alertType,
+      price: parsedAlertPrice,
+      active: true,
+    });
+    setIsAlertDialogOpen(false);
+  }, [addAlert, alertTicker, alertType, isValidAlertPrice, parsedAlertPrice]);
+
+  const legendItems = useMemo(() => {
+    if (view === "overview") {
+      return [
+        { term: "Trend", description: "30-day momentum label based on 1M performance." },
+        { term: "Vol", description: "Relative volume versus average daily volume." },
+        { term: "Events", description: "Closest upcoming earnings or ex-dividend event." },
+        { term: "Target", description: "Your personal target price and current distance." },
+      ];
+    }
+
+    if (view === "performance") {
+      return [
+        { term: "1D", description: "Price change over the last trading day." },
+        { term: "1W", description: "Price change over the last 5 trading days." },
+        { term: "1M", description: "Price change over roughly the last 30 days." },
+        { term: "YTD", description: "Performance since the first trading day of the year." },
+        { term: "Beta", description: "Volatility vs market. 1.0 means market-like behavior." },
+      ];
+    }
+
+    if (view === "fundamental") {
+      return [
+        { term: "P/E", description: "Price-to-earnings ratio from trailing earnings." },
+        { term: "Mkt Cap", description: "Total market value of the company equity." },
+        { term: "EPS", description: "Earnings per share from trailing data." },
+        { term: "Yield", description: "Annual dividend yield relative to current price." },
+        { term: "52W Range", description: "Position between 52-week low and high." },
+      ];
+    }
+
+    return [
+      { term: "Yield", description: "Annual dividend as percentage of current price." },
+      { term: "Annual Div", description: "Approximate annual cash dividend per share." },
+      { term: "Payout Ratio", description: "Portion of earnings paid as dividends (dividends / net income)." },
+      { term: "Ex-Div Date", description: "Buy before this date to qualify for the next dividend payment." },
+    ];
+  }, [view]);
 
   return (
     <div className="space-y-6 w-full">
@@ -254,6 +384,34 @@ export default function WatchlistsPage() {
           </div>
 
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={`gap-1.5 text-xs border-sunset-orange/35 ${
+                isLegendOpen
+                  ? "bg-sunset-orange/15 text-sunset-orange"
+                  : "text-mist hover:text-sunset-orange"
+              }`}
+              onClick={() => setIsLegendOpen((value) => !value)}
+            >
+              <BookOpen className="h-3.5 w-3.5" />
+              Legend
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className={`gap-1.5 text-xs border-sunset-orange/35 ${
+                isInboxOpen
+                  ? "bg-sunset-orange/15 text-sunset-orange"
+                  : "text-mist hover:text-sunset-orange"
+              }`}
+              onClick={() => setIsInboxOpen((value) => !value)}
+            >
+              <BellRing className="h-3.5 w-3.5" />
+              Inbox ({notificationInbox.length})
+            </Button>
             <ImportExportActions
               onExport={exportToCSV}
               onImport={importFromCSV}
@@ -266,6 +424,42 @@ export default function WatchlistsPage() {
         </div>
 
         <CardContent className="p-0 pb-2">
+          {isInboxOpen ? (
+            <div className="mx-6 mt-4 mb-6 rounded-lg border border-sunset-orange/30 bg-sunset-orange/10 px-3 py-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-sunset-orange">
+                <BellRing className="h-3.5 w-3.5" />
+                Price Inbox ({notificationInbox.length})
+              </div>
+              <div className="space-y-1">
+                {notificationInbox.length > 0 ? (
+                  notificationInbox.slice(0, 6).map((item) => (
+                    <p key={item.id} className="text-xs text-mist">
+                      {item.text}
+                    </p>
+                  ))
+                ) : (
+                  <p className="text-xs text-mist/80">No triggered alerts yet. Configure a bell alert or target to start receiving notifications.</p>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {isLegendOpen ? (
+            <div className="mx-6 mt-4 mb-4 rounded-lg border border-sunset-orange/25 bg-sunset-orange/10 px-3 py-3">
+              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-sunset-orange">
+                <BookOpen className="h-3.5 w-3.5" />
+                {VIEW_OPTIONS.find((option) => option.key === view)?.label} glossary
+              </div>
+              <div className="grid gap-1.5 sm:grid-cols-2">
+                {legendItems.map((item) => (
+                  <p key={item.term} className="text-[11px] text-mist leading-relaxed">
+                    <span className="font-mono text-snow-peak">{item.term}</span>: {item.description}
+                  </p>
+                ))}
+              </div>
+            </div>
+          ) : null}
+
           {isLoading ? (
             <WatchlistTableSkeleton />
           ) : isEmpty ? (
@@ -277,6 +471,9 @@ export default function WatchlistsPage() {
               entries={entries!}
               view={view}
               performanceData={performanceData}
+              activeAlertsByTicker={activeAlertsByTicker}
+              onConfigureAlert={openAlertDialog}
+              onSetTargetPrice={setTargetPrice}
               onRemove={removeTicker}
               isRemoving={isRemoving}
             />
@@ -305,6 +502,69 @@ export default function WatchlistsPage() {
                 Cancel
               </Button>
               <Button onClick={handleCreateList}>Create</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+        <DialogContent className="max-w-md p-4">
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-base font-semibold text-snow-peak">Price Alert / Target</h3>
+              <p className="text-xs text-mist mt-0.5">{alertTicker} notification and target settings</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-mist">Direction</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={alertType === "below" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setAlertType("below")}
+                >
+                  Below
+                </Button>
+                <Button
+                  type="button"
+                  variant={alertType === "above" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setAlertType("above")}
+                >
+                  Above
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-mist">Price</label>
+              <Input
+                value={alertPrice}
+                onChange={(event) => setAlertPrice(event.target.value)}
+                placeholder="e.g. 800"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  const alertToRemove = alerts.find((a) => a.ticker === alertTicker && a.active);
+                  if (alertToRemove) removeAlert(alertToRemove.id);
+                  setTargetPrice(alertTicker, null);
+                  setIsAlertDialogOpen(false);
+                }}
+              >
+                Clear
+              </Button>
+              <Button type="button" variant="outline" onClick={saveTargetFromDialog} disabled={!isValidAlertPrice}>
+                Save Target
+              </Button>
+              <Button type="button" onClick={saveAlertFromDialog} disabled={!isValidAlertPrice}>
+                Save Alert
+              </Button>
             </div>
           </div>
         </DialogContent>

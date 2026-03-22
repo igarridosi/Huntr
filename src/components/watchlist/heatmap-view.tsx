@@ -11,18 +11,17 @@ interface HeatmapViewProps {
   performanceData: Record<string, number>;
 }
 
-function getHeatBg(change: number, positive: boolean): string {
+function getHeatBgStyle(change: number): { backgroundColor: string } {
   const abs = Math.abs(change);
-  if (positive) {
-    if (abs > 0.05) return "bg-emerald-500/35";
-    if (abs > 0.02) return "bg-emerald-500/25";
-    if (abs > 0.005) return "bg-emerald-500/15";
-    return "bg-wolf-surface/30";
+  const cap = 0.05;
+  const normalized = Math.min(abs / cap, 1);
+  const alpha = 0.08 + normalized * 0.32;
+
+  if (change >= 0) {
+    return { backgroundColor: `rgba(16, 185, 129, ${alpha.toFixed(3)})` };
   }
-  if (abs > 0.05) return "bg-red-500/35";
-  if (abs > 0.02) return "bg-red-500/25";
-  if (abs > 0.005) return "bg-red-500/15";
-  return "bg-wolf-surface/30";
+
+  return { backgroundColor: `rgba(244, 63, 94, ${alpha.toFixed(3)})` };
 }
 
 export function HeatmapView({ entries, performanceData }: HeatmapViewProps) {
@@ -54,7 +53,8 @@ export function HeatmapView({ entries, performanceData }: HeatmapViewProps) {
           <Link
             key={entry.ticker}
             href={ROUTES.SYMBOL(entry.ticker)}
-            className={`rounded-lg border border-wolf-border/35 p-3 hover:border-wolf-border/70 transition-colors ${getHeatBg(dayChange, isPositive)}`}
+            className="rounded-lg border border-wolf-border/35 p-3 hover:border-wolf-border/70 transition-colors"
+            style={getHeatBgStyle(dayChange)}
           >
             <div className="flex items-center gap-2 mb-2">
               <TickerLogo

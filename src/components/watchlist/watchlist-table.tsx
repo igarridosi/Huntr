@@ -3,9 +3,12 @@
 import Link from "next/link";
 import {
   Trash2,
-  CalendarDays,
+  Bell,
+  BellRing,
+  Coins,
   Activity,
   Rocket,
+  PhoneCall,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -68,12 +71,13 @@ function getRangeWidthClass(percent: number): string {
   return "w-[98%]";
 }
 
-// ── Props ──
-
 interface WatchlistTableProps {
   entries: WatchlistEntry[];
   view: WatchlistView;
   performanceData?: Record<string, Record<string, number>>;
+  activeAlertsByTicker?: Record<string, number>;
+  onConfigureAlert?: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
+  onSetTargetPrice?: (ticker: string, price: number | null) => void;
   onRemove: (ticker: string) => void;
   isRemoving: boolean;
 }
@@ -83,7 +87,7 @@ function getMonthlyTrendMeta(monthChange: number) {
     return { Icon: Rocket, label: "Rocket", className: "text-emerald-400" };
   }
   if (monthChange >= 0.02) {
-    return { Icon: TrendingUp, label: "Bull", className: "text-sunset-orange" };
+    return { Icon: TrendingUp, label: "Bull", className: "text-emerald-400" };
   }
   if (monthChange > -0.02) {
     return { Icon: Minus, label: "Neutral", className: "text-mist" };
@@ -98,6 +102,9 @@ export function WatchlistTable({
   entries,
   view,
   performanceData = {},
+  activeAlertsByTicker = {},
+  onConfigureAlert,
+  onSetTargetPrice,
   onRemove,
   isRemoving,
 }: WatchlistTableProps) {
@@ -105,7 +112,7 @@ export function WatchlistTable({
     <Table>
       <TableHeader>
         <TableRow className="hover:bg-transparent">
-          <TableHead className="w-[200px]">Company</TableHead>
+          <TableHead className="w-[220px]">Company</TableHead>
           <TableHead className="text-right">Price</TableHead>
 
           {view === "overview" && (
@@ -118,63 +125,39 @@ export function WatchlistTable({
                 </span>
               </TableHead>
               <TableHead className="hidden md:table-cell">Tags</TableHead>
-              <TableHead className="text-center hidden lg:table-cell ">
-                Vol
-              </TableHead>
-              <TableHead className="text-center hidden lg:table-cell ">
-                Events
-              </TableHead>
+              <TableHead className="text-center hidden lg:table-cell">Vol</TableHead>
+              <TableHead className="text-center hidden lg:table-cell">Events</TableHead>
+              <TableHead className="text-right hidden xl:table-cell">Target</TableHead>
+              <TableHead className="text-right hidden xl:table-cell">52W Range</TableHead>
             </>
           )}
 
           {view === "performance" && (
             <>
               <TableHead className="text-right">1D</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">
-                1W
-              </TableHead>
-              <TableHead className="text-right hidden md:table-cell">
-                1M
-              </TableHead>
-              <TableHead className="text-right hidden lg:table-cell">
-                YTD
-              </TableHead>
-              <TableHead className="text-right hidden lg:table-cell">
-                Beta
-              </TableHead>
+              <TableHead className="text-right hidden sm:table-cell">1W</TableHead>
+              <TableHead className="text-right hidden md:table-cell">1M</TableHead>
+              <TableHead className="text-right hidden lg:table-cell">YTD</TableHead>
+              <TableHead className="text-right hidden lg:table-cell">Beta</TableHead>
             </>
           )}
 
           {view === "fundamental" && (
             <>
               <TableHead className="text-right">P/E</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">
-                Mkt Cap
-              </TableHead>
-              <TableHead className="text-right hidden md:table-cell">
-                EPS
-              </TableHead>
-              <TableHead className="text-right hidden md:table-cell">
-                Yield
-              </TableHead>
-              <TableHead className="text-right hidden lg:table-cell">
-                52W Range
-              </TableHead>
+              <TableHead className="text-right hidden sm:table-cell">Mkt Cap</TableHead>
+              <TableHead className="text-right hidden md:table-cell">EPS</TableHead>
+              <TableHead className="text-right hidden md:table-cell">Yield</TableHead>
+              <TableHead className="text-right hidden lg:table-cell">52W Range</TableHead>
             </>
           )}
 
           {view === "dividends" && (
             <>
               <TableHead className="text-right">Yield</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">
-                Annual Div
-              </TableHead>
-              <TableHead className="text-right hidden md:table-cell">
-                Earnings
-              </TableHead>
-              <TableHead className="text-right hidden lg:table-cell">
-                52W Range
-              </TableHead>
+              <TableHead className="text-right hidden sm:table-cell">Annual Div</TableHead>
+              <TableHead className="text-right hidden md:table-cell">Payout Ratio</TableHead>
+              <TableHead className="text-right hidden lg:table-cell">Ex-Div Date</TableHead>
             </>
           )}
 
@@ -188,6 +171,9 @@ export function WatchlistTable({
             entry={entry}
             view={view}
             performanceData={performanceData}
+            activeAlertCount={activeAlertsByTicker[entry.ticker] ?? 0}
+            onConfigureAlert={onConfigureAlert}
+            onSetTargetPrice={onSetTargetPrice}
             onRemove={onRemove}
             isRemoving={isRemoving}
           />
@@ -197,18 +183,22 @@ export function WatchlistTable({
   );
 }
 
-// ── Individual Row ──
-
 function WatchlistRow({
   entry,
   view,
   performanceData,
+  activeAlertCount,
+  onConfigureAlert,
+  onSetTargetPrice,
   onRemove,
   isRemoving,
 }: {
   entry: WatchlistEntry;
   view: WatchlistView;
   performanceData: Record<string, Record<string, number>>;
+  activeAlertCount: number;
+  onConfigureAlert?: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
+  onSetTargetPrice?: (ticker: string, price: number | null) => void;
   onRemove: (ticker: string) => void;
   isRemoving: boolean;
 }) {
@@ -216,21 +206,17 @@ function WatchlistRow({
   const dayChange = quote?.day_change_percent ?? 0;
   const isPositive = dayChange >= 0;
 
-  // Volume ratio
   const volumeRatio =
     quote && quote.avg_volume > 0 && (quote.current_volume ?? 0) > 0
       ? (quote.current_volume ?? 0) / quote.avg_volume
       : 0;
 
-  // Earnings proximity (within 14 days)
   const earningsSoon = (() => {
     if (!quote?.next_earnings_date) return false;
-    const diff =
-      new Date(quote.next_earnings_date).getTime() - Date.now();
+    const diff = new Date(quote.next_earnings_date).getTime() - Date.now();
     return diff > 0 && diff < 14 * 24 * 60 * 60 * 1000;
   })();
 
-  // 52W range position
   const rangePercent =
     quote && quote.fifty_two_week_high !== quote.fifty_two_week_low
       ? ((quote.price - quote.fifty_two_week_low) /
@@ -238,15 +224,10 @@ function WatchlistRow({
         100
       : 50;
 
-  // Derived metrics
-  const eps =
-    quote && quote.pe_ratio > 0 ? quote.price / quote.pe_ratio : null;
-  const annualDiv =
-    quote && quote.dividend_yield > 0
-      ? quote.price * quote.dividend_yield
-      : null;
+  const eps = quote && quote.pe_ratio > 0 ? quote.price / quote.pe_ratio : null;
+  const annualDiv = quote && quote.dividend_yield > 0 ? quote.price * quote.dividend_yield : null;
+  const payoutRatio = quote && quote.payout_ratio && quote.payout_ratio > 0 ? quote.payout_ratio : null;
 
-  // Performance data per window
   const perf1D = performanceData["1D"]?.[ticker] ?? dayChange;
   const perf1W = performanceData["1W"]?.[ticker] ?? 0;
   const perf1M = performanceData["1M"]?.[ticker] ?? 0;
@@ -255,57 +236,91 @@ function WatchlistRow({
   const TrendIcon: LucideIcon = trendMeta.Icon;
   const displayTags = deriveTags(entry);
 
+  const selectedEvent = (() => {
+    const earningsDate = quote?.next_earnings_date
+      ? new Date(`${quote.next_earnings_date}T00:00:00Z`)
+      : null;
+    const exDivDate = quote?.ex_dividend_date
+      ? new Date(`${quote.ex_dividend_date}T00:00:00Z`)
+      : null;
+
+    const now = Date.now();
+    const upcoming = [
+      earningsDate && !Number.isNaN(earningsDate.getTime()) && earningsDate.getTime() >= now
+        ? { type: "earnings" as const, date: earningsDate }
+        : null,
+      exDivDate && !Number.isNaN(exDivDate.getTime()) && exDivDate.getTime() >= now
+        ? { type: "ex-div" as const, date: exDivDate }
+        : null,
+    ].filter((v): v is { type: "earnings" | "ex-div"; date: Date } => v !== null);
+
+    if (upcoming.length > 0) {
+      return upcoming.sort((a, b) => a.date.getTime() - b.date.getTime())[0];
+    }
+
+    if (earningsDate && !Number.isNaN(earningsDate.getTime())) {
+      return { type: "earnings" as const, date: earningsDate };
+    }
+    if (exDivDate && !Number.isNaN(exDivDate.getTime())) {
+      return { type: "ex-div" as const, date: exDivDate };
+    }
+
+    return null;
+  })();
+
   return (
     <TableRow className="group">
-      {/* Company — always present */}
       <TableCell>
-        <Link
-          href={ROUTES.SYMBOL(ticker)}
-          className="flex items-center gap-3 hover:text-sunset-orange transition-colors"
-        >
-          <TickerLogo
-            ticker={ticker}
-            src={profile?.logo_url}
-            className="w-9 h-9"
-            imageClassName="rounded-[6px]"
-            fallbackClassName="rounded-[6px] text-[10px]"
-          />
-          <div className="min-w-0">
-            <p className="font-bold text-sm font-mono">{ticker}</p>
-            <p className="text-xs text-mist truncate max-w-[130px]">
-              {profile?.name ?? ticker}
-            </p>
-          </div>
-        </Link>
+        <div className="flex items-center justify-between gap-2">
+          <Link
+            href={ROUTES.SYMBOL(ticker)}
+            className="flex min-w-0 items-center gap-3 hover:text-sunset-orange transition-colors"
+          >
+            <TickerLogo
+              ticker={ticker}
+              src={profile?.logo_url}
+              className="w-9 h-9"
+              imageClassName="rounded-[6px]"
+              fallbackClassName="rounded-[6px] text-[10px]"
+            />
+            <div className="min-w-0">
+              <p className="font-bold text-sm font-mono">{ticker}</p>
+              <p className="text-xs text-mist truncate max-w-[130px]">{profile?.name ?? ticker}</p>
+            </div>
+          </Link>
+          {quote ? (
+            <button
+              type="button"
+              onClick={() => onConfigureAlert?.(ticker, quote.price, entry.target_price)}
+              className="shrink-0 rounded-md border border-wolf-border/40 p-1 text-mist transition-colors hover:text-sunset-orange cursor-pointer"
+              title={activeAlertCount > 0 ? `Alerts (${activeAlertCount})` : "Create price alert"}
+              aria-label={`Configure alerts for ${ticker}`}
+            >
+              {activeAlertCount > 0 ? <BellRing className="h-3.5 w-3.5 text-sunset-orange" /> : <Bell className="h-3.5 w-3.5" />}
+            </button>
+          ) : null}
+        </div>
       </TableCell>
 
-      {/* Price — always present */}
       <TableCell className="text-right">
         <p className="font-mono font-tabular text-sm font-medium text-snow-peak">
           {quote ? formatCurrency(quote.price) : "—"}
         </p>
         {view !== "overview" && quote && (
-          <p
-            className={`text-[10px] font-mono ${
-              isPositive ? "text-sunset-orange" : "text-bearish"
-            }`}
-          >
+          <p className={`text-[10px] font-mono ${isPositive ? "text-emerald-400" : "text-bearish"}`}>
             {isPositive ? "+" : ""}
             {formatPercent(dayChange, 2)}
           </p>
         )}
       </TableCell>
 
-      {/* ── Overview Columns ── */}
       {view === "overview" && (
         <>
           <TableCell className="text-right">
             {quote ? (
               <span
                 className={`inline-flex items-center px-1.5 py-0.5 rounded text-xs font-mono font-semibold ${
-                  isPositive
-                    ? "text-sunset-orange bg-sunset-orange/10"
-                    : "text-bearish bg-bearish/10"
+                  isPositive ? "text-emerald-400 bg-emerald-500/10" : "text-bearish bg-bearish/10"
                 }`}
               >
                 {isPositive ? "+" : ""}
@@ -330,23 +345,21 @@ function WatchlistRow({
                 <span
                   key={tag}
                   className={`inline-flex px-2 py-1 rounded text-xs font-medium border ${
-                    TAG_COLORS[tag] ??
-                    "bg-wolf-surface text-mist border-wolf-border"
+                    TAG_COLORS[tag] ?? "bg-wolf-surface text-mist border-wolf-border"
                   }`}
                 >
                   {tag}
                 </span>
               ))}
-              {displayTags.length > 2 && (
-                <span className="text-xs text-mist">
-                  +{displayTags.length - 2}
-                </span>
-              )}
+              {displayTags.length > 2 && <span className="text-xs text-mist">+{displayTags.length - 2}</span>}
             </div>
           </TableCell>
           <TableCell className="text-center hidden lg:table-cell">
             {volumeRatio > 0 ? (
-              <span className="text-xs font-mono text-mist inline-flex items-center gap-1" title={`Volume ${volumeRatio.toFixed(1)}x average`}>
+              <span
+                className="text-xs font-mono text-mist inline-flex items-center gap-1"
+                title={`Relative volume ${volumeRatio.toFixed(2)}x (current / avg daily)`}
+              >
                 {volumeRatio >= 1.5 ? <Activity className="h-3.5 w-3.5 text-golden-hour" /> : null}
                 {volumeRatio.toFixed(1)}x
               </span>
@@ -355,20 +368,54 @@ function WatchlistRow({
             )}
           </TableCell>
           <TableCell className="text-center hidden lg:table-cell">
-            {quote?.next_earnings_date ? (
-              <span
-                className={`text-xs ${earningsSoon ? "text-sunset-orange font-bold" : "text-mist"}`}
-                title={`Earnings: ${quote.next_earnings_date}`}
-              >
-                {new Date(quote.next_earnings_date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+            {selectedEvent ? (
+              <span className={`inline-flex items-center gap-1 text-xs ${earningsSoon ? "text-emerald-400 font-semibold" : "text-mist"}`}>
+                {selectedEvent.type === "earnings" ? <PhoneCall className="h-3 w-3" /> : <Coins className="h-3 w-3" />}
+                {selectedEvent.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
               </span>
-            ) : null}
-            {!quote?.next_earnings_date ? <span className="text-xs text-mist/60">—</span> : null}
+            ) : (
+              <span className="text-xs text-mist/60">—</span>
+            )}
+          </TableCell>
+          <TableCell className="text-right hidden xl:table-cell text-xs font-mono">
+            {entry.target_price != null ? (
+              <button
+                type="button"
+                onClick={() => onSetTargetPrice?.(ticker, null)}
+                className="text-mist hover:text-snow-peak cursor-pointer"
+                title="Clear target"
+              >
+                {formatCurrency(entry.target_price, { decimals: 2 })}
+                {quote?.price
+                  ? ` (${formatPercent((quote.price - entry.target_price) / entry.target_price, 1)})`
+                  : ""}
+              </button>
+            ) : quote ? (
+              <button
+                type="button"
+                onClick={() => onConfigureAlert?.(ticker, quote.price, entry.target_price)}
+                className="text-mist/70 hover:text-snow-peak cursor-pointer"
+              >
+                Set
+              </button>
+            ) : (
+              <span className="text-mist/50">—</span>
+            )}
+          </TableCell>
+          <TableCell className="text-right hidden xl:table-cell">
+            {quote ? (
+              <Range52W
+                low={quote.fifty_two_week_low}
+                high={quote.fifty_two_week_high}
+                percent={rangePercent}
+              />
+            ) : (
+              "—"
+            )}
           </TableCell>
         </>
       )}
 
-      {/* ── Performance Columns ── */}
       {view === "performance" && (
         <>
           <PerfCell value={perf1D} />
@@ -381,20 +428,11 @@ function WatchlistRow({
         </>
       )}
 
-      {/* ── Fundamental Columns ── */}
       {view === "fundamental" && (
         <>
           <TableCell className="text-right text-sm font-mono font-tabular">
             {quote ? (
-              <span
-                className={
-                  quote.pe_ratio > 40
-                    ? "text-golden-hour"
-                    : quote.pe_ratio > 0
-                      ? "text-snow-peak"
-                      : "text-mist"
-                }
-              >
+              <span className={quote.pe_ratio > 40 ? "text-golden-hour" : quote.pe_ratio > 0 ? "text-snow-peak" : "text-mist"}>
                 {quote.pe_ratio > 0 ? quote.pe_ratio.toFixed(1) : "N/A"}
               </span>
             ) : (
@@ -407,14 +445,8 @@ function WatchlistRow({
           <TableCell className="text-right hidden md:table-cell text-sm font-mono font-tabular text-snow-peak">
             {eps !== null ? `$${eps.toFixed(2)}` : "—"}
           </TableCell>
-          <TableCell className="text-right hidden md:table-cell text-sm font-mono font-tabular">
-            {quote && quote.dividend_yield > 0 ? (
-              <span className="text-sunset-orange">
-                {formatPercent(quote.dividend_yield)}
-              </span>
-            ) : (
-              <span className="text-mist/50">—</span>
-            )}
+          <TableCell className="text-right hidden md:table-cell text-sm font-mono font-tabular text-snow-peak">
+            {quote && quote.dividend_yield > 0 ? formatPercent(quote.dividend_yield) : <span className="text-mist/50">—</span>}
           </TableCell>
           <TableCell className="text-right hidden lg:table-cell">
             {quote ? (
@@ -430,14 +462,11 @@ function WatchlistRow({
         </>
       )}
 
-      {/* ── Dividends Columns ── */}
       {view === "dividends" && (
         <>
           <TableCell className="text-right text-sm font-mono font-tabular">
             {quote && quote.dividend_yield > 0 ? (
-              <span className="text-sunset-orange font-semibold">
-                {formatPercent(quote.dividend_yield)}
-              </span>
+              <span className="text-snow-peak font-semibold">{formatPercent(quote.dividend_yield)}</span>
             ) : (
               <span className="text-mist/50">—</span>
             )}
@@ -446,24 +475,21 @@ function WatchlistRow({
             {annualDiv ? formatCurrency(annualDiv) : "—"}
           </TableCell>
           <TableCell className="text-right hidden md:table-cell text-sm text-mist">
-            {quote?.next_earnings_date ? (
-              <span className="font-mono text-xs">
-                {new Date(quote.next_earnings_date).toLocaleDateString(
-                  "en-US",
-                  { month: "short", day: "numeric" }
-                )}
-              </span>
+            {payoutRatio != null ? (
+              <span className="font-mono text-xs text-snow-peak">{formatPercent(payoutRatio, 1)}</span>
             ) : (
               "—"
             )}
           </TableCell>
           <TableCell className="text-right hidden lg:table-cell">
-            {quote ? (
-              <Range52W
-                low={quote.fifty_two_week_low}
-                high={quote.fifty_two_week_high}
-                percent={rangePercent}
-              />
+            {quote?.ex_dividend_date ? (
+              <span className="inline-flex items-center gap-1 font-mono text-xs text-mist">
+                <Coins className="h-3 w-3" />
+                {new Date(`${quote.ex_dividend_date}T00:00:00Z`).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
             ) : (
               "—"
             )}
@@ -471,7 +497,6 @@ function WatchlistRow({
         </>
       )}
 
-      {/* Actions */}
       <TableCell>
         <div className="flex items-center gap-1 justify-end">
           <Button
@@ -490,8 +515,6 @@ function WatchlistRow({
   );
 }
 
-// ── Helper: Performance cell ──
-
 function PerfCell({
   value,
   className = "",
@@ -501,18 +524,14 @@ function PerfCell({
 }) {
   const isPos = value >= 0;
   return (
-    <TableCell
-      className={`text-right text-sm font-mono font-tabular ${className}`}
-    >
-      <span className={isPos ? "text-sunset-orange" : "text-bearish"}>
+    <TableCell className={`text-right text-sm font-mono font-tabular ${className}`}>
+      <span className={isPos ? "text-emerald-400" : "text-bearish"}>
         {isPos ? "+" : ""}
         {formatPercent(value, 2)}
       </span>
     </TableCell>
   );
 }
-
-// ── Helper: 52-Week Range bar ──
 
 function Range52W({
   low,
@@ -525,9 +544,7 @@ function Range52W({
 }) {
   return (
     <div className="flex items-center gap-2 justify-end">
-      <span className="text-[10px] text-mist font-mono">
-        {formatCurrency(low, { decimals: 0 })}
-      </span>
+      <span className="text-[10px] text-mist font-mono">{formatCurrency(low, { decimals: 0 })}</span>
       <div className="relative w-14 h-1.5 bg-wolf-border rounded-full overflow-hidden">
         <div
           className={cn(
@@ -536,14 +553,10 @@ function Range52W({
           )}
         />
       </div>
-      <span className="text-[10px] text-mist font-mono">
-        {formatCurrency(high, { decimals: 0 })}
-      </span>
+      <span className="text-[10px] text-mist font-mono">{formatCurrency(high, { decimals: 0 })}</span>
     </div>
   );
 }
-
-// ── Loading Skeleton ──
 
 export function WatchlistTableSkeleton() {
   return (

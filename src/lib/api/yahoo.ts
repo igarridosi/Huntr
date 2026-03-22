@@ -67,6 +67,7 @@ const QUOTE_MODULES = [
   "summaryDetail",
   "defaultKeyStatistics",
   "calendarEvents",
+  "financialData",
 ] as const;
 
 /** Combined profile + quote modules (for getFullStockData) */

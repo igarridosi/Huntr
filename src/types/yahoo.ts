@@ -139,6 +139,10 @@ export interface YahooCalendarEvents {
   earnings?: {
     earningsDate?: Array<Date | string | number>;
   };
+  dividends?: {
+    dividendDate?: Date | string | number;
+    exDividendDate?: Date | string | number;
+  };
 }
 
 // ─────────────────────────────────────────────────────────
