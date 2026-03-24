@@ -20,6 +20,7 @@ import type {
 import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
+import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 
 export async function fetchStockProfile(
   ticker: string
@@ -102,4 +103,18 @@ export async function fetchEarningsDetailData(
   ticker: string
 ): Promise<EarningsDetailData> {
   return dataService.getEarningsDetailData(ticker);
+}
+
+export async function fetchTranscriptPeriods(
+  ticker: string
+): Promise<TranscriptPeriod[]> {
+  return dataService.getTranscriptPeriods(ticker);
+}
+
+export async function fetchTranscriptDocument(
+  ticker: string,
+  year: number,
+  quarter: number
+): Promise<TranscriptDocument | null> {
+  return dataService.getTranscriptDocument(ticker, year, quarter);
 }

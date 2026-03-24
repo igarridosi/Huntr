@@ -5,7 +5,12 @@ import type {
   IncomeStatement,
 } from "@/types/financials";
 
-type AlphaFunction = "INCOME_STATEMENT" | "BALANCE_SHEET" | "CASH_FLOW" | "EARNINGS";
+type AlphaFunction =
+  | "INCOME_STATEMENT"
+  | "BALANCE_SHEET"
+  | "CASH_FLOW"
+  | "EARNINGS"
+  | "EARNINGS_CALL_TRANSCRIPT";
 const ALPHA_MIN_INTERVAL_MS = 13_000;
 const ALPHA_THROTTLE_RETRY_MS = 2_000;
 const ALPHA_MAX_RETRIES = 2;
@@ -42,6 +47,26 @@ interface AlphaEarningsResponse {
   Note?: string;
   Information?: string;
   ErrorMessage?: string;
+}
+
+interface AlphaTranscriptResponse {
+  symbol?: string;
+  quarter?: string;
+  year?: string;
+  date?: string;
+  content?: string;
+  transcript?: string;
+  Note?: string;
+  Information?: string;
+  ErrorMessage?: string;
+}
+
+export interface AlphaTranscriptDocument {
+  ticker: string;
+  year: number;
+  quarter: number;
+  published_at: string | null;
+  content: string;
 }
 
 interface AlphaBundle {
@@ -90,11 +115,19 @@ function toDateString(date: Date): string {
 async function fetchAlphaFunction(
   symbol: string,
   fn: AlphaFunction,
-  apiKey: string
-): Promise<AlphaFinancialResponse | AlphaEarningsResponse> {
+  apiKey: string,
+  extraParams?: Record<string, string>
+): Promise<AlphaFinancialResponse | AlphaEarningsResponse | AlphaTranscriptResponse> {
+  const serializedParams = extraParams
+    ? Object.entries(extraParams)
+        .map(([k, v]) => `&${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+        .join("")
+    : "";
+
   const url =
     `https://www.alphavantage.co/query?function=${fn}` +
     `&symbol=${encodeURIComponent(symbol)}` +
+    serializedParams +
     `&apikey=${encodeURIComponent(apiKey)}`;
 
   const response = await fetch(url, {
@@ -145,13 +178,14 @@ async function runAlphaRateLimited<T>(operation: () => Promise<T>): Promise<T> {
 async function fetchWithRetry(
   symbol: string,
   fn: AlphaFunction,
-  apiKey: string
-): Promise<AlphaFinancialResponse | AlphaEarningsResponse> {
+  apiKey: string,
+  extraParams?: Record<string, string>
+): Promise<AlphaFinancialResponse | AlphaEarningsResponse | AlphaTranscriptResponse> {
   let lastError: unknown;
 
   for (let attempt = 0; attempt < ALPHA_MAX_RETRIES; attempt += 1) {
     try {
-      return await runAlphaRateLimited(() => fetchAlphaFunction(symbol, fn, apiKey));
+      return await runAlphaRateLimited(() => fetchAlphaFunction(symbol, fn, apiKey, extraParams));
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : String(error);
@@ -480,4 +514,55 @@ export async function getEarningsInsightFromAlphaVantage(
     history,
     est_eps: nextWithEstimate?.eps_estimate ?? latestWithEstimate?.eps_estimate ?? null,
   };
+}
+
+export async function getEarningsCallTranscriptFromAlphaVantage(
+  ticker: string,
+  year: number,
+  quarter: number,
+  apiKey: string
+): Promise<AlphaTranscriptDocument | null> {
+  const symbol = ticker.toUpperCase();
+  const normalizedQuarter = Math.min(Math.max(Math.trunc(quarter), 1), 4);
+  const variants: Array<Record<string, string>> = [
+    { quarter: `${year}Q${normalizedQuarter}` },
+    { quarter: `Q${normalizedQuarter}`, year: String(year) },
+    { quarter: String(normalizedQuarter), year: String(year) },
+  ];
+
+  for (const params of variants) {
+    try {
+      const raw = (await fetchWithRetry(
+        symbol,
+        "EARNINGS_CALL_TRANSCRIPT",
+        apiKey,
+        params
+      )) as AlphaTranscriptResponse | AlphaTranscriptResponse[];
+
+      const payload = Array.isArray(raw) ? raw[0] : raw;
+      if (!payload) continue;
+
+      const rawContent = payload.content ?? payload.transcript ?? "";
+      const content = rawContent.trim();
+      if (!content) continue;
+
+      const parsedDate = payload.date ? getDate(payload.date) : null;
+      const publishedAt =
+        parsedDate && !Number.isNaN(parsedDate.getTime())
+          ? toDateString(parsedDate)
+          : null;
+
+      return {
+        ticker: symbol,
+        year,
+        quarter: normalizedQuarter,
+        published_at: publishedAt,
+        content,
+      };
+    } catch {
+      continue;
+    }
+  }
+
+  return null;
 }

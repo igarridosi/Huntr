@@ -188,7 +188,7 @@ function MarketIndexTile({ index }: { index: MarketIndexQuote }) {
         <span
           className={cn(
             "text-[11px] font-mono font-semibold",
-            isPositive ? "text-sunset-orange" : "text-[#FF4242]"
+            isPositive ? "text-[#4DC990]" : "text-[#FF4242]"
           )}
         >
           {sign}

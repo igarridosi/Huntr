@@ -12,37 +12,37 @@ const features = [
     icon: Radar,
     title: "Opportunity Radar Pro",
     description:
-      "Top Gainers, Top Losers, Unusual Volume, Buyback Leaders, Breaking 52-Week High and Income Leaders in a single panel.",
+      "Top Gainers, Top Losers, Unusual Volume, Buyback Leaders, Breaking 52-Week High, and Income Leaders in one decision-ready panel.",
   },
   {
     icon: Activity,
     title: "Signals by Time Window",
     description:
-      "Analyze momentum and risk across 1D, 1W, 1M and YTD windows to spot opportunities before consensus.",
+      "Analyze momentum and risk across 1D, 1W, 1M, and YTD windows to spot opportunities before consensus.",
   },
   {
     icon: Search,
-    title: "Command Palette",
+    title: "Command Palette + Fast Search",
     description:
-      "Cmd+K to jump to any ticker instantly, with logos, prefetch and persistent recent searches.",
+      "Cmd/Ctrl + K to jump to any ticker instantly with logos, prefetch, and persistent recent searches.",
   },
   {
     icon: CandlestickChart,
     title: "Deep Symbol Analysis",
     description:
-      "Actionable view with price, daily change, next earnings, global indices and decision-ready KPI blocks.",
+      "Actionable symbol view with price action, next earnings, global indices, and decision-ready KPI blocks.",
   },
   {
     icon: CalendarClock,
-    title: "Earnings + Financials",
+    title: "Earnings + Financial Statements",
     description:
-      "Historical financial statements and structured metrics for valuation, quality, dividends and quarterly tracking.",
+      "Structured Income Statement, Balance Sheet, and Cash Flow views with metrics for valuation, quality, and dividend tracking.",
   },
   {
     icon: RefreshCcw,
-    title: "Real-Time UX",
+    title: "Constant Product Improvement",
     description:
-      "Fluid updates, smart pagination and smooth loading animations for a seamless premium experience.",
+      "We continuously improve speed, data quality, and UX to deliver a stronger product every release.",
   },
 ];
 
@@ -55,10 +55,10 @@ export function Features() {
       {/* Section header */}
       <div className="text-center space-y-3 mb-16">
         <h2 className="text-3xl sm:text-4xl font-bold text-snow-peak tracking-tight">
-          Built for Serious Stock Analysis
+          What You Can Do with HUNTR
         </h2>
         <p className="text-mist text-base sm:text-lg max-w-lg mx-auto">
-          Everything you need to go from idea to decision, in a fast and professional interface.
+          From discovery to deep financial analysis, everything is designed to help you move from idea to decision faster.
         </p>
       </div>
 

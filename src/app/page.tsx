@@ -1,6 +1,10 @@
 import { HeroParallax } from "@/components/landing/HeroParallax";
 import { Features } from "@/components/landing/features";
 import { Preview } from "@/components/landing/preview";
+import { DCFShowcase } from "@/components/landing/dcf-showcase";
+import { EarningsShowcase } from "@/components/landing/earnings-showcase";
+import { PortfoliosShowcase } from "@/components/landing/portfolios-showcase";
+import { Transparency } from "@/components/landing/transparency";
 import { CTA } from "@/components/landing/cta";
 import { Footer } from "@/components/landing/footer";
 
@@ -34,6 +38,10 @@ export default function Home() {
         <HeroParallax />
         <Features />
         <Preview />
+        <DCFShowcase />
+        <EarningsShowcase />
+        <PortfoliosShowcase />
+        <Transparency />
         <CTA />
       </main>
 

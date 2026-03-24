@@ -13,6 +13,9 @@ import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { cn } from "@/lib/utils";
 import type { PeriodType, FinancialPeriod } from "@/types/financials";
 
+const ANNUAL_VISIBLE_YEARS = 10;
+const QUARTERLY_VISIBLE_PERIODS = 40;
+
 function sortByDateAsc<T extends FinancialPeriod>(rows: T[]): T[] {
   return rows
     .slice()
@@ -23,6 +26,14 @@ function sortByDateDesc<T extends FinancialPeriod>(rows: T[]): T[] {
   return rows
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+}
+
+function limitVisiblePeriods<T extends FinancialPeriod>(
+  rows: T[],
+  periodType: PeriodType
+): T[] {
+  const limit = periodType === "annual" ? ANNUAL_VISIBLE_YEARS : QUARTERLY_VISIBLE_PERIODS;
+  return rows.slice(0, limit);
 }
 
 // ---- Statement Section Toggle ----
@@ -106,11 +117,20 @@ export default function FinancialsPage() {
   const getData = (): FinancialPeriod[] => {
     switch (activeStatement) {
       case "income":
-        return sortByDateDesc(financials.income_statement[periodType]);
+        return limitVisiblePeriods(
+          sortByDateDesc(financials.income_statement[periodType]),
+          periodType
+        );
       case "balance":
-        return sortByDateDesc(financials.balance_sheet[periodType]);
+        return limitVisiblePeriods(
+          sortByDateDesc(financials.balance_sheet[periodType]),
+          periodType
+        );
       case "cashflow":
-        return sortByDateDesc(financials.cash_flow[periodType]);
+        return limitVisiblePeriods(
+          sortByDateDesc(financials.cash_flow[periodType]),
+          periodType
+        );
     }
   };
 
@@ -126,8 +146,8 @@ export default function FinancialsPage() {
   };
 
   // Chart data (annual chronological for trends)
-  const annualIncome = sortByDateAsc(financials.income_statement.annual);
-  const annualCashFlow = sortByDateAsc(financials.cash_flow.annual);
+  const annualIncome = sortByDateAsc(financials.income_statement.annual).slice(-ANNUAL_VISIBLE_YEARS);
+  const annualCashFlow = sortByDateAsc(financials.cash_flow.annual).slice(-ANNUAL_VISIBLE_YEARS);
 
   const revenueData = annualIncome.map((is) => ({
     period: is.period.replace("FY", ""),

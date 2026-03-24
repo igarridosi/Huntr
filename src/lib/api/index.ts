@@ -40,6 +40,10 @@ import {
   prewarmEarningsDetailCacheForTickers,
   type EarningsDetailData,
 } from "./earnings-detail";
+import {
+  getTranscriptPeriods,
+  getTranscriptDocument,
+} from "./transcripts";
 
 const MIN_MARKET_CAP = 10_000_000_000;
 
@@ -300,6 +304,8 @@ export async function getWatchlistTickers(): Promise<string[]> {
 export {
   getEarningsDetailData,
   prewarmEarningsDetailCacheForTickers,
+  getTranscriptPeriods,
+  getTranscriptDocument,
 };
 
 export type {

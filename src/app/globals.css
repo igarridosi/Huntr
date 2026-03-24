@@ -97,3 +97,21 @@ body {
 .blur-metrics {
   filter: blur(5px);
 }
+
+/* ---- Premium Locked Content ---- */
+.premium-veiled,
+.premium-veiled * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+
+.premium-veiled {
+  pointer-events: none;
+}
+
+.premium-veiled-content {
+  filter: blur(4px);
+}

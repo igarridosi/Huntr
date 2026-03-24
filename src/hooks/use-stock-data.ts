@@ -13,6 +13,7 @@ import type {
   PeriodType,
 } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
+import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 import {
   fetchStockProfile,
   fetchStockQuote,
@@ -27,6 +28,8 @@ import {
   fetchAllProfiles,
   fetchCompanyFinancials,
   fetchSearchTickers,
+  fetchTranscriptPeriods,
+  fetchTranscriptDocument,
 } from "@/app/actions/stock";
 
 // ---------- Stock Profile ----------
@@ -201,5 +204,34 @@ export function useSearch(query: string, limit = 10) {
     staleTime: STALE_TIMES.SEARCH,
     // Search is always enabled — returns popular results for empty query
     enabled: true,
+  });
+}
+
+// ---------- Transcripts ----------
+
+export function useTranscriptPeriods(ticker: string, enabled: boolean = true) {
+  return useQuery<TranscriptPeriod[]>({
+    queryKey: QUERY_KEYS.TRANSCRIPT_PERIODS(ticker.toUpperCase()),
+    queryFn: () => fetchTranscriptPeriods(ticker),
+    staleTime: STALE_TIMES.STATIC,
+    enabled: enabled && !!ticker,
+  });
+}
+
+export function useTranscriptDocument(
+  ticker: string,
+  year: number | null,
+  quarter: number | null,
+  enabled: boolean = true
+) {
+  return useQuery<TranscriptDocument | null>({
+    queryKey: QUERY_KEYS.TRANSCRIPT_DOCUMENT(
+      ticker.toUpperCase(),
+      year ?? 0,
+      quarter ?? 0
+    ),
+    queryFn: () => fetchTranscriptDocument(ticker, year ?? 0, quarter ?? 0),
+    staleTime: STALE_TIMES.STATIC,
+    enabled: enabled && !!ticker && year != null && quarter != null,
   });
 }

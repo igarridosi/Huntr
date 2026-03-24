@@ -16,11 +16,11 @@ export function CTA() {
 
       <div className="relative z-10 max-w-2xl mx-auto text-center space-y-6">
         <h2 className="text-3xl sm:text-4xl font-bold text-snow-peak tracking-tight">
-          Upgrade Your Research Stack
+          Start Free. Help It Grow.
         </h2>
         <p className="text-mist text-base sm:text-lg leading-relaxed">
-          Join HUNTR and analyze opportunities with premium signals,
-          professional metrics, and execution-ready workflows.
+          Use HUNTR today at no cost. If you can support the project, every contribution is reinvested into faster
+          infrastructure, paid data providers, and higher-quality features for everyone.
         </p>
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
           <Link href={ROUTES.SIGNUP}>
@@ -28,9 +28,9 @@ export function CTA() {
               Start Free Beta
             </Button>
           </Link>
-          <Link href={ROUTES.LOGIN}>
+          <Link href="/#support">
             <Button variant="outline" size="lg" className="min-w-[200px] text-base">
-              Sign In to Dashboard
+              Support the Project
             </Button>
           </Link>
         </div>

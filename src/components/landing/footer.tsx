@@ -19,7 +19,7 @@ export function Footer() {
 
         {/* Tagline */}
         <p className="text-xs text-mist/60 text-center">
-          Tactical stock intelligence for premium investors.
+          Accessible stock intelligence, built in public and improved with the community.
         </p>
 
         {/* Copyright */}
