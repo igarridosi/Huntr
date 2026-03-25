@@ -3,6 +3,7 @@ import { Outfit } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { QueryProvider } from "@/providers/query-provider";
 import { SupabaseProvider } from "@/providers/supabase-provider";
+import { TallyFeedbackWidget } from "@/components/ui/tally-feedback";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -71,6 +72,7 @@ export default function RootLayout({
         <SupabaseProvider>
           <QueryProvider>
             {children}
+            <TallyFeedbackWidget />
           </QueryProvider>
         </SupabaseProvider>
       </body>
