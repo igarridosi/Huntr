@@ -36,7 +36,9 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
-      const emailRedirectTo = `${window.location.origin}${ROUTES.LOGIN}`;
+      const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+      const baseUrl = (configuredSiteUrl || window.location.origin).replace(/\/+$/, "");
+      const emailRedirectTo = `${baseUrl}${ROUTES.LOGIN}`;
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
