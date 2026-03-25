@@ -36,11 +36,13 @@ export default function SignupPage() {
     setLoading(true);
 
     try {
+      const emailRedirectTo = `${window.location.origin}${ROUTES.LOGIN}`;
+
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
-          emailRedirectTo: "https://huntr-web.vercel.app/app",
+          emailRedirectTo,
         },
       });
 
