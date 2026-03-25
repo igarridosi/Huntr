@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 import { useAllProfiles } from "@/hooks/use-stock-data";
 import { getRecentSearches } from "@/lib/recent-searches";
 import { useSupabase } from "@/providers/supabase-provider";
@@ -194,6 +195,10 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
             <LogOut className="w-4 h-4 shrink-0" />
             Sign Out
           </button>
+
+          <div className="px-3 pt-2 pb-1">
+            <KoFiSupport text="Support Huntr" />
+          </div>
         </div>
       </div>
     </div>

@@ -1,4 +1,5 @@
 import { Clock3, HeartHandshake, Rocket, Wrench, ShieldCheck } from "lucide-react";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 
 const notes = [
   {
@@ -71,6 +72,10 @@ export function Transparency() {
           If this product helps your workflow and you have the flexibility to contribute, your support will directly
           accelerate performance, data quality, and feature delivery for the whole community.
         </p>
+
+        <div className="mt-4">
+          <KoFiSupport text="Support Huntr on Ko-fi" />
+        </div>
       </div>
     </section>
   );

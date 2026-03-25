@@ -1,9 +1,9 @@
 import {
   Radar,
-  Activity,
+  Calculator,
   Search,
   CalendarClock,
-  CandlestickChart,
+  BriefcaseBusiness,
   RefreshCcw,
 } from "lucide-react";
 
@@ -15,10 +15,10 @@ const features = [
       "Top Gainers, Top Losers, Unusual Volume, Buyback Leaders, Breaking 52-Week High, and Income Leaders in one decision-ready panel.",
   },
   {
-    icon: Activity,
-    title: "Signals by Time Window",
+    icon: Calculator,
+    title: "DCF + Monte Carlo Engine",
     description:
-      "Analyze momentum and risk across 1D, 1W, 1M, and YTD windows to spot opportunities before consensus.",
+      "Run scenario-based valuation, probabilistic distributions, and sensitivity matrices to build stronger fair-value theses.",
   },
   {
     icon: Search,
@@ -27,16 +27,16 @@ const features = [
       "Cmd/Ctrl + K to jump to any ticker instantly with logos, prefetch, and persistent recent searches.",
   },
   {
-    icon: CandlestickChart,
-    title: "Deep Symbol Analysis",
+    icon: CalendarClock,
+    title: "Earnings Intelligence Workspace",
     description:
-      "Actionable symbol view with price action, next earnings, global indices, and decision-ready KPI blocks.",
+      "Navigate weekly earnings flow, pre/post-market buckets, estimate trends, and surprise history in one focused view.",
   },
   {
-    icon: CalendarClock,
-    title: "Earnings + Financial Statements",
+    icon: BriefcaseBusiness,
+    title: "Portfolio Tracker",
     description:
-      "Structured Income Statement, Balance Sheet, and Cash Flow views with metrics for valuation, quality, and dividend tracking.",
+      "Track positions, P&L, sector allocation, and top holdings with a simple interface built for daily decision speed.",
   },
   {
     icon: RefreshCcw,
@@ -57,8 +57,9 @@ export function Features() {
         <h2 className="text-3xl sm:text-4xl font-bold text-snow-peak tracking-tight">
           What You Can Do with HUNTR
         </h2>
-        <p className="text-mist text-base sm:text-lg max-w-lg mx-auto">
-          From discovery to deep financial analysis, everything is designed to help you move from idea to decision faster.
+        <p className="text-mist text-base sm:text-lg max-w-2xl mx-auto">
+          The most important modules for modern stock research: opportunity discovery, valuation rigor, earnings context,
+          and portfolio decision workflows.
         </p>
       </div>
 

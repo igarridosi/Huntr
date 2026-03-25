@@ -3,6 +3,7 @@
 import { Search, Menu, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 
 interface TopbarProps {
   onSearchClick?: () => void;
@@ -70,6 +71,8 @@ export function Topbar({
           ⌘K
         </kbd>
       </button>
+
+      <KoFiSupport className="ml-2 hidden md:block" text="Support Huntr" />
     </header>
   );
 }

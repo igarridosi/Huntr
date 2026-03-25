@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Lightbulb,
@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 import { useAllProfiles } from "@/hooks/use-stock-data";
 import { getRecentSearches } from "@/lib/recent-searches";
 import { useSupabase } from "@/providers/supabase-provider";
@@ -81,17 +82,13 @@ export function Sidebar({
   const pathname = usePathname();
   const router = useRouter();
   const { supabase } = useSupabase();
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
   const { data: profiles = [] } = useAllProfiles();
+  const recentSearches = getRecentSearches();
 
   const profileMap = useMemo(
     () => Object.fromEntries(profiles.map((profile) => [profile.ticker, profile])),
     [profiles]
   );
-
-  useEffect(() => {
-    setRecentSearches(getRecentSearches());
-  }, [pathname]);
 
   useEffect(() => {
     for (const ticker of recentSearches.slice(0, 6)) {
@@ -247,6 +244,10 @@ export function Sidebar({
           <LogOut className="w-4 h-4 shrink-0" />
           Sign Out
         </button>
+
+        <div className="px-3 pt-2 pb-1">
+          <KoFiSupport text="Support Huntr on Ko-fi" />
+        </div>
       </div>
       </aside>
     </>
