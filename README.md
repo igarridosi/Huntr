@@ -6,41 +6,59 @@ Huntr is an institutional-grade financial web terminal designed to streamline fu
 
 ## Platform Gallery
 
-<p align="center">
-  <img src="public/screenshots/stock_chart.png" width="100%" alt="Main Stock Chart" />
-</p>
+## Platform Gallery
 
 <table border="0">
+  <!-- 1. Stock Chart -->
   <tr>
-    <td width="50%">
-      <p align="center"><b>Market Insights</b></p>
+    <td colspan="2">
+      <p align="center"><b>Main Stock Chart & Analysis</b></p>
+      <img src="public/screenshots/stock_chart.png" width="100%" />
+    </td>
+  </tr>
+  <!-- 2. Insights -->
+  <tr>
+    <td colspan="2">
+      <p align="center"><b>Market Insights & Trends</b></p>
       <img src="public/screenshots/insights.png" width="100%" />
     </td>
-    <td width="50%">
-      <p align="center"><b>Opportunity Radar</b></p>
+  </tr>
+  <!-- 3. Opportunity Radar -->
+  <tr>
+    <td colspan="2">
+      <p align="center"><b>Opportunity Radar (Unusual Volume & Buybacks)</b></p>
       <img src="public/screenshots/oportunity_radar.png" width="100%" />
     </td>
   </tr>
+  <!-- 4. Watchlist -->
   <tr>
-    <td width="50%">
-      <p align="center"><b>Dynamic Watchlists</b></p>
+    <td colspan="2">
+      <p align="center"><b>Dynamic Watchlists & Market Heatmaps</b></p>
       <img src="public/screenshots/watchlist.png" width="100%" />
     </td>
-    <td width="50%">
-      <p align="center"><b>Earnings Calendar</b></p>
+  </tr>
+  <!-- 5. Earnings Calendar -->
+  <tr>
+    <td colspan="2">
+      <p align="center"><b>Weekly Earnings Calendar</b></p>
       <img src="public/screenshots/earnings_calendar.png" width="100%" />
     </td>
   </tr>
+  <!-- 6. DCF -->
   <tr>
-    <td width="50%">
-      <p align="center"><b>Advanced DCF Calculator</b></p>
+    <td colspan="2">
+      <p align="center"><b>Advanced DCF Calculator (Intrinsic Value)</b></p>
       <img src="public/screenshots/dcf.png" width="100%" />
     </td>
-    <td width="50%">
-      <p align="center"><b>Monte Carlo Simulation</b></p>
+  </tr>
+  <!-- 7. Monte Carlo -->
+  <tr>
+    <td colspan="2">
+      <p align="center"><b>Monte Carlo Simulation & Probability Distribution</b></p>
       <img src="public/screenshots/monte_carlo.png" width="100%" />
     </td>
   </tr>
+  <!-- 8. Portfolio -->
   <tr>
     <td colspan="2">
       <p align="center"><b>Portfolio Performance & Risk Metrics</b></p>
