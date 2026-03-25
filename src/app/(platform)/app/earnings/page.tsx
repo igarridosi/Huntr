@@ -250,6 +250,12 @@ function numberOrNull(value: unknown): number | null {
   return null;
 }
 
+function nonZeroNumberOrNull(value: unknown): number | null {
+  const parsed = numberOrNull(value);
+  if (parsed == null) return null;
+  return Math.abs(parsed) > 1e-9 ? parsed : null;
+}
+
 function inferSurprise(actual: number | null, estimate: number | null): number | null {
   if (
     actual == null ||
@@ -318,10 +324,19 @@ function formatEarningsData(
 
     const existing = merged.get(quarter);
     const sortTs = quarterLabelToTimestamp(quarter);
+    const epsFromFinancials =
+      nonZeroNumberOrNull(row.eps_diluted) ?? nonZeroNumberOrNull(row.eps_basic);
 
     if (existing) {
       if (existing.revenue == null) {
         existing.revenue = numberOrNull(row.revenue);
+      }
+      if (existing.reported == null && epsFromFinancials != null) {
+        existing.reported = epsFromFinancials;
+        existing.surprise = existing.surprise ?? inferSurprise(existing.reported, existing.estimate);
+      }
+      if (!existing.releaseDate) {
+        existing.releaseDate = row.date;
       }
       existing.sortTs = Math.max(existing.sortTs, sortTs);
       continue;
@@ -329,9 +344,9 @@ function formatEarningsData(
 
     merged.set(quarter, {
       quarter,
-      releaseDate: null,
+      releaseDate: row.date ?? null,
       estimate: null,
-      reported: null,
+      reported: epsFromFinancials,
       surprise: null,
       revenueEstimate: null,
       revenue: numberOrNull(row.revenue),

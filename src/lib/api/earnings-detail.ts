@@ -23,6 +23,15 @@ interface StockCacheRow {
   last_updated: string;
 }
 
+function hasSufficientCachedDetail(payload: EarningsDetailData): boolean {
+  const history = payload.insight?.history ?? [];
+  if (history.length < 10) return false;
+
+  const reportedCount = history.filter((row) => row.eps_actual != null).length;
+  const estimateCount = history.filter((row) => row.eps_estimate != null).length;
+  return reportedCount >= 10 && estimateCount >= 6;
+}
+
 function buildEmptyInsight(ticker: string): EarningsInsight {
   return {
     ticker,
@@ -60,11 +69,17 @@ async function readEarningsDetailFromCache(
       return null;
     }
 
-    return {
+    const payload = {
       ...row.data,
       ticker,
       cached: true,
     };
+
+    if (!hasSufficientCachedDetail(payload)) {
+      return null;
+    }
+
+    return payload;
   } catch {
     return null;
   }

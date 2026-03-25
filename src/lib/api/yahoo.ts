@@ -925,11 +925,22 @@ function parseEarningsTimingFromSummary(data: YahooQuoteSummaryResult): "Before 
   return "Time TBD";
 }
 
+function hasSufficientEpsHistory(insight: EarningsInsight): boolean {
+  const history = insight.history ?? [];
+  if (history.length < 10) return false;
+
+  const reportedCount = history.filter((row) => row.eps_actual != null).length;
+  const estimateCount = history.filter((row) => row.eps_estimate != null).length;
+
+  // Require enough depth to avoid the "only ~5 quarters" degraded cache state.
+  return reportedCount >= 10 && estimateCount >= 6;
+}
+
 async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
   const key = ticker.toUpperCase();
   const cacheNamespace = "earnings-insight-v2";
   const cached = await getCachedData<EarningsInsight>(key, cacheNamespace, TTL.EARNINGS_INSIGHT);
-  if (cached) return cached;
+  if (cached && hasSufficientEpsHistory(cached)) return cached;
 
   const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
 
