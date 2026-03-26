@@ -6,8 +6,6 @@ Huntr is an institutional-grade financial web terminal designed to streamline fu
 
 ## Platform Gallery
 
-## Platform Gallery
-
 <table border="0">
   <!-- 1. Stock Chart -->
   <tr>
