@@ -197,6 +197,24 @@ function isSubstantialRow(
   return row[requiredField] != null && typeof row[requiredField] === "number";
 }
 
+function isSubstantialIncomeRow(row: Record<string, unknown>): boolean {
+  const candidateFields = [
+    "totalRevenue",
+    "operatingRevenue",
+    "operatingIncome",
+    "netIncome",
+    "EBITDA",
+    "interestExpense",
+    "basicEPS",
+    "dilutedEPS",
+  ];
+
+  return candidateFields.some((field) => {
+    const value = row[field];
+    return typeof value === "number" && Number.isFinite(value);
+  });
+}
+
 // ─────────────────────────────────────────────────────────
 // Income Statement — fundamentalsTimeSeries mapper
 // ─────────────────────────────────────────────────────────
@@ -206,11 +224,12 @@ function mapTsIncomeRow(
   isAnnual: boolean
 ): IncomeStatement {
   const date = parseTimeSeriesDate(row.date);
+  const totalRevenue = tsn(row, "totalRevenue") || tsn(row, "operatingRevenue");
   return {
     period: toPeriodLabel(date, isAnnual),
     date: toDateString(date),
     currency: "USD",
-    revenue: tsn(row, "totalRevenue"),
+    revenue: totalRevenue,
     cost_of_revenue: tsn(row, "costOfRevenue"),
     gross_profit: tsn(row, "grossProfit"),
     operating_expenses: tsn(row, "operatingExpense"),
@@ -319,18 +338,22 @@ export function mapTimeSeriesFinancials(
   return {
     ticker: ticker.toUpperCase(),
     income_statement: {
-      annual: filterSortMap(
-        data.income.annual,
-        "totalRevenue",
-        mapTsIncomeRow,
-        true
-      ),
-      quarterly: filterSortMap(
-        data.income.quarterly,
-        "totalRevenue",
-        mapTsIncomeRow,
-        false
-      ),
+      annual: data.income.annual
+        .filter((row) => isSubstantialIncomeRow(row))
+        .sort((a, b) => {
+          const da = parseTimeSeriesDate(a.date).getTime();
+          const db = parseTimeSeriesDate(b.date).getTime();
+          return da - db;
+        })
+        .map((row) => mapTsIncomeRow(row, true)),
+      quarterly: data.income.quarterly
+        .filter((row) => isSubstantialIncomeRow(row))
+        .sort((a, b) => {
+          const da = parseTimeSeriesDate(a.date).getTime();
+          const db = parseTimeSeriesDate(b.date).getTime();
+          return da - db;
+        })
+        .map((row) => mapTsIncomeRow(row, false)),
     },
     balance_sheet: {
       annual: filterSortMap(

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo } from "react";
 import { useParams } from "next/navigation";
 import {
   useStockProfile,
@@ -12,6 +12,7 @@ import {
   MetricChartCard,
   type MetricChartCardData,
 } from "@/components/stock/metric-chart-card";
+import { StockPriceCard } from "@/components/stock/stock-price-card";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,19 +52,22 @@ function pickMostRecentPeriod<T extends { date: string }>(
 
 type YearRange = 5 | 10 | 15 | 20;
 
-function filterByYearRange<T extends { date: string }>(rows: T[], years: YearRange): T[] {
-  if (!rows.length) return rows;
+function findNearestBalanceRow<T extends { date: string }>(rows: T[], targetDate: string): T | null {
+  if (!rows.length) return null;
+  const targetTs = new Date(targetDate).getTime();
+  if (!Number.isFinite(targetTs)) return null;
 
-  const latest = rows.reduce((acc, row) => {
-    const ts = new Date(row.date).getTime();
-    return ts > acc ? ts : acc;
-  }, 0);
+  const sorted = rows
+    .slice()
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  const cutoff = new Date(latest);
-  cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
-  const cutoffTs = cutoff.getTime();
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const ts = new Date(sorted[i].date).getTime();
+    if (!Number.isFinite(ts)) continue;
+    if (ts <= targetTs) return sorted[i];
+  }
 
-  return rows.filter((row) => new Date(row.date).getTime() >= cutoffTs);
+  return sorted[0] ?? null;
 }
 
 export default function OverviewPage() {
@@ -72,7 +76,6 @@ export default function OverviewPage() {
 
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
   const [yearRange, setYearRange] = useState<YearRange>(10);
-  const hasAutoSelectedPeriod = useRef(false);
 
   const { data: profile } = useStockProfile(ticker);
   const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker);
@@ -102,58 +105,56 @@ export default function OverviewPage() {
     );
   }, [financials]);
 
-  useEffect(() => {
-    if (!financials || hasAutoSelectedPeriod.current) return;
-
-    const latestAnnualIncome = getMostRecentByDate(financials.income_statement.annual);
-    const latestQuarterlyIncome = getMostRecentByDate(financials.income_statement.quarterly);
-
-    if (!latestQuarterlyIncome) {
-      hasAutoSelectedPeriod.current = true;
-      return;
-    }
-
-    const annualTs = latestAnnualIncome
-      ? new Date(latestAnnualIncome.date).getTime()
-      : 0;
-    const quarterlyTs = new Date(latestQuarterlyIncome.date).getTime();
-    const staleThresholdMs = 420 * 24 * 60 * 60 * 1000;
-
-    if (quarterlyTs > annualTs && Date.now() - annualTs > staleThresholdMs) {
-      setPeriodType("quarterly");
-    }
-
-    hasAutoSelectedPeriod.current = true;
-  }, [financials]);
-
   // Build all chart series from selected period
   const charts = useMemo(() => {
     if (!financials) return null;
 
-    const incomeAnnual = sortByDateAsc(
-      filterByYearRange(financials.income_statement.annual, yearRange)
-    );
-    const incomeQuarterly = sortByDateAsc(
-      filterByYearRange(financials.income_statement.quarterly, yearRange)
-    );
-    const balanceAnnual = sortByDateAsc(
-      filterByYearRange(financials.balance_sheet.annual, yearRange)
-    );
-    const balanceQuarterly = sortByDateAsc(
-      filterByYearRange(financials.balance_sheet.quarterly, yearRange)
-    );
-    const cashFlowAnnual = sortByDateAsc(
-      filterByYearRange(financials.cash_flow.annual, yearRange)
-    );
-    const cashFlowQuarterly = sortByDateAsc(
-      filterByYearRange(financials.cash_flow.quarterly, yearRange)
-    );
+    const incomeAnnual = sortByDateAsc(financials.income_statement.annual);
+    const incomeQuarterly = sortByDateAsc(financials.income_statement.quarterly);
+    const balanceAnnual = sortByDateAsc(financials.balance_sheet.annual);
+    const balanceQuarterly = sortByDateAsc(financials.balance_sheet.quarterly);
+    const cashFlowAnnual = sortByDateAsc(financials.cash_flow.annual);
+    const cashFlowQuarterly = sortByDateAsc(financials.cash_flow.quarterly);
 
     const fmt = (p: string, type: PeriodType) =>
       type === "annual" ? p.replace("FY", "'") : p;
 
     const byPeriod = <T,>(annual: T, quarterly: T): T =>
       periodType === "annual" ? annual : quarterly;
+
+    const filterMetricRows = (rows: MetricChartCardData[]): MetricChartCardData[] => {
+      if (!rows.length) return rows;
+
+      const latestDateMs = rows.reduce((latest, row) => {
+        const ts = row.date ? new Date(row.date).getTime() : Number.NaN;
+        if (!Number.isFinite(ts)) return latest;
+        return Math.max(latest, ts);
+      }, Number.NEGATIVE_INFINITY);
+
+      if (!Number.isFinite(latestDateMs)) {
+        return rows.slice(-yearRange);
+      }
+
+      const cutoff = new Date(latestDateMs);
+      cutoff.setUTCFullYear(cutoff.getUTCFullYear() - yearRange);
+      const cutoffMs = cutoff.getTime();
+
+      const filtered = rows.filter((row) => {
+        const ts = row.date ? new Date(row.date).getTime() : Number.NaN;
+        if (!Number.isFinite(ts)) return false;
+        return ts >= cutoffMs;
+      });
+
+      return filtered.length ? filtered : rows;
+    };
+
+    const displaySeries = (
+      annual: MetricChartCardData[],
+      quarterly: MetricChartCardData[]
+    ): MetricChartCardData[] => {
+      const source = byPeriod(annual, quarterly);
+      return filterMetricRows(source);
+    };
 
     // Helper to compute growth between first and last element
     const growth = (arr: MetricChartCardData[]): number | null => {
@@ -290,66 +291,214 @@ export default function OverviewPage() {
       date: is.date,
     }));
 
+    const roicAnnual: MetricChartCardData[] = incomeAnnual.reduce<MetricChartCardData[]>((acc, is) => {
+      const bs = findNearestBalanceRow(balanceAnnual, is.date);
+      if (!bs) return acc;
+      const investedCapital = bs.total_assets - bs.total_current_liabilities;
+      if (!Number.isFinite(investedCapital) || Math.abs(investedCapital) < 1e-9) return acc;
+      acc.push({
+        period: fmt(is.period, "annual"),
+        value: is.net_income / investedCapital,
+        date: is.date,
+      });
+      return acc;
+    }, []);
+
+    const roicQuarterly: MetricChartCardData[] = incomeQuarterly.reduce<MetricChartCardData[]>((acc, is) => {
+      const bs = findNearestBalanceRow(balanceQuarterly, is.date);
+      if (!bs) return acc;
+      const investedCapital = bs.total_assets - bs.total_current_liabilities;
+      if (!Number.isFinite(investedCapital) || Math.abs(investedCapital) < 1e-9) return acc;
+      acc.push({
+        period: fmt(is.period, "quarterly"),
+        value: is.net_income / investedCapital,
+        date: is.date,
+      });
+      return acc;
+    }, []);
+
+    const roeAnnual: MetricChartCardData[] = incomeAnnual.reduce<MetricChartCardData[]>((acc, is) => {
+      const bs = findNearestBalanceRow(balanceAnnual, is.date);
+      if (!bs || Math.abs(bs.total_equity) < 1e-9) return acc;
+      acc.push({
+        period: fmt(is.period, "annual"),
+        value: is.net_income / bs.total_equity,
+        date: is.date,
+      });
+      return acc;
+    }, []);
+
+    const roeQuarterly: MetricChartCardData[] = incomeQuarterly.reduce<MetricChartCardData[]>((acc, is) => {
+      const bs = findNearestBalanceRow(balanceQuarterly, is.date);
+      if (!bs || Math.abs(bs.total_equity) < 1e-9) return acc;
+      acc.push({
+        period: fmt(is.period, "quarterly"),
+        value: is.net_income / bs.total_equity,
+        date: is.date,
+      });
+      return acc;
+    }, []);
+
+    const capexAnnual: MetricChartCardData[] = cashFlowAnnual.map((cf) => ({
+      period: fmt(cf.period, "annual"),
+      value: cf.capital_expenditures,
+      date: cf.date,
+    }));
+    const capexQuarterly: MetricChartCardData[] = cashFlowQuarterly.map((cf) => ({
+      period: fmt(cf.period, "quarterly"),
+      value: cf.capital_expenditures,
+      date: cf.date,
+    }));
+
+    const interestCoverageAnnual: MetricChartCardData[] = incomeAnnual.map((is) => {
+      const interest = Math.abs(is.interest_expense);
+      const ratio = !interest || interest <= 0 ? 50 : is.operating_income / interest;
+      return {
+        period: fmt(is.period, "annual"),
+        value: Number.isFinite(ratio) ? ratio : 50,
+        date: is.date,
+      };
+    });
+
+    const interestCoverageQuarterly: MetricChartCardData[] = incomeQuarterly.map((is) => {
+      const interest = Math.abs(is.interest_expense);
+      const ratio = !interest || interest <= 0 ? 50 : is.operating_income / interest;
+      return {
+        period: fmt(is.period, "quarterly"),
+        value: Number.isFinite(ratio) ? ratio : 50,
+        date: is.date,
+      };
+    });
+
+    const totalDebtAnnual: MetricChartCardData[] = balanceAnnual.map((bs) => {
+      const totalDebt = bs.long_term_debt + bs.total_current_liabilities;
+      return {
+        period: fmt(bs.period, "annual"),
+        value: totalDebt,
+        date: bs.date,
+      };
+    });
+    const totalDebtQuarterly: MetricChartCardData[] = balanceQuarterly.map((bs) => {
+      const totalDebt = bs.long_term_debt + bs.total_current_liabilities;
+      return {
+        period: fmt(bs.period, "quarterly"),
+        value: totalDebt,
+        date: bs.date,
+      };
+    });
+
+    const netDebtAnnual: MetricChartCardData[] = balanceAnnual.map((bs) => {
+      const totalDebt = bs.long_term_debt + bs.total_current_liabilities;
+      return {
+        period: fmt(bs.period, "annual"),
+        value: totalDebt - bs.cash_and_equivalents,
+        date: bs.date,
+      };
+    });
+    const netDebtQuarterly: MetricChartCardData[] = balanceQuarterly.map((bs) => {
+      const totalDebt = bs.long_term_debt + bs.total_current_liabilities;
+      return {
+        period: fmt(bs.period, "quarterly"),
+        value: totalDebt - bs.cash_and_equivalents,
+        date: bs.date,
+      };
+    });
+
     return {
       revenue: {
-        data: byPeriod(revenueAnnual, revenueQuarterly),
+        data: displaySeries(revenueAnnual, revenueQuarterly),
         annualData: revenueAnnual,
         quarterlyData: revenueQuarterly,
-        growth: growth(byPeriod(revenueAnnual, revenueQuarterly)),
+        growth: growth(displaySeries(revenueAnnual, revenueQuarterly)),
       },
       ebitda: {
-        data: byPeriod(ebitdaAnnual, ebitdaQuarterly),
+        data: displaySeries(ebitdaAnnual, ebitdaQuarterly),
         annualData: ebitdaAnnual,
         quarterlyData: ebitdaQuarterly,
-        growth: growth(byPeriod(ebitdaAnnual, ebitdaQuarterly)),
+        growth: growth(displaySeries(ebitdaAnnual, ebitdaQuarterly)),
       },
       fcf: {
-        data: byPeriod(fcfAnnual, fcfQuarterly),
+        data: displaySeries(fcfAnnual, fcfQuarterly),
         annualData: fcfAnnual,
         quarterlyData: fcfQuarterly,
-        growth: growth(byPeriod(fcfAnnual, fcfQuarterly)),
+        growth: growth(displaySeries(fcfAnnual, fcfQuarterly)),
       },
       netIncome: {
-        data: byPeriod(netIncomeAnnual, netIncomeQuarterly),
+        data: displaySeries(netIncomeAnnual, netIncomeQuarterly),
         annualData: netIncomeAnnual,
         quarterlyData: netIncomeQuarterly,
-        growth: growth(byPeriod(netIncomeAnnual, netIncomeQuarterly)),
+        growth: growth(displaySeries(netIncomeAnnual, netIncomeQuarterly)),
       },
       eps: {
-        data: byPeriod(epsAnnual, epsQuarterly),
+        data: displaySeries(epsAnnual, epsQuarterly),
         annualData: epsAnnual,
         quarterlyData: epsQuarterly,
-        growth: growth(byPeriod(epsAnnual, epsQuarterly)),
+        growth: growth(displaySeries(epsAnnual, epsQuarterly)),
       },
       cashDebt: {
-        data: byPeriod(cashDebtAnnual, cashDebtQuarterly),
+        data: displaySeries(cashDebtAnnual, cashDebtQuarterly),
         annualData: cashDebtAnnual,
         quarterlyData: cashDebtQuarterly,
-        growth: growth(byPeriod(cashDebtAnnual, cashDebtQuarterly)),
+        growth: growth(displaySeries(cashDebtAnnual, cashDebtQuarterly)),
       },
       dividends: {
-        data: byPeriod(dividendsAnnual, dividendsQuarterly),
+        data: displaySeries(dividendsAnnual, dividendsQuarterly),
         annualData: dividendsAnnual,
         quarterlyData: dividendsQuarterly,
-        growth: growth(byPeriod(dividendsAnnual, dividendsQuarterly)),
+        growth: growth(displaySeries(dividendsAnnual, dividendsQuarterly)),
       },
       sharesOut: {
-        data: byPeriod(sharesOutAnnual, sharesOutQuarterly),
+        data: displaySeries(sharesOutAnnual, sharesOutQuarterly),
         annualData: sharesOutAnnual,
         quarterlyData: sharesOutQuarterly,
-        growth: growth(byPeriod(sharesOutAnnual, sharesOutQuarterly)),
+        growth: growth(displaySeries(sharesOutAnnual, sharesOutQuarterly)),
       },
       grossMargin: {
-        data: byPeriod(grossMarginAnnual, grossMarginQuarterly),
+        data: displaySeries(grossMarginAnnual, grossMarginQuarterly),
         annualData: grossMarginAnnual,
         quarterlyData: grossMarginQuarterly,
         growth: null as number | null,
       },
       opMargin: {
-        data: byPeriod(opMarginAnnual, opMarginQuarterly),
+        data: displaySeries(opMarginAnnual, opMarginQuarterly),
         annualData: opMarginAnnual,
         quarterlyData: opMarginQuarterly,
         growth: null as number | null,
+      },
+      roic: {
+        data: displaySeries(roicAnnual, roicQuarterly),
+        annualData: roicAnnual,
+        quarterlyData: roicQuarterly,
+        growth: null as number | null,
+      },
+      roe: {
+        data: displaySeries(roeAnnual, roeQuarterly),
+        annualData: roeAnnual,
+        quarterlyData: roeQuarterly,
+        growth: null as number | null,
+      },
+      capex: {
+        data: displaySeries(capexAnnual, capexQuarterly),
+        annualData: capexAnnual,
+        quarterlyData: capexQuarterly,
+        growth: growth(displaySeries(capexAnnual, capexQuarterly)),
+      },
+      interestCoverage: {
+        data: displaySeries(interestCoverageAnnual, interestCoverageQuarterly),
+        annualData: interestCoverageAnnual,
+        quarterlyData: interestCoverageQuarterly,
+        growth: null as number | null,
+      },
+      totalDebt: {
+        data: displaySeries(totalDebtAnnual, totalDebtQuarterly),
+        annualData: totalDebtAnnual,
+        quarterlyData: totalDebtQuarterly,
+      },
+      netDebt: {
+        data: displaySeries(netDebtAnnual, netDebtQuarterly),
+        annualData: netDebtAnnual,
+        quarterlyData: netDebtQuarterly,
+        growth: growth(displaySeries(netDebtAnnual, netDebtQuarterly)),
       },
     };
   }, [financials, periodType, quote?.shares_outstanding, yearRange]);
@@ -379,34 +528,36 @@ export default function OverviewPage() {
         />
       )}
 
-      {/* Controls */}
-      <div className="flex items-center justify-end gap-3">
-        <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
-          {([5, 10, 15, 20] as const).map((years) => (
-            <button
-              key={years}
-              type="button"
-              onClick={() => setYearRange(years)}
-              className={cn(
-                "px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150",
-                yearRange === years
-                  ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                  : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
-              )}
-            >
-              {years}Y
-            </button>
-          ))}
-        </div>
-        <PeriodToggle value={periodType} onChange={setPeriodType} />
-      </div>
-
       {/* Charts Grid — 5 columns × 2 rows */}
       {finLoading && !charts ? (
         <DataHuntingLoader ticker={ticker} compact />
       ) : charts ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-          <MetricChartCard
+        <div className="flex flex-col gap-6">
+          <StockPriceCard ticker={ticker} quote={quote ?? null} />
+
+          <div className="flex items-center justify-end gap-3">
+            <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
+              {([5, 10, 15, 20] as const).map((years) => (
+                <button
+                  key={years}
+                  type="button"
+                  onClick={() => setYearRange(years)}
+                  className={cn(
+                    "px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                    yearRange === years
+                      ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
+                      : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+                  )}
+                >
+                  {years}Y
+                </button>
+              ))}
+            </div>
+            <PeriodToggle value={periodType} onChange={setPeriodType} />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+            <MetricChartCard
             title="Revenue"
             data={charts.revenue.data}
             annualData={charts.revenue.annualData}
@@ -423,7 +574,7 @@ export default function OverviewPage() {
             quarterlyData={charts.ebitda.quarterlyData}
             growth={charts.ebitda.growth}
             type="bar"
-            color="#5A9BD5"
+            color="#7b59b3"
             formatter={dollarFmt}
           />
           <MetricChartCard
@@ -504,7 +655,71 @@ export default function OverviewPage() {
             color="#FF8C42"
             formatter={pctFmt}
           />
+          <MetricChartCard
+            title="ROIC"
+            data={charts.roic.data}
+            annualData={charts.roic.annualData}
+            quarterlyData={charts.roic.quarterlyData}
+            type="area"
+            color="#3DDC97"
+            formatter={pctFmt}
+            defaultYearRange={20}
+          />
+          <MetricChartCard
+            title="ROE"
+            data={charts.roe.data}
+            annualData={charts.roe.annualData}
+            quarterlyData={charts.roe.quarterlyData}
+            type="area"
+            color="#4BC0C0"
+            formatter={pctFmt}
+            defaultYearRange={20}
+          />
+          <MetricChartCard
+            title="Capex"
+            data={charts.capex.data}
+            annualData={charts.capex.annualData}
+            quarterlyData={charts.capex.quarterlyData}
+            growth={charts.capex.growth}
+            type="bar"
+            color="#E57373"
+            formatter={dollarFmt}
+          />
+          <MetricChartCard
+            title="Interest Coverage"
+            data={charts.interestCoverage.data}
+            annualData={charts.interestCoverage.annualData}
+            quarterlyData={charts.interestCoverage.quarterlyData}
+            type="area"
+            color="#d1d5db"
+            formatter={(v) => `${v.toFixed(2)}x`}
+            yAxisTickFormatter={(v) => `${v.toFixed(0)}x`}
+            referenceLineY={3}
+            referenceLineColor="#ef4444"
+            yMaxClamp={60}
+            showPerformanceFooter={false}
+            defaultYearRange={20}
+          />
+          <MetricChartCard
+            title="Total Debt vs Net Debt"
+            data={charts.netDebt.data}
+            annualData={charts.netDebt.annualData}
+            quarterlyData={charts.netDebt.quarterlyData}
+            compareData={charts.totalDebt.data}
+            compareAnnualData={charts.totalDebt.annualData}
+            compareQuarterlyData={charts.totalDebt.quarterlyData}
+            seriesLabel="Net Debt"
+            compareLabel="Total Debt"
+            compareColor="#4F9CF9"
+            growth={charts.netDebt.growth}
+            type="bar"
+            color="#FF6B6B"
+            formatter={dollarFmt}
+            defaultYearRange={20}
+          />
         </div>
+          </div>
+          
       ) : null}
 
       {/* Company Description */}

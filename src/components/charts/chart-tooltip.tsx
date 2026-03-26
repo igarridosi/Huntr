@@ -45,7 +45,8 @@ export function ChartTooltip({
           <div key={i} className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-1.5">
               <span
-                className="inline-block w-2 h-2 rounded-full shrink-0 bg-sunset-orange"
+                className="inline-block w-2 h-2 rounded-full shrink-0"
+                style={{ backgroundColor: entry.color ?? "#FF8C42" }}
               />
               <span className="text-mist">{entry.name}</span>
             </div>

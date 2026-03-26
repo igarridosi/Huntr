@@ -54,7 +54,7 @@ export function StockHeader({
   const dayChange = quote?.day_change ?? 0;
   const dayChangePercent = quote?.day_change_percent ?? 0;
   const changeDirection = dayChange >= 0;
-  const changeColor = changeDirection ? "text-sunset-orange" : "text-[#FF4242]";
+  const changeColor = changeDirection ? "text-emerald-400" : "text-[#FF4242]";
   const changeSign = changeDirection ? "+" : "";
   const earningsText = formatEarningsDate(quote?.next_earnings_date);
 

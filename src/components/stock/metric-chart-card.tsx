@@ -12,6 +12,7 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  ReferenceLine,
 } from "recharts";
 import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
@@ -45,6 +46,30 @@ export interface MetricChartCardProps {
   annualData?: MetricChartCardData[];
   /** Quarterly series for dialog toggle */
   quarterlyData?: MetricChartCardData[];
+  /** Optional comparison series (for dual bar cards) */
+  compareData?: MetricChartCardData[];
+  /** Annual comparison series for dialog */
+  compareAnnualData?: MetricChartCardData[];
+  /** Quarterly comparison series for dialog */
+  compareQuarterlyData?: MetricChartCardData[];
+  /** Label for primary series in tooltip */
+  seriesLabel?: string;
+  /** Label for comparison series in tooltip */
+  compareLabel?: string;
+  /** Color for comparison bars */
+  compareColor?: string;
+  /** Initial year range selected in expanded modal */
+  defaultYearRange?: YearRangeFilter;
+  /** Optional custom Y-axis tick formatter */
+  yAxisTickFormatter?: (value: number) => string;
+  /** Optional horizontal reference line for threshold metrics */
+  referenceLineY?: number;
+  /** Optional reference line color */
+  referenceLineColor?: string;
+  /** Show/hide performance footer badges in expanded dialog */
+  showPerformanceFooter?: boolean;
+  /** Optional max clamp for Y-axis visual scaling */
+  yMaxClamp?: number;
 }
 
 type ChartPeriodFilter = "annual" | "quarterly";
@@ -64,17 +89,33 @@ export function MetricChartCard({
   showYAxis = true,
   annualData,
   quarterlyData,
+  compareData,
+  compareAnnualData,
+  compareQuarterlyData,
+  seriesLabel,
+  compareLabel = "Comparison",
+  compareColor = "#6b7280",
+  defaultYearRange = 20,
+  yAxisTickFormatter,
+  referenceLineY,
+  referenceLineColor = "#ef4444",
+  showPerformanceFooter = true,
+  yMaxClamp,
 }: MetricChartCardProps) {
-  if (!data.length) return null;
-
   const chartId = useId().replace(/:/g, "");
   const miniGradientId = `mc-grad-${chartId}-mini`;
   const expandedGradientId = `mc-grad-${chartId}-expanded`;
   const [dialogPeriod, setDialogPeriod] = useState<ChartPeriodFilter>("annual");
-  const [yearRange, setYearRange] = useState<YearRangeFilter>(10);
+  const [yearRange, setYearRange] = useState<YearRangeFilter>(defaultYearRange);
 
   const annualSeries = annualData ?? data;
   const quarterlySeries = quarterlyData ?? annualSeries;
+  const resolvedSeriesLabel = seriesLabel ?? title;
+  const compareAnnualSeries = useMemo(
+    () => compareAnnualData ?? compareData ?? [],
+    [compareAnnualData, compareData]
+  );
+  const compareQuarterlySeries = compareQuarterlyData ?? compareAnnualSeries;
 
   const annualFiltered = useMemo(
     () => filterSeriesByYearRange(annualSeries, yearRange),
@@ -84,13 +125,30 @@ export function MetricChartCard({
     () => filterSeriesByYearRange(quarterlySeries, yearRange),
     [quarterlySeries, yearRange]
   );
+  const compareAnnualFiltered = useMemo(
+    () => filterSeriesByYearRange(compareAnnualSeries, yearRange),
+    [compareAnnualSeries, yearRange]
+  );
+  const compareQuarterlyFiltered = useMemo(
+    () => filterSeriesByYearRange(compareQuarterlySeries, yearRange),
+    [compareQuarterlySeries, yearRange]
+  );
 
   const dialogData = useMemo(
     () => (dialogPeriod === "annual" ? annualFiltered : quarterlyFiltered),
     [dialogPeriod, annualFiltered, quarterlyFiltered]
   );
-  const performance = useMemo(() => buildPerformanceBadges(dialogData), [dialogData]);
-  const showPerformanceFooter = dialogPeriod === "annual";
+  const dialogCompareData = useMemo(
+    () => (dialogPeriod === "annual" ? compareAnnualFiltered : compareQuarterlyFiltered),
+    [dialogPeriod, compareAnnualFiltered, compareQuarterlyFiltered]
+  );
+  const performance = useMemo(
+    () => buildPerformanceBadges(dialogData, dialogPeriod),
+    [dialogData, dialogPeriod]
+  );
+  const shouldShowPerformanceFooter = showPerformanceFooter;
+
+  if (!data.length) return null;
 
   return (
     <div className="rounded-xl border border-wolf-border/50 bg-wolf-surface p-4 flex flex-col gap-2">
@@ -158,7 +216,7 @@ export function MetricChartCard({
                 </div>
               </div>
             }
-            footer={showPerformanceFooter ? (
+            footer={shouldShowPerformanceFooter ? (
               <div className="flex items-center justify-center gap-2 flex-wrap">
                 {performance.map((item) => (
                   <Badge
@@ -181,9 +239,17 @@ export function MetricChartCard({
             <div className="h-[420px] w-full">
               <MetricChartRender
                 data={dialogData}
+                compareData={dialogCompareData}
                 type={type}
                 color={color}
+                compareColor={compareColor}
+                seriesLabel={resolvedSeriesLabel}
+                compareLabel={compareLabel}
                 formatter={formatter}
+                yAxisTickFormatter={yAxisTickFormatter}
+                referenceLineY={referenceLineY}
+                referenceLineColor={referenceLineColor}
+                yMaxClamp={yMaxClamp}
                 showYAxis
                 gradientId={expandedGradientId}
               />
@@ -192,13 +258,20 @@ export function MetricChartCard({
         </div>
       </div>
 
-      {/* Chart */}
       <div className="w-full h-40">
         <MetricChartRender
           data={data}
+          compareData={compareData}
           type={type}
           color={color}
+          compareColor={compareColor}
+          seriesLabel={resolvedSeriesLabel}
+          compareLabel={compareLabel}
           formatter={formatter}
+          yAxisTickFormatter={yAxisTickFormatter}
+          referenceLineY={referenceLineY}
+          referenceLineColor={referenceLineColor}
+          yMaxClamp={yMaxClamp}
           showYAxis={showYAxis}
           gradientId={miniGradientId}
         />
@@ -209,26 +282,80 @@ export function MetricChartCard({
 
 interface MetricChartRenderProps {
   data: MetricChartCardData[];
+  compareData?: MetricChartCardData[];
   type: "bar" | "area";
   color: string;
+  compareColor: string;
+  seriesLabel: string;
+  compareLabel: string;
   formatter: (value: number) => string;
+  yAxisTickFormatter?: (value: number) => string;
+  referenceLineY?: number;
+  referenceLineColor: string;
+  yMaxClamp?: number;
   showYAxis: boolean;
   gradientId: string;
 }
 
 function MetricChartRender({
   data,
+  compareData,
   type,
   color,
+  compareColor,
+  seriesLabel,
+  compareLabel,
   formatter,
+  yAxisTickFormatter,
+  referenceLineY,
+  referenceLineColor,
+  yMaxClamp,
   showYAxis,
   gradientId,
 }: MetricChartRenderProps) {
+  const yDomain = useMemo<[number, number]>(() => {
+    return computeYAxisDomain({
+      data,
+      compareData,
+      yMaxClamp,
+      forceZeroFloor: type === "bar",
+    });
+  }, [data, compareData, yMaxClamp, type]);
+
+  const mergedSeries = useMemo(() => {
+    if (!compareData || compareData.length === 0) return null;
+
+    const byPeriod = new Map<string, { value?: number; compareValue?: number }>();
+
+    for (const row of data) {
+      byPeriod.set(row.period, {
+        ...(byPeriod.get(row.period) ?? {}),
+        value: row.value,
+      });
+    }
+
+    for (const row of compareData) {
+      byPeriod.set(row.period, {
+        ...(byPeriod.get(row.period) ?? {}),
+        compareValue: row.value,
+      });
+    }
+
+    return data.map((row) => {
+      const merged = byPeriod.get(row.period) ?? {};
+      return {
+        period: row.period,
+        value: merged.value ?? row.value,
+        compareValue: merged.compareValue ?? null,
+      };
+    });
+  }, [data, compareData]);
+
   return (
     <ResponsiveContainer width="100%" height="100%">
       {type === "bar" ? (
         <RechartsBarChart
-          data={data}
+          data={mergedSeries ?? data}
           margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
           barCategoryGap="8%"
           barGap={2}
@@ -253,7 +380,10 @@ function MetricChartRender({
               tickLine={false}
               tick={{ fill: "#8C9DA1", fontSize: 10 }}
               width={48}
-              tickFormatter={(v: number) => compactFormat(v)}
+              domain={yDomain}
+              tickFormatter={(v: number) =>
+                yAxisTickFormatter ? yAxisTickFormatter(v) : compactFormat(v)
+              }
             />
           )}
           <Tooltip
@@ -266,11 +396,22 @@ function MetricChartRender({
           />
           <Bar
             dataKey="value"
+            name={seriesLabel}
             fill={color}
             radius={[3, 3, 0, 0]}
             minPointSize={2}
             activeBar={{ fill: color, fillOpacity: 0.85 }}
           />
+          {mergedSeries ? (
+            <Bar
+              dataKey="compareValue"
+              name={compareLabel}
+              fill={compareColor}
+              radius={[3, 3, 0, 0]}
+              minPointSize={2}
+              activeBar={{ fill: compareColor, fillOpacity: 0.9 }}
+            />
+          ) : null}
         </RechartsBarChart>
       ) : (
         <RechartsAreaChart
@@ -303,9 +444,15 @@ function MetricChartRender({
               tickLine={false}
               tick={{ fill: "#8C9DA1", fontSize: 10 }}
               width={48}
-              tickFormatter={(v: number) => compactFormat(v)}
+              domain={yDomain}
+              tickFormatter={(v: number) =>
+                yAxisTickFormatter ? yAxisTickFormatter(v) : compactFormat(v)
+              }
             />
           )}
+          {referenceLineY != null ? (
+            <ReferenceLine y={referenceLineY} stroke={referenceLineColor} strokeDasharray="4 4" />
+          ) : null}
           <Tooltip
             cursor={false}
             content={
@@ -317,6 +464,7 @@ function MetricChartRender({
           <Area
             type="monotone"
             dataKey="value"
+            name={seriesLabel}
             stroke={color}
             strokeWidth={2}
             fill={`url(#${gradientId})`}
@@ -387,10 +535,67 @@ function calculateChange(
   return (end - start) / start;
 }
 
-function buildPerformanceBadges(data: MetricChartCardData[]) {
-  return [
-    { label: "YTD", value: calculateChange(data, 2) },
-    { label: "1Y", value: calculateChange(data, 2) },
-    { label: "2Y", value: calculateChange(data, 3) },
-  ];
+function buildPerformanceBadges(
+  data: MetricChartCardData[],
+  period: ChartPeriodFilter
+) {
+  const yearWindows = [1, 3, 5, 10, 15] as const;
+
+  return yearWindows.map((years) => {
+    const lookbackPoints = period === "quarterly" ? years * 4 + 1 : years + 1;
+    return {
+      label: `${years}Y`,
+      value: calculateChange(data, lookbackPoints),
+    };
+  });
+}
+
+function computeYAxisDomain({
+  data,
+  compareData,
+  yMaxClamp,
+  forceZeroFloor,
+}: {
+  data: MetricChartCardData[];
+  compareData?: MetricChartCardData[];
+  yMaxClamp?: number;
+  forceZeroFloor: boolean;
+}): [number, number] {
+  const values = [
+    ...data.map((row) => row.value),
+    ...(compareData ?? []).map((row) => row.value),
+  ].filter((value) => Number.isFinite(value));
+
+  if (!values.length) {
+    return [0, Number.isFinite(yMaxClamp) ? Math.max(1, yMaxClamp as number) : 1];
+  }
+
+  let min = Math.min(...values);
+  let max = Math.max(...values);
+
+  if (min === max) {
+    const pad = Math.max(Math.abs(min) * 0.15, 1);
+    min -= pad;
+    max += pad;
+  } else {
+    const span = max - min;
+    const pad = span * 0.12;
+    min -= pad;
+    max += pad;
+  }
+
+  if (forceZeroFloor && min > 0) {
+    min = 0;
+  }
+
+  if (Number.isFinite(yMaxClamp)) {
+    max = Math.min(max, yMaxClamp as number);
+  }
+
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) {
+    const fallbackMax = Number.isFinite(yMaxClamp) ? Math.max(1, yMaxClamp as number) : 1;
+    return [0, fallbackMax];
+  }
+
+  return [min, max];
 }

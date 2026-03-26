@@ -9,7 +9,7 @@ const badgeVariants = cva(
       variant: {
         default: "bg-sunset-orange/15 text-sunset-orange border border-sunset-orange/20",
         secondary: "bg-wolf-surface text-mist border border-wolf-border",
-        bullish: "bg-sunset-orange/15 text-sunset-orange border border-sunset-orange/20",
+        bullish: "bg-emerald-400/15 text-emerald-400 border border-emerald-400/20",
         bearish: "bg-bearish/15 text-bearish border border-bearish/20",
         golden: "bg-golden-hour/15 text-golden-hour border border-golden-hour/20",
         outline: "bg-transparent text-snow-peak border border-wolf-border",
