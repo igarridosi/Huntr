@@ -119,19 +119,19 @@ export function HeroParallax() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   return (
-    <section className="relative overflow-visible border-0 px-6 min-h-screen flex items-center">
+    <section className="relative overflow-hidden border-0 px-4 sm:px-6 lg:px-8 py-14 sm:py-16 min-h-[calc(100svh-64px)] flex items-center">
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(22,34,37,0.7)_0%,rgba(11,20,22,1)_72%)]" />
       <div className="pointer-events-none absolute inset-0 bg-grid-white/[0.02] [mask-image:radial-gradient(ellipse_at_center,transparent_18%,transparent_34%,black_76%)] [-webkit-mask-image:radial-gradient(ellipse_at_center,transparent_18%,transparent_34%,black_76%)]" />
 
-      <div className="relative z-10 mx-auto grid max-w-7xl grid-cols-1 gap-12 lg:grid-cols-2 lg:gap-16 w-full">
+      <div className="relative z-10 mx-auto grid w-full max-w-[1280px] grid-cols-1 items-center gap-10 lg:grid-cols-[minmax(0,1.03fr)_minmax(0,0.97fr)] lg:gap-12 xl:gap-16">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.25 }}
           transition={{ duration: 0.6, ease: "easeOut" }}
-          className="flex flex-col justify-center"
+          className="mx-auto flex w-full max-w-2xl flex-col justify-center lg:mx-0"
         >
-          <h1 className="text-5xl font-bold leading-[1.04] tracking-tight text-snow-peak sm:text-7xl">
+          <h1 className="text-4xl font-bold leading-[1.06] tracking-tight text-snow-peak sm:text-6xl lg:text-7xl">
             Stop Searching
             <br />
             Start <span className="bg-gradient-to-r from-sunset-orange to-golden-hour bg-clip-text text-transparent">Hunting</span>
@@ -188,11 +188,11 @@ export function HeroParallax() {
           />
         </motion.div>
 
-        <div className="relative border-0 [perspective:1400px]">
+        <div className="relative mx-auto w-full max-w-[620px] border-0 [perspective:1400px] lg:mx-0">
           <div className="pointer-events-none absolute inset-0 -z-10 rounded-3xl bg-sunset-orange/20 blur-3xl" />
 
-          <div className="relative h-[360px] overflow-y-auto pr-2 [&::-webkit-scrollbar]:display-none [scrollbar-width:none] [-ms-overflow-style:none] [mask-image:linear-gradient(to_bottom,transparent_0%,black_8%,black_92%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,black_8%,black_92%,transparent_100%)]">
-            <motion.div className="space-y-4 pr-20 [transform:rotate(0deg)_skewY(8deg)] [transform-origin:20%_20%]">
+          <div className="relative h-[300px] sm:h-[340px] lg:h-[380px] overflow-y-auto pr-1 [&::-webkit-scrollbar]:display-none [scrollbar-width:none] [-ms-overflow-style:none] [mask-image:linear-gradient(to_bottom,transparent_0%,black_8%,black_92%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_bottom,transparent_0%,black_8%,black_92%,transparent_100%)]">
+            <motion.div className="space-y-4 pr-2 [transform:rotate(-1.5deg)_skewY(6deg)] [transform-origin:18%_18%] sm:pr-4 lg:pr-6">
               {snippets.map((item) => (
                 <StockCard key={item.ticker} item={item} />
               ))}

@@ -57,6 +57,15 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
+  icons: {
+    icon: [
+      { url: "/logo/HunterLogoCut.png", type: "image/png" },
+    ],
+    shortcut: ["/logo/HunterLogoCut.png"],
+    apple: [
+      { url: "/logo/HunterLogoCut.png" },
+    ],
+  },
 };
 
 export default function RootLayout({
