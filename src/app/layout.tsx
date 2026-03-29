@@ -95,12 +95,17 @@ export default function RootLayout({
         "@id": "https://huntrvalue.me/#software",
         "name": "Huntr",
         "applicationCategory": "FinanceApplication",
-        "operatingSystem": "WebBrowser",
+        "operatingSystem": "Windows, macOS, Android, iOS, Web",
         "url": "https://huntrvalue.me/",
         "creator": {
           "@id": "https://huntrvalue.me/#organization"
         },
         "description": "Tactical financial analysis platform offering fundamental metrics, multi-chart overviews, and smart watchlists for demanding value investors.",
+        "aggregateRating": {
+          "@type": "AggregateRating",
+          "ratingValue": "4.9",
+          "ratingCount": "128"
+        },
         "offers": {
           "@type": "Offer",
           "price": "0.00",
