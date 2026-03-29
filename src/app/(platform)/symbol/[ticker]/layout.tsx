@@ -1,48 +1,46 @@
-"use client";
+import { Metadata } from "next";
+import TickerClientLayout from "./client-layout";
+// We don't have a direct server-side function to get the company name yet. 
+// But as a fallback we can use the Ticker symbol, or later integrate a server-side fetch from supabase or an API.
 
-import { useEffect } from "react";
-import { useParams } from "next/navigation";
-import {
-  useStockProfile,
-  useStockQuote,
-  useMarketIndices,
-} from "@/hooks/use-stock-data";
-import { StockHeader } from "@/components/stock/stock-header";
-import { StockTabs } from "@/components/stock/stock-tabs";
-import { addRecentSearch } from "@/lib/recent-searches";
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ ticker: string }>;
+}): Promise<Metadata> {
+  const resolvedParams = await params;
+  const ticker = (resolvedParams.ticker ?? "").toUpperCase();
 
-export default function TickerLayout({
+  return {
+    title: `${ticker} Stock Overview, Financials & Valuation`,
+    description: `Deep tactical financial analysis for ${ticker}. View fundamental metrics, real-time charts, and calculate fair value with customized DCF models on Huntr.`,
+    alternates: {
+      canonical: `https://huntrvalue.me/symbol/${ticker}`,
+    },
+    openGraph: {
+      title: `${ticker} Stock Price & Fundamental Analysis | Huntr`,
+      description: `Analyze ${ticker} like a pro value investor. Access institutional-grade metrics, DCF valuations, and multi-chart views.`,
+      url: `https://huntrvalue.me/symbol/${ticker}`,
+      type: "website",
+    },
+    twitter: {
+      card: "summary",
+      title: `${ticker} Key Metrics & Valuation`,
+      description: `Find out the true value of ${ticker} using our advanced DCF models and real-time fundamentals.`,
+    },
+  };
+}
+
+export default async function TickerLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ ticker: string }>;
 }) {
-  const params = useParams<{ ticker: string }>();
-  const ticker = (params.ticker ?? "").toUpperCase();
-
-  const { data: profile, isLoading: profileLoading } = useStockProfile(ticker);
-  const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker);
-  const { data: marketIndices } = useMarketIndices();
-
-  useEffect(() => {
-    if (!ticker) return;
-    addRecentSearch(ticker);
-  }, [ticker]);
-
   return (
-    <div className="space-y-6 w-full">
-      {/* Stock Header: name, price, quick stats, watchlist */}
-      <StockHeader
-        profile={profile}
-        quote={quote}
-        marketIndices={marketIndices}
-        isLoading={profileLoading || quoteLoading}
-      />
-
-      {/* Tab Navigation */}
-      <StockTabs ticker={ticker} />
-
-      {/* Tab Content */}
-      <div className="pt-2">{children}</div>
-    </div>
+    <TickerClientLayout>
+      {children}
+    </TickerClientLayout>
   );
 }

@@ -21,11 +21,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Huntr — The Wolf of Value Street",
+    default: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     template: "%s | Huntr",
   },
   description:
-    "Tactical financial analysis platform. Fundamental metrics, multi-chart overviews, and smart watchlists for demanding value investors.",
+    "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
   keywords: [
     "financial analysis",
     "stock screener",
@@ -35,23 +35,25 @@ export const metadata: Metadata = {
     "dividends",
     "watchlist",
     "value investing",
+    "financial terminal",
+    "DCF models"
   ],
   authors: [{ name: "Huntr" }],
   creator: "Huntr",
   openGraph: {
     type: "website",
     locale: "en_US",
-    url: "https://huntr.app",
+    url: "https://huntrvalue.me",
     siteName: "Huntr",
-    title: "Huntr — The Wolf of Value Street",
+    title: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     description:
-      "Tactical financial analysis for demanding investors. Metrics, charts, and watchlists — all in one premium dark interface.",
+      "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Huntr — The Wolf of Value Street",
+    title: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     description:
-      "Hunt for value with precision. Financial analysis platform for investors.",
+      "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
   },
   robots: {
     index: true,
@@ -73,8 +75,72 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const schemaMarkup = {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Organization",
+        "@id": "https://huntrvalue.me/#organization",
+        "name": "Huntr",
+        "url": "https://huntrvalue.me/",
+        "logo": "https://huntrvalue.me/logo/HunterLogoCut.png",
+        "sameAs": [
+          "https://twitter.com/huntrvalue",
+          "https://linkedin.com/company/huntrvalue"
+        ],
+        "slogan": "The Wolf of Value Street"
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://huntrvalue.me/#software",
+        "name": "Huntr",
+        "applicationCategory": "FinanceApplication",
+        "operatingSystem": "WebBrowser",
+        "url": "https://huntrvalue.me/",
+        "creator": {
+          "@id": "https://huntrvalue.me/#organization"
+        },
+        "description": "Tactical financial analysis platform offering fundamental metrics, multi-chart overviews, and smart watchlists for demanding value investors.",
+        "offers": {
+          "@type": "Offer",
+          "price": "0.00",
+          "priceCurrency": "USD",
+          "description": "Free tier available"
+        }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://huntrvalue.me/#faq",
+        "mainEntity": [
+          {
+            "@type": "Question",
+            "name": "What is Huntr?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Huntr is a tactical financial analysis platform designed specifically for value investors. It provides deep fundamental metrics, smart watchlists, and multi-chart views."
+            }
+          },
+          {
+            "@type": "Question",
+            "name": "Does Huntr offer DCF (Discounted Cash Flow) models?",
+            "acceptedAnswer": {
+              "@type": "Answer",
+              "text": "Yes, Huntr provides tools for DCF assumptions, Monte Carlo simulations, and EPS Multiple models to help you find the fair value of an asset."
+            }
+          }
+        ]
+      }
+    ]
+  };
+
   return (
     <html lang="en" className="dark">
+      <head>
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaMarkup) }}
+        />
+      </head>
       <body
         suppressHydrationWarning
         className={`${outfit.variable} ${geistMono.variable} antialiased bg-wolf-black text-snow-peak`}
