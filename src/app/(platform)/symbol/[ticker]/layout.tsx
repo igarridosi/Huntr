@@ -33,9 +33,12 @@ export async function generateMetadata({
   const ticker = (resolvedParams.ticker ?? "").toUpperCase();
   const tickerData = await getTickerData(ticker);
 
+  const formatPrice = (val: number) => val.toFixed(2);
+  const formatChange = (val: number) => (val > 0 ? `+${val.toFixed(2)}` : val.toFixed(2));
+
   return {
-    title: `${tickerData.name} (${ticker}) | Stock Price $${tickerData.price} & Valuation`,
-    description: `Deep tactical financial analysis for ${tickerData.name} (${ticker}). View fundamental metrics (P/E ${tickerData.peRatio}), real-time charts, and calculate fair value on Huntr.`,
+    title: `${tickerData.name} (${ticker}) | $${formatPrice(tickerData.price)} (${formatChange(tickerData.changePercent)}%)`,
+    description: `Current quote for ${tickerData.name} (${ticker}) is $${formatPrice(tickerData.price)}. View deep financial metrics (P/E ${tickerData.peRatio}), real-time charts, and calculate fair value on Huntr.`,
     alternates: {
       canonical: `https://huntrvalue.me/symbol/${ticker}`,
     },
@@ -64,20 +67,50 @@ export default async function TickerLayout({
   const ticker = (resolvedParams.ticker ?? "").toUpperCase();
   const quoteData = await getTickerData(ticker);
 
-  // FinancialQuote Schema JSON-LD Construction
+  // Financial Data Schema JSON-LD Construction (Using Dataset to avoid validation errors)
   const financialQuoteSchema = {
     "@context": "https://schema.org",
-    "@type": "FinancialQuote", // Or a composite of FinancialProduct / Dataset used for stock snippets
-    "tickerSymbol": quoteData.ticker,
-    "exchange": quoteData.exchange,
-    "price": quoteData.price,
-    "priceCurrency": quoteData.currency,
-    "priceChange": quoteData.change,
-    "priceChangePercent": quoteData.changePercent,
-    "quoteTime": quoteData.updatedAt,
-    "marketCap": quoteData.marketCap,
-    "peRatio": quoteData.peRatio,
-    "url": `https://huntrvalue.me/symbol/${quoteData.ticker}`
+    "@type": "Dataset",
+    "name": `${quoteData.name} (${quoteData.ticker}) Financial Data`,
+    "description": `Real-time financial quote and valuation metrics for ${quoteData.name} (${quoteData.ticker}).`,
+    "url": `https://huntrvalue.me/symbol/${quoteData.ticker}`,
+    "keywords": [quoteData.ticker, "Stock Price", quoteData.exchange, "Financial Data"],
+    "creator": {
+      "@type": "Organization",
+      "name": "Huntr"
+    },
+    "variableMeasured": [
+      {
+        "@type": "PropertyValue",
+        "name": "Price",
+        "value": quoteData.price,
+        "unitText": quoteData.currency
+      },
+      {
+        "@type": "PropertyValue",
+        "name": "Price Change",
+        "value": quoteData.change,
+        "unitText": quoteData.currency
+      },
+      {
+        "@type": "PropertyValue",
+        "name": "Percent Change",
+        "value": quoteData.changePercent,
+        "unitText": "%"
+      },
+      {
+        "@type": "PropertyValue",
+        "name": "Market Cap",
+        "value": quoteData.marketCap,
+        "unitText": quoteData.currency
+      },
+      {
+        "@type": "PropertyValue",
+        "name": "P/E Ratio",
+        "value": quoteData.peRatio,
+        "measurementTechnique": "Financial Ratio"
+      }
+    ]
   };
 
   return (
