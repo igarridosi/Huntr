@@ -245,8 +245,8 @@ export function Sidebar({
           Sign Out
         </button>
 
-        <div className="px-3 pt-2 pb-1">
-          <KoFiSupport text="Support Huntr on Ko-fi" />
+        <div className="px-3 pt-2 pb-1 flex flex-col items-start">
+          <KoFiSupport text="Support Huntr on Ko-fi" position="above" />
         </div>
       </div>
       </aside>
