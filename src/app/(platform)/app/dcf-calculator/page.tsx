@@ -19,6 +19,7 @@ import { DCFProjectionTable } from "@/components/dcf/dcf-projection-table";
 import { DCFSensitivity } from "@/components/dcf/dcf-sensitivity";
 import { DCFMonteCarlo } from "@/components/dcf/dcf-monte-carlo";
 import { DCFFCFChart } from "@/components/dcf/dcf-fcf-chart";
+import { PositionDecisionEngine } from "@/components/dcf/position-decision-engine";
 import {
   useStockQuote,
   useStockProfile,
@@ -193,8 +194,15 @@ export default function DcfCalculatorPage() {
   const handleScenarioChange = useCallback((scenario: DCFScenarioKey) => {
     if (!scenarios) return;
     setActiveScenario(scenario);
-    animateInputsTo(scenarios[scenario].inputs, 420);
-  }, [scenarios, animateInputsTo]);
+    animateInputsTo(
+      {
+        ...scenarios[scenario].inputs,
+        // Always compare vs live quote when present.
+        currentPrice: quote?.price ?? inputs.currentPrice,
+      },
+      420
+    );
+  }, [scenarios, animateInputsTo, quote?.price, inputs.currentPrice]);
 
   useEffect(() => {
     if (!scenarios || !isPopulated) return;
@@ -202,7 +210,16 @@ export default function DcfCalculatorPage() {
     const current = scenarios[activeScenario];
     if (!current) return;
 
-    const same = JSON.stringify(current.inputs) === JSON.stringify(inputs);
+    const normalizeScenarioInputs = (scenarioInputs: DCFInputs): DCFInputs => ({
+      ...scenarioInputs,
+      // currentPrice is live-only and must not participate in scenario snapshot equality.
+      currentPrice: 0,
+    });
+
+    const normalizedCurrent = normalizeScenarioInputs(current.inputs);
+    const normalizedInputs = normalizeScenarioInputs(inputs);
+
+    const same = JSON.stringify(normalizedCurrent) === JSON.stringify(normalizedInputs);
     if (same) return;
 
     setScenarios((prev) => {
@@ -211,7 +228,7 @@ export default function DcfCalculatorPage() {
         ...prev,
         [activeScenario]: {
           ...prev[activeScenario],
-          inputs: { ...inputs },
+          inputs: normalizedInputs,
         },
       };
     });
@@ -256,7 +273,14 @@ export default function DcfCalculatorPage() {
     setScenarios(payload.scenarios);
     setActiveScenario(payload.activeScenario);
     setWaccEstimate(payload.waccEstimate);
-    animateInputsTo(selected.inputs, 420);
+    animateInputsTo(
+      {
+        ...selected.inputs,
+        // Always prioritize live quote when available.
+        currentPrice: quote?.price ?? selected.inputs.currentPrice,
+      },
+      420
+    );
     setIsPopulated(true);
     setIsSavedMenuOpen(false);
     setSaveStatus("idle");
@@ -269,16 +293,48 @@ export default function DcfCalculatorPage() {
     const baselineCapex = Math.max(0.01, Math.min(0.35, baselineOcf - selected.inputs.baseFCFMargin));
     setOcfMargin(baselineOcf);
     setCapexMargin(baselineCapex);
-  }, [animateInputsTo]);
+  }, [animateInputsTo, quote?.price]);
+
+  useEffect(() => {
+    // Keep DCF comparison anchored to live market price instead of stored snapshots.
+    if (!ticker || quote?.price == null || quote.price <= 0) return;
+
+    setInputs((prev) =>
+      prev.currentPrice === quote.price
+        ? prev
+        : {
+            ...prev,
+            currentPrice: quote.price,
+          }
+    );
+  }, [quote?.price, ticker]);
 
   const handleSaveScenarios = useCallback(async () => {
     if (!user || !ticker || !scenarios) return;
 
+    const sanitizeCurrentPrice = (scenarioInputs: DCFInputs): DCFInputs => ({
+      ...scenarioInputs,
+      // currentPrice must be evaluated in real-time, not persisted.
+      currentPrice: 0,
+    });
+
     const scenariosToSave: DCFScenarioSet = {
       ...scenarios,
+      bear: {
+        ...scenarios.bear,
+        inputs: sanitizeCurrentPrice(scenarios.bear.inputs),
+      },
+      base: {
+        ...scenarios.base,
+        inputs: sanitizeCurrentPrice(scenarios.base.inputs),
+      },
+      bull: {
+        ...scenarios.bull,
+        inputs: sanitizeCurrentPrice(scenarios.bull.inputs),
+      },
       [activeScenario]: {
         ...scenarios[activeScenario],
-        inputs: { ...inputs },
+        inputs: sanitizeCurrentPrice(inputs),
       },
     };
 
@@ -475,6 +531,66 @@ export default function DcfCalculatorPage() {
                     Load Saved
                   </Button>
                 )}
+
+                {user && (
+                  <div className="relative shrink-0 sm:ml-auto">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setIsSavedMenuOpen((value) => !value)}
+                      className="gap-1"
+                    >
+                      Saved ({savedScenarios.length})
+                      <ChevronDown className="w-3.5 h-3.5" />
+                    </Button>
+
+                    {isSavedMenuOpen && (
+                      <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-wolf-border/50 bg-midnight-rock/95 backdrop-blur p-1.5 shadow-xl">
+                        {savedScenariosLoading ? (
+                          <p className="px-2 py-2 text-xs text-mist">Loading saved scenarios...</p>
+                        ) : savedScenarios.length === 0 ? (
+                          <p className="px-2 py-2 text-xs text-mist">No saved scenarios yet.</p>
+                        ) : (
+                          <div className="max-h-64 overflow-y-auto space-y-1">
+                            {savedScenarios.map((entry) => (
+                              <div
+                                key={`${entry.ticker}-${entry.updatedAt}`}
+                                className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-sunset-orange/10 transition-colors"
+                              >
+                                <button
+                                  type="button"
+                                  onClick={() => applySavedScenario(entry)}
+                                  className="min-w-0 flex-1 text-left flex items-center gap-2"
+                                >
+                                  <TickerLogo
+                                    ticker={entry.ticker}
+                                    className="w-6 h-6"
+                                    imageClassName="rounded-md"
+                                    fallbackClassName="rounded-md text-[8px]"
+                                  />
+                                  <div className="min-w-0">
+                                    <p className="text-xs font-semibold text-snow-peak group-hover:text-sunset-orange transition-colors">{entry.ticker}</p>
+                                    <p className="text-[11px] text-mist group-hover:text-sunset-orange/80 transition-colors">Updated {new Date(entry.updatedAt).toLocaleDateString("en-US")}</p>
+                                  </div>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteSavedScenario(entry.ticker)}
+                                  className="ml-2 rounded p-1 text-mist hover:text-sunset-orange hover:bg-sunset-orange/10 transition-colors"
+                                  aria-label={`Delete saved scenarios for ${entry.ticker}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -494,7 +610,7 @@ export default function DcfCalculatorPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left: Assumptions Panel (sticky and full viewport height) */}
           <div className="lg:col-span-4 lg:self-start lg:sticky lg:top-4">
-            <Card className="lg:max-h-[calc(55vh-2rem)] lg:flex lg:flex-col lg:mt-12">
+            <Card className="lg:max-h-[calc(60vh-2rem)] lg:flex lg:flex-col lg:mt-12">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm flex items-center gap-2">
                   Model Assumptions
@@ -665,6 +781,15 @@ export default function DcfCalculatorPage() {
                   </CardHeader>
                   <CardContent>
                     <DCFResults result={result} ticker={ticker || "STOCK"} />
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm">Position Decision</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <PositionDecisionEngine inputs={inputs} result={result} />
                   </CardContent>
                 </Card>
 

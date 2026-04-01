@@ -89,6 +89,29 @@ function getHeatmapColor(cellValue: number, currentPrice: number): string {
   return "bg-rose-900 text-gray-100";
 }
 
+function getRoundedYAxisDomain(values: number[]): [number, number] {
+  const maxPos = Math.max(0, ...values);
+  const minNeg = Math.min(0, ...values);
+  const absMax = Math.max(maxPos, Math.abs(minNeg));
+
+  if (absMax === 0) return [-1, 1];
+
+  const billion = 1_000_000_000;
+  const step =
+    absMax >= 200 * billion
+      ? 10 * billion
+      : absMax >= 100 * billion
+        ? 5 * billion
+        : absMax >= 25 * billion
+          ? 2 * billion
+          : 1 * billion;
+
+  const roundedMax = maxPos > 0 ? Math.ceil(maxPos / step) * step + step : step;
+  const roundedMin = minNeg < 0 ? Math.floor(minNeg / step) * step - step : 0;
+
+  return [roundedMin, roundedMax];
+}
+
 export function CapitalAllocatorModel({
   ticker,
   queryTicker,
@@ -233,6 +256,25 @@ export function CapitalAllocatorModel({
   }, [sensitivityMatrix]);
 
   const centralValue = sensitivityMatrix[2]?.[2] ?? 0;
+
+  const chartYAxisDomain = useMemo(() => {
+    const values = projections.flatMap((item) => [item.ocf, item.capex, item.fcf]);
+    return getRoundedYAxisDomain(values);
+  }, [projections]);
+
+  const horizonChanges = useMemo(() => {
+    const baseFcf = baseRevenue * (ocfMargin - capexMargin);
+    const horizons = [1, 3, 5, 10];
+
+    return horizons
+      .map((year) => {
+        const point = projections.find((item) => item.year === year);
+        if (!point || baseFcf === 0) return null;
+        const change = (point.fcf - baseFcf) / Math.abs(baseFcf);
+        return { label: `${year}Y`, change };
+      })
+      .filter((item): item is { label: string; change: number } => item !== null);
+  }, [baseRevenue, capexMargin, ocfMargin, projections]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -421,6 +463,7 @@ export function CapitalAllocatorModel({
                         tick={{ fill: "#9fb0bf", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
+                        domain={chartYAxisDomain}
                         tickFormatter={(value) => `${value < 0 ? "-$" : "$"}${Math.abs(value / 1_000_000_000).toFixed(0)}B`}
                       />
                       <Tooltip
@@ -445,6 +488,26 @@ export function CapitalAllocatorModel({
                     </ComposedChart>
                   </ResponsiveContainer>
                 </div>
+
+                {horizonChanges.length > 0 ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {horizonChanges.map((item) => {
+                      const positive = item.change >= 0;
+                      return (
+                        <span
+                          key={item.label}
+                          className={
+                            positive
+                              ? "inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono text-emerald-300"
+                              : "inline-flex items-center gap-1 rounded-md border border-rose-400/20 bg-rose-500/15 px-2.5 py-1 text-xs font-mono text-rose-300"
+                          }
+                        >
+                          {item.label}: {item.change > 0 ? "+" : ""}{(item.change * 100).toFixed(1)}%
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : null}
 
                 <div className="rounded-lg border border-wolf-border/35 bg-wolf-black/35 p-3">
                   <p className="text-xs text-mist leading-relaxed">

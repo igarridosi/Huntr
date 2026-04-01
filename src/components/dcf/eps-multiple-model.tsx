@@ -431,6 +431,27 @@ function SimpleInput({
         onChange={(e) => onChange(parseFloat(e.target.value || "0"))}
         className="font-mono"
       />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={Number.isFinite(value) ? value : 0}
+        onChange={(e) => onChange(parseFloat(e.target.value || "0"))}
+        className={cn(
+          "w-full h-1.5 rounded-full appearance-none cursor-pointer",
+          "bg-wolf-border/60",
+          "[&::-webkit-slider-thumb]:appearance-none",
+          "[&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5",
+          "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-sunset-orange",
+          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-snow-peak",
+          "[&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,140,66,0.4)]",
+          "[&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5",
+          "[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-sunset-orange",
+          "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-snow-peak",
+          "[&::-moz-range-track]:bg-wolf-border/60 [&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full"
+        )}
+      />
       <p className="text-[10px] text-mist/70">{helper}</p>
     </div>
   );

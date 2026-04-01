@@ -100,13 +100,14 @@ function SliderInput({
           "[&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5",
           "[&::-webkit-slider-thumb]:rounded-full",
           "[&::-webkit-slider-thumb]:bg-sunset-orange",
+          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-snow-peak",
           "[&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,140,66,0.4)]",
           "[&::-webkit-slider-thumb]:cursor-pointer",
           "[&::-webkit-slider-thumb]:transition-shadow",
           "[&::-webkit-slider-thumb]:hover:shadow-[0_0_10px_rgba(255,140,66,0.6)]",
           "[&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5",
           "[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-sunset-orange",
-          "[&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+          "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-snow-peak [&::-moz-range-thumb]:cursor-pointer"
         )}
       />
       <div className="flex justify-between text-[9px] text-mist/40 font-mono">
