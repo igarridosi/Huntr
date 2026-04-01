@@ -1,7 +1,7 @@
 import type { StockProfile } from "@/types/stock";
 
 /**
- * Mock stock profiles for all 13 tickers in the Huntr universe.
+ * Mock stock profiles for core tickers in the Huntr universe.
  * Data approximates real-world company information.
  */
 export const stockProfiles: StockProfile[] = [
@@ -173,6 +173,71 @@ export const stockProfiles: StockProfile[] = [
       "Realty Income is a real estate investment trust (REIT) that invests in freestanding, single-tenant commercial properties. Known as 'The Monthly Dividend Company' for its monthly dividend payments and 100+ consecutive quarterly increases.",
     logo_url: "/logos/o.svg",
     website: "https://realtyincome.com",
+  },
+  {
+    ticker: "DUOL",
+    name: "Duolingo, Inc.",
+    sector: "Technology",
+    industry: "Education & Training Services",
+    exchange: "NASDAQ",
+    currency: "USD",
+    country: "US",
+    description:
+      "Duolingo builds mobile-first language learning and literacy products powered by adaptive AI and gamified learning loops.",
+    logo_url: "",
+    website: "https://duolingo.com",
+  },
+  {
+    ticker: "CRWD",
+    name: "CrowdStrike Holdings, Inc.",
+    sector: "Technology",
+    industry: "Software — Infrastructure",
+    exchange: "NASDAQ",
+    currency: "USD",
+    country: "US",
+    description:
+      "CrowdStrike provides cloud-native endpoint security, threat intelligence, and identity protection through the Falcon platform.",
+    logo_url: "",
+    website: "https://crowdstrike.com",
+  },
+  {
+    ticker: "PLTR",
+    name: "Palantir Technologies Inc.",
+    sector: "Technology",
+    industry: "Software — Infrastructure",
+    exchange: "NASDAQ",
+    currency: "USD",
+    country: "US",
+    description:
+      "Palantir develops data integration and decision intelligence platforms used by commercial enterprises and government agencies.",
+    logo_url: "",
+    website: "https://palantir.com",
+  },
+  {
+    ticker: "SNOW",
+    name: "Snowflake Inc.",
+    sector: "Technology",
+    industry: "Software — Application",
+    exchange: "NYSE",
+    currency: "USD",
+    country: "US",
+    description:
+      "Snowflake operates a cloud-native data platform for warehousing, analytics, data sharing, and AI workloads.",
+    logo_url: "",
+    website: "https://snowflake.com",
+  },
+  {
+    ticker: "DASH",
+    name: "DoorDash, Inc.",
+    sector: "Consumer Cyclical",
+    industry: "Internet Retail",
+    exchange: "NASDAQ",
+    currency: "USD",
+    country: "US",
+    description:
+      "DoorDash operates on-demand local commerce and delivery logistics across restaurants, grocery, and retail categories.",
+    logo_url: "",
+    website: "https://doordash.com",
   },
 ];
 

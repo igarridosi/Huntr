@@ -19,14 +19,12 @@ interface KoFiSupportProps {
   text?: string;
   className?: string;
   color?: string;
-  position?: "right" | "left" | "above";
 }
 
 export function KoFiSupport({
   text = "Support Huntr on Ko-fi",
   className,
   color = "#ff8f44",
-  position = "right",
 }: KoFiSupportProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
 
@@ -62,50 +60,5 @@ export function KoFiSupport({
     };
   }, [text, color]);
 
-  // Layout variations:
-  // - right (default): [Ko-fi widget] [ProductHunt badge]
-  // - left: [ProductHunt badge] [Ko-fi widget]
-  // - above: stacked column with ProductHunt above Ko-fi
-
-  const badge = (
-    <a
-      href="https://www.producthunt.com/products/huntr-4?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-huntr-5"
-      target="_blank"
-      rel="noopener noreferrer"
-      className="product-hunt-badge"
-      aria-label="Vote for Huntr on Product Hunt"
-    >
-      <img
-        alt="Huntr - The terminal for value investors | Product Hunt"
-        src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1108986&theme=light&t=1774944195458"
-        style={{ maxWidth: 200, height: "auto" }}
-      />
-    </a>
-  );
-
-  if (position === "above") {
-    return (
-      <div className={cn("kofi-support-widget flex flex-col items-center gap-2", className)}>
-        {badge}
-        <div ref={hostRef} />
-      </div>
-    );
-  }
-
-  if (position === "left") {
-    return (
-      <div className={cn("kofi-support-widget flex items-center gap-3", className)}>
-        {badge}
-        <div ref={hostRef} />
-      </div>
-    );
-  }
-
-  // default: right
-  return (
-    <div className={cn("kofi-support-widget flex items-center gap-3", className)}>
-      <div ref={hostRef} />
-      {badge}
-    </div>
-  );
+  return <div ref={hostRef} className={cn("kofi-support-widget", className)} />;
 }

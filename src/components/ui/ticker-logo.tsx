@@ -25,9 +25,9 @@ export function TickerLogo({
   const symbol = ticker.toUpperCase();
   const candidates = useMemo(() => {
     const list = [
-      src,
       `https://assets.parqet.com/logos/symbol/${encodeURIComponent(symbol)}?format=png`,
       `https://eodhd.com/img/logos/US/${encodeURIComponent(symbol)}.png`,
+      src,
       fallbackSrc,
     ].filter((value): value is string => !!value);
 

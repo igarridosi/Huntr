@@ -3,6 +3,7 @@
 import { Search, Menu, Crosshair } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 
 interface TopbarProps {
   onSearchClick?: () => void;
@@ -71,30 +72,7 @@ export function Topbar({
         </kbd>
       </button>
 
-      <div className="ml-2 hidden md:flex items-center gap-2">
-        <a
-          href="https://www.producthunt.com/products/huntr-4?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-huntr-5"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center"
-          aria-label="Vote for Huntr on Product Hunt"
-        >
-          <img
-            alt="Product Hunt"
-            src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1108986&theme=light&t=1774944195458"
-            className="max-w-[140px] h-auto"
-          />
-        </a>
-
-        <a
-          href="https://ko-fi.com/huntr"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-sm font-semibold text-wolf-black bg-sunset-orange hover:bg-sunset-orange/90 px-3 py-1.5 rounded-lg transition-colors"
-        >
-          Support Huntr
-        </a>
-      </div>
+      <KoFiSupport className="ml-2 hidden md:block" text="Support Huntr" />
     </header>
   );
 }

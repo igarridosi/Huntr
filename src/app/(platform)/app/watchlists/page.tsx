@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentType } from "react";
 import {
   BarChart3,
   BellRing,
+  SearchAlert,
   BookOpen,
   DollarSign,
   LayoutGrid,
@@ -31,6 +32,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { TickerLogo } from "@/components/ui/ticker-logo";
+import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
 import type { WatchlistView } from "@/types/watchlist";
 
 const VIEW_OPTIONS: Array<{
@@ -43,6 +46,8 @@ const VIEW_OPTIONS: Array<{
   { key: "fundamental", label: "Fundamental", icon: BarChart3 },
   { key: "dividends", label: "Dividends", icon: DollarSign },
 ];
+
+const INBOX_READ_KEY = "huntr_watchlist_inbox_read_v1";
 
 export default function WatchlistsPage() {
   const {
@@ -76,7 +81,36 @@ export default function WatchlistsPage() {
   const [alertType, setAlertType] = useState<"above" | "below">("below");
   const [alertPrice, setAlertPrice] = useState<string>("");
   const [isInboxOpen, setIsInboxOpen] = useState(false);
+  const [isDipFinderOpen, setIsDipFinderOpen] = useState(false);
+  const [dismissedInboxIds, setDismissedInboxIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(INBOX_READ_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+
+      if (Array.isArray(parsed)) {
+        return parsed.filter((value): value is string => typeof value === "string");
+      }
+
+      // Backward-compat migration from per-list map shape.
+      if (parsed && typeof parsed === "object") {
+        return Object.values(parsed as Record<string, string[]>)
+          .flat()
+          .filter((value): value is string => typeof value === "string");
+      }
+
+      return [];
+    } catch {
+      return [];
+    }
+  });
   const [isLegendOpen, setIsLegendOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(INBOX_READ_KEY, JSON.stringify(dismissedInboxIds));
+  }, [dismissedInboxIds]);
 
   const tickers = useMemo(() => entries?.map((entry) => entry.ticker) ?? [], [entries]);
 
@@ -142,6 +176,14 @@ export default function WatchlistsPage() {
     }, {});
   }, [alerts]);
 
+  const primaryAlertByTicker = useMemo(() => {
+    return alerts.reduce<Record<string, { price: number; type: "above" | "below" }>>((acc, alert) => {
+      if (!alert.active) return acc;
+      acc[alert.ticker] = { price: alert.price, type: alert.type };
+      return acc;
+    }, {});
+  }, [alerts]);
+
   const notificationInbox = useMemo(() => {
     if (!entries) return [];
 
@@ -183,6 +225,27 @@ export default function WatchlistsPage() {
 
     return [...alertNotifications, ...targetNotifications];
   }, [alerts, entries]);
+
+  useEffect(() => {
+    if (isLoading) return;
+    setDismissedInboxIds((prev) => prev.filter((id) => notificationInbox.some((item) => item.id === id)));
+  }, [isLoading, notificationInbox]);
+
+  const visibleInbox = useMemo(
+    () => notificationInbox.filter((item) => !dismissedInboxIds.includes(item.id)),
+    [dismissedInboxIds, notificationInbox]
+  );
+
+  const dipFinderItems = useMemo(() => {
+    return (entries ?? [])
+      .filter((entry) => (entry.quote?.price ?? 0) > 0)
+      .map((entry) => ({
+        ticker: entry.ticker,
+        name: entry.profile?.name,
+        sector: entry.profile?.sector,
+        price: entry.quote?.price ?? 0,
+      }));
+  }, [entries]);
 
   const openAlertDialog = useCallback(
     (ticker: string, currentPrice: number, targetPrice: number | null) => {
@@ -388,6 +451,21 @@ export default function WatchlistsPage() {
               type="button"
               size="sm"
               variant="outline"
+              className={`gap-1.5 text-xs border-sunset-orange/45 ${
+                isDipFinderOpen
+                  ? "bg-sunset-orange/18 text-sunset-orange"
+                  : "text-sunset-orange hover:text-sunset-orange"
+              }`}
+              onClick={() => setIsDipFinderOpen((value) => !value)}
+            >
+              <SearchAlert className="h-3.5 w-3.5" />
+              Dip Finder
+            </Button>
+
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
               className={`gap-1.5 text-xs border-sunset-orange/35 ${
                 isLegendOpen
                   ? "bg-sunset-orange/15 text-sunset-orange"
@@ -410,7 +488,7 @@ export default function WatchlistsPage() {
               onClick={() => setIsInboxOpen((value) => !value)}
             >
               <BellRing className="h-3.5 w-3.5" />
-              Inbox ({notificationInbox.length})
+              Inbox ({visibleInbox.length})
             </Button>
             <ImportExportActions
               onExport={exportToCSV}
@@ -424,18 +502,53 @@ export default function WatchlistsPage() {
         </div>
 
         <CardContent className="p-0 pb-2">
+          {isDipFinderOpen ? (
+            <div className="px-6 pt-5 pb-2">
+              <DipFinderPanel
+                title="Dip Finder"
+                subtitle="Detect discounted opportunities in your watchlist"
+                items={dipFinderItems}
+              />
+            </div>
+          ) : null}
+
           {isInboxOpen ? (
-            <div className="mx-6 mt-4 mb-6 rounded-lg border border-sunset-orange/30 bg-sunset-orange/10 px-3 py-3">
-              <div className="mb-2 flex items-center gap-2 text-xs font-semibold text-sunset-orange">
-                <BellRing className="h-3.5 w-3.5" />
-                Price Inbox ({notificationInbox.length})
+            <div className="mx-6 mt-4 mb-6 rounded-xl border border-sunset-orange/35 bg-gradient-to-br from-sunset-orange/18 via-sunset-orange/8 to-wolf-black/15 px-4 py-3 shadow-[0_14px_26px_rgba(0,0,0,0.22)]">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs font-semibold text-sunset-orange">
+                  <BellRing className="h-3.5 w-3.5" />
+                  Price Inbox ({visibleInbox.length})
+                </div>
+                {visibleInbox.length > 0 ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 px-2 text-[10px] border-sunset-orange/40 bg-wolf-black/30 text-sunset-orange hover:text-sunset-orange"
+                    onClick={() =>
+                      setDismissedInboxIds((prev) => [
+                        ...new Set([...prev, ...visibleInbox.map((item) => item.id)]),
+                      ])
+                    }
+                  >
+                    Mark all as read
+                  </Button>
+                ) : null}
               </div>
-              <div className="space-y-1">
-                {notificationInbox.length > 0 ? (
-                  notificationInbox.slice(0, 6).map((item) => (
-                    <p key={item.id} className="text-xs text-mist">
-                      {item.text}
-                    </p>
+              <div className="space-y-1.5">
+                {visibleInbox.length > 0 ? (
+                  visibleInbox.slice(0, 6).map((item) => (
+                    <div key={item.id} className="rounded-md border border-sunset-orange/25 bg-wolf-black/30 px-2.5 py-2">
+                      <div className="flex items-center gap-2.5">
+                        <TickerLogo
+                          ticker={item.ticker}
+                          className="w-5 h-5"
+                          imageClassName="rounded-md"
+                          fallbackClassName="rounded-md text-[8px]"
+                        />
+                        <p className="text-[11px] text-snow-peak leading-relaxed">{item.text}</p>
+                      </div>
+                    </div>
                   ))
                 ) : (
                   <p className="text-xs text-mist/80">No triggered alerts yet. Configure a bell alert or target to start receiving notifications.</p>
@@ -472,6 +585,7 @@ export default function WatchlistsPage() {
               view={view}
               performanceData={performanceData}
               activeAlertsByTicker={activeAlertsByTicker}
+              primaryAlertByTicker={primaryAlertByTicker}
               onConfigureAlert={openAlertDialog}
               onSetTargetPrice={setTargetPrice}
               onRemove={removeTicker}

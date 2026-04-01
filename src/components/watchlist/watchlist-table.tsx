@@ -76,6 +76,7 @@ interface WatchlistTableProps {
   view: WatchlistView;
   performanceData?: Record<string, Record<string, number>>;
   activeAlertsByTicker?: Record<string, number>;
+  primaryAlertByTicker?: Record<string, { price: number; type: "above" | "below" }>;
   onConfigureAlert?: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
   onSetTargetPrice?: (ticker: string, price: number | null) => void;
   onRemove: (ticker: string) => void;
@@ -103,6 +104,7 @@ export function WatchlistTable({
   view,
   performanceData = {},
   activeAlertsByTicker = {},
+  primaryAlertByTicker = {},
   onConfigureAlert,
   onSetTargetPrice,
   onRemove,
@@ -172,6 +174,7 @@ export function WatchlistTable({
             view={view}
             performanceData={performanceData}
             activeAlertCount={activeAlertsByTicker[entry.ticker] ?? 0}
+            primaryAlert={primaryAlertByTicker[entry.ticker]}
             onConfigureAlert={onConfigureAlert}
             onSetTargetPrice={onSetTargetPrice}
             onRemove={onRemove}
@@ -188,6 +191,7 @@ function WatchlistRow({
   view,
   performanceData,
   activeAlertCount,
+  primaryAlert,
   onConfigureAlert,
   onSetTargetPrice,
   onRemove,
@@ -197,6 +201,7 @@ function WatchlistRow({
   view: WatchlistView;
   performanceData: Record<string, Record<string, number>>;
   activeAlertCount: number;
+  primaryAlert?: { price: number; type: "above" | "below" };
   onConfigureAlert?: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
   onSetTargetPrice?: (ticker: string, price: number | null) => void;
   onRemove: (ticker: string) => void;
@@ -232,6 +237,16 @@ function WatchlistRow({
   const perf1W = performanceData["1W"]?.[ticker] ?? 0;
   const perf1M = performanceData["1M"]?.[ticker] ?? 0;
   const perfYTD = performanceData["YTD"]?.[ticker] ?? 0;
+  const explicitTargetPrice = entry.target_price;
+  const effectiveTargetPrice = explicitTargetPrice ?? primaryAlert?.price ?? null;
+  const effectiveTargetType =
+    explicitTargetPrice != null
+      ? quote?.price != null
+        ? explicitTargetPrice >= quote.price
+          ? "above"
+          : "below"
+        : null
+      : primaryAlert?.type ?? null;
   const trendMeta = getMonthlyTrendMeta(perf1M);
   const TrendIcon: LucideIcon = trendMeta.Icon;
   const displayTags = deriveTags(entry);
@@ -378,16 +393,35 @@ function WatchlistRow({
             )}
           </TableCell>
           <TableCell className="text-right hidden xl:table-cell text-xs font-mono">
-            {entry.target_price != null ? (
+            {effectiveTargetPrice != null ? (
               <button
                 type="button"
-                onClick={() => onSetTargetPrice?.(ticker, null)}
-                className="text-mist hover:text-snow-peak cursor-pointer"
-                title="Clear target"
+                onClick={() => {
+                  if (explicitTargetPrice != null) {
+                    onSetTargetPrice?.(ticker, null);
+                    return;
+                  }
+
+                  if (quote) {
+                    onConfigureAlert?.(ticker, quote.price, effectiveTargetPrice);
+                  }
+                }}
+                className="inline-flex items-center gap-1 text-mist hover:text-snow-peak cursor-pointer"
+                title={explicitTargetPrice != null ? "Clear target" : "Edit alert target"}
               >
-                {formatCurrency(entry.target_price, { decimals: 2 })}
-                {quote?.price
-                  ? ` (${formatPercent((quote.price - entry.target_price) / entry.target_price, 1)})`
+                {effectiveTargetType === "above" ? (
+                  <TrendingUp className="h-3 w-3 text-emerald-400" />
+                ) : effectiveTargetType === "below" ? (
+                  <TrendingDown className="h-3 w-3 text-bearish" />
+                ) : null}
+                {formatCurrency(effectiveTargetPrice, { decimals: 2 })}
+                {effectiveTargetType ? (
+                  <span className="text-[10px] uppercase tracking-wide text-mist/80">
+                    {effectiveTargetType}
+                  </span>
+                ) : null}
+                {quote?.price && effectiveTargetPrice
+                  ? ` (${(effectiveTargetPrice - quote.price) / quote.price >= 0 ? "+" : ""}${formatPercent((effectiveTargetPrice - quote.price) / quote.price, 1)})`
                   : ""}
               </button>
             ) : quote ? (

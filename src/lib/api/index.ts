@@ -267,6 +267,21 @@ export async function searchTickers(
   query: string,
   limit = 10
 ): Promise<SearchEntry[]> {
+  const normalizedQuery = query.trim().toLowerCase();
+  const fallbackResults = await mock.searchTickersByQuery(query, Math.max(limit * 2, 20));
+
+  const score = (entry: SearchEntry): number => {
+    const ticker = entry.ticker.toLowerCase();
+    const name = entry.name.toLowerCase();
+    if (!normalizedQuery) return 10;
+    if (ticker === normalizedQuery) return 0;
+    if (ticker.startsWith(normalizedQuery)) return 1;
+    if (name.startsWith(normalizedQuery)) return 2;
+    if (name.includes(normalizedQuery)) return 3;
+    if (ticker.includes(normalizedQuery)) return 4;
+    return 6;
+  };
+
   if (FEATURES.ENABLE_REAL_API) {
     // Search from Supabase tickers table
     const dbResults = await searchTickersFromDB(query, limit);
@@ -277,20 +292,48 @@ export async function searchTickers(
 
       const filtered = dbResults.filter((row) => {
         const cap = capMap.get(row.ticker.toUpperCase()) ?? 0;
-        return cap >= MIN_MARKET_CAP;
+        if (cap >= MIN_MARKET_CAP) return true;
+
+        // Prevent false "no results" when market-cap batch quote is temporarily missing.
+        if (!normalizedQuery) return false;
+        const ticker = row.ticker.toLowerCase();
+        const name = row.name.toLowerCase();
+        const isStrongMatch =
+          ticker === normalizedQuery ||
+          ticker.startsWith(normalizedQuery) ||
+          name.startsWith(normalizedQuery);
+
+        return cap === 0 && isStrongMatch;
       });
 
-      return filtered.map((r) => ({
+      const mappedDb: SearchEntry[] = filtered.map((r) => ({
         ticker: r.ticker,
         name: r.name,
         sector: r.sector,
         logo_url: r.logo_url,
         searchText: r.searchText,
       }));
+
+      // Merge DB + fallback so strategic names (e.g. DUOL) still appear
+      // if live metadata is temporarily incomplete.
+      const merged = new Map<string, SearchEntry>();
+      for (const entry of [...mappedDb, ...fallbackResults]) {
+        const key = entry.ticker.toUpperCase();
+        if (!merged.has(key)) merged.set(key, entry);
+      }
+
+      return Array.from(merged.values())
+        .sort((a, b) => {
+          const scoreDiff = score(a) - score(b);
+          if (scoreDiff !== 0) return scoreDiff;
+          return a.ticker.localeCompare(b.ticker);
+        })
+        .slice(0, limit);
     }
   }
+
   // Fallback to local mock search index
-  return mock.searchTickersByQuery(query, limit);
+  return fallbackResults.slice(0, limit);
 }
 
 // ─────────────────────────────────────────────────────────

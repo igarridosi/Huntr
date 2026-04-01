@@ -64,6 +64,11 @@ const MANDATORY_US_LARGE_CAPS: SeedTickerRow[] = [
   { symbol: "MS", name: "Morgan Stanley", sector: "Financials", website: "" },
   { symbol: "GS", name: "The Goldman Sachs Group, Inc.", sector: "Financials", website: "" },
   { symbol: "BAC", name: "Bank of America Corporation", sector: "Financials", website: "" },
+  { symbol: "DUOL", name: "Duolingo, Inc.", sector: "Technology", website: "" },
+  { symbol: "CRWD", name: "CrowdStrike Holdings, Inc.", sector: "Technology", website: "" },
+  { symbol: "PLTR", name: "Palantir Technologies Inc.", sector: "Technology", website: "" },
+  { symbol: "SNOW", name: "Snowflake Inc.", sector: "Technology", website: "" },
+  { symbol: "DASH", name: "DoorDash, Inc.", sector: "Consumer Discretionary", website: "" },
 ] as const;
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });

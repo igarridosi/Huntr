@@ -196,8 +196,8 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
             Sign Out
           </button>
 
-          <div className="px-3 pt-2 pb-1 flex flex-col items-start">
-            <KoFiSupport text="Support Huntr" position="above" />
+          <div className="px-3 pt-2 pb-1">
+            <KoFiSupport text="Support Huntr" />
           </div>
         </div>
       </div>

@@ -31,9 +31,14 @@ export function ChartTooltip({
   return (
     <div
       className={cn(
-        "rounded-lg border border-wolf-border bg-wolf-black/95 px-3 py-2 shadow-xl backdrop-blur-sm",
+        "rounded-lg border border-wolf-border/90 bg-[#0B1416] px-3 py-2 shadow-[0_14px_36px_rgba(0,0,0,0.55)] ring-1 ring-black/30",
         "text-xs"
       )}
+      style={{
+        backdropFilter: "none",
+        WebkitBackdropFilter: "none",
+        textRendering: "geometricPrecision",
+      }}
     >
       {label && (
         <p className="text-mist/70 font-medium mb-1.5">

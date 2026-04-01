@@ -529,6 +529,17 @@ export default function DcfCalculatorPage() {
                       <Button
                         type="button"
                         size="sm"
+                        variant="outline"
+                        onClick={() => setIsSavedMenuOpen((value) => !value)}
+                        className="mr-2"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
+                        Load Scenarios
+                      </Button>
+
+                      <Button
+                        type="button"
+                        size="sm"
                         variant="ghost"
                         onClick={() => setIsSavedMenuOpen((value) => !value)}
                         className="gap-1"
@@ -553,10 +564,18 @@ export default function DcfCalculatorPage() {
                                   <button
                                     type="button"
                                     onClick={() => applySavedScenario(entry)}
-                                    className="min-w-0 flex-1 text-left"
+                                    className="min-w-0 flex-1 text-left flex items-center gap-2"
                                   >
-                                    <p className="text-xs font-semibold text-snow-peak group-hover:text-sunset-orange transition-colors">{entry.ticker}</p>
-                                    <p className="text-[11px] text-mist group-hover:text-sunset-orange/80 transition-colors">Updated {new Date(entry.updatedAt).toLocaleDateString("en-US")}</p>
+                                    <TickerLogo
+                                      ticker={entry.ticker}
+                                      className="w-6 h-6"
+                                      imageClassName="rounded-md"
+                                      fallbackClassName="rounded-md text-[8px]"
+                                    />
+                                    <div className="min-w-0">
+                                      <p className="text-xs font-semibold text-snow-peak group-hover:text-sunset-orange transition-colors">{entry.ticker}</p>
+                                      <p className="text-[11px] text-mist group-hover:text-sunset-orange/80 transition-colors">Updated {new Date(entry.updatedAt).toLocaleDateString("en-US")}</p>
+                                    </div>
                                   </button>
 
                                   <button

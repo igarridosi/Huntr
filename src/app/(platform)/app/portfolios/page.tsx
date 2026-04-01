@@ -19,10 +19,12 @@ import {
   BarChart3,
   ArrowUpDown,
   AlertTriangle,
+  SearchAlert,
   Shield,
   DollarSign,
   Activity,
   Target,
+  Star,
   Info,
   MoreVertical,
   PlusCircle,
@@ -38,6 +40,9 @@ import {
   YAxis,
   Tooltip,
   CartesianGrid,
+  PieChart as RechartsPieChart,
+  Pie,
+  Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -53,7 +58,9 @@ import {
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
+import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
 import { usePortfolio } from "@/hooks/use-portfolio";
+import { useWatchlist } from "@/hooks/use-watchlist";
 import { useBatchDailyHistory, useSearch } from "@/hooks/use-stock-data";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
 import type {
@@ -83,6 +90,7 @@ type SortDir = "asc" | "desc";
 
 type ViewMode = "table" | "cards";
 type PerformanceRange = "1W" | "1M" | "YTD" | "1Y" | "ALL";
+type ContentView = "positions" | "transactions" | "watchlist" | "dipfinder";
 
 function normalizeDividendYield(raw: number | null | undefined): number {
   if (!Number.isFinite(raw) || raw === null || raw === undefined || raw <= 0) return 0;
@@ -1294,14 +1302,14 @@ function AddTransactionDialog({
   );
 }
 
-function TransactionHistoryDialog({
-  open,
-  onOpenChange,
+function TransactionActivityFeed({
   transactions,
+  positions,
+  isLoading,
 }: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
   transactions: PortfolioTransaction[];
+  positions: EnrichedPosition[];
+  isLoading: boolean;
 }) {
   const sortedTransactions = useMemo(
     () =>
@@ -1312,78 +1320,144 @@ function TransactionHistoryDialog({
     [transactions]
   );
 
+  const positionMap = useMemo(
+    () => new Map(positions.map((position) => [position.ticker.toUpperCase(), position])),
+    [positions]
+  );
+
+  const txWeightById = useMemo(() => {
+    const asc = [...transactions].sort(
+      (a, b) => new Date(a.executed_at).getTime() - new Date(b.executed_at).getTime()
+    );
+
+    const qtyByTicker = new Map<string, number>();
+    const priceByTicker = new Map<string, number>();
+    const result = new Map<string, { before: number; after: number }>();
+
+    const getTotalValue = () => {
+      let total = 0;
+      qtyByTicker.forEach((qty, ticker) => {
+        const price = priceByTicker.get(ticker) ?? 0;
+        if (qty > 0 && price > 0) total += qty * price;
+      });
+      return total;
+    };
+
+    for (const tx of asc) {
+      const ticker = tx.ticker.toUpperCase();
+      const prevQty = qtyByTicker.get(ticker) ?? 0;
+      const prevPrice = priceByTicker.get(ticker) ?? tx.price;
+
+      const beforeTotal = getTotalValue();
+      const beforeValue = Math.max(0, prevQty) * Math.max(0, prevPrice);
+      const beforeWeight = beforeTotal > 0 ? beforeValue / beforeTotal : 0;
+
+      const nextQty = tx.side === "buy" ? prevQty + tx.shares : Math.max(0, prevQty - tx.shares);
+      qtyByTicker.set(ticker, nextQty);
+      priceByTicker.set(ticker, tx.price);
+
+      const afterTotal = getTotalValue();
+      const afterValue = Math.max(0, nextQty) * Math.max(0, tx.price);
+      const afterWeight = afterTotal > 0 ? afterValue / afterTotal : 0;
+
+      result.set(tx.id, {
+        before: Math.max(0, beforeWeight),
+        after: Math.max(0, afterWeight),
+      });
+    }
+
+    return result;
+  }, [transactions]);
+
+  const formatDate = (iso: string): string => {
+    const parsed = new Date(iso);
+    if (Number.isNaN(parsed.getTime())) return "-";
+    return parsed.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 3 }).map((_, idx) => (
+          <Skeleton key={idx} className="h-24 w-full rounded-xl" />
+        ))}
+      </div>
+    );
+  }
+
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl p-0 overflow-hidden">
-        <DialogHeader className="px-5 py-4 border-b border-wolf-border/40">
-          <DialogTitle className="text-base">Transaction History</DialogTitle>
-          <DialogDescription className="text-xs">
-            Ordered by most recent transaction date.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="p-5">
-          {sortedTransactions.length === 0 ? (
-            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
-              No transactions recorded yet.
-            </div>
-          ) : (
-            <div className="max-h-[420px] overflow-y-auto rounded-lg border border-wolf-border/40">
-              <table className="w-full text-xs">
-                <thead className="sticky top-0 bg-wolf-surface/95 backdrop-blur border-b border-wolf-border/40">
-                  <tr className="text-left text-mist">
-                    <th className="px-3 py-2 font-medium">Date</th>
-                    <th className="px-3 py-2 font-medium">Ticker</th>
-                    <th className="px-3 py-2 font-medium">Side</th>
-                    <th className="px-3 py-2 font-medium text-right">Shares</th>
-                    <th className="px-3 py-2 font-medium text-right">Price</th>
-                    <th className="px-3 py-2 font-medium text-right">Realized P&L</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sortedTransactions.map((tx) => {
-                    const parsed = new Date(tx.executed_at);
-                    const dateLabel = Number.isNaN(parsed.getTime())
-                      ? "-"
-                      : parsed.toLocaleDateString("en-US", {
-                          year: "numeric",
-                          month: "short",
-                          day: "numeric",
-                        });
-
-                    return (
-                      <tr key={tx.id} className="border-b border-wolf-border/20 last:border-b-0">
-                        <td className="px-3 py-2 font-mono text-mist">{dateLabel}</td>
-                        <td className="px-3 py-2 font-semibold text-snow-peak font-mono">{tx.ticker}</td>
-                        <td className="px-3 py-2">
-                          <Badge
-                            variant="secondary"
-                            className={cn(
-                              "text-[10px] uppercase",
-                              tx.side === "buy"
-                                ? "bg-bullish/10 text-bullish"
-                                : "bg-bearish/10 text-bearish"
-                            )}
-                          >
-                            {tx.side}
-                          </Badge>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-snow-peak">{tx.shares.toFixed(4)}</td>
-                        <td className="px-3 py-2 text-right font-mono text-snow-peak">{formatCurrency(tx.price)}</td>
-                        <td className={cn("px-3 py-2 text-right font-mono", glColor(tx.realized_gain_loss))}>
-                          {tx.realized_gain_loss >= 0 ? "+" : ""}
-                          {formatCurrency(tx.realized_gain_loss)}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+    <div className="space-y-2">
+      {sortedTransactions.length === 0 ? (
+        <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
+          No transactions recorded yet.
         </div>
-      </DialogContent>
-    </Dialog>
+      ) : (
+        sortedTransactions.map((tx) => {
+          const sideLabel = tx.side === "buy" ? "Bought" : "Sold";
+          const sideColor = tx.side === "buy" ? "text-bullish" : "text-bearish";
+          const position = positionMap.get(tx.ticker.toUpperCase()) ?? null;
+
+          const currentWeight = position?.weight ?? 0;
+          const txWeights = txWeightById.get(tx.id);
+          const beforeWeight = txWeights?.before ?? 0;
+          const afterWeight = txWeights?.after ?? currentWeight;
+
+          const realizedDenominator = tx.shares * tx.price - tx.realized_gain_loss;
+          const sellGainPct = realizedDenominator > 0 ? tx.realized_gain_loss / realizedDenominator : 0;
+
+          const operationPnL = tx.realized_gain_loss;
+          const operationPct = sellGainPct;
+          const pnlColor = operationPnL >= 0 ? "text-bullish" : "text-bearish";
+
+          return (
+            <div
+              key={tx.id}
+              className="rounded-xl border border-wolf-border/50 bg-gradient-to-r from-wolf-surface/95 to-wolf-black/80 p-2"
+            >
+              <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_210px]">
+                <div className="rounded-xl bg-wolf-black/30 px-5 py-4">
+                  <p className={cn("text-[28px] leading-tight font-bold tracking-tight", sideColor)}>
+                    <span className="text-[26px]">{sideLabel}</span>
+                    <span className="mx-2 inline-flex align-middle">
+                      <TickerLogo ticker={tx.ticker} className="h-5 w-5" imageClassName="rounded-full" fallbackClassName="rounded-full text-[8px]" />
+                    </span>
+                    <span className="text-snow-peak">{tx.ticker}</span>
+                    <span className="text-snow-peak/90"> @ {formatCurrency(tx.price)}</span>
+                  </p>
+                  {tx.side === "sell" ? (
+                    <p className={cn("mt-1 text-xl font-bold", pnlColor)}>
+                      {operationPnL >= 0 ? "+" : ""}
+                      {formatPercent(operationPct, 2)} {operationPnL >= 0 ? "gain" : "loss"}
+                    </p>
+                  ) : null}
+                  <p className="mt-3 inline-flex items-center rounded-full bg-wolf-black/65 px-3 py-1 text-xs text-mist">
+                    {tx.side === "buy" ? <PlusCircle className="mr-1.5 h-3 w-3" /> : <MinusCircle className="mr-1.5 h-3 w-3" />}
+                    {tx.side === "buy" ? "position up" : "position down"} by {formatPercent(Math.abs(afterWeight - beforeWeight), 2)}
+                  </p>
+                </div>
+
+                <div className="rounded-xl bg-wolf-black/35 px-4 py-3 flex flex-col justify-center">
+                  <div className="flex items-center gap-1.5 text-mist/80 text-xs mb-2">
+                    <History className="h-4 w-4" />
+                    <span>{formatDate(tx.executed_at)}</span>
+                  </div>
+                  <p className="font-mono text-xl font-bold text-snow-peak">
+                    {(beforeWeight * 100).toFixed(2)}
+                    <span className="mx-1 text-mist">→</span>
+                    {(afterWeight * 100).toFixed(2)}%
+                  </p>
+                  <p className="text-sm text-mist">of total portfolio</p>
+                </div>
+              </div>
+            </div>
+          );
+        })
+      )}
+    </div>
   );
 }
 
@@ -1422,10 +1496,14 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
   ];
 
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
       {kpis.map((kpi) => (
-        <Card key={kpi.label}>
-          <CardContent className="p-4">
+        <Card
+          key={kpi.label}
+          className="overflow-hidden border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+        >
+          <CardContent className="relative p-4">
+            <div className="pointer-events-none absolute -top-8 -right-8 h-20 w-20 rounded-full bg-sunset-orange/10 blur-2xl" />
             {isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-3 w-20" />
@@ -1433,15 +1511,17 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
               </div>
             ) : (
               <>
-                <div className="flex items-center gap-1.5 mb-1">
-                  <kpi.icon className={cn("w-3.5 h-3.5", kpi.color)} />
-                  <p className="text-[11px] text-mist">{kpi.label}</p>
+                <div className="mb-2 flex items-center gap-2">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-wolf-border/40 bg-wolf-black/35">
+                    <kpi.icon className={cn("w-3.5 h-3.5", kpi.color)} />
+                  </span>
+                  <p className="text-[11px] uppercase tracking-wide text-mist/85">{kpi.label}</p>
                 </div>
-                <p className={cn("text-lg font-bold font-mono tracking-tight", kpi.color)}>
+                <p className={cn("text-xl font-bold font-mono tracking-tight", kpi.color)}>
                   {kpi.value}
                 </p>
                 {kpi.sub && (
-                  <p className={cn("text-xs font-mono mt-0.5", kpi.color)}>{kpi.sub}</p>
+                  <p className={cn("text-xs font-mono mt-1", kpi.color)}>{kpi.sub}</p>
                 )}
               </>
             )}
@@ -1456,23 +1536,27 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
 // SECTOR & ALLOCATION BREAKDOWN
 // ═══════════════════════════════════════════════════════
 
-const SECTOR_COLORS: Record<string, string> = {
-  Technology: "bg-blue-500",
-  "Communication Services": "bg-violet-500",
-  "Consumer Cyclical": "bg-amber-500",
-  "Consumer Defensive": "bg-emerald-500",
-  Healthcare: "bg-rose-500",
-  Industrials: "bg-slate-400",
-  "Financial Services": "bg-cyan-500",
-  Energy: "bg-orange-500",
-  "Basic Materials": "bg-lime-500",
-  "Real Estate": "bg-teal-500",
-  Utilities: "bg-indigo-400",
-  Unknown: "bg-wolf-border",
+const SECTOR_COLORS: Record<string, { dotClass: string; hex: string }> = {
+  Technology: { dotClass: "bg-blue-500", hex: "#3B82F6" },
+  "Communication Services": { dotClass: "bg-violet-500", hex: "#8B5CF6" },
+  "Consumer Cyclical": { dotClass: "bg-amber-500", hex: "#F59E0B" },
+  "Consumer Defensive": { dotClass: "bg-emerald-500", hex: "#10B981" },
+  Healthcare: { dotClass: "bg-rose-500", hex: "#F43F5E" },
+  Industrials: { dotClass: "bg-slate-400", hex: "#94A3B8" },
+  "Financial Services": { dotClass: "bg-cyan-500", hex: "#06B6D4" },
+  Energy: { dotClass: "bg-orange-500", hex: "#F97316" },
+  "Basic Materials": { dotClass: "bg-lime-500", hex: "#84CC16" },
+  "Real Estate": { dotClass: "bg-teal-500", hex: "#14B8A6" },
+  Utilities: { dotClass: "bg-indigo-400", hex: "#818CF8" },
+  Unknown: { dotClass: "bg-wolf-border", hex: "#334155" },
 };
 
-function getSectorColor(sector: string) {
-  return SECTOR_COLORS[sector] ?? "bg-wolf-border";
+function getSectorColorClass(sector: string) {
+  return SECTOR_COLORS[sector]?.dotClass ?? "bg-wolf-border";
+}
+
+function getSectorColorHex(sector: string) {
+  return SECTOR_COLORS[sector]?.hex ?? "#334155";
 }
 
 function AllocationBreakdown({
@@ -1484,11 +1568,44 @@ function AllocationBreakdown({
   summary: PortfolioSummary;
   isLoading: boolean;
 }) {
+  const [perfMode, setPerfMode] = useState<"today" | "all">("today");
+
   const sectors = useMemo(() => {
     return Object.entries(summary.sector_allocation)
       .sort(([, a], [, b]) => b - a)
       .map(([sector, weight]) => ({ sector, weight }));
   }, [summary.sector_allocation]);
+
+  const sectorPerformance = useMemo(() => {
+    const map = new Map<string, { market: number; cost: number; day: number; gain: number }>();
+    for (const pos of positions) {
+      const sector = pos.profile?.sector || "Unknown";
+      const current = map.get(sector) ?? { market: 0, cost: 0, day: 0, gain: 0 };
+      current.market += pos.market_value;
+      current.cost += pos.cost_basis;
+      current.day += pos.day_gain_loss;
+      current.gain += pos.gain_loss;
+      map.set(sector, current);
+    }
+
+    return Object.fromEntries(
+      Array.from(map.entries()).map(([sector, agg]) => {
+        const previous = agg.market - agg.day;
+        const todayPct = previous > 0 ? agg.day / previous : 0;
+        const allPct = agg.cost > 0 ? agg.gain / agg.cost : 0;
+        return [sector, { todayPct, allPct }];
+      })
+    );
+  }, [positions]);
+
+  const donutData = useMemo(() => {
+    return sectors.map((entry) => ({
+      ...entry,
+      fill: getSectorColorHex(entry.sector),
+    }));
+  }, [sectors]);
+
+  const centerPerf = perfMode === "today" ? summary.total_day_gain_loss_percent : summary.total_gain_loss_percent;
 
   const topHoldings = useMemo(() => {
     return [...positions]
@@ -1499,13 +1616,13 @@ function AllocationBreakdown({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Sector Allocation */}
-      <Card>
+      <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <PieChart className="w-4 h-4 text-sunset-orange" /> Sector Allocation
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2.5">
+        <CardContent className="space-y-4">
           {isLoading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <Skeleton key={i} className="h-5 w-full" />
@@ -1514,28 +1631,77 @@ function AllocationBreakdown({
             <p className="text-xs text-mist/70">No positions</p>
           ) : (
             <>
-              {/* Visual allocation bar */}
-              <div className="flex h-3 rounded-full overflow-hidden gap-[1px]">
-                {sectors.map(({ sector, weight }) => (
-                  <div
-                    key={sector}
-                    className={cn("h-full rounded-sm transition-all", getSectorColor(sector))}
-                    style={{ width: `${Math.max(weight * 100, 1.5)}%` }}
-                    title={`${sector}: ${(weight * 100).toFixed(1)}%`}
-                  />
-                ))}
-              </div>
-              {/* Item list */}
-              <div className="space-y-1.5 mt-3">
-                {sectors.map(({ sector, weight }) => (
-                  <div key={sector} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className={cn("w-2.5 h-2.5 rounded-sm", getSectorColor(sector))} />
-                      <p className="text-xs text-snow-peak">{sector}</p>
-                    </div>
-                    <p className="text-xs font-mono text-mist">{(weight * 100).toFixed(1)}%</p>
+              <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4 items-center mt-4">
+                <div className="relative mx-auto h-52 w-52">
+                  <div className="h-full w-full rounded-full bg-wolf-black/25 shadow-[0_14px_26px_rgba(0,0,0,0.28)]">
+                    <RechartsPieChart width={208} height={208}>
+                      <Pie
+                        data={donutData}
+                        dataKey="weight"
+                        nameKey="sector"
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={65}
+                        outerRadius={98}
+                        startAngle={90}
+                        endAngle={-270}
+                        paddingAngle={2}
+                        stroke="rgba(11, 20, 22, 0.76)"
+                        strokeWidth={2}
+                        isAnimationActive={true}
+                      >
+                        {donutData.map((slice, index) => (
+                          <Cell key={`sector-cell-${index}`} fill={slice.fill} />
+                        ))}
+                      </Pie>
+                    </RechartsPieChart>
                   </div>
-                ))}
+
+                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                    <p
+                      className={cn(
+                        "text-[24px] leading-none font-mono font-bold",
+                        centerPerf >= 0 ? "text-bullish" : "text-bearish"
+                      )}
+                    >
+                      {centerPerf >= 0 ? "+" : ""}
+                      {formatPercent(centerPerf, 2)}
+                    </p>
+                    <div className="relative">
+                      <select
+                        value={perfMode}
+                        onChange={(e) => setPerfMode(e.target.value as "today" | "all")}
+                        className="appearance-none rounded-md border border-wolf-border/50 bg-wolf-black/80 px-2.5 py-1 pr-7 text-sm text-snow-peak"
+                      >
+                        <option value="today">Today</option>
+                        <option value="all">All Time</option>
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mist" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  {sectors.map(({ sector, weight }) => {
+                    const perf = sectorPerformance[sector];
+                    const pct = perfMode === "today" ? perf?.todayPct ?? 0 : perf?.allPct ?? 0;
+                    return (
+                      <div key={sector} className="flex items-center justify-between rounded-md border border-wolf-border/30 bg-wolf-black/25 px-2 py-1.5">
+                        <div className="flex items-center gap-2">
+                          <span className={cn("w-2.5 h-2.5 rounded-sm", getSectorColorClass(sector))} />
+                          <p className="text-xs text-snow-peak">{sector}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-mono text-sunset-orange">{(weight * 100).toFixed(1)}%</p>
+                          <p className={cn("text-[10px] font-mono", pct >= 0 ? "text-bullish" : "text-bearish")}>
+                            {pct >= 0 ? "+" : ""}
+                            {formatPercent(pct, 2)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </>
           )}
@@ -1543,13 +1709,13 @@ function AllocationBreakdown({
       </Card>
 
       {/* Top Holdings */}
-      <Card>
+      <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-sunset-orange" /> Top Holdings
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-2 mt-4">
           {isLoading ? (
             Array.from({ length: 5 }).map((_, i) => (
               <Skeleton key={i} className="h-8 w-full" />
@@ -1558,7 +1724,7 @@ function AllocationBreakdown({
             <p className="text-xs text-mist/70">No positions</p>
           ) : (
             topHoldings.map((pos) => (
-              <div key={pos.ticker} className="flex items-center gap-3">
+              <div key={pos.ticker} className="flex items-center gap-3 rounded-lg border border-wolf-border/30 bg-wolf-black/20 px-2.5 py-2">
                 <TickerLogo
                   ticker={pos.ticker}
                   src={pos.profile?.logo_url}
@@ -1571,10 +1737,10 @@ function AllocationBreakdown({
                   <p className="text-[10px] text-mist truncate">{pos.profile?.name}</p>
                 </div>
                 {/* Weight bar */}
-                <div className="w-24 flex items-center gap-2">
-                  <div className="flex-1 h-1.5 rounded-full bg-wolf-border/40 overflow-hidden">
+                <div className="w-28 flex items-center gap-2">
+                  <div className="flex-1 h-2 rounded-full bg-wolf-border/40 overflow-hidden">
                     <div
-                      className="h-full rounded-full bg-sunset-orange transition-all"
+                      className="h-full rounded-full bg-gradient-to-r from-sunset-orange to-golden-hour transition-all"
                       style={{ width: `${pos.weight * 100}%` }}
                     />
                   </div>
@@ -1637,26 +1803,26 @@ function PortfolioMetrics({
   ];
 
   return (
-    <Card>
+    <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <Info className="w-4 h-4 text-sunset-orange" /> Portfolio Metrics
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {metrics.map((m) => (
-            <div key={m.label}>
+            <div key={m.label} className="rounded-lg border border-wolf-border/35 bg-wolf-black/20 px-3 py-2.5">
               {isLoading ? (
                 <Skeleton className="h-8 w-full" />
               ) : (
                 <>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <m.icon className="w-3 h-3 text-mist/70" />
+                  <div className="flex items-center gap-1.5 mb-1">
+                    <m.icon className="w-3.5 h-3.5 text-mist/75" />
                     <p className="text-[10px] uppercase tracking-wide text-mist">{m.label}</p>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <p className={cn("text-sm font-semibold font-mono", m.color ?? "text-snow-peak")}>
+                    <p className={cn("text-base font-semibold font-mono", m.color ?? "text-snow-peak")}>
                       {m.value}
                     </p>
                     {"riskTooltip" in m && m.riskTooltip && concentrationRisk !== "Low" && (
@@ -1968,6 +2134,82 @@ function PositionCards({
   );
 }
 
+function WatchlistScoutView({
+  entries,
+  isLoading,
+}: {
+  entries: Array<{
+    ticker: string;
+    profile: { name?: string; logo_url?: string | null } | null;
+    quote: { price?: number; day_change_percent?: number } | null;
+    target_price: number | null;
+    tags: string[];
+  }>;
+  isLoading: boolean;
+}) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 4 }).map((_, idx) => (
+          <Skeleton key={idx} className="h-16 w-full rounded-lg" />
+        ))}
+      </div>
+    );
+  }
+
+  if (entries.length === 0) {
+    return (
+      <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
+        No watchlist candidates outside your current portfolio.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {entries.map((entry) => {
+        const dayPct = entry.quote?.day_change_percent ?? 0;
+        const isUp = dayPct >= 0;
+
+        return (
+          <Link
+            key={entry.ticker}
+            href={`/symbol/${entry.ticker}`}
+            className="flex items-center gap-3 rounded-lg border border-wolf-border/40 bg-wolf-black/25 px-3 py-2.5 hover:bg-wolf-black/35 transition-colors"
+          >
+            <TickerLogo
+              ticker={entry.ticker}
+              src={entry.profile?.logo_url ?? undefined}
+              className="w-9 h-9"
+              imageClassName="rounded-[7px]"
+              fallbackClassName="rounded-[7px] text-[10px]"
+            />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-snow-peak font-mono">{entry.ticker}</p>
+              <p className="text-xs text-mist truncate">{entry.profile?.name ?? entry.ticker}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-snow-peak font-mono">
+                {entry.quote?.price != null ? formatCurrency(entry.quote.price) : "-"}
+              </p>
+              <p className={cn("text-[11px] font-mono", isUp ? "text-bullish" : "text-bearish")}>
+                {isUp ? "+" : ""}
+                {formatPercent(dayPct, 2)}
+              </p>
+            </div>
+            <div className="w-[120px] text-right">
+              <p className="text-[10px] uppercase tracking-wide text-mist">Target</p>
+              <p className="text-xs font-mono text-sunset-orange">
+                {entry.target_price != null ? formatCurrency(entry.target_price) : "Not set"}
+              </p>
+            </div>
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
 // ═══════════════════════════════════════════════════════
 // PORTFOLIO SELECTOR
 // ═══════════════════════════════════════════════════════
@@ -2120,11 +2362,18 @@ function PortfolioSelector({
 
 export default function PortfoliosPage() {
   const portfolio = usePortfolio();
+  const {
+    data: watchlistData = [],
+    isLoading: watchlistLoading,
+    lists,
+    activeListId,
+    setActiveList,
+  } = useWatchlist();
   const [showAddPanel, setShowAddPanel] = useState(false);
   const [isImportDialogOpen, setIsImportDialogOpen] = useState(false);
   const [editingPosition, setEditingPosition] = useState<EnrichedPosition | null>(null);
   const [transactionPosition, setTransactionPosition] = useState<EnrichedPosition | null>(null);
-  const [isHistoryDialogOpen, setIsHistoryDialogOpen] = useState(false);
+  const [contentView, setContentView] = useState<ContentView>("positions");
   const [toast, setToast] = useState<{
     title: string;
     message?: string;
@@ -2159,6 +2408,34 @@ export default function PortfoliosPage() {
     });
     return arr;
   }, [portfolio.positions, sortKey, sortDir]);
+
+  const portfolioTickers = useMemo(() => {
+    return new Set(portfolio.positions.map((p) => p.ticker.toUpperCase()));
+  }, [portfolio.positions]);
+
+  const watchlistCandidates = useMemo(() => {
+    return watchlistData
+      .filter((item) => !portfolioTickers.has(item.ticker.toUpperCase()))
+      .map((item) => ({
+        ticker: item.ticker,
+        profile: item.profile,
+        quote: item.quote,
+        target_price: item.target_price,
+        tags: item.tags ?? [],
+      }))
+      .sort((a, b) => (b.quote?.day_change_percent ?? 0) - (a.quote?.day_change_percent ?? 0));
+  }, [watchlistData, portfolioTickers]);
+
+  const dipFinderItems = useMemo(() => {
+    return portfolio.positions
+      .filter((pos) => (pos.quote?.price ?? 0) > 0)
+      .map((pos) => ({
+        ticker: pos.ticker,
+        name: pos.profile?.name,
+        sector: pos.profile?.sector,
+        price: pos.quote?.price ?? 0,
+      }));
+  }, [portfolio.positions]);
 
   const handleSort = useCallback(
     (key: SortKey) => {
@@ -2254,69 +2531,158 @@ export default function PortfoliosPage() {
         <CardContent className="p-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-wolf-border/30 px-3 sm:px-4 py-3">
             <p className="text-sm font-semibold text-snow-peak">
-              Positions ({portfolio.positions.length})
+              {contentView === "transactions"
+                ? `Transactions (${portfolio.transactionHistory.length})`
+                : contentView === "watchlist"
+                  ? `Watchlist Scout (${watchlistCandidates.length})`
+                  : contentView === "dipfinder"
+                    ? `Dip Finder (${dipFinderItems.length})`
+                  : `Positions (${portfolio.positions.length})`}
             </p>
             <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-              {/* View toggle */}
-              <div className="flex bg-wolf-black/40 rounded-md border border-wolf-border/40 p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setViewMode("table")}
-                  disabled={isMobileViewport}
-                  className={cn(
-                    "px-2 py-1 text-[11px] rounded-sm transition-colors",
-                    effectiveViewMode === "table" ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak",
-                    isMobileViewport && "opacity-40 cursor-not-allowed"
-                  )}
+              {contentView === "transactions" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setContentView("positions")}
+                  className="text-xs gap-1.5 text-sunset-orange"
                 >
-                  Table
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setViewMode("cards")}
-                  className={cn(
-                    "px-2 py-1 text-[11px] rounded-sm transition-colors",
-                    effectiveViewMode === "cards" ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak"
-                  )}
+                  <History className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Transactions</span>
+                </Button>
+              ) : contentView === "watchlist" ? (
+                <>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setContentView("positions")}
+                    className="text-xs gap-1.5 text-sunset-orange"
+                  >
+                    <Star className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Watchlist View</span>
+                  </Button>
+
+                  {lists.length > 1 ? (
+                    <div className="relative">
+                      <select
+                        value={activeListId}
+                        onChange={(e) => setActiveList(e.target.value)}
+                        className="appearance-none h-8 min-w-[150px] rounded-md border border-wolf-border/45 bg-wolf-black/45 pl-2 pr-7 text-xs text-snow-peak"
+                        aria-label="Select watchlist"
+                      >
+                        {lists.map((list) => (
+                          <option key={list.id} value={list.id}>
+                            {list.name}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown className="pointer-events-none absolute right-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mist" />
+                    </div>
+                  ) : null}
+                </>
+              ) : contentView === "dipfinder" ? (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setContentView("positions")}
+                  className="text-xs gap-1.5 text-sunset-orange"
                 >
-                  Cards
-                </button>
-              </div>
+                  <SearchAlert className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Dip Finder</span>
+                </Button>
+              ) : (
+                <>
+                  {/* 1. Table/Cards */}
+                  <div className="flex bg-wolf-black/40 rounded-md border border-wolf-border/40 p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContentView("positions");
+                        setViewMode("table");
+                      }}
+                      disabled={isMobileViewport}
+                      className={cn(
+                        "px-2 py-1 text-[11px] rounded-sm transition-colors",
+                        effectiveViewMode === "table"
+                          ? "bg-sunset-orange/20 text-sunset-orange"
+                          : "text-mist hover:text-snow-peak",
+                        isMobileViewport && "opacity-40 cursor-not-allowed"
+                      )}
+                    >
+                      Table
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContentView("positions");
+                        setViewMode("cards");
+                      }}
+                      className={cn(
+                        "px-2 py-1 text-[11px] rounded-sm transition-colors",
+                        effectiveViewMode === "cards"
+                          ? "bg-sunset-orange/20 text-sunset-orange"
+                          : "text-mist hover:text-snow-peak"
+                      )}
+                    >
+                      Cards
+                    </button>
+                  </div>
 
-              {/* Import/Export */}
-              <Button variant="ghost" size="sm" onClick={() => setIsImportDialogOpen(true)} className="text-xs gap-1.5">
-                <Upload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Import</span>
-              </Button>
-              <Button variant="ghost" size="sm" onClick={handleExport} className="text-xs gap-1.5">
-                <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
-              </Button>
+                  {/* 2. Group by Sector */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setGroupBySector((v) => !v)}
+                    className={cn("text-xs gap-1.5", groupBySector && "text-sunset-orange")}
+                  >
+                    <BarChart3 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Group by Sector</span>
+                  </Button>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsHistoryDialogOpen(true)}
-                className="text-xs gap-1.5"
-              >
-                <History className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Transactions</span>
-              </Button>
+                  {/* 3. Transactions */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setContentView("transactions")}
+                    className="text-xs gap-1.5"
+                  >
+                    <History className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Transactions</span>
+                  </Button>
 
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setGroupBySector((v) => !v)}
-                className={cn("text-xs gap-1.5", groupBySector && "text-sunset-orange")}
-              >
-                <BarChart3 className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Group by Sector</span>
-              </Button>
+                  {/* 4. Watchlist View */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setContentView("watchlist")}
+                    className="text-xs gap-1.5"
+                  >
+                    <Star className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Watchlist View</span>
+                  </Button>
 
-              {/* Add button */}
-              <Button size="sm" onClick={() => setShowAddPanel(!showAddPanel)} className="text-xs gap-1.5">
-                <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Position</span>
-              </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setContentView("dipfinder")}
+                    className="text-xs gap-1.5 border-sunset-orange/40 bg-sunset-orange/10 text-sunset-orange hover:text-sunset-orange"
+                  >
+                    <SearchAlert className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Dip Finder</span>
+                  </Button>
+
+                  {/* 5. Import */}
+                  <Button variant="ghost" size="sm" onClick={() => setIsImportDialogOpen(true)} className="text-xs gap-1.5">
+                    <Upload className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Import</span>
+                  </Button>
+
+                  {/* 6. Export */}
+                  <Button variant="ghost" size="sm" onClick={handleExport} className="text-xs gap-1.5">
+                    <Download className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Export</span>
+                  </Button>
+
+                  <Button size="sm" onClick={() => setShowAddPanel(!showAddPanel)} className="text-xs gap-1.5">
+                    <Plus className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Add Position</span>
+                  </Button>
+                </>
+              )}
             </div>
           </div>
 
-          {showAddPanel && (
+          {contentView === "positions" && showAddPanel && (
             <div className="px-4 py-3 border-b border-wolf-border/30">
               <AddPositionPanel
                 onAdd={(ticker, shares, avgCost, purchaseDate) => {
@@ -2329,24 +2695,45 @@ export default function PortfoliosPage() {
           )}
 
           <div className="p-4">
-            {effectiveViewMode === "table" ? (
-              <PositionTable
-                positions={sortedPositions}
+            {contentView === "transactions" ? (
+              <TransactionActivityFeed
+                transactions={portfolio.transactionHistory}
+                positions={portfolio.positions}
                 isLoading={portfolio.isLoading}
-                onAddTransaction={setTransactionPosition}
-                onRemove={portfolio.removePosition}
-                groupBySector={groupBySector}
-                sortKey={sortKey}
-                sortDir={sortDir}
-                onSort={handleSort}
+              />
+            ) : contentView === "watchlist" ? (
+              <WatchlistScoutView
+                entries={watchlistCandidates}
+                isLoading={watchlistLoading}
+              />
+            ) : contentView === "dipfinder" ? (
+              <DipFinderPanel
+                title="Dip Finder"
+                subtitle="Find buy opportunities from sharp pullbacks across your portfolio"
+                items={dipFinderItems}
               />
             ) : (
-              <PositionCards
-                positions={sortedPositions}
-                isLoading={portfolio.isLoading}
-                onEdit={setEditingPosition}
-                onRemove={portfolio.removePosition}
-              />
+              <>
+                {effectiveViewMode === "table" ? (
+                  <PositionTable
+                    positions={sortedPositions}
+                    isLoading={portfolio.isLoading}
+                    onAddTransaction={setTransactionPosition}
+                    onRemove={portfolio.removePosition}
+                    groupBySector={groupBySector}
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={handleSort}
+                  />
+                ) : (
+                  <PositionCards
+                    positions={sortedPositions}
+                    isLoading={portfolio.isLoading}
+                    onEdit={setEditingPosition}
+                    onRemove={portfolio.removePosition}
+                  />
+                )}
+              </>
             )}
           </div>
         </CardContent>
@@ -2390,12 +2777,6 @@ export default function PortfoliosPage() {
             variant: "success",
           });
         }}
-      />
-
-      <TransactionHistoryDialog
-        open={isHistoryDialogOpen}
-        onOpenChange={setIsHistoryDialogOpen}
-        transactions={portfolio.transactionHistory}
       />
 
       <FeedbackToast

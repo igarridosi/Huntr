@@ -10,6 +10,7 @@ import {
 import { StockHeader } from "@/components/stock/stock-header";
 import { StockTabs } from "@/components/stock/stock-tabs";
 import { addRecentSearch } from "@/lib/recent-searches";
+import { formatCurrency, formatPercent } from "@/lib/utils";
 
 export default function TickerClientLayout({
   children,
@@ -27,6 +28,15 @@ export default function TickerClientLayout({
     if (!ticker) return;
     addRecentSearch(ticker);
   }, [ticker]);
+
+  useEffect(() => {
+    if (!ticker || !quote) return;
+
+    const companyName = profile?.name ?? `${ticker} Corp`;
+    const sign = quote.day_change_percent >= 0 ? "+" : "";
+
+    document.title = `${companyName} (${ticker}) | ${formatCurrency(quote.price)} (${sign}${formatPercent(quote.day_change_percent, 2)}) | Huntr`;
+  }, [profile?.name, quote, ticker]);
 
   return (
     <div className="space-y-6 w-full">

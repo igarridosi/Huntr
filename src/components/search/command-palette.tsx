@@ -11,6 +11,7 @@ import { useSearch } from "@/hooks/use-stock-data";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { fetchStockProfile, fetchStockQuote } from "@/app/actions/stock";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { Skeleton } from "@/components/ui/skeleton";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -36,7 +37,7 @@ export function CommandPalette({
   );
 
   // Search results from hook
-  const { data: results = [] } = useSearch(query, 20);
+  const { data: results = [], isFetching } = useSearch(query, 20);
 
   // Reset query on close
   useEffect(() => {
@@ -126,8 +127,8 @@ export function CommandPalette({
 
           {/* Results */}
           <Command.List className="max-h-[320px] overflow-y-auto p-2">
-            <Command.Empty className="py-8 text-center text-sm text-mist/60">
-              No stocks found. Try a different ticker.
+            <Command.Empty className="py-6">
+              <SearchEmptySkeleton isFetching={isFetching} query={query} />
             </Command.Empty>
 
             {results.length > 0 && (
@@ -189,6 +190,62 @@ export function CommandPalette({
             <span>{results.length} result{results.length !== 1 ? "s" : ""}</span>
           </div>
         </Command>
+      </div>
+    </div>
+  );
+}
+
+function SearchEmptySkeleton({
+  isFetching,
+  query,
+}: {
+  isFetching: boolean;
+  query: string;
+}) {
+  const hasQuery = query.trim().length > 0;
+
+  if (!isFetching) {
+    return (
+      <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/20 px-4 py-5 text-center">
+        <p className="text-sm text-mist/80">
+          {hasQuery
+            ? "We couldn't find that stock. Try another ticker symbol or name."
+            : "Start typing to search for stocks."}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/20 px-4 py-4">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 rounded-lg border border-wolf-border/30 bg-wolf-black/25 px-3 py-2.5">
+          <Skeleton className="h-8 w-8 rounded-md" />
+          <div className="flex-1">
+            <Skeleton className="h-3 w-28" />
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 rounded-lg border border-wolf-border/30 bg-wolf-black/25 px-3 py-2.5">
+          <Skeleton className="h-8 w-8 rounded-md" />
+          <div className="flex-1">
+            <Skeleton className="h-3 w-24" />
+          </div>
+        </div>
+      </div>
+
+      <p className="mt-3 text-center text-[11px] text-mist/70">
+        Searching symbols...
+      </p>
+
+      <div className="mt-2.5 flex items-center justify-center gap-1.5">
+        {[0, 1, 2].map((index) => (
+          <span
+            key={index}
+            className="h-1.5 w-1.5 rounded-full bg-sunset-orange/70 animate-pulse"
+            style={{ animationDelay: `${index * 140}ms` }}
+          />
+        ))}
       </div>
     </div>
   );

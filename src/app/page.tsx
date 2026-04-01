@@ -16,7 +16,7 @@ export default function Home() {
       <LandingSideMenu />
 
       <div className="fixed bottom-4 right-4 z-50">
-        <KoFiSupport text="Support Huntr on Ko-fi" position="above" />
+        <KoFiSupport text="Support Huntr on Ko-fi" />
       </div>
 
       {/* Sticky nav bar */}
