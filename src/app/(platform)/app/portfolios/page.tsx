@@ -19,6 +19,7 @@ import {
   BarChart3,
   ArrowUpDown,
   AlertTriangle,
+  BellRing,
   SearchAlert,
   Shield,
   DollarSign,
@@ -61,7 +62,7 @@ import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedba
 import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useWatchlist } from "@/hooks/use-watchlist";
-import { useBatchDailyHistory, useSearch } from "@/hooks/use-stock-data";
+import { useBatchDailyHistory, useBatchPeriodPerformance, useSearch } from "@/hooks/use-stock-data";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
 import type {
   EnrichedPosition,
@@ -91,6 +92,7 @@ type SortDir = "asc" | "desc";
 type ViewMode = "table" | "cards";
 type PerformanceRange = "1W" | "1M" | "YTD" | "1Y" | "ALL";
 type ContentView = "positions" | "transactions" | "watchlist" | "dipfinder";
+const SCOUT_INBOX_READ_KEY = "huntr_portfolio_watchlist_scout_inbox_read_v1";
 
 function normalizeDividendYield(raw: number | null | undefined): number {
   if (!Number.isFinite(raw) || raw === null || raw === undefined || raw <= 0) return 0;
@@ -1420,14 +1422,14 @@ function TransactionActivityFeed({
             >
               <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_210px]">
                 <div className="rounded-xl bg-wolf-black/30 px-5 py-4">
-                  <p className={cn("text-[28px] leading-tight font-bold tracking-tight", sideColor)}>
+                  <div className={cn("text-[28px] leading-tight font-bold tracking-tight", sideColor)}>
                     <span className="text-[26px]">{sideLabel}</span>
                     <span className="mx-2 inline-flex align-middle">
                       <TickerLogo ticker={tx.ticker} className="h-5 w-5" imageClassName="rounded-full" fallbackClassName="rounded-full text-[8px]" />
                     </span>
                     <span className="text-snow-peak">{tx.ticker}</span>
                     <span className="text-snow-peak/90"> @ {formatCurrency(tx.price)}</span>
-                  </p>
+                  </div>
                   {tx.side === "sell" ? (
                     <p className={cn("mt-1 text-xl font-bold", pnlColor)}>
                       {operationPnL >= 0 ? "+" : ""}
@@ -2137,21 +2139,37 @@ function PositionCards({
 function WatchlistScoutView({
   entries,
   isLoading,
+  perf1D,
+  perf1W,
+  perf1M,
+  perfYTD,
+  onOpenTargetDialog,
+  onOpenAlertsDialog,
+  activeAlertsByTicker,
 }: {
   entries: Array<{
     ticker: string;
     profile: { name?: string; logo_url?: string | null } | null;
-    quote: { price?: number; day_change_percent?: number } | null;
+    quote: { price?: number; day_change_percent?: number; pe_ratio?: number } | null;
     target_price: number | null;
+    effective_target_price: number | null;
+    effective_target_type: "above" | "below" | null;
     tags: string[];
   }>;
   isLoading: boolean;
+  perf1D: Record<string, number>;
+  perf1W: Record<string, number>;
+  perf1M: Record<string, number>;
+  perfYTD: Record<string, number>;
+  onOpenTargetDialog: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
+  onOpenAlertsDialog: (ticker: string, currentPrice: number) => void;
+  activeAlertsByTicker: Record<string, number>;
 }) {
   if (isLoading) {
     return (
       <div className="space-y-2">
-        {Array.from({ length: 4 }).map((_, idx) => (
-          <Skeleton key={idx} className="h-16 w-full rounded-lg" />
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <Skeleton key={idx} className="h-12 w-full rounded-lg" />
         ))}
       </div>
     );
@@ -2166,46 +2184,119 @@ function WatchlistScoutView({
   }
 
   return (
-    <div className="space-y-2">
-      {entries.map((entry) => {
-        const dayPct = entry.quote?.day_change_percent ?? 0;
-        const isUp = dayPct >= 0;
+    <div className="overflow-x-auto">
+      <table className="w-full text-xs">
+        <thead>
+          <tr className="border-b border-wolf-border/30">
+            <th className="px-2 py-2 text-left font-medium text-mist">Company</th>
+            <th className="px-2 py-2 text-left font-medium text-mist">Price</th>
+            <th className="px-2 py-2 text-right font-medium text-mist">1D</th>
+            <th className="px-2 py-2 text-right font-medium text-mist">1W</th>
+            <th className="px-2 py-2 text-right font-medium text-mist">1M</th>
+            <th className="px-2 py-2 text-right font-medium text-mist">YTD</th>
+            <th className="px-2 py-2 text-right font-medium text-mist">P/E</th>
+            <th className="px-2 py-2 text-right font-medium text-mist">Price Target</th>
+          </tr>
+        </thead>
+        <tbody>
+          {entries.map((entry) => {
+            const p1d = perf1D[entry.ticker] ?? 0;
+            const p1w = perf1W[entry.ticker] ?? 0;
+            const p1m = perf1M[entry.ticker] ?? 0;
+            const pytd = perfYTD[entry.ticker] ?? 0;
+            const pe = entry.quote?.pe_ratio;
+            const targetPrice = entry.effective_target_price;
+            const alertCount = activeAlertsByTicker[entry.ticker] ?? 0;
+            const hasMultipleAlerts = alertCount > 1;
+            const targetType = entry.effective_target_type;
+            const distancePercent =
+              targetPrice != null && (entry.quote?.price ?? 0) > 0
+                ? (targetPrice - (entry.quote?.price ?? 0)) / (entry.quote?.price ?? 1)
+                : null;
 
-        return (
-          <Link
-            key={entry.ticker}
-            href={`/symbol/${entry.ticker}`}
-            className="flex items-center gap-3 rounded-lg border border-wolf-border/40 bg-wolf-black/25 px-3 py-2.5 hover:bg-wolf-black/35 transition-colors"
-          >
-            <TickerLogo
-              ticker={entry.ticker}
-              src={entry.profile?.logo_url ?? undefined}
-              className="w-9 h-9"
-              imageClassName="rounded-[7px]"
-              fallbackClassName="rounded-[7px] text-[10px]"
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-semibold text-snow-peak font-mono">{entry.ticker}</p>
-              <p className="text-xs text-mist truncate">{entry.profile?.name ?? entry.ticker}</p>
-            </div>
-            <div className="text-right">
-              <p className="text-sm font-semibold text-snow-peak font-mono">
-                {entry.quote?.price != null ? formatCurrency(entry.quote.price) : "-"}
-              </p>
-              <p className={cn("text-[11px] font-mono", isUp ? "text-bullish" : "text-bearish")}>
-                {isUp ? "+" : ""}
-                {formatPercent(dayPct, 2)}
-              </p>
-            </div>
-            <div className="w-[120px] text-right">
-              <p className="text-[10px] uppercase tracking-wide text-mist">Target</p>
-              <p className="text-xs font-mono text-sunset-orange">
-                {entry.target_price != null ? formatCurrency(entry.target_price) : "Not set"}
-              </p>
-            </div>
-          </Link>
-        );
-      })}
+            return (
+              <tr key={entry.ticker} className="border-b border-wolf-border/20 hover:bg-wolf-surface/40 transition-colors">
+                <td className="px-2 py-2.5">
+                  <Link href={`/symbol/${entry.ticker}`} className="flex items-center gap-2.5 min-w-0">
+                    <TickerLogo
+                      ticker={entry.ticker}
+                      src={entry.profile?.logo_url ?? undefined}
+                      className="w-8 h-8"
+                      imageClassName="rounded-[7px]"
+                      fallbackClassName="rounded-[7px] text-[9px]"
+                    />
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-snow-peak font-mono">{entry.ticker}</p>
+                      <p className="text-[11px] text-mist truncate max-w-[230px]">{entry.profile?.name ?? entry.ticker}</p>
+                    </div>
+                  </Link>
+                </td>
+                <td className="px-2 py-2.5 text-left font-mono text-snow-peak whitespace-nowrap">
+                  {entry.quote?.price != null ? formatCurrency(entry.quote.price) : "-"}
+                </td>
+                <td className={cn("px-2 py-2.5 text-right font-mono", p1d >= 0 ? "text-bullish" : "text-bearish")}>{p1d >= 0 ? "+" : ""}{formatPercent(p1d, 2)}</td>
+                <td className={cn("px-2 py-2.5 text-right font-mono", p1w >= 0 ? "text-bullish" : "text-bearish")}>{p1w >= 0 ? "+" : ""}{formatPercent(p1w, 2)}</td>
+                <td className={cn("px-2 py-2.5 text-right font-mono", p1m >= 0 ? "text-bullish" : "text-bearish")}>{p1m >= 0 ? "+" : ""}{formatPercent(p1m, 2)}</td>
+                <td className={cn("px-2 py-2.5 text-right font-mono", pytd >= 0 ? "text-bullish" : "text-bearish")}>{pytd >= 0 ? "+" : ""}{formatPercent(pytd, 2)}</td>
+                <td className="px-2 py-2.5 text-right font-mono text-snow-peak">{pe && pe > 0 ? `${pe.toFixed(1)}x` : "—"}</td>
+                <td className="px-2 py-2.5">
+                  {hasMultipleAlerts ? (
+                    <div className="flex items-center justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-8 px-2 text-[10px] border-sunset-orange/35 text-sunset-orange hover:text-sunset-orange"
+                        onClick={() => onOpenAlertsDialog(entry.ticker, entry.quote?.price ?? 0)}
+                        disabled={(entry.quote?.price ?? 0) <= 0}
+                      >
+                        {alertCount} alerts
+                      </Button>
+                    </div>
+                  ) : targetPrice != null ? (
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => onOpenTargetDialog(entry.ticker, entry.quote?.price ?? 0, targetPrice)}
+                        className="inline-flex items-center gap-1 text-mist hover:text-snow-peak cursor-pointer"
+                        disabled={(entry.quote?.price ?? 0) <= 0}
+                      >
+                      {targetType === "above" ? (
+                        <TrendingUp className="h-3 w-3 text-emerald-400" />
+                      ) : targetType === "below" ? (
+                        <TrendingDown className="h-3 w-3 text-bearish" />
+                      ) : null}
+                      <span className="font-mono">{formatCurrency(targetPrice, { decimals: 2 })}</span>
+                      {targetType ? (
+                        <span className="text-[10px] uppercase tracking-wide text-mist/80">{targetType}</span>
+                      ) : null}
+                      {distancePercent != null ? (
+                        <span className="font-mono text-[11px] text-mist/85">
+                          ({distancePercent >= 0 ? "+" : ""}{formatPercent(distancePercent, 1)})
+                        </span>
+                      ) : null}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-[10px] text-mist/80 hover:text-snow-peak"
+                        onClick={() => onOpenTargetDialog(entry.ticker, entry.quote?.price ?? 0, entry.target_price)}
+                        disabled={(entry.quote?.price ?? 0) <= 0}
+                      >
+                        Set
+                      </Button>
+                    </div>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }
@@ -2365,6 +2456,11 @@ export default function PortfoliosPage() {
   const {
     data: watchlistData = [],
     isLoading: watchlistLoading,
+    alerts,
+    addAlert,
+    removeAlert,
+    updateAlert,
+    setTargetPrice,
     lists,
     activeListId,
     setActiveList,
@@ -2384,6 +2480,28 @@ export default function PortfoliosPage() {
   const [sortKey, setSortKey] = useState<SortKey>("market_value");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  const [isScoutInboxOpen, setIsScoutInboxOpen] = useState(false);
+  const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [isAlertsDialogOpen, setIsAlertsDialogOpen] = useState(false);
+  const [alertTicker, setAlertTicker] = useState<string>("");
+  const [alertType, setAlertType] = useState<"above" | "below">("below");
+  const [alertPrice, setAlertPrice] = useState<string>("");
+  const [alertsDialogTicker, setAlertsDialogTicker] = useState("");
+  const [alertsDialogCurrentPrice, setAlertsDialogCurrentPrice] = useState(0);
+  const [alertDrafts, setAlertDrafts] = useState<Array<{ id: string | null; type: "above" | "below"; price: string }>>([]);
+  const [dismissedScoutInboxIds, setDismissedScoutInboxIds] = useState<string[]>(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      const raw = window.localStorage.getItem(SCOUT_INBOX_READ_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((value): value is string => typeof value === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -2413,6 +2531,31 @@ export default function PortfoliosPage() {
     return new Set(portfolio.positions.map((p) => p.ticker.toUpperCase()));
   }, [portfolio.positions]);
 
+  const activeAlertsByTicker = useMemo(() => {
+    return alerts.reduce<Record<string, number>>((acc, alert) => {
+      if (!alert.active) return acc;
+      acc[alert.ticker] = (acc[alert.ticker] ?? 0) + 1;
+      return acc;
+    }, {});
+  }, [alerts]);
+
+  const alertsByTicker = useMemo(() => {
+    return alerts.reduce<Record<string, { id: string; price: number; type: "above" | "below" }[]>>((acc, alert) => {
+      if (!alert.active) return acc;
+      if (!acc[alert.ticker]) acc[alert.ticker] = [];
+      acc[alert.ticker].push({ id: alert.id, price: alert.price, type: alert.type });
+      return acc;
+    }, {});
+  }, [alerts]);
+
+  const primaryAlertByTicker = useMemo(() => {
+    return alerts.reduce<Record<string, { price: number; type: "above" | "below" }>>((acc, alert) => {
+      if (!alert.active) return acc;
+      acc[alert.ticker] = { price: alert.price, type: alert.type };
+      return acc;
+    }, {});
+  }, [alerts]);
+
   const watchlistCandidates = useMemo(() => {
     return watchlistData
       .filter((item) => !portfolioTickers.has(item.ticker.toUpperCase()))
@@ -2421,10 +2564,185 @@ export default function PortfoliosPage() {
         profile: item.profile,
         quote: item.quote,
         target_price: item.target_price,
+        effective_target_price: item.target_price ?? primaryAlertByTicker[item.ticker]?.price ?? null,
+        effective_target_type:
+          item.target_price != null
+            ? item.quote?.price != null
+              ? item.target_price >= item.quote.price
+                ? "above"
+                : "below"
+              : null
+            : (primaryAlertByTicker[item.ticker]?.type ?? null),
         tags: item.tags ?? [],
       }))
       .sort((a, b) => (b.quote?.day_change_percent ?? 0) - (a.quote?.day_change_percent ?? 0));
-  }, [watchlistData, portfolioTickers]);
+  }, [watchlistData, portfolioTickers, primaryAlertByTicker]);
+
+  const watchlistTickers = useMemo(
+    () => watchlistCandidates.map((entry) => entry.ticker),
+    [watchlistCandidates]
+  );
+
+  const { data: scoutPerf1D = {} } = useBatchPeriodPerformance(
+    watchlistTickers,
+    "1D",
+    contentView === "watchlist" && watchlistTickers.length > 0
+  );
+  const { data: scoutPerf1W = {} } = useBatchPeriodPerformance(
+    watchlistTickers,
+    "1W",
+    contentView === "watchlist" && watchlistTickers.length > 0
+  );
+  const { data: scoutPerf1M = {} } = useBatchPeriodPerformance(
+    watchlistTickers,
+    "1M",
+    contentView === "watchlist" && watchlistTickers.length > 0
+  );
+  const { data: scoutPerfYTD = {} } = useBatchPeriodPerformance(
+    watchlistTickers,
+    "YTD",
+    contentView === "watchlist" && watchlistTickers.length > 0
+  );
+
+  const scoutInbox = useMemo(() => {
+    const byTicker = new Map(watchlistCandidates.map((entry) => [entry.ticker, entry]));
+
+    const alertNotifications = alerts
+      .filter((alert) => alert.active)
+      .map((alert) => {
+        const entry = byTicker.get(alert.ticker);
+        const price = entry?.quote?.price;
+        if (price == null) return null;
+
+        const triggered = alert.type === "below" ? price <= alert.price : price >= alert.price;
+        if (!triggered) return null;
+
+        return {
+          id: `alert-${alert.id}`,
+          ticker: alert.ticker,
+          text:
+            alert.type === "below"
+              ? `${alert.ticker} reached alert below ${alert.price.toFixed(2)}`
+              : `${alert.ticker} reached alert above ${alert.price.toFixed(2)}`,
+        };
+      })
+      .filter((item): item is { id: string; ticker: string; text: string } => item !== null);
+
+    const targetNotifications = watchlistCandidates
+      .map((entry) => {
+        if (entry.target_price == null || entry.quote?.price == null) return null;
+        if (entry.quote.price > entry.target_price) return null;
+        return {
+          id: `target-${entry.ticker}`,
+          ticker: entry.ticker,
+          text: `${entry.ticker} reached target ${entry.target_price.toFixed(2)}`,
+        };
+      })
+      .filter((item): item is { id: string; ticker: string; text: string } => item !== null);
+
+    return [...alertNotifications, ...targetNotifications];
+  }, [alerts, watchlistCandidates]);
+
+  useEffect(() => {
+    if (watchlistLoading) return;
+    setDismissedScoutInboxIds((prev) => prev.filter((id) => scoutInbox.some((item) => item.id === id)));
+  }, [watchlistLoading, scoutInbox]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(SCOUT_INBOX_READ_KEY, JSON.stringify(dismissedScoutInboxIds));
+  }, [dismissedScoutInboxIds]);
+
+  const visibleScoutInbox = useMemo(
+    () => scoutInbox.filter((item) => !dismissedScoutInboxIds.includes(item.id)),
+    [dismissedScoutInboxIds, scoutInbox]
+  );
+
+  const openAlertDialog = useCallback(
+    (ticker: string, currentPrice: number, targetPrice: number | null) => {
+      setAlertTicker(ticker);
+      setAlertType("below");
+      const base = targetPrice ?? currentPrice * 0.95;
+      setAlertPrice(base > 0 ? base.toFixed(2) : "");
+      setIsAlertDialogOpen(true);
+    },
+    []
+  );
+
+  const openAlertsDialog = useCallback(
+    (ticker: string, currentPrice: number) => {
+      setAlertsDialogTicker(ticker);
+      setAlertsDialogCurrentPrice(currentPrice);
+      const currentAlerts = alertsByTicker[ticker] ?? [];
+      const initial = currentAlerts.map((item) => ({
+        id: item.id,
+        type: item.type,
+        price: item.price.toFixed(2),
+      }));
+      setAlertDrafts(initial);
+      setIsAlertsDialogOpen(true);
+    },
+    [alertsByTicker]
+  );
+
+  const parsedAlertPrice = Number(alertPrice);
+  const isValidAlertPrice = Number.isFinite(parsedAlertPrice) && parsedAlertPrice > 0;
+
+  const saveTargetFromDialog = useCallback(() => {
+    if (!isValidAlertPrice || !alertTicker) return;
+    setTargetPrice(alertTicker, parsedAlertPrice);
+    setIsAlertDialogOpen(false);
+  }, [alertTicker, isValidAlertPrice, parsedAlertPrice, setTargetPrice]);
+
+  const saveAlertFromDialog = useCallback(() => {
+    if (!isValidAlertPrice || !alertTicker) return;
+    addAlert({
+      ticker: alertTicker,
+      type: alertType,
+      price: parsedAlertPrice,
+      active: true,
+    });
+    setIsAlertDialogOpen(false);
+  }, [addAlert, alertTicker, alertType, isValidAlertPrice, parsedAlertPrice]);
+
+  const hasInvalidAlertDraft = useMemo(
+    () => alertDrafts.some((draft) => !Number.isFinite(Number(draft.price)) || Number(draft.price) <= 0),
+    [alertDrafts]
+  );
+
+  const saveAlertsDialog = useCallback(() => {
+    if (!alertsDialogTicker || hasInvalidAlertDraft) return;
+
+    const existing = alertsByTicker[alertsDialogTicker] ?? [];
+    const draftById = new Map(alertDrafts.filter((draft) => draft.id).map((draft) => [draft.id as string, draft]));
+
+    for (const existingAlert of existing) {
+      const draft = draftById.get(existingAlert.id);
+      if (!draft) {
+        removeAlert(existingAlert.id);
+        continue;
+      }
+      const nextPrice = Number(draft.price);
+      if (nextPrice !== existingAlert.price || draft.type !== existingAlert.type) {
+        updateAlert(existingAlert.id, {
+          price: nextPrice,
+          type: draft.type,
+        });
+      }
+    }
+
+    for (const draft of alertDrafts) {
+      if (draft.id) continue;
+      addAlert({
+        ticker: alertsDialogTicker,
+        type: draft.type,
+        price: Number(draft.price),
+        active: true,
+      });
+    }
+
+    setIsAlertsDialogOpen(false);
+  }, [addAlert, alertDrafts, alertsByTicker, alertsDialogTicker, hasInvalidAlertDraft, removeAlert, updateAlert]);
 
   const dipFinderItems = useMemo(() => {
     return portfolio.positions
@@ -2558,6 +2876,20 @@ export default function PortfoliosPage() {
                     className="text-xs gap-1.5 text-sunset-orange"
                   >
                     <Star className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Watchlist View</span>
+                  </Button>
+
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setIsScoutInboxOpen((prev) => !prev)}
+                    className={cn("text-xs gap-1.5", isScoutInboxOpen && "text-sunset-orange")}
+                  >
+                    <BellRing className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Inbox</span>
+                    {visibleScoutInbox.length > 0 ? (
+                      <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px] font-mono">
+                        {visibleScoutInbox.length}
+                      </Badge>
+                    ) : null}
                   </Button>
 
                   {lists.length > 1 ? (
@@ -2702,10 +3034,64 @@ export default function PortfoliosPage() {
                 isLoading={portfolio.isLoading}
               />
             ) : contentView === "watchlist" ? (
-              <WatchlistScoutView
-                entries={watchlistCandidates}
-                isLoading={watchlistLoading}
-              />
+              <div className="space-y-4">
+                {isScoutInboxOpen ? (
+                  <div className="rounded-xl border border-sunset-orange/35 bg-gradient-to-br from-sunset-orange/18 via-sunset-orange/8 to-wolf-black/15 px-4 py-3 shadow-[0_14px_26px_rgba(0,0,0,0.22)]">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs font-semibold text-sunset-orange">
+                        <BellRing className="h-3.5 w-3.5" />
+                        Price Inbox ({visibleScoutInbox.length})
+                      </div>
+                      {visibleScoutInbox.length > 0 ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-7 px-2 text-[10px] border-sunset-orange/40 bg-wolf-black/30 text-sunset-orange hover:text-sunset-orange"
+                          onClick={() =>
+                            setDismissedScoutInboxIds((prev) => [
+                              ...new Set([...prev, ...visibleScoutInbox.map((item) => item.id)]),
+                            ])
+                          }
+                        >
+                          Mark all as read
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1.5">
+                      {visibleScoutInbox.length > 0 ? (
+                        visibleScoutInbox.slice(0, 6).map((item) => (
+                          <div key={item.id} className="rounded-md border border-sunset-orange/25 bg-wolf-black/30 px-2.5 py-2">
+                            <div className="flex items-center gap-2.5">
+                              <TickerLogo
+                                ticker={item.ticker}
+                                className="w-5 h-5"
+                                imageClassName="rounded-md"
+                                fallbackClassName="rounded-md text-[8px]"
+                              />
+                              <p className="text-[11px] text-snow-peak leading-relaxed">{item.text}</p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-mist/80">No triggered alerts yet. Configure a bell alert or target to start receiving notifications.</p>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                <WatchlistScoutView
+                  entries={watchlistCandidates}
+                  isLoading={watchlistLoading}
+                  perf1D={scoutPerf1D}
+                  perf1W={scoutPerf1W}
+                  perf1M={scoutPerf1M}
+                  perfYTD={scoutPerfYTD}
+                  onOpenTargetDialog={openAlertDialog}
+                  onOpenAlertsDialog={openAlertsDialog}
+                  activeAlertsByTicker={activeAlertsByTicker}
+                />
+              </div>
             ) : contentView === "dipfinder" ? (
               <DipFinderPanel
                 title="Dip Finder"
@@ -2778,6 +3164,180 @@ export default function PortfoliosPage() {
           });
         }}
       />
+
+      <Dialog open={isAlertDialogOpen} onOpenChange={setIsAlertDialogOpen}>
+        <DialogContent className="max-w-md p-4">
+          <div className="space-y-5">
+            <div>
+              <h3 className="text-base font-semibold text-snow-peak">Price Alert / Target</h3>
+              <p className="text-xs text-mist mt-0.5">{alertTicker} notification and target settings</p>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-mist">Direction</label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={alertType === "below" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setAlertType("below")}
+                >
+                  Below
+                </Button>
+                <Button
+                  type="button"
+                  variant={alertType === "above" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setAlertType("above")}
+                >
+                  Above
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs text-mist">Price</label>
+              <Input
+                value={alertPrice}
+                onChange={(event) => setAlertPrice(event.target.value)}
+                placeholder="e.g. 800"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  alerts
+                    .filter((a) => a.ticker === alertTicker && a.active)
+                    .forEach((a) => removeAlert(a.id));
+                  setTargetPrice(alertTicker, null);
+                  setIsAlertDialogOpen(false);
+                }}
+              >
+                Clear
+              </Button>
+              <Button type="button" variant="outline" onClick={saveTargetFromDialog} disabled={!isValidAlertPrice}>
+                Save Target
+              </Button>
+              <Button type="button" onClick={saveAlertFromDialog} disabled={!isValidAlertPrice}>
+                Add Alert
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAlertsDialogOpen} onOpenChange={setIsAlertsDialogOpen}>
+        <DialogContent className="max-w-lg p-4">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-snow-peak">Alerts ({alertsDialogTicker})</h3>
+              <p className="text-xs text-mist mt-0.5">Edit or remove each alert individually</p>
+            </div>
+
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {alertDrafts.length > 0 ? (
+                alertDrafts.map((draft, idx) => (
+                  <div key={draft.id ?? `new-${idx}`} className="rounded-lg border border-wolf-border/40 bg-wolf-black/35 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={draft.type === "below" ? "default" : "ghost"}
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() =>
+                            setAlertDrafts((prev) =>
+                              prev.map((item, itemIdx) =>
+                                itemIdx === idx ? { ...item, type: "below" } : item
+                              )
+                            )
+                          }
+                        >
+                          Below
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={draft.type === "above" ? "default" : "ghost"}
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() =>
+                            setAlertDrafts((prev) =>
+                              prev.map((item, itemIdx) =>
+                                itemIdx === idx ? { ...item, type: "above" } : item
+                              )
+                            )
+                          }
+                        >
+                          Above
+                        </Button>
+                      </div>
+
+                      <Input
+                        value={draft.price}
+                        onChange={(event) =>
+                          setAlertDrafts((prev) =>
+                            prev.map((item, itemIdx) =>
+                              itemIdx === idx ? { ...item, price: event.target.value } : item
+                            )
+                          )
+                        }
+                        className="h-8 text-xs font-mono"
+                        placeholder="Price"
+                        inputMode="decimal"
+                      />
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-[10px] text-bearish hover:text-bearish"
+                        onClick={() => setAlertDrafts((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-mist/80">No active alerts for this ticker.</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() =>
+                  setAlertDrafts((prev) => [
+                    ...prev,
+                    {
+                      id: null,
+                      type: "below",
+                      price: (alertsDialogCurrentPrice > 0 ? alertsDialogCurrentPrice * 0.95 : 0).toFixed(2),
+                    },
+                  ])
+                }
+              >
+                Add alert
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={() => setIsAlertsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={saveAlertsDialog} disabled={hasInvalidAlertDraft}>
+                  Save changes
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <FeedbackToast
         open={!!toast}

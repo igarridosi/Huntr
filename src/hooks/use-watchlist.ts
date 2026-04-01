@@ -529,6 +529,23 @@ export function useWatchlist() {
     [alerts, alertsQueryKey, queryClient, store, supabase, user, watchlistQueryKey]
   );
 
+  const updateAlert = useCallback(
+    (id: string, patch: Partial<Pick<PriceAlert, "price" | "type" | "active">>) => {
+      const current = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? alerts;
+      const updated = current.map((a) => (a.id === id ? { ...a, ...patch } : a));
+      queryClient.setQueryData(alertsQueryKey, updated);
+
+      if (user) {
+        const currentStore = queryClient.getQueryData<WatchlistStore>(watchlistQueryKey) ?? store;
+        void persistCloudWatchlistState(supabase, user.id, {
+          data: currentStore,
+          alerts: updated,
+        });
+      }
+    },
+    [alerts, alertsQueryKey, queryClient, store, supabase, user, watchlistQueryKey]
+  );
+
   const toggleAlert = useCallback(
     (id: string) => {
       const current = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? alerts;
@@ -678,6 +695,7 @@ export function useWatchlist() {
     alerts,
     addAlert,
     removeAlert,
+    updateAlert,
     toggleAlert,
 
     // Import/Export

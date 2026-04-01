@@ -32,7 +32,7 @@ import {
   formatCompactNumber,
   formatPercent,
 } from "@/lib/utils";
-import type { WatchlistEntry, WatchlistView } from "@/types/watchlist";
+import type { PriceAlert, WatchlistEntry, WatchlistView } from "@/types/watchlist";
 import { TAG_COLORS } from "@/types/watchlist";
 
 function deriveTags(entry: WatchlistEntry): string[] {
@@ -76,8 +76,10 @@ interface WatchlistTableProps {
   view: WatchlistView;
   performanceData?: Record<string, Record<string, number>>;
   activeAlertsByTicker?: Record<string, number>;
+  alertsByTicker?: Record<string, PriceAlert[]>;
   primaryAlertByTicker?: Record<string, { price: number; type: "above" | "below" }>;
   onConfigureAlert?: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
+  onOpenAlertsDialog?: (ticker: string, currentPrice: number) => void;
   onSetTargetPrice?: (ticker: string, price: number | null) => void;
   onRemove: (ticker: string) => void;
   isRemoving: boolean;
@@ -104,8 +106,10 @@ export function WatchlistTable({
   view,
   performanceData = {},
   activeAlertsByTicker = {},
+  alertsByTicker = {},
   primaryAlertByTicker = {},
   onConfigureAlert,
+  onOpenAlertsDialog,
   onSetTargetPrice,
   onRemove,
   isRemoving,
@@ -174,8 +178,10 @@ export function WatchlistTable({
             view={view}
             performanceData={performanceData}
             activeAlertCount={activeAlertsByTicker[entry.ticker] ?? 0}
+            alertsForTicker={alertsByTicker[entry.ticker] ?? []}
             primaryAlert={primaryAlertByTicker[entry.ticker]}
             onConfigureAlert={onConfigureAlert}
+            onOpenAlertsDialog={onOpenAlertsDialog}
             onSetTargetPrice={onSetTargetPrice}
             onRemove={onRemove}
             isRemoving={isRemoving}
@@ -191,8 +197,10 @@ function WatchlistRow({
   view,
   performanceData,
   activeAlertCount,
+  alertsForTicker,
   primaryAlert,
   onConfigureAlert,
+  onOpenAlertsDialog,
   onSetTargetPrice,
   onRemove,
   isRemoving,
@@ -201,8 +209,10 @@ function WatchlistRow({
   view: WatchlistView;
   performanceData: Record<string, Record<string, number>>;
   activeAlertCount: number;
+  alertsForTicker: PriceAlert[];
   primaryAlert?: { price: number; type: "above" | "below" };
   onConfigureAlert?: (ticker: string, currentPrice: number, targetPrice: number | null) => void;
+  onOpenAlertsDialog?: (ticker: string, currentPrice: number) => void;
   onSetTargetPrice?: (ticker: string, price: number | null) => void;
   onRemove: (ticker: string) => void;
   isRemoving: boolean;
@@ -238,6 +248,7 @@ function WatchlistRow({
   const perf1M = performanceData["1M"]?.[ticker] ?? 0;
   const perfYTD = performanceData["YTD"]?.[ticker] ?? 0;
   const explicitTargetPrice = entry.target_price;
+  const hasMultipleAlerts = alertsForTicker.length > 1;
   const effectiveTargetPrice = explicitTargetPrice ?? primaryAlert?.price ?? null;
   const effectiveTargetType =
     explicitTargetPrice != null
@@ -393,21 +404,24 @@ function WatchlistRow({
             )}
           </TableCell>
           <TableCell className="text-right hidden xl:table-cell text-xs font-mono">
-            {effectiveTargetPrice != null ? (
+            {hasMultipleAlerts && quote ? (
+              <button
+                type="button"
+                onClick={() => onOpenAlertsDialog?.(ticker, quote.price)}
+                className="inline-flex h-7 items-center rounded-md border border-sunset-orange/35 px-2 text-[10px] font-medium text-sunset-orange hover:text-sunset-orange"
+              >
+                {alertsForTicker.length} alerts
+              </button>
+            ) : effectiveTargetPrice != null ? (
               <button
                 type="button"
                 onClick={() => {
-                  if (explicitTargetPrice != null) {
-                    onSetTargetPrice?.(ticker, null);
-                    return;
-                  }
-
                   if (quote) {
                     onConfigureAlert?.(ticker, quote.price, effectiveTargetPrice);
                   }
                 }}
                 className="inline-flex items-center gap-1 text-mist hover:text-snow-peak cursor-pointer"
-                title={explicitTargetPrice != null ? "Clear target" : "Edit alert target"}
+                title="Edit target / alert"
               >
                 {effectiveTargetType === "above" ? (
                   <TrendingUp className="h-3 w-3 text-emerald-400" />

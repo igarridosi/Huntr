@@ -34,7 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
-import type { WatchlistView } from "@/types/watchlist";
+import type { PriceAlert, WatchlistView } from "@/types/watchlist";
 
 const VIEW_OPTIONS: Array<{
   key: WatchlistView;
@@ -65,6 +65,7 @@ export default function WatchlistsPage() {
     alerts,
     addAlert,
     removeAlert,
+    updateAlert,
     exportToCSV,
     importFromCSV,
     isRemoving,
@@ -77,9 +78,13 @@ export default function WatchlistsPage() {
   const [editingListId, setEditingListId] = useState<string | null>(null);
   const [editListName, setEditListName] = useState("");
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
+  const [isAlertsDialogOpen, setIsAlertsDialogOpen] = useState(false);
   const [alertTicker, setAlertTicker] = useState<string>("");
   const [alertType, setAlertType] = useState<"above" | "below">("below");
   const [alertPrice, setAlertPrice] = useState<string>("");
+  const [alertsDialogTicker, setAlertsDialogTicker] = useState("");
+  const [alertsDialogCurrentPrice, setAlertsDialogCurrentPrice] = useState(0);
+  const [alertDrafts, setAlertDrafts] = useState<Array<{ id: string | null; type: "above" | "below"; price: string }>>([]);
   const [isInboxOpen, setIsInboxOpen] = useState(false);
   const [isDipFinderOpen, setIsDipFinderOpen] = useState(false);
   const [dismissedInboxIds, setDismissedInboxIds] = useState<string[]>(() => {
@@ -176,6 +181,15 @@ export default function WatchlistsPage() {
     }, {});
   }, [alerts]);
 
+  const alertsByTicker = useMemo(() => {
+    return alerts.reduce<Record<string, PriceAlert[]>>((acc, alert) => {
+      if (!alert.active) return acc;
+      if (!acc[alert.ticker]) acc[alert.ticker] = [];
+      acc[alert.ticker].push(alert);
+      return acc;
+    }, {});
+  }, [alerts]);
+
   const primaryAlertByTicker = useMemo(() => {
     return alerts.reduce<Record<string, { price: number; type: "above" | "below" }>>((acc, alert) => {
       if (!alert.active) return acc;
@@ -258,6 +272,22 @@ export default function WatchlistsPage() {
     []
   );
 
+  const openAlertsDialog = useCallback(
+    (ticker: string, currentPrice: number) => {
+      setAlertsDialogTicker(ticker);
+      setAlertsDialogCurrentPrice(currentPrice);
+      const currentAlerts = alertsByTicker[ticker] ?? [];
+      const initial = currentAlerts.map((item) => ({
+        id: item.id,
+        type: item.type,
+        price: item.price.toFixed(2),
+      }));
+      setAlertDrafts(initial);
+      setIsAlertsDialogOpen(true);
+    },
+    [alertsByTicker]
+  );
+
   const parsedAlertPrice = Number(alertPrice);
   const isValidAlertPrice = Number.isFinite(parsedAlertPrice) && parsedAlertPrice > 0;
 
@@ -277,6 +307,45 @@ export default function WatchlistsPage() {
     });
     setIsAlertDialogOpen(false);
   }, [addAlert, alertTicker, alertType, isValidAlertPrice, parsedAlertPrice]);
+
+  const hasInvalidAlertDraft = useMemo(
+    () => alertDrafts.some((draft) => !Number.isFinite(Number(draft.price)) || Number(draft.price) <= 0),
+    [alertDrafts]
+  );
+
+  const saveAlertsDialog = useCallback(() => {
+    if (!alertsDialogTicker || hasInvalidAlertDraft) return;
+
+    const existing = alertsByTicker[alertsDialogTicker] ?? [];
+    const draftById = new Map(alertDrafts.filter((draft) => draft.id).map((draft) => [draft.id as string, draft]));
+
+    for (const existingAlert of existing) {
+      const draft = draftById.get(existingAlert.id);
+      if (!draft) {
+        removeAlert(existingAlert.id);
+        continue;
+      }
+      const nextPrice = Number(draft.price);
+      if (nextPrice !== existingAlert.price || draft.type !== existingAlert.type) {
+        updateAlert(existingAlert.id, {
+          price: nextPrice,
+          type: draft.type,
+        });
+      }
+    }
+
+    for (const draft of alertDrafts) {
+      if (draft.id) continue;
+      addAlert({
+        ticker: alertsDialogTicker,
+        type: draft.type,
+        price: Number(draft.price),
+        active: true,
+      });
+    }
+
+    setIsAlertsDialogOpen(false);
+  }, [addAlert, alertDrafts, alertsByTicker, alertsDialogTicker, hasInvalidAlertDraft, removeAlert, updateAlert]);
 
   const legendItems = useMemo(() => {
     if (view === "overview") {
@@ -585,8 +654,10 @@ export default function WatchlistsPage() {
               view={view}
               performanceData={performanceData}
               activeAlertsByTicker={activeAlertsByTicker}
+              alertsByTicker={alertsByTicker}
               primaryAlertByTicker={primaryAlertByTicker}
               onConfigureAlert={openAlertDialog}
+              onOpenAlertsDialog={openAlertsDialog}
               onSetTargetPrice={setTargetPrice}
               onRemove={removeTicker}
               isRemoving={isRemoving}
@@ -665,8 +736,9 @@ export default function WatchlistsPage() {
                 type="button"
                 variant="ghost"
                 onClick={() => {
-                  const alertToRemove = alerts.find((a) => a.ticker === alertTicker && a.active);
-                  if (alertToRemove) removeAlert(alertToRemove.id);
+                  alerts
+                    .filter((a) => a.ticker === alertTicker && a.active)
+                    .forEach((a) => removeAlert(a.id));
                   setTargetPrice(alertTicker, null);
                   setIsAlertDialogOpen(false);
                 }}
@@ -677,8 +749,118 @@ export default function WatchlistsPage() {
                 Save Target
               </Button>
               <Button type="button" onClick={saveAlertFromDialog} disabled={!isValidAlertPrice}>
-                Save Alert
+                Add Alert
               </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAlertsDialogOpen} onOpenChange={setIsAlertsDialogOpen}>
+        <DialogContent className="max-w-lg p-4">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-base font-semibold text-snow-peak">Alerts ({alertsDialogTicker})</h3>
+              <p className="text-xs text-mist mt-0.5">Edit or remove each alert individually</p>
+            </div>
+
+            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+              {alertDrafts.length > 0 ? (
+                alertDrafts.map((draft, idx) => (
+                  <div key={draft.id ?? `new-${idx}`} className="rounded-lg border border-wolf-border/40 bg-wolf-black/35 px-3 py-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="flex gap-1">
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={draft.type === "below" ? "default" : "ghost"}
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() =>
+                            setAlertDrafts((prev) =>
+                              prev.map((item, itemIdx) =>
+                                itemIdx === idx ? { ...item, type: "below" } : item
+                              )
+                            )
+                          }
+                        >
+                          Below
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant={draft.type === "above" ? "default" : "ghost"}
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() =>
+                            setAlertDrafts((prev) =>
+                              prev.map((item, itemIdx) =>
+                                itemIdx === idx ? { ...item, type: "above" } : item
+                              )
+                            )
+                          }
+                        >
+                          Above
+                        </Button>
+                      </div>
+
+                      <Input
+                        value={draft.price}
+                        onChange={(event) =>
+                          setAlertDrafts((prev) =>
+                            prev.map((item, itemIdx) =>
+                              itemIdx === idx ? { ...item, price: event.target.value } : item
+                            )
+                          )
+                        }
+                        className="h-8 text-xs font-mono"
+                        placeholder="Price"
+                        inputMode="decimal"
+                      />
+
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-[10px] text-bearish hover:text-bearish"
+                        onClick={() => setAlertDrafts((prev) => prev.filter((_, itemIdx) => itemIdx !== idx))}
+                      >
+                        Delete
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-mist/80">No active alerts for this ticker.</p>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="text-xs"
+                onClick={() =>
+                  setAlertDrafts((prev) => [
+                    ...prev,
+                    {
+                      id: null,
+                      type: "below",
+                      price: (alertsDialogCurrentPrice > 0 ? alertsDialogCurrentPrice * 0.95 : 0).toFixed(2),
+                    },
+                  ])
+                }
+              >
+                Add alert
+              </Button>
+
+              <div className="flex items-center gap-2">
+                <Button type="button" variant="ghost" onClick={() => setIsAlertsDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={saveAlertsDialog} disabled={hasInvalidAlertDraft}>
+                  Save changes
+                </Button>
+              </div>
             </div>
           </div>
         </DialogContent>
