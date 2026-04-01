@@ -12,6 +12,7 @@ import {
   EPSMultipleModel,
   type EPSMultipleInputs,
 } from "@/components/dcf/eps-multiple-model";
+import { CapitalAllocatorModel } from "@/components/dcf/capital-allocator-model";
 import { DCFAssumptions } from "@/components/dcf/dcf-assumptions";
 import { DCFResults } from "@/components/dcf/dcf-results";
 import { DCFProjectionTable } from "@/components/dcf/dcf-projection-table";
@@ -63,10 +64,15 @@ const DEFAULT_EPS_INPUTS: EPSMultipleInputs = {
 };
 
 export default function DcfCalculatorPage() {
-  const [modelType, setModelType] = useState<"dcf" | "eps">("dcf");
+  const [modelType, setModelType] = useState<"dcf" | "eps" | "capital">("dcf");
   const [ticker, setTicker] = useState("");
   const [inputs, setInputs] = useState<DCFInputs>(DEFAULT_INPUTS);
   const [epsInputs, setEpsInputs] = useState<EPSMultipleInputs>(DEFAULT_EPS_INPUTS);
+  const [capitalProjectionYears, setCapitalProjectionYears] = useState<5 | 10>(10);
+  const [capitalRevenueGrowth, setCapitalRevenueGrowth] = useState(0.1);
+  const [ocfMargin, setOcfMargin] = useState(0.28);
+  const [capexMargin, setCapexMargin] = useState(0.08);
+  const [capitalWacc, setCapitalWacc] = useState(0.1);
   const [waccEstimate, setWaccEstimate] = useState<WACCEstimate | null>(null);
   const [scenarios, setScenarios] = useState<DCFScenarioSet | null>(null);
   const [activeScenario, setActiveScenario] = useState<DCFScenarioKey>("base");
@@ -155,6 +161,33 @@ export default function DcfCalculatorPage() {
     setWaccEstimate(generated.waccEstimate);
     animateInputsTo(generated.base.inputs, 420);
     setIsPopulated(true);
+
+    const annualIncome = financials.income_statement.annual
+      .slice()
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const annualCashFlow = financials.cash_flow.annual
+      .slice()
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+    const latestIncome = annualIncome.at(-1);
+    const latestCashFlow = annualCashFlow.at(-1);
+
+    const projectedYears = generated.base.inputs.yearsPhase1 + generated.base.inputs.yearsPhase2;
+    setCapitalProjectionYears(projectedYears >= 8 ? 10 : 5);
+    setCapitalRevenueGrowth(Math.max(-0.1, Math.min(0.5, generated.base.inputs.growthRatePhase1)));
+    setCapitalWacc(Math.max(0.04, Math.min(0.25, generated.base.inputs.wacc)));
+
+    if (latestIncome && latestIncome.revenue > 0 && latestCashFlow) {
+      const nextOcfMargin = Math.max(0.05, Math.min(0.7, latestCashFlow.operating_cash_flow / latestIncome.revenue));
+      const nextCapexMargin = Math.max(0.01, Math.min(0.35, Math.abs(latestCashFlow.capital_expenditures) / latestIncome.revenue));
+      setOcfMargin(nextOcfMargin);
+      setCapexMargin(nextCapexMargin);
+    } else {
+      const fallbackOcfMargin = Math.max(0.08, Math.min(0.65, generated.base.inputs.baseFCFMargin + 0.08));
+      const fallbackCapexMargin = Math.max(0.01, Math.min(0.35, fallbackOcfMargin - generated.base.inputs.baseFCFMargin));
+      setOcfMargin(fallbackOcfMargin);
+      setCapexMargin(fallbackCapexMargin);
+    }
   }, [quote, financials, profile, animateInputsTo]);
 
   const handleScenarioChange = useCallback((scenario: DCFScenarioKey) => {
@@ -198,6 +231,11 @@ export default function DcfCalculatorPage() {
     setIsSavedMenuOpen(false);
     setSaveStatus("idle");
     setEpsInputs(DEFAULT_EPS_INPUTS);
+    setCapitalProjectionYears(10);
+    setCapitalRevenueGrowth(0.1);
+    setOcfMargin(0.28);
+    setCapexMargin(0.08);
+    setCapitalWacc(0.1);
   }, []);
 
   const applySavedScenario = useCallback((payload: {
@@ -222,6 +260,15 @@ export default function DcfCalculatorPage() {
     setIsPopulated(true);
     setIsSavedMenuOpen(false);
     setSaveStatus("idle");
+
+    const selectedYears = selected.inputs.yearsPhase1 + selected.inputs.yearsPhase2;
+    setCapitalProjectionYears(selectedYears >= 8 ? 10 : 5);
+    setCapitalRevenueGrowth(Math.max(-0.1, Math.min(0.5, selected.inputs.growthRatePhase1)));
+    setCapitalWacc(Math.max(0.04, Math.min(0.25, selected.inputs.wacc)));
+    const baselineOcf = Math.max(0.08, Math.min(0.65, selected.inputs.baseFCFMargin + 0.08));
+    const baselineCapex = Math.max(0.01, Math.min(0.35, baselineOcf - selected.inputs.baseFCFMargin));
+    setOcfMargin(baselineOcf);
+    setCapexMargin(baselineCapex);
   }, [animateInputsTo]);
 
   const handleSaveScenarios = useCallback(async () => {
@@ -283,6 +330,11 @@ export default function DcfCalculatorPage() {
     setTicker("");
     setInputs(DEFAULT_INPUTS);
     setEpsInputs(DEFAULT_EPS_INPUTS);
+    setCapitalProjectionYears(10);
+    setCapitalRevenueGrowth(0.1);
+    setOcfMargin(0.28);
+    setCapexMargin(0.08);
+    setCapitalWacc(0.1);
     setWaccEstimate(null);
     setScenarios(null);
     setActiveScenario("base");
@@ -334,7 +386,7 @@ export default function DcfCalculatorPage() {
       {/* Model Toggle */}
       <Card>
         <CardContent className="pt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-1">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-1">
             <button
               type="button"
               onClick={() => setModelType("dcf")}
@@ -356,6 +408,17 @@ export default function DcfCalculatorPage() {
               }`}
             >
               EPS Multiple Model (Simple)
+            </button>
+            <button
+              type="button"
+              onClick={() => setModelType("capital")}
+              className={`h-9 rounded-md text-sm font-medium transition-all cursor-pointer border ${
+                modelType === "capital"
+                  ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
+                  : "text-mist border-transparent hover:text-snow-peak hover:bg-wolf-surface/70"
+              }`}
+            >
+              Capital Allocator
             </button>
           </div>
         </CardContent>
@@ -467,7 +530,6 @@ export default function DcfCalculatorPage() {
               <CardContent className="pt-5">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                   <DCFTickerInput value={ticker} onSelect={handleTickerSelect} />
-
                   {ticker && profile && (
                     <div className="flex items-center gap-2.5 flex-1 min-w-0">
                       <TickerLogo ticker={ticker} className="w-8 h-8 rounded-lg" />
@@ -526,16 +588,7 @@ export default function DcfCalculatorPage() {
 
                   {isPopulated && user && (
                     <div className="relative shrink-0">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => setIsSavedMenuOpen((value) => !value)}
-                        className="mr-2"
-                      >
-                        <FolderOpen className="w-3.5 h-3.5 mr-1.5" />
-                        Load Scenarios
-                      </Button>
+                      
 
                       <Button
                         type="button"
@@ -688,6 +741,43 @@ export default function DcfCalculatorPage() {
           currentPrice={quote?.price ?? 0}
           inputs={epsInputs}
           onChange={setEpsInputs}
+        />
+      )}
+
+      {modelType === "capital" && (
+        <CapitalAllocatorModel
+          ticker={ticker || "STOCK"}
+          queryTicker={ticker}
+          companyName={profile?.name}
+          companyMeta={
+            profile
+              ? `${profile.sector} · ${profile.exchange}${
+                  quote
+                    ? ` · ${formatCurrency(quote.price)} · ${formatCompactNumber(quote.market_cap)} mkt cap`
+                    : ""
+                }`
+              : undefined
+          }
+          isPreparingData={isPreparingPopulate}
+          canAutoFill={!!quote && !!financials}
+          onTickerSelect={handleTickerSelect}
+          onAutoFill={handlePopulate}
+          currentPrice={quote?.price ?? 0}
+          baseRevenue={inputs.baseRevenue}
+          sharesOutstanding={inputs.sharesOutstanding}
+          totalDebt={inputs.totalDebt}
+          cashAndEquivalents={inputs.cashAndEquivalents}
+          revenueGrowthRate={capitalRevenueGrowth}
+          onRevenueGrowthRateChange={setCapitalRevenueGrowth}
+          terminalGrowthRate={inputs.terminalGrowthRate}
+          projectionYears={capitalProjectionYears}
+          onProjectionYearsChange={setCapitalProjectionYears}
+          ocfMargin={ocfMargin}
+          onOcfMarginChange={setOcfMargin}
+          capexMargin={capexMargin}
+          onCapexMarginChange={setCapexMargin}
+          wacc={capitalWacc}
+          onWaccChange={setCapitalWacc}
         />
       )}
 
