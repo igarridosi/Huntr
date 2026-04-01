@@ -33,9 +33,10 @@ export default function TickerClientLayout({
     if (!ticker || !quote) return;
 
     const companyName = profile?.name ?? `${ticker} Corp`;
-    const sign = quote.day_change_percent >= 0 ? "+" : "";
+    const dayChangePercent = quote.day_change_percent ?? 0;
+    const sign = dayChangePercent >= 0 ? "+" : "";
 
-    document.title = `${companyName} (${ticker}) | ${formatCurrency(quote.price)} (${sign}${formatPercent(quote.day_change_percent, 2)}) | Huntr`;
+    document.title = `${companyName} (${ticker}) | ${formatCurrency(quote.price)} (${sign}${formatPercent(dayChangePercent, 2)}) | Huntr`;
   }, [profile?.name, quote, ticker]);
 
   return (

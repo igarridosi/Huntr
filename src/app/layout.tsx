@@ -20,6 +20,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://huntrvalue.me"),
   title: {
     default: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     template: "%s | Huntr",
@@ -48,12 +49,21 @@ export const metadata: Metadata = {
     title: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     description:
       "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
+    images: [
+      {
+        url: "/logo/HunterLogo.png",
+        width: 1200,
+        height: 1200,
+        alt: "Huntr logo",
+      },
+    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     description:
       "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
+    images: ["/logo/HunterLogo.png"],
   },
   robots: {
     index: true,
