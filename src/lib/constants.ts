@@ -19,6 +19,7 @@ export const ROUTES = {
   SYMBOL_FINANCIALS: (ticker: string) => `/symbol/${ticker}/financials`,
   SYMBOL_VALUATION: (ticker: string) => `/symbol/${ticker}/valuation`,
   SYMBOL_DIVIDENDS: (ticker: string) => `/symbol/${ticker}/dividends`,
+  SYMBOL_EARNINGS: (ticker: string) => `/symbol/${ticker}/earnings`,
 } as const;
 
 // ---- TanStack Query Keys ----
@@ -46,6 +47,7 @@ export const QUERY_KEYS = {
 export const STALE_TIMES = {
   STATIC: Infinity,
   QUOTE: 30_000,       // 30 seconds
+  FINANCIALS: 15 * 60_000, // 15 minutes
   SEARCH: 15_000,      // 15 seconds
   INDICES: 10_000,     // 10 seconds
   WATCHLIST: 60_000,   // 60 seconds

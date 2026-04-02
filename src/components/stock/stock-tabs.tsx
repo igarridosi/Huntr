@@ -14,6 +14,7 @@ const tabs = [
   { label: "Financials", href: (t: string) => ROUTES.SYMBOL_FINANCIALS(t) },
   { label: "Valuation", href: (t: string) => ROUTES.SYMBOL_VALUATION(t) },
   { label: "Dividends", href: (t: string) => ROUTES.SYMBOL_DIVIDENDS(t) },
+  { label: "Earnings", href: (t: string) => ROUTES.SYMBOL_EARNINGS(t) },
 ];
 
 export function StockTabs({ ticker }: StockTabsProps) {

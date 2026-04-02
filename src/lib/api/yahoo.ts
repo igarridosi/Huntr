@@ -98,7 +98,7 @@ const TTL = {
   BUYBACK: 24 * 60 * 60 * 1000,        // 24 hours — capital allocation changes slowly
   EARNINGS_INSIGHT: 8 * 60 * 60 * 1000, // 8 hours — estimates/last results
   FINANCIALS: 24 * 60 * 60 * 1000,     // 24 hours — earnings cycle
-  FINANCIALS_ALPHA: 30 * 24 * 60 * 60 * 1000, // 30 days — avoid repeated Alpha throttling
+  FINANCIALS_ALPHA: 12 * 60 * 60 * 1000, // 12 hours — refresh quickly after earnings releases
 } as const;
 
 const MARKET_INDICES = [
@@ -106,6 +106,52 @@ const MARKET_INDICES = [
   { symbol: "^GSPC", label: "S&P 500" },
   { symbol: "^IXIC", label: "Nasdaq" },
 ] as const;
+
+function getLatestQuarterTs(financials: CompanyFinancials | null): number {
+  if (!financials) return 0;
+
+  const quarterRows = [
+    ...financials.income_statement.quarterly,
+    ...financials.balance_sheet.quarterly,
+    ...financials.cash_flow.quarterly,
+  ];
+
+  return quarterRows.reduce((latest, row) => {
+    const ts = new Date(row.date).getTime();
+    if (!Number.isFinite(ts)) return latest;
+    return Math.max(latest, ts);
+  }, 0);
+}
+
+function getQuarterCoverageScore(financials: CompanyFinancials | null): number {
+  if (!financials) return 0;
+
+  return (
+    financials.income_statement.quarterly.length +
+    financials.balance_sheet.quarterly.length +
+    financials.cash_flow.quarterly.length
+  );
+}
+
+function pickPreferredFinancials(
+  alphaFinancials: CompanyFinancials | null,
+  yahooFinancials: CompanyFinancials | null
+): CompanyFinancials | null {
+  if (alphaFinancials && !yahooFinancials) return alphaFinancials;
+  if (!alphaFinancials && yahooFinancials) return yahooFinancials;
+  if (!alphaFinancials && !yahooFinancials) return null;
+
+  const alphaLatest = getLatestQuarterTs(alphaFinancials);
+  const yahooLatest = getLatestQuarterTs(yahooFinancials);
+
+  if (yahooLatest > alphaLatest) return yahooFinancials;
+  if (alphaLatest > yahooLatest) return alphaFinancials;
+
+  const alphaCoverage = getQuarterCoverageScore(alphaFinancials);
+  const yahooCoverage = getQuarterCoverageScore(yahooFinancials);
+
+  return alphaCoverage >= yahooCoverage ? alphaFinancials : yahooFinancials;
+}
 
 // ─────────────────────────────────────────────────────────
 // Internal: Raw Yahoo fetcher
@@ -287,8 +333,9 @@ export async function getFinancials(
 ): Promise<CompanyFinancials | null> {
   const key = ticker.toUpperCase();
   const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  let alphaFinancials: CompanyFinancials | null = null;
 
-  // 0. Alpha Vantage first (if configured) for longer/more up-to-date histories
+  // 0. Alpha Vantage first (if configured), but we still compare with Yahoo freshness.
   if (alphaVantageApiKey) {
     const alphaCached = await getCachedData<CompanyFinancials>(
       key,
@@ -296,50 +343,56 @@ export async function getFinancials(
       TTL.FINANCIALS_ALPHA
     );
     if (alphaCached) {
-      return alphaCached;
+      alphaFinancials = alphaCached;
     }
 
-    try {
-      const alphaFinancials = await getFinancialsFromAlphaVantage(key, alphaVantageApiKey);
-      if (alphaFinancials) {
-        await setCachedData(
-          key,
-          "financials-alpha-v2",
-          alphaFinancials as unknown as Record<string, unknown>
+    if (!alphaFinancials) {
+      try {
+        const fetchedAlpha = await getFinancialsFromAlphaVantage(key, alphaVantageApiKey);
+        if (fetchedAlpha) {
+          alphaFinancials = fetchedAlpha;
+          await setCachedData(
+            key,
+            "financials-alpha-v2",
+            fetchedAlpha as unknown as Record<string, unknown>
+          );
+        }
+      } catch (alphaError) {
+        console.warn(
+          `[AlphaVantage] Failed to fetch financials for ${key}, falling back to Yahoo:`,
+          alphaError
         );
-        return alphaFinancials;
       }
-    } catch (alphaError) {
-      console.warn(
-        `[AlphaVantage] Failed to fetch financials for ${key}, falling back to Yahoo:`,
-        alphaError
-      );
     }
   }
 
-  // 1. Check cache (v2 key to avoid stale quoteSummary format)
+  // 1. Yahoo cache (v2 key to avoid stale quoteSummary format)
   const cached = await getCachedData<TimeSeriesFinancialsCache>(
     key,
     "financials-v2",
     TTL.FINANCIALS
   );
+  let yahooFinancials: CompanyFinancials | null = null;
   if (cached) {
-    return mapTimeSeriesFinancials(key, cached);
+    yahooFinancials = mapTimeSeriesFinancials(key, cached);
   }
 
-  // 2. Fetch from Yahoo via fundamentalsTimeSeries (6 parallel calls)
-  try {
-    const raw = await fetchAllFinancialTimeSeries(key);
-    await setCachedData(
-      key,
-      "financials-v2",
-      raw as unknown as Record<string, unknown>
-    );
-    return mapTimeSeriesFinancials(key, raw);
-  } catch (error) {
-    console.error(`[Yahoo] Failed to fetch financials for ${key}:`, error);
-    return null;
+  if (!yahooFinancials) {
+    // 2. Fetch from Yahoo via fundamentalsTimeSeries (6 parallel calls)
+    try {
+      const raw = await fetchAllFinancialTimeSeries(key);
+      await setCachedData(
+        key,
+        "financials-v2",
+        raw as unknown as Record<string, unknown>
+      );
+      yahooFinancials = mapTimeSeriesFinancials(key, raw);
+    } catch (error) {
+      console.error(`[Yahoo] Failed to fetch financials for ${key}:`, error);
+    }
   }
+
+  return pickPreferredFinancials(alphaFinancials, yahooFinancials);
 }
 
 /**

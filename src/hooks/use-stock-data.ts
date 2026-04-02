@@ -190,7 +190,7 @@ export function useFinancials(
   return useQuery<CompanyFinancials | null>({
     queryKey: [...QUERY_KEYS.FINANCIALS(ticker), periodType],
     queryFn: () => fetchCompanyFinancials(ticker),
-    staleTime: STALE_TIMES.STATIC,
+    staleTime: STALE_TIMES.FINANCIALS,
     enabled: enabled && !!ticker,
   });
 }
