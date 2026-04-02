@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import {
   Bar,
+  Cell,
   CartesianGrid,
   ComposedChart,
   Line,
@@ -20,6 +21,12 @@ interface DCFFCFChartProps {
   result: DCFResult;
   baseRevenue: number;
   baseFCF: number;
+}
+
+interface FCFChartPoint {
+  period: string;
+  fcf: number;
+  pvFcf: number;
 }
 
 function getRoundedYAxisDomain(values: number[]): [number, number] {
@@ -58,25 +65,20 @@ function formatShortCurrency(value: number): string {
 }
 
 export function DCFFCFChart({ result, baseRevenue, baseFCF }: DCFFCFChartProps) {
-  const chartData = [
-    { period: "Base", value: baseFCF, revenue: baseRevenue, fcfMargin: result.projections[0]?.fcfMargin ?? 0, discountFactor: 1 },
-    ...result.projections.map((p) => ({
-      period: `Y${p.year}`,
-      value: p.fcf,
-      pvValue: p.pvFCF,
-      discountDrag: p.pvFCF - p.fcf,
-      revenue: p.revenue,
-      fcfMargin: p.fcfMargin,
-      discountFactor: p.discountFactor,
-    })),
-  ].map((point) => ({
-    ...point,
-    pvValue: point.pvValue ?? point.value,
-    discountDrag: point.discountDrag ?? 0,
-    revenue: point.revenue ?? 0,
-    fcfMargin: point.fcfMargin ?? 0,
-    discountFactor: point.discountFactor ?? 1,
-  }));
+  const chartData = useMemo<FCFChartPoint[]>(() => {
+    return [
+      {
+        period: "Base",
+        fcf: baseFCF,
+        pvFcf: baseFCF,
+      },
+      ...result.projections.map((p) => ({
+        period: `Y${p.year}`,
+        fcf: p.fcf,
+        pvFcf: p.pvFCF,
+      })),
+    ];
+  }, [baseFCF, baseRevenue, result.projections]);
 
   const compactHeight = chartData.length > 9 ? 300 : 260;
   const expandedHeight = chartData.length > 9 ? 520 : 460;
@@ -88,11 +90,13 @@ export function DCFFCFChart({ result, baseRevenue, baseFCF }: DCFFCFChartProps) 
         const point = chartData.find((item) => item.period === `Y${year}`);
         if (!point || baseFCF === 0) return null;
 
-        const change = (point.value - baseFCF) / Math.abs(baseFCF);
+        const change = (point.fcf - baseFCF) / Math.abs(baseFCF);
         return { label: `${year}Y`, change };
       })
       .filter((item): item is { label: string; change: number } => item !== null);
   }, [baseFCF, chartData]);
+
+  const latestPoint = chartData[chartData.length - 1];
 
   return (
     <div>
@@ -101,33 +105,19 @@ export function DCFFCFChart({ result, baseRevenue, baseFCF }: DCFFCFChartProps) 
           Projected Free Cash Flow
         </p>
         <ExpandChartDialog title="Projected Free Cash Flow">
-          <FCFBreakdownChart data={chartData} height={expandedHeight} />
+          <FCFBreakdownChart data={chartData} height={expandedHeight} horizonChanges={horizonChanges} />
         </ExpandChartDialog>
       </div>
-      <FCFBreakdownChart data={chartData} height={compactHeight} />
+      <FCFBreakdownChart data={chartData} height={compactHeight} horizonChanges={horizonChanges} />
 
-      {horizonChanges.length > 0 ? (
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          {horizonChanges.map((item) => {
-            const positive = item.change >= 0;
-            return (
-              <span
-                key={item.label}
-                className={
-                  positive
-                    ? "inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono text-emerald-300"
-                    : "inline-flex items-center gap-1 rounded-md border border-rose-400/20 bg-rose-500/15 px-2.5 py-1 text-xs font-mono text-rose-300"
-                }
-              >
-                {item.label}: {item.change > 0 ? "+" : ""}{(item.change * 100).toFixed(1)}%
-              </span>
-            );
-          })}
-        </div>
-      ) : null}
+      <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+        <InfoTile label="Base FCF" value={formatShortCurrency(baseFCF)} />
+        <InfoTile label="Latest Projected FCF" value={formatShortCurrency(latestPoint?.fcf ?? 0)} />
+        <InfoTile label="Latest Present Value" value={formatShortCurrency(latestPoint?.pvFcf ?? 0)} />
+      </div>
 
       <p className="mt-2 text-[11px] text-mist/80">
-        Green bars show projected FCF from a base revenue of {formatCompactNumber(baseRevenue)}, red bars show discount drag over time, and the white line tracks present value of each future cash flow.
+        Bars show projected Free Cash Flow by year. The white line shows each year&apos;s discounted present value.
       </p>
     </div>
   );
@@ -136,25 +126,21 @@ export function DCFFCFChart({ result, baseRevenue, baseFCF }: DCFFCFChartProps) 
 function FCFBreakdownChart({
   data,
   height,
+  horizonChanges,
 }: {
-  data: Array<{
-    period: string;
-    value: number;
-    pvValue: number;
-    discountDrag: number;
-    revenue: number;
-    fcfMargin: number;
-    discountFactor: number;
-  }>;
+  data: FCFChartPoint[];
   height: number;
+  horizonChanges: Array<{ label: string; change: number }>;
 }) {
-  const yValues = data.flatMap((item) => [item.value, item.discountDrag, item.pvValue]);
+  const yValues = data.flatMap((item) => [item.fcf, item.pvFcf]);
   const yDomain = getRoundedYAxisDomain(yValues);
+  const chartHeight = horizonChanges.length > 0 ? Math.max(140, height - 38) : height;
 
   return (
-    <div className="rounded-xl border border-wolf-border/30 bg-wolf-black/20 p-2" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={data} margin={{ top: 10, right: 14, left: 8, bottom: 4 }}>
+    <div className="rounded-xl border border-wolf-border/30 bg-wolf-black/20 p-2 m-2" style={{ height: height + height/20 }}>
+      <div style={{ height: chartHeight }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={data} margin={{ top: 10, right: 14, left: 8, bottom: 4 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="rgba(125, 139, 153, 0.16)" />
           <XAxis
             dataKey="period"
@@ -179,48 +165,75 @@ function FCFBreakdownChart({
               if (!active || !payload || payload.length === 0) return null;
 
               const row = payload[0]?.payload as {
-                value: number;
-                pvValue: number;
-                discountDrag: number;
-                revenue: number;
-                fcfMargin: number;
-                discountFactor: number;
+                fcf: number;
+                pvFcf: number;
               };
 
+              const base = data[0]?.fcf ?? 0;
+              const changeVsBase = base !== 0 ? (row.fcf - base) / Math.abs(base) : 0;
+
               return (
-                <div className="max-w-[290px] rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-3 shadow-xl">
+                <div className="rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-3 shadow-xl min-w-[210px]">
                   <p className="text-sm font-semibold text-snow-peak mb-2">{label}</p>
 
                   <p className="text-[11px] text-emerald-300 font-mono">
-                    Projected FCF: {formatShortCurrency(row.value)}
+                    Free Cash Flow: {formatShortCurrency(row.fcf)}
                   </p>
-                  <p className="text-[10px] text-mist/90 mb-1">
-                    Source: Revenue x FCF Margin ({formatShortCurrency(row.revenue)} x {formatCompactNumber(row.fcfMargin * 100)}%)
-                  </p>
-
                   <p className="text-[11px] text-snow-peak font-mono">
-                    Present Value: {formatShortCurrency(row.pvValue)}
+                    Present Value: {formatShortCurrency(row.pvFcf)}
                   </p>
-                  <p className="text-[10px] text-mist/90 mb-1">
-                    Source: Projected FCF x Discount Factor ({row.discountFactor.toFixed(4)})
-                  </p>
-
-                  <p className="text-[11px] text-rose-300 font-mono">
-                    Discount Drag: {formatShortCurrency(Math.abs(row.discountDrag))}
-                  </p>
-                  <p className="text-[10px] text-mist/90">
-                    Source: |Projected FCF - Present Value| (time-value of money impact)
+                  <p className={
+                    changeVsBase >= 0
+                      ? "text-[11px] text-emerald-300 font-mono"
+                      : "text-[11px] text-rose-300 font-mono"
+                  }>
+                    Vs Base: {changeVsBase >= 0 ? "+" : ""}{(changeVsBase * 100).toFixed(1)}%
                   </p>
                 </div>
               );
             }}
           />
           <ReferenceLine y={0} stroke="rgba(248, 250, 252, 0.35)" strokeDasharray="2 4" />
-          <Bar dataKey="value" fill="#10b981" radius={[6, 6, 0, 0]} />
-          <Bar dataKey="discountDrag" fill="#ef4444" radius={[6, 6, 0, 0]} />
-          <Line dataKey="pvValue" type="monotone" stroke="#f8fafc" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 4 }} />
-        </ComposedChart>
-      </ResponsiveContainer>
+          <Bar dataKey="fcf" radius={[6, 6, 0, 0]}>
+            {data.map((item) => (
+              <Cell
+                key={`fcf-${item.period}`}
+                fill={item.fcf >= 0 ? "#10b981" : "#ef4444"}
+              />
+            ))}
+          </Bar>
+          <Line dataKey="pvFcf" type="monotone" stroke="#f8fafc" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 4 }} />
+          </ComposedChart>
+        </ResponsiveContainer>
+        {horizonChanges.length > 0 ? (
+        <div className="flex flex-wrap justify-center items-center w-full gap-2">
+          {horizonChanges.map((item) => {
+            const positive = item.change >= 0;
+            return (
+              <span
+                key={item.label}
+                className={
+                  positive
+                    ? "inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono text-emerald-300"
+                    : "inline-flex items-center gap-1 rounded-md border border-rose-400/20 bg-rose-500/15 px-2.5 py-1 text-xs font-mono text-rose-300"
+                }
+              >
+                {item.label}: {item.change > 0 ? "+" : ""}{(item.change * 100).toFixed(1)}%
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
+      </div>
+    </div>
+  );
+}
+
+function InfoTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-md border border-wolf-border/35 bg-midnight-rock/25 px-3 py-2">
+      <p className="text-[10px] uppercase tracking-wider text-mist font-medium">{label}</p>
+      <p className="mt-0.5 text-sm font-mono font-semibold text-snow-peak">{value}</p>
     </div>
   );
 }

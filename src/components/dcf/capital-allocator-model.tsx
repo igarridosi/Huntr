@@ -467,18 +467,20 @@ export function CapitalAllocatorModel({
                         tickFormatter={(value) => `${value < 0 ? "-$" : "$"}${Math.abs(value / 1_000_000_000).toFixed(0)}B`}
                       />
                       <Tooltip
-                        contentStyle={{
-                          background: "#0b151d",
-                          border: "1px solid rgba(125, 139, 153, 0.25)",
-                          borderRadius: "0.75rem",
-                          color: "#f8fafc",
-                        }}
-                        formatter={(value, name) => {
-                          const numericValue = typeof value === "number" ? value : Number(value ?? 0);
-                          if (name === "capex") return [formatShortCurrency(Math.abs(numericValue)), "CapEx"];
-                          if (name === "ocf") return [formatShortCurrency(numericValue), "OCF"];
-                          if (name === "fcf") return [formatShortCurrency(numericValue), "FCF"];
-                          return [formatShortCurrency(numericValue), String(name)];
+                        cursor={{ stroke: "rgba(248,250,252,0.55)", strokeWidth: 1 }}
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload || payload.length === 0) return null;
+
+                          const row = payload[0]?.payload as { ocf: number; fcf: number; capex: number };
+
+                          return (
+                            <div className="rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-3 shadow-xl">
+                              <p className="text-sm font-semibold text-snow-peak mb-2">{label}</p>
+                              <p className="text-[11px] text-emerald-300 font-mono">OCF: {formatShortCurrency(row.ocf)}</p>
+                              <p className="text-[11px] text-snow-peak font-mono">FCF: {formatShortCurrency(row.fcf)}</p>
+                              <p className="text-[11px] text-rose-300 font-mono">CapEx: {formatShortCurrency(Math.abs(row.capex))}</p>
+                            </div>
+                          );
                         }}
                       />
                       <ReferenceLine y={0} stroke="rgba(248, 250, 252, 0.35)" strokeDasharray="2 4" />
