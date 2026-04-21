@@ -57,6 +57,7 @@ const MANDATORY_US_LARGE_CAPS: SeedTickerRow[] = [
   { symbol: "AMZN", name: "Amazon.com, Inc.", sector: "Consumer Discretionary", website: "" },
   { symbol: "GOOGL", name: "Alphabet Inc.", sector: "Communication Services", website: "" },
   { symbol: "META", name: "Meta Platforms, Inc.", sector: "Communication Services", website: "" },
+  { symbol: "BRK-B", name: "Berkshire Hathaway Inc. Class B", sector: "Financials", website: "" },
   { symbol: "JPM", name: "JPMorgan Chase & Co.", sector: "Financials", website: "" },
   { symbol: "XOM", name: "Exxon Mobil Corporation", sector: "Energy", website: "" },
   { symbol: "NKE", name: "NIKE, Inc.", sector: "Consumer Discretionary", website: "" },

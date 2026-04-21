@@ -75,6 +75,15 @@ const MANDATORY_US_LARGE_CAP_SYMBOLS = [
   "PEP",
 ] as const;
 
+const CURATED_SEARCH_ENTRIES: SearchEntry[] = [
+  {
+    ticker: "BRK-B",
+    name: "Berkshire Hathaway Inc. Class B",
+    sector: "Financials",
+    searchText: "brk-b brk.b berkshire hathaway class b",
+  },
+];
+
 // ─────────────────────────────────────────────────────────
 // Profile
 // ─────────────────────────────────────────────────────────
@@ -268,14 +277,31 @@ export async function searchTickers(
   limit = 10
 ): Promise<SearchEntry[]> {
   const normalizedQuery = query.trim().toLowerCase();
+  const normalizedToken = normalizedQuery.replace(/[^a-z0-9]/g, "");
   const fallbackResults = await mock.searchTickersByQuery(query, Math.max(limit * 2, 20));
+  const curatedMatches = CURATED_SEARCH_ENTRIES.filter((entry) => {
+    if (!normalizedQuery) return true;
+
+    const ticker = entry.ticker.toLowerCase();
+    const name = entry.name.toLowerCase();
+    const searchable = `${ticker} ${name} ${entry.searchText}`;
+    const tickerToken = ticker.replace(/[^a-z0-9]/g, "");
+
+    return (
+      searchable.includes(normalizedQuery) ||
+      (normalizedToken.length > 0 && tickerToken.includes(normalizedToken))
+    );
+  });
 
   const score = (entry: SearchEntry): number => {
     const ticker = entry.ticker.toLowerCase();
     const name = entry.name.toLowerCase();
+    const tickerToken = ticker.replace(/[^a-z0-9]/g, "");
     if (!normalizedQuery) return 10;
     if (ticker === normalizedQuery) return 0;
+    if (normalizedToken.length > 0 && tickerToken === normalizedToken) return 0;
     if (ticker.startsWith(normalizedQuery)) return 1;
+    if (normalizedToken.length > 0 && tickerToken.startsWith(normalizedToken)) return 1;
     if (name.startsWith(normalizedQuery)) return 2;
     if (name.includes(normalizedQuery)) return 3;
     if (ticker.includes(normalizedQuery)) return 4;
@@ -314,10 +340,10 @@ export async function searchTickers(
         searchText: r.searchText,
       }));
 
-      // Merge DB + fallback so strategic names (e.g. DUOL) still appear
+      // Merge DB + fallback + curated so strategic names still appear
       // if live metadata is temporarily incomplete.
       const merged = new Map<string, SearchEntry>();
-      for (const entry of [...mappedDb, ...fallbackResults]) {
+      for (const entry of [...mappedDb, ...curatedMatches, ...fallbackResults]) {
         const key = entry.ticker.toUpperCase();
         if (!merged.has(key)) merged.set(key, entry);
       }
@@ -333,7 +359,19 @@ export async function searchTickers(
   }
 
   // Fallback to local mock search index
-  return fallbackResults.slice(0, limit);
+  const mergedFallback = new Map<string, SearchEntry>();
+  for (const entry of [...curatedMatches, ...fallbackResults]) {
+    const key = entry.ticker.toUpperCase();
+    if (!mergedFallback.has(key)) mergedFallback.set(key, entry);
+  }
+
+  return Array.from(mergedFallback.values())
+    .sort((a, b) => {
+      const scoreDiff = score(a) - score(b);
+      if (scoreDiff !== 0) return scoreDiff;
+      return a.ticker.localeCompare(b.ticker);
+    })
+    .slice(0, limit);
 }
 
 // ─────────────────────────────────────────────────────────
