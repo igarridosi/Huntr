@@ -1036,6 +1036,7 @@ export async function getEarningsInsightFromAlphaVantage(
   return {
     history,
     est_eps: nextWithEstimate?.eps_estimate ?? latestWithEstimate?.eps_estimate ?? null,
+    next_earnings_date: nextWithEstimate?.report_date ?? null,
   };
 }
 
