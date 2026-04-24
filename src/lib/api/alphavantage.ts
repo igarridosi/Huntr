@@ -228,7 +228,7 @@ async function fetchAlphaFunction(
   fn: AlphaFunction,
   apiKey: string,
   extraParams?: Record<string, string>
-): Promise<unknown> {
+): Promise<AlphaFinancialResponse | AlphaEarningsResponse | AlphaTranscriptResponse> {
   const throttleState = await readAlphaThrottleState();
   if (throttleState) {
     throw new AlphaThrottleError(
@@ -262,7 +262,10 @@ async function fetchAlphaFunction(
       throw new Error(`AlphaVantage ${fn} failed with status ${response.status}`);
     }
 
-    const payload = (await response.json()) as AlphaFinancialResponse;
+    const payload = (await response.json()) as
+      | AlphaFinancialResponse
+      | AlphaEarningsResponse
+      | AlphaTranscriptResponse;
     if (payload.ErrorMessage) {
       throw new Error(`AlphaVantage ${fn}: ${payload.ErrorMessage}`);
     }
