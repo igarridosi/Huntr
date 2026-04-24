@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import {
   Lightbulb,
@@ -45,7 +45,11 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
   const router = useRouter();
   const { supabase } = useSupabase();
   const { data: profiles = [] } = useAllProfiles();
-  const recentSearches = getRecentSearches();
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
 
   // Close on route change
   useEffect(() => {

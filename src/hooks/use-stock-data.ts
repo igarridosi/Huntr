@@ -71,6 +71,9 @@ export function useFullStockData(ticker: string) {
     queryKey: ["stock", "full", ticker],
     queryFn: () => fetchFullStockData(ticker),
     staleTime: STALE_TIMES.QUOTE,
+    refetchInterval: (query) =>
+      query.state.data?.financials ? false : 15_000,
+    refetchIntervalInBackground: true,
     enabled: !!ticker,
   });
 }
@@ -191,6 +194,8 @@ export function useFinancials(
     queryKey: [...QUERY_KEYS.FINANCIALS(ticker), periodType],
     queryFn: () => fetchCompanyFinancials(ticker),
     staleTime: STALE_TIMES.FINANCIALS,
+    refetchInterval: (query) => (query.state.data ? false : 15_000),
+    refetchIntervalInBackground: true,
     enabled: enabled && !!ticker,
   });
 }

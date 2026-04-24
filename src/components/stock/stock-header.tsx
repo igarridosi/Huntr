@@ -39,7 +39,7 @@ export function StockHeader({
   marketIndices,
   isLoading,
 }: StockHeaderProps) {
-  if (isLoading || !profile) {
+  if (!profile) {
     return <StockHeaderSkeleton />;
   }
 
@@ -107,7 +107,7 @@ export function StockHeader({
       </div>
 
       {/* Price Row */}
-      {quote && (
+      {quote ? (
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
           {/* Price */}
           <div>
@@ -170,7 +170,18 @@ export function StockHeader({
             <span className="text-[10px] text-mist/50 ml-1">52W</span>
           </div>
         </div>
-      )}
+      ) : isLoading ? (
+        <div className="flex flex-wrap items-end gap-4">
+          <div>
+            <p className="text-3xl font-bold font-mono font-tabular text-snow-peak/90 animate-pulse">
+              Fetching live price...
+            </p>
+            <div className="mt-1 text-xs text-mist">
+              Profile ready. Pulling quote and key metrics.
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

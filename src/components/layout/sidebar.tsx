@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Lightbulb,
@@ -83,7 +83,11 @@ export function Sidebar({
   const router = useRouter();
   const { supabase } = useSupabase();
   const { data: profiles = [] } = useAllProfiles();
-  const recentSearches = getRecentSearches();
+  const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+  useEffect(() => {
+    setRecentSearches(getRecentSearches());
+  }, []);
 
   const profileMap = useMemo(
     () => Object.fromEntries(profiles.map((profile) => [profile.ticker, profile])),

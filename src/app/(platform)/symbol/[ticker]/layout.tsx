@@ -1,13 +1,13 @@
 import { Metadata } from "next";
 import TickerClientLayout from "./client-layout";
 import Script from "next/script";
-import { getProfile, getPrice } from "@/lib/api/yahoo";
+import { getStockProfile, getStockQuote } from "@/lib/api";
 
 // Proxy function to get real API data
 async function getTickerData(ticker: string) {
   const [profile, quote] = await Promise.all([
-    getProfile(ticker).catch(() => null),
-    getPrice(ticker).catch(() => null),
+    getStockProfile(ticker).catch(() => null),
+    getStockQuote(ticker).catch(() => null),
   ]);
 
   return {

@@ -44,11 +44,11 @@ import {
   getTranscriptPeriods,
   getTranscriptDocument,
 } from "./transcripts";
+import { getCachedDataState } from "./cache";
 
 const MIN_MARKET_CAP = 10_000_000_000;
 
 const MANDATORY_US_LARGE_CAP_SYMBOLS = [
-  "AAPL",
   "MSFT",
   "NVDA",
   "AMZN",
@@ -59,7 +59,6 @@ const MANDATORY_US_LARGE_CAP_SYMBOLS = [
   "XOM",
   "NKE",
   "WFC",
-  "MS",
   "GS",
   "BAC",
   "V",
@@ -237,6 +236,18 @@ export async function getCompanyFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
   if (FEATURES.ENABLE_REAL_API) {
+    const key = ticker.toUpperCase();
+    const alphaCached = await getCachedDataState<CompanyFinancials>(
+      key,
+      "financials-alpha-v2",
+      12 * 60 * 60 * 1000,
+      7 * 24 * 60 * 60 * 1000
+    );
+
+    if (alphaCached.status !== "miss" && alphaCached.data) {
+      return alphaCached.data;
+    }
+
     return yahoo.getFinancials(ticker);
   }
   return mock.getCompanyFinancials(ticker);
@@ -248,7 +259,24 @@ export async function getCompanyFinancials(
 
 export async function getFullStockData(ticker: string) {
   if (FEATURES.ENABLE_REAL_API) {
-    return yahoo.getFullStockData(ticker);
+    const key = ticker.toUpperCase();
+    const [profile, quote, alphaCached] = await Promise.all([
+      yahoo.getProfile(key),
+      yahoo.getPrice(key),
+      getCachedDataState<CompanyFinancials>(
+        key,
+        "financials-alpha-v2",
+        12 * 60 * 60 * 1000,
+        7 * 24 * 60 * 60 * 1000
+      ),
+    ]);
+
+    const financials =
+      alphaCached.status !== "miss" && alphaCached.data
+        ? alphaCached.data
+        : await yahoo.getFinancials(key);
+
+    return { profile, quote, financials };
   }
   // Mock fallback: combine separate calls
   const [profile, quote, financials] = await Promise.all([
@@ -288,6 +316,7 @@ export async function searchTickers(
     if (dbResults.length > 0) {
       // Keep search universe aligned with global >10B policy.
       const caps = await yahoo.getBatchQuotes(dbResults.map((row) => row.ticker));
+
       const capMap = new Map(caps.map((quote) => [quote.ticker.toUpperCase(), quote.market_cap]));
 
       const filtered = dbResults.filter((row) => {

@@ -12,7 +12,6 @@ import {
   CalendarClock,
   ChevronLeft,
   ChevronRight,
-  Filter,
   Moon,
   Search,
   Star,
@@ -500,111 +499,6 @@ function floorRevenueAxisMin(dataMin: number): number {
 function signToneClass(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "text-snow-peak/95";
   return value >= 0 ? "text-emerald-400" : "text-rose-400";
-}
-
-interface DotProps {
-  className: string;
-}
-
-function PanelSkeleton({ onClose }: { onClose: () => void }) {
-  return (
-    <div className="min-h-screen bg-[#081317] p-6 m-0 rounded-xl font-sans">
-      <div className="mx-auto flex w-full max-w-[340px] sm:max-w-md flex-col gap-4">
-        
-        <div className="flex justify-end">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onClose}
-            aria-label="Close side panel"
-          >
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-
-        {/* TOP SECTION: (Antes Next Estimate) */}
-        <div className="rounded-2xl border border-slate-800/60 bg-[#0f1b23] p-5 shadow-lg">
-          {/* Texto sustituido por esqueleto */}
-          <div className="mb-4 h-3 w-28 rounded bg-slate-700/40 animate-pulse" />
-          <div className="h-3 w-4/5 rounded bg-slate-700/40 animate-pulse" />
-        </div>
-
-        {/* MIDDLE SECTION: SCATTER PLOT */}
-        <div className="rounded-2xl border border-slate-800/60 bg-[#0f1b23] p-5 shadow-lg">
-          <div className="flex h-[280px] gap-4">
-            {/* Y-Axis */}
-            <div className="flex flex-col justify-between pb-8 pt-2">
-              {[1, 2, 3, 4].map((tick) => (
-                <div key={`y-${tick}`} className="h-2.5 w-8 rounded bg-slate-700/40 animate-pulse" />
-              ))}
-            </div>
-
-            {/* Chart Area */}
-            <div className="relative flex-1 overflow-visible border-b-2 border-l-2 border-slate-700/40 pb-6">
-              {/* Grid de fondo */}
-              <div className="absolute inset-0 bg-[linear-gradient(to_right,rgba(51,65,85,0.15)_1px,transparent_1px),linear-gradient(to_bottom,rgba(51,65,85,0.15)_1px,transparent_1px)] bg-[size:30px_30px]" />
-
-              {/* Puntos aleatorios animados */}
-              {PANEL_LOADING_DOTS.map((dotClassName, idx) => (
-                <div 
-                  key={`dot-${idx}`} 
-                  className={`absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/70 shadow-[0_0_8px_rgba(100,116,139,0.5)] animate-pulse ${dotClassName}`}
-                />
-              ))}
-
-            </div>
-          </div>
-        </div>
-
-        {/* BOTTOM SECTION: DATA TABLE */}
-        <div className="flex flex-col gap-5 rounded-2xl border border-slate-800/60 bg-[#0f1b23] p-5 shadow-lg">
-          
-          {/* Header Row */}
-          <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_1.5fr] items-center gap-3 pb-4 border-b border-slate-800/60">
-            <div className="flex flex-col gap-2.5">
-               <div className="h-2.5 w-11/12 rounded bg-slate-700/40 animate-pulse" />
-               <div className="h-2.5 w-2/3 rounded bg-slate-700/40 animate-pulse" />
-            </div>
-            <div className="h-2.5 w-full rounded bg-slate-700/40 animate-pulse" />
-            <div className="h-2.5 w-full rounded bg-slate-700/40 animate-pulse" />
-            <div className="h-2.5 w-full rounded bg-slate-700/40 animate-pulse" />
-            <div className="h-2.5 w-full rounded bg-slate-700/40 animate-pulse" />
-          </div>
-
-          {/* Data Row 1 */}
-          <div className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.5fr] items-center gap-3 pb-4 border-b border-slate-800/60">
-            <div className="flex flex-col gap-2.5">
-               <div className="h-2.5 w-10/12 rounded bg-slate-700/40 animate-pulse" />
-               <div className="h-2.5 w-1/2 rounded bg-slate-700/40 animate-pulse" />
-            </div>
-            <div className="flex flex-col gap-2.5">
-               <div className="h-2.5 w-3/4 rounded bg-slate-700/40 animate-pulse" />
-               <div className="h-2.5 w-1/2 rounded bg-slate-700/40 animate-pulse" />
-            </div>
-            <div className="h-2.5 w-3/4 rounded bg-slate-700/40 animate-pulse" />
-            <div className="h-2.5 w-3/4 rounded bg-slate-700/40 animate-pulse" />
-          </div>
-
-           {/* Data Row 2 */}
-           <div className="grid grid-cols-[1.2fr_1.2fr_1fr_1fr_0.5fr] items-center gap-3">
-            <div className="flex flex-col gap-2.5">
-               <div className="h-2.5 w-10/12 rounded bg-slate-700/40 animate-pulse" />
-               <div className="h-2.5 w-1/2 rounded bg-slate-700/40 animate-pulse" />
-            </div>
-            <div className="flex flex-col gap-2.5">
-               <div className="h-2.5 w-3/4 rounded bg-slate-700/40 animate-pulse" />
-               <div className="h-2.5 w-1/2 rounded bg-slate-700/40 animate-pulse" />
-            </div>
-            <div className="h-2.5 w-3/4 rounded bg-slate-700/40 animate-pulse" />
-            <div className="h-2.5 w-3/4 rounded bg-slate-700/40 animate-pulse" />
-            
-            
-          </div>
-        </div>
-
-      </div>
-    </div>
-  );
 }
 
 function formatQuarterTick(quarter: string): string {
@@ -1235,9 +1129,6 @@ export default function EarningsPage() {
     const ordered = [...filteredRows].sort((a, b) => quarterSortValue(a) - quarterSortValue(b));
     if (!selectedCache) return ordered;
 
-    const hasAnyNextEstimate = selectedCache.nextEstEps != null || selectedCache.nextEstRevenue != null;
-    if (!hasAnyNextEstimate) return ordered;
-
     const nextQuarter = resolveNextEstimateQuarter(
       selectedCache.rows,
       selectedCache.nextEarningsDate
@@ -1245,31 +1136,11 @@ export default function EarningsPage() {
 
     if (!nextQuarter || nextQuarter === "Unknown") return ordered;
 
-    // Keep chart focused on a single upcoming estimate quarter per ticker sequence.
-    const pruned = ordered.filter((row) => {
-      const isEstimateOnly =
-        row.reported == null &&
-        row.revenue == null &&
-        (row.estimate != null || row.revenueEstimate != null);
-
-      if (!isEstimateOnly) return true;
-      return row.quarter === nextQuarter;
-    });
+    const hasNextQuarter = ordered.some((row) => row.quarter === nextQuarter);
+    if (hasNextQuarter) return ordered;
 
     const nextSortTs = new Date(`${selectedCache.nextEarningsDate}T00:00:00Z`).getTime();
-    const index = pruned.findIndex((row) => row.quarter === nextQuarter);
-
-    if (index >= 0) {
-      const existing = pruned[index];
-      pruned[index] = {
-        ...existing,
-        estimate: existing.estimate ?? selectedCache.nextEstEps,
-        revenueEstimate: existing.revenueEstimate ?? selectedCache.nextEstRevenue,
-      };
-      return pruned.sort((a, b) => quarterSortValue(a) - quarterSortValue(b));
-    }
-
-    pruned.push({
+    ordered.push({
       quarter: nextQuarter,
       releaseDate: selectedCache.nextEarningsDate,
       estimate: selectedCache.nextEstEps,
@@ -1280,15 +1151,15 @@ export default function EarningsPage() {
       sortTs: Number.isFinite(nextSortTs) ? nextSortTs : quarterLabelToTimestamp(nextQuarter),
     });
 
-    return pruned
-      .sort((a, b) => quarterSortValue(a) - quarterSortValue(b))
-      .slice(-16);
+    return ordered.sort((a, b) => quarterSortValue(a) - quarterSortValue(b));
   }, [filteredRows, selectedCache]);
 
   const tableRows = useMemo(
     () =>
       filteredRows.filter((row) =>
-        chartMetric === "revenue" ? row.revenue != null : row.reported != null
+        chartMetric === "revenue"
+          ? row.revenue != null || row.revenueEstimate != null
+          : row.reported != null || row.estimate != null
       ),
     [filteredRows, chartMetric]
   );

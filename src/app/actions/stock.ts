@@ -20,6 +20,9 @@ import type {
 import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
+import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
+import { getFinancialsFromAlphaVantage } from "@/lib/api/alphavantage";
+import { getCachedDataState, setCachedData, withSingleFlight } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 
 export async function fetchStockProfile(
@@ -84,6 +87,34 @@ export async function fetchCompanyFinancials(
   return dataService.getCompanyFinancials(ticker);
 }
 
+export async function fetchAlphaFinancials(
+  ticker: string
+): Promise<CompanyFinancials | null> {
+  const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  if (!alphaKey) return null;
+
+  const normalizedTicker = ticker.toUpperCase();
+  const cached = await getCachedDataState<CompanyFinancials>(
+    normalizedTicker,
+    "financials-alpha-v2",
+    12 * 60 * 60 * 1000,
+    7 * 24 * 60 * 60 * 1000
+  );
+
+  if (cached.status !== "miss" && cached.data) {
+    return cached.data;
+  }
+
+  return withSingleFlight(`${normalizedTicker}:financials-alpha-v2:fetch`, async () => {
+    const alphaFinancials = await getFinancialsFromAlphaVantage(normalizedTicker, alphaKey);
+
+    if (!alphaFinancials) return null;
+
+    await setCachedData(normalizedTicker, "financials-alpha-v2", alphaFinancials);
+    return alphaFinancials;
+  });
+}
+
 export async function fetchSearchTickers(
   query: string,
   limit: number = 10
@@ -103,6 +134,12 @@ export async function fetchEarningsDetailData(
   ticker: string
 ): Promise<EarningsDetailData> {
   return dataService.getEarningsDetailData(ticker);
+}
+
+export async function prewarmEarningsDetailCacheForTickers(
+  tickers: string[]
+): Promise<{ total: number; warmed: number; failed: string[] }> {
+  return prewarmEarningsDetailCacheForTickersService(tickers);
 }
 
 export async function fetchTranscriptPeriods(

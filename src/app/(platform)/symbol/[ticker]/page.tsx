@@ -1,12 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import {
+  useFullStockData,
   useStockProfile,
-  useStockQuote,
-  useFinancials,
 } from "@/hooks/use-stock-data";
+import { fetchAlphaFinancials } from "@/app/actions/stock";
 import { CategorizedMetrics } from "@/components/stock/categorized-metrics";
 import {
   MetricChartCard,
@@ -16,8 +16,11 @@ import { StockPriceCard } from "@/components/stock/stock-price-card";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
+import type { CompanyFinancials } from "@/types/financials";
+import { Loader2, Sparkles } from "lucide-react";
 
 function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
   return rows
@@ -52,6 +55,8 @@ function pickMostRecentPeriod<T extends { date: string }>(
 
 type YearRange = 5 | 10 | 15 | 20;
 
+const ALPHA_ESTIMATED_SECONDS = 90;
+
 function findNearestBalanceRow<T extends { date: string }>(rows: T[], targetDate: string): T | null {
   if (!rows.length) return null;
   const targetTs = new Date(targetDate).getTime();
@@ -70,16 +75,159 @@ function findNearestBalanceRow<T extends { date: string }>(rows: T[], targetDate
   return sorted[0] ?? null;
 }
 
+function formatCountdown(seconds: number | null): string {
+  if (seconds === null || seconds < 0) return "--:--";
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = seconds % 60;
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+}
+
+function mergeRowsByDate<T extends { date: string }>(baseRows: T[], alphaRows: T[]): T[] {
+  const merged = new Map<string, T>();
+
+  for (const row of baseRows) {
+    merged.set(row.date, row);
+  }
+
+  for (const row of alphaRows) {
+    merged.set(row.date, row);
+  }
+
+  return Array.from(merged.values()).sort((left, right) => {
+    const leftTs = new Date(left.date).getTime();
+    const rightTs = new Date(right.date).getTime();
+    return leftTs - rightTs;
+  });
+}
+
+function mergeFinancials(
+  baseline: CompanyFinancials | null,
+  alpha: CompanyFinancials | null
+): CompanyFinancials | null {
+  if (!baseline && !alpha) return null;
+  if (!baseline) return alpha;
+  if (!alpha) return baseline;
+
+  return {
+    ticker: baseline.ticker,
+    income_statement: {
+      annual: mergeRowsByDate(baseline.income_statement.annual, alpha.income_statement.annual),
+      quarterly: mergeRowsByDate(
+        baseline.income_statement.quarterly,
+        alpha.income_statement.quarterly
+      ),
+    },
+    balance_sheet: {
+      annual: mergeRowsByDate(baseline.balance_sheet.annual, alpha.balance_sheet.annual),
+      quarterly: mergeRowsByDate(
+        baseline.balance_sheet.quarterly,
+        alpha.balance_sheet.quarterly
+      ),
+    },
+    cash_flow: {
+      annual: mergeRowsByDate(baseline.cash_flow.annual, alpha.cash_flow.annual),
+      quarterly: mergeRowsByDate(baseline.cash_flow.quarterly, alpha.cash_flow.quarterly),
+    },
+  };
+}
+
 export default function OverviewPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params.ticker ?? "").toUpperCase();
 
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
   const [yearRange, setYearRange] = useState<YearRange>(10);
+  const [alphaFinancials, setAlphaFinancials] = useState<CompanyFinancials | null>(null);
+  const [alphaLoading, setAlphaLoading] = useState(false);
+  const [alphaCountdown, setAlphaCountdown] = useState<number | null>(null);
+  const [alphaError, setAlphaError] = useState<string | null>(null);
+  const alphaRequestIdRef = useRef(0);
 
-  const { data: profile } = useStockProfile(ticker);
-  const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker);
-  const { data: financials, isLoading: finLoading } = useFinancials(ticker);
+  const {
+    data: stockData,
+    isLoading: stockDataLoading,
+    isFetching: stockDataFetching,
+  } = useFullStockData(ticker);
+  const { data: quickProfile } = useStockProfile(ticker);
+
+  useEffect(() => {
+    setAlphaFinancials(null);
+    setAlphaLoading(false);
+    setAlphaCountdown(null);
+    setAlphaError(null);
+  }, [ticker]);
+
+  useEffect(() => {
+    if (!alphaLoading) return;
+
+    const timer = window.setInterval(() => {
+      setAlphaCountdown((current) => {
+        if (current === null) return current;
+        return current > 0 ? current - 1 : current;
+      });
+    }, 1000);
+
+    return () => window.clearInterval(timer);
+  }, [alphaLoading]);
+
+  const profile = stockData?.profile ?? quickProfile ?? null;
+  const quote = stockData?.quote ?? null;
+  const financials = useMemo(
+    () => mergeFinancials(stockData?.financials ?? null, alphaFinancials),
+    [alphaFinancials, stockData?.financials]
+  );
+  const quoteLoading = stockDataLoading || stockDataFetching;
+  const finLoading = stockDataLoading || stockDataFetching || !financials;
+
+  const alphaButtonLabel = alphaLoading
+    ? "Loading Alpha 20Y"
+    : alphaFinancials
+      ? "Refresh Alpha 20Y"
+      : "Load Alpha 20Y";
+
+  const alphaStatusLabel = alphaLoading
+    ? alphaCountdown !== null && alphaCountdown > 0
+      ? `ETA ${formatCountdown(alphaCountdown)}`
+      : "Alpha sigue procesando..."
+    : alphaFinancials
+      ? "Alpha 20Y merged"
+      : alphaError ?? "Yahoo fast path";
+
+  const handleLoadAlphaFinancials = async () => {
+    if (!ticker || alphaLoading) return;
+
+    const requestId = alphaRequestIdRef.current + 1;
+    alphaRequestIdRef.current = requestId;
+
+    setAlphaError(null);
+    setAlphaLoading(true);
+    setAlphaCountdown(ALPHA_ESTIMATED_SECONDS);
+
+    try {
+      const result = await fetchAlphaFinancials(ticker);
+
+      if (alphaRequestIdRef.current !== requestId) return;
+
+      if (!result) {
+        setAlphaError("AlphaVantage no devolvió datos en este intento. Seguimos con Yahoo.");
+        return;
+      }
+
+      setAlphaFinancials(result);
+      setYearRange(20);
+    } catch (error) {
+      if (alphaRequestIdRef.current !== requestId) return;
+      setAlphaError(
+        error instanceof Error
+          ? error.message
+          : "No se pudo cargar AlphaVantage. Seguimos con Yahoo."
+      );
+    } finally {
+      if (alphaRequestIdRef.current !== requestId) return;
+      setAlphaLoading(false);
+      setAlphaCountdown(null);
+    }
+  };
 
   const latestIncome = useMemo(() => {
     if (!financials) return null;
@@ -504,7 +652,13 @@ export default function OverviewPage() {
   }, [financials, periodType, quote?.shares_outstanding, yearRange]);
 
   if (quoteLoading && !quote) {
-    return <DataHuntingLoader ticker={ticker} />;
+    return (
+      <DataHuntingLoader
+        ticker={ticker}
+        profile={profile}
+        detailMessage="Loading live quote, company profile, and KPI history..."
+      />
+    );
   }
 
   const dollarFmt = (v: number) => formatCurrency(v, { compact: true });
@@ -530,13 +684,40 @@ export default function OverviewPage() {
 
       {/* Charts Grid — 5 columns × 2 rows */}
       {finLoading && !charts ? (
-        <DataHuntingLoader ticker={ticker} compact />
+        <DataHuntingLoader
+          ticker={ticker}
+          profile={profile}
+          compact
+          detailMessage="Loading 20 years of financial history and building charts..."
+        />
       ) : charts ? (
         <div className="flex flex-col gap-6">
           <StockPriceCard ticker={ticker} quote={quote ?? null} />
 
-          <div className="flex items-center justify-end gap-3">
-            <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-end">
+            <div className="flex flex-wrap items-center gap-3 xl:justify-end">
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleLoadAlphaFinancials}
+                  disabled={alphaLoading}
+                  className="h-8 rounded-xl border-sunset-orange/30 bg-sunset-orange/10 text-sunset-orange hover:bg-sunset-orange/20 hover:text-sunset-orange"
+                >
+                  {alphaLoading ? (
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Sparkles className="mr-2 h-3.5 w-3.5" />
+                  )}
+                  {alphaButtonLabel}
+                </Button>
+                <div className="min-w-[7rem] text-[11px] font-medium text-mist/80">
+                  {alphaStatusLabel}
+                </div>
+              </div>
+
+              <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
               {([5, 10, 15, 20] as const).map((years) => (
                 <button
                   key={years}
@@ -552,8 +733,9 @@ export default function OverviewPage() {
                   {years}Y
                 </button>
               ))}
+              </div>
+              <PeriodToggle value={periodType} onChange={setPeriodType} />
             </div>
-            <PeriodToggle value={periodType} onChange={setPeriodType} />
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
@@ -718,8 +900,7 @@ export default function OverviewPage() {
             defaultYearRange={20}
           />
         </div>
-          </div>
-          
+      </div>
       ) : null}
 
       {/* Company Description */}

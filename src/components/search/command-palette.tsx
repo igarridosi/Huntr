@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { ROUTES, QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import { useSearch } from "@/hooks/use-stock-data";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
-import { fetchStockProfile, fetchStockQuote } from "@/app/actions/stock";
+import { fetchStockProfile, fetchStockQuote, fetchFullStockData } from "@/app/actions/stock";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -69,6 +69,8 @@ export function CommandPalette({
   // Navigate to stock detail
   const handleSelect = useCallback(
     (ticker: string) => {
+      // Fire-and-forget warmup to persist data in shared server cache.
+      void fetchFullStockData(ticker).catch(() => null);
       onOpenChange(false);
       router.push(redirectTo ?? ROUTES.SYMBOL(ticker));
     },

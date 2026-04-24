@@ -600,6 +600,7 @@ export default function DcfCalculatorPage() {
               ticker={ticker}
               compact
               className="border border-wolf-border/50"
+              detailMessage="Loading 20 years of financial history for the DCF model..."
             />
           )}
         </div>

@@ -15,7 +15,11 @@
  */
 
 import YahooFinance from "yahoo-finance2";
-import type { YahooQuoteSummaryResult, TimeSeriesFinancialsCache, FundamentalsTimeSeriesRow } from "@/types/yahoo";
+import type {
+  YahooQuoteSummaryResult,
+  TimeSeriesFinancialsCache,
+  FundamentalsTimeSeriesRow,
+} from "@/types/yahoo";
 import type {
   StockProfile,
   StockQuote,
@@ -26,15 +30,16 @@ import type {
 import type { CompanyFinancials } from "@/types/financials";
 import { buildTickerLogoUrl } from "@/lib/logo";
 import {
-  getFinancialsFromAlphaVantage,
-  getEarningsInsightFromAlphaVantage,
-} from "@/lib/api/alphavantage";
-import {
   mapToStockProfile,
   mapToStockQuote,
   mapTimeSeriesFinancials,
 } from "./mappers";
-import { getCachedData, setCachedData } from "./cache";
+import {
+  getCachedData,
+  getCachedDataState,
+  setCachedData,
+  withSingleFlight,
+} from "./cache";
 
 // ─────────────────────────────────────────────────────────
 // yahoo-finance2 v3 requires instantiation
@@ -50,6 +55,44 @@ type YahooHistoricalClient = {
 };
 
 const yahooHistoricalClient = yahooFinance as unknown as YahooHistoricalClient;
+
+const SUPPRESSED_YAHOO_MESSAGES = [
+  "Could not determine entry type",
+  "historical() is deprecated",
+  "Using historical() is deprecated",
+  "deprecated historical",
+] as const;
+
+function isSuppressedYahooMessage(args: unknown[]): boolean {
+  const first = args[0];
+  if (typeof first !== "string") return false;
+  const message = first.toLowerCase();
+  return SUPPRESSED_YAHOO_MESSAGES.some((entry) =>
+    message.includes(entry.toLowerCase())
+  );
+}
+
+async function withSuppressedYahooWarnings<T>(operation: () => Promise<T>): Promise<T> {
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+
+  console.log = (...args: unknown[]) => {
+    if (isSuppressedYahooMessage(args)) return;
+    originalLog(...args);
+  };
+
+  console.warn = (...args: unknown[]) => {
+    if (isSuppressedYahooMessage(args)) return;
+    originalWarn(...args);
+  };
+
+  try {
+    return await operation();
+  } finally {
+    console.log = originalLog;
+    console.warn = originalWarn;
+  }
+}
 
 // ─────────────────────────────────────────────────────────
 // Module sets for each data type
@@ -101,56 +144,73 @@ const TTL = {
   FINANCIALS_ALPHA: 12 * 60 * 60 * 1000, // 12 hours — refresh quickly after earnings releases
 } as const;
 
+const SWR = {
+  PROFILE: 30 * 24 * 60 * 60 * 1000,       // Serve stale profile while refreshing for up to 30 days.
+  QUOTE: 60 * 1000,                         // Keep quote responsive during refresh spikes.
+  INDICES: 30 * 1000,                       // Avoid blocking header on tiny expiry windows.
+  FINANCIALS: 7 * 24 * 60 * 60 * 1000,      // Reserved for optional non-KPI Yahoo financial cache flows.
+  FINANCIALS_ALPHA: 24 * 60 * 60 * 1000,    // AlphaVantage cache used as KPI source of truth.
+} as const;
+
 const MARKET_INDICES = [
   { symbol: "^DJI", label: "Dow Jones" },
   { symbol: "^GSPC", label: "S&P 500" },
   { symbol: "^IXIC", label: "Nasdaq" },
 ] as const;
 
-function getLatestQuarterTs(financials: CompanyFinancials | null): number {
-  if (!financials) return 0;
-
-  const quarterRows = [
-    ...financials.income_statement.quarterly,
-    ...financials.balance_sheet.quarterly,
-    ...financials.cash_flow.quarterly,
-  ];
-
-  return quarterRows.reduce((latest, row) => {
-    const ts = new Date(row.date).getTime();
-    if (!Number.isFinite(ts)) return latest;
-    return Math.max(latest, ts);
-  }, 0);
+interface SwrResourceOptions<T> {
+  ticker: string;
+  cacheKey: string;
+  ttlMs: number;
+  staleWhileRevalidateMs: number;
+  fetchFresh: () => Promise<T | null>;
+  isUsable?: (value: T | null) => value is T;
+  onRefreshError?: (error: unknown) => void;
 }
 
-function getQuarterCoverageScore(financials: CompanyFinancials | null): number {
-  if (!financials) return 0;
+function hasValue<T>(value: T | null | undefined): value is T {
+  return value !== null && value !== undefined;
+}
 
-  return (
-    financials.income_statement.quarterly.length +
-    financials.balance_sheet.quarterly.length +
-    financials.cash_flow.quarterly.length
+async function resolveWithSWR<T>(options: SwrResourceOptions<T>): Promise<T | null> {
+  const normalizedTicker = options.ticker.toUpperCase();
+  const isUsable = options.isUsable ?? ((value: T | null): value is T => hasValue(value));
+
+  const cached = await getCachedDataState<T>(
+    normalizedTicker,
+    options.cacheKey,
+    options.ttlMs,
+    options.staleWhileRevalidateMs
   );
-}
 
-function pickPreferredFinancials(
-  alphaFinancials: CompanyFinancials | null,
-  yahooFinancials: CompanyFinancials | null
-): CompanyFinancials | null {
-  if (alphaFinancials && !yahooFinancials) return alphaFinancials;
-  if (!alphaFinancials && yahooFinancials) return yahooFinancials;
-  if (!alphaFinancials && !yahooFinancials) return null;
+  const refresh = async (): Promise<T | null> =>
+    withSingleFlight(`${normalizedTicker}:${options.cacheKey}:refresh`, async () => {
+      try {
+        const fresh = await options.fetchFresh();
+        if (isUsable(fresh)) {
+          await setCachedData(normalizedTicker, options.cacheKey, fresh);
+          return fresh;
+        }
+        return null;
+      } catch (error) {
+        options.onRefreshError?.(error);
+        return null;
+      }
+    });
 
-  const alphaLatest = getLatestQuarterTs(alphaFinancials);
-  const yahooLatest = getLatestQuarterTs(yahooFinancials);
+  if (cached.status === "fresh" && isUsable(cached.data)) {
+    return cached.data;
+  }
 
-  if (yahooLatest > alphaLatest) return yahooFinancials;
-  if (alphaLatest > yahooLatest) return alphaFinancials;
+  if (cached.status === "stale" && isUsable(cached.data)) {
+    void refresh();
+    return cached.data;
+  }
 
-  const alphaCoverage = getQuarterCoverageScore(alphaFinancials);
-  const yahooCoverage = getQuarterCoverageScore(yahooFinancials);
+  const fresh = await refresh();
+  if (isUsable(fresh)) return fresh;
 
-  return alphaCoverage >= yahooCoverage ? alphaFinancials : yahooFinancials;
+  return isUsable(cached.data) ? cached.data : null;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -175,14 +235,9 @@ async function fetchFromYahoo(
 }
 
 // ─────────────────────────────────────────────────────────
-// Internal: fundamentalsTimeSeries fetcher
+// Internal: Yahoo financials (fundamentalsTimeSeries)
 // ─────────────────────────────────────────────────────────
 
-/**
- * Fetch a single fundamentalsTimeSeries module for a given period type.
- * Uses `validateResult: false` because yahoo-finance2 schema validation
- * fails on many fields returned by this endpoint.
- */
 async function fetchTimeSeriesModule(
   ticker: string,
   module: string,
@@ -192,17 +247,19 @@ async function fetchTimeSeriesModule(
     const now = new Date();
     const period2 = `${now.getFullYear() + 1}-12-31`;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await (yahooFinance as any).fundamentalsTimeSeries(
-      ticker,
-      {
-        period1: "2005-01-01",
-        period2,
-        type: periodType,
-        module,
-      },
-      { validateResult: false }
-    );
+    const result: unknown = await withSuppressedYahooWarnings(async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return await (yahooFinance as any).fundamentalsTimeSeries(
+        ticker,
+        {
+          period1: "2005-01-01",
+          period2,
+          type: periodType,
+          module,
+        },
+        { validateResult: false }
+      );
+    });
 
     return Array.isArray(result) ? result : [];
   } catch (error) {
@@ -214,10 +271,6 @@ async function fetchTimeSeriesModule(
   }
 }
 
-/**
- * Fetch all 6 financial time-series calls in parallel:
- *   3 modules (financials, balance-sheet, cash-flow) × 2 period types (annual, quarterly)
- */
 async function fetchAllFinancialTimeSeries(
   ticker: string
 ): Promise<TimeSeriesFinancialsCache> {
@@ -258,31 +311,18 @@ async function fetchAllFinancialTimeSeries(
 export async function getProfile(ticker: string): Promise<StockProfile | null> {
   const key = ticker.toUpperCase();
 
-  // 1. Check cache
-  const cached = await getCachedData<YahooQuoteSummaryResult>(
-    key,
-    "profile",
-    TTL.PROFILE
-  );
-  if (cached) {
-    return mapToStockProfile(key, cached);
-  }
+  const raw = await resolveWithSWR<YahooQuoteSummaryResult>({
+    ticker: key,
+    cacheKey: "profile",
+    ttlMs: TTL.PROFILE,
+    staleWhileRevalidateMs: SWR.PROFILE,
+    fetchFresh: () => fetchFromYahoo(key, PROFILE_MODULES),
+    onRefreshError: (error) => {
+      console.error(`[Yahoo] Failed to fetch profile for ${key}:`, error);
+    },
+  });
 
-  // 2. Fetch from Yahoo
-  try {
-    const raw = await fetchFromYahoo(key, PROFILE_MODULES);
-    // 3. Cache the raw Yahoo response
-    await setCachedData(
-      key,
-      "profile",
-      raw as unknown as Record<string, unknown>
-    );
-    // 4. Map and return
-    return mapToStockProfile(key, raw);
-  } catch (error) {
-    console.error(`[Yahoo] Failed to fetch profile for ${key}:`, error);
-    return null;
-  }
+  return raw ? mapToStockProfile(key, raw) : null;
 }
 
 /**
@@ -295,35 +335,24 @@ export async function getProfile(ticker: string): Promise<StockProfile | null> {
 export async function getPrice(ticker: string): Promise<StockQuote | null> {
   const key = ticker.toUpperCase();
 
-  // 1. Check cache
-  const cached = await getCachedData<YahooQuoteSummaryResult>(
-    key,
-    "quote",
-    TTL.QUOTE
-  );
-  if (cached) {
-    return mapToStockQuote(key, cached);
-  }
+  const raw = await resolveWithSWR<YahooQuoteSummaryResult>({
+    ticker: key,
+    cacheKey: "quote",
+    ttlMs: TTL.QUOTE,
+    staleWhileRevalidateMs: SWR.QUOTE,
+    fetchFresh: () => fetchFromYahoo(key, QUOTE_MODULES),
+    onRefreshError: (error) => {
+      console.error(`[Yahoo] Failed to fetch quote for ${key}:`, error);
+    },
+  });
 
-  // 2. Fetch from Yahoo
-  try {
-    const raw = await fetchFromYahoo(key, QUOTE_MODULES);
-    await setCachedData(
-      key,
-      "quote",
-      raw as unknown as Record<string, unknown>
-    );
-    return mapToStockQuote(key, raw);
-  } catch (error) {
-    console.error(`[Yahoo] Failed to fetch quote for ${key}:`, error);
-    return null;
-  }
+  return raw ? mapToStockQuote(key, raw) : null;
 }
 
 /**
  * Get full financial statements (Income, Balance, CashFlow) for a ticker.
- * Uses fundamentalsTimeSeries (replaces deprecated quoteSummary financial modules).
- * Fetches up to 20 years of annual + quarterly data in parallel.
+ * KPI source of truth is AlphaVantage only.
+ * If AlphaVantage is unavailable, returns null (no Yahoo fallback for KPI integrity).
  *
  * @param ticker - Stock symbol
  * @returns CompanyFinancials or null if not found
@@ -332,67 +361,33 @@ export async function getFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
   const key = ticker.toUpperCase();
-  const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
-  let alphaFinancials: CompanyFinancials | null = null;
-
-  // 0. Alpha Vantage first (if configured), but we still compare with Yahoo freshness.
-  if (alphaVantageApiKey) {
-    const alphaCached = await getCachedData<CompanyFinancials>(
-      key,
-      "financials-alpha-v2",
-      TTL.FINANCIALS_ALPHA
+  const isTimeSeriesShape = (
+    value: TimeSeriesFinancialsCache | null
+  ): value is TimeSeriesFinancialsCache => {
+    return (
+      value !== null &&
+      Array.isArray(value.income?.annual) &&
+      Array.isArray(value.income?.quarterly) &&
+      Array.isArray(value.balance?.annual) &&
+      Array.isArray(value.balance?.quarterly) &&
+      Array.isArray(value.cashflow?.annual) &&
+      Array.isArray(value.cashflow?.quarterly)
     );
-    if (alphaCached) {
-      alphaFinancials = alphaCached;
-    }
+  };
 
-    if (!alphaFinancials) {
-      try {
-        const fetchedAlpha = await getFinancialsFromAlphaVantage(key, alphaVantageApiKey);
-        if (fetchedAlpha) {
-          alphaFinancials = fetchedAlpha;
-          await setCachedData(
-            key,
-            "financials-alpha-v2",
-            fetchedAlpha as unknown as Record<string, unknown>
-          );
-        }
-      } catch (alphaError) {
-        console.warn(
-          `[AlphaVantage] Failed to fetch financials for ${key}, falling back to Yahoo:`,
-          alphaError
-        );
-      }
-    }
-  }
-
-  // 1. Yahoo cache (v2 key to avoid stale quoteSummary format)
-  const cached = await getCachedData<TimeSeriesFinancialsCache>(
-    key,
-    "financials-v2",
-    TTL.FINANCIALS
-  );
-  let yahooFinancials: CompanyFinancials | null = null;
-  if (cached) {
-    yahooFinancials = mapTimeSeriesFinancials(key, cached);
-  }
-
-  if (!yahooFinancials) {
-    // 2. Fetch from Yahoo via fundamentalsTimeSeries (6 parallel calls)
-    try {
-      const raw = await fetchAllFinancialTimeSeries(key);
-      await setCachedData(
-        key,
-        "financials-v2",
-        raw as unknown as Record<string, unknown>
-      );
-      yahooFinancials = mapTimeSeriesFinancials(key, raw);
-    } catch (error) {
+  const yahooRaw = await resolveWithSWR<TimeSeriesFinancialsCache>({
+    ticker: key,
+    cacheKey: "financials-v2",
+    ttlMs: TTL.FINANCIALS,
+    staleWhileRevalidateMs: SWR.FINANCIALS,
+    fetchFresh: async () => fetchAllFinancialTimeSeries(key),
+    isUsable: isTimeSeriesShape,
+    onRefreshError: (error) => {
       console.error(`[Yahoo] Failed to fetch financials for ${key}:`, error);
-    }
-  }
+    },
+  });
 
-  return pickPreferredFinancials(alphaFinancials, yahooFinancials);
+  return yahooRaw ? mapTimeSeriesFinancials(key, yahooRaw) : null;
 }
 
 /**
@@ -412,23 +407,63 @@ export async function getFullStockData(ticker: string): Promise<{
 }> {
   const key = ticker.toUpperCase();
 
+  const refreshProfileQuote = async (): Promise<YahooQuoteSummaryResult | null> => {
+    return withSingleFlight(`${key}:profile-quote:refresh`, async () => {
+      try {
+        const profileQuoteRaw = await fetchFromYahoo(key, PROFILE_QUOTE_MODULES);
+        await Promise.all([
+          setCachedData(key, "profile", profileQuoteRaw),
+          setCachedData(key, "quote", profileQuoteRaw),
+        ]);
+        return profileQuoteRaw;
+      } catch (error) {
+        console.error(`[Yahoo] Failed to refresh full payload for ${key}:`, error);
+        return null;
+      }
+    });
+  };
+
   try {
-    // Fetch profile+quote (quoteSummary) and financials (timeSeries) in parallel
-    const [profileQuoteRaw, financials] = await Promise.all([
-      fetchFromYahoo(key, PROFILE_QUOTE_MODULES),
+    const [profileLookup, quoteLookup, financials] = await Promise.all([
+      getCachedDataState<YahooQuoteSummaryResult>(
+        key,
+        "profile",
+        TTL.PROFILE,
+        SWR.PROFILE
+      ),
+      getCachedDataState<YahooQuoteSummaryResult>(
+        key,
+        "quote",
+        TTL.QUOTE,
+        SWR.QUOTE
+      ),
       getFinancials(key),
     ]);
 
-    // Cache profile and quote segments
-    const rawRecord = profileQuoteRaw as unknown as Record<string, unknown>;
-    await Promise.all([
-      setCachedData(key, "profile", rawRecord),
-      setCachedData(key, "quote", rawRecord),
-    ]);
+    let profileRaw = profileLookup.data;
+    let quoteRaw = quoteLookup.data;
+
+    const hasStaleData =
+      profileLookup.status === "stale" || quoteLookup.status === "stale";
+    if (hasStaleData && profileRaw && quoteRaw) {
+      void refreshProfileQuote();
+    }
+
+    const requiresBlockingRefresh =
+      profileLookup.status === "miss" ||
+      quoteLookup.status === "miss" ||
+      !profileRaw ||
+      !quoteRaw;
+
+    if (requiresBlockingRefresh) {
+      const refreshed = await refreshProfileQuote();
+      profileRaw = profileRaw ?? refreshed;
+      quoteRaw = quoteRaw ?? refreshed;
+    }
 
     return {
-      profile: mapToStockProfile(key, profileQuoteRaw),
-      quote: mapToStockQuote(key, profileQuoteRaw),
+      profile: profileRaw ? mapToStockProfile(key, profileRaw) : null,
+      quote: quoteRaw ? mapToStockQuote(key, quoteRaw) : null,
       financials,
     };
   } catch (error) {
@@ -586,65 +621,62 @@ export async function getBatchQuotes(
  */
 export async function getMarketIndices(): Promise<MarketIndexQuote[]> {
   const cacheKey = "market-indices";
-  const cached = await getCachedData<MarketIndexQuote[]>(
-    cacheKey,
-    "indices",
-    TTL.INDICES
-  );
-  if (cached && Array.isArray(cached) && cached.length > 0) {
-    return cached;
-  }
+  const mapped = await resolveWithSWR<MarketIndexQuote[]>({
+    ticker: cacheKey,
+    cacheKey: "indices",
+    ttlMs: TTL.INDICES,
+    staleWhileRevalidateMs: SWR.INDICES,
+    fetchFresh: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw: any = await yahooFinance.quote(
+        MARKET_INDICES.map((item) => item.symbol)
+      );
+      const rows: Record<string, unknown>[] = Array.isArray(raw) ? raw : [raw];
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const raw: any = await yahooFinance.quote(
-      MARKET_INDICES.map((item) => item.symbol)
-    );
-    const rows: Record<string, unknown>[] = Array.isArray(raw) ? raw : [raw];
+      return MARKET_INDICES.map((idx) => {
+        const match = rows.find((row) => row.symbol === idx.symbol) ?? {};
+        const rawPct = (match.regularMarketChangePercent as number) ?? 0;
+        const marketPrice = (match.regularMarketPrice as number) ?? 0;
+        const dayChange = (match.regularMarketChange as number) ?? 0;
+        const previousClose =
+          (match.regularMarketPreviousClose as number) ??
+          (marketPrice !== 0 ? marketPrice - dayChange : 0);
 
-    const mapped: MarketIndexQuote[] = MARKET_INDICES.map((idx) => {
-      const match = rows.find((row) => row.symbol === idx.symbol) ?? {};
-      const rawPct = (match.regularMarketChangePercent as number) ?? 0;
-      const marketPrice = (match.regularMarketPrice as number) ?? 0;
-      const dayChange = (match.regularMarketChange as number) ?? 0;
-      const previousClose =
-        (match.regularMarketPreviousClose as number) ??
-        (marketPrice !== 0 ? marketPrice - dayChange : 0);
+        let changePercent = 0;
 
-      let changePercent = 0;
+        if (previousClose > 0 && Number.isFinite(dayChange)) {
+          // Most reliable: derive true intraday % from change / previous close
+          changePercent = dayChange / previousClose;
+        } else if (Number.isFinite(rawPct)) {
+          // Yahoo can return either 1.23 (percent points) or 0.0123 (ratio)
+          changePercent = Math.abs(rawPct) > 1 ? rawPct / 100 : rawPct;
+        }
 
-      if (previousClose > 0 && Number.isFinite(dayChange)) {
-        // Most reliable: derive true intraday % from change / previous close
-        changePercent = dayChange / previousClose;
-      } else if (Number.isFinite(rawPct)) {
-        // Yahoo can return either 1.23 (percent points) or 0.0123 (ratio)
-        changePercent = Math.abs(rawPct) > 1 ? rawPct / 100 : rawPct;
-      }
+        return {
+          symbol: idx.symbol,
+          label: idx.label,
+          price: marketPrice,
+          change_percent: changePercent,
+        } satisfies MarketIndexQuote;
+      });
+    },
+    isUsable: (value): value is MarketIndexQuote[] =>
+      Array.isArray(value) && value.length === MARKET_INDICES.length,
+    onRefreshError: (error) => {
+      console.error("[Yahoo] Failed to fetch market indices:", error);
+    },
+  });
 
-      return {
-        symbol: idx.symbol,
-        label: idx.label,
-        price: marketPrice,
-        change_percent: changePercent,
-      };
-    });
-
-    await setCachedData(
-      cacheKey,
-      "indices",
-      mapped as unknown as Record<string, unknown>
-    );
-
+  if (mapped && mapped.length > 0) {
     return mapped;
-  } catch (error) {
-    console.error("[Yahoo] Failed to fetch market indices:", error);
-    return MARKET_INDICES.map((item) => ({
-      symbol: item.symbol,
-      label: item.label,
-      price: 0,
-      change_percent: 0,
-    }));
   }
+
+  return MARKET_INDICES.map((item) => ({
+    symbol: item.symbol,
+    label: item.label,
+    price: 0,
+    change_percent: 0,
+  }));
 }
 
 /**
@@ -995,8 +1027,6 @@ async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
   const cached = await getCachedData<EarningsInsight>(key, cacheNamespace, TTL.EARNINGS_INSIGHT);
   if (cached && hasSufficientEpsHistory(cached)) return cached;
 
-  const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
-
   const empty: EarningsInsight = {
     ticker: key,
     company_name: null,
@@ -1074,31 +1104,18 @@ async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
     const parsedTrendRows = parseTrendQuarterRows(trendRows);
     const parsedRevenueRows = parseFinancialsChartQuarterRows(asAny.earnings);
 
-    let mergedHistory: EarningsHistoryPoint[] = mergeEarningsHistoryRows(
+    const mergedHistory: EarningsHistoryPoint[] = mergeEarningsHistoryRows(
       parsedEarningsChartRows,
       parsedYahooHistory,
       parsedTrendRows,
       parsedRevenueRows
     );
-    let mergedEstEps: number | null =
+    const mergedEstEps: number | null =
       estEpsFromEarningsChart ?? estEpsFromCalendar ?? estEpsFromTrend;
-    let source: EarningsInsight["source"] =
+    const source: EarningsInsight["source"] =
       mergedHistory.length > 0 || mergedEstEps != null || estRevenueFromTrend != null
         ? "yahoo"
         : "none";
-
-    if (alphaVantageApiKey) {
-      const alpha = await getEarningsInsightFromAlphaVantage(key, alphaVantageApiKey);
-      if (alpha) {
-        mergedHistory = mergeEarningsHistoryRows(mergedHistory, alpha.history);
-        mergedEstEps = mergedEstEps ?? alpha.est_eps;
-
-        source =
-          source === "yahoo"
-            ? "mixed"
-            : "alphavantage";
-      }
-    }
 
     const insight: EarningsInsight = {
       ticker: key,
@@ -1118,20 +1135,6 @@ async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.warn(`[Yahoo] Failed to fetch earnings insight for ${key}: ${message}`);
-
-    if (alphaVantageApiKey) {
-      const alpha = await getEarningsInsightFromAlphaVantage(key, alphaVantageApiKey);
-      if (alpha) {
-        const fallback: EarningsInsight = {
-          ...empty,
-          history: alpha.history,
-          est_eps: alpha.est_eps,
-          source: "alphavantage",
-        };
-        await setCachedData(key, cacheNamespace, fallback as unknown as Record<string, unknown>);
-        return fallback;
-      }
-    }
 
     return empty;
   }
@@ -1224,11 +1227,13 @@ async function getTickerWindowPerformance(
       const row = (raw ?? {}) as Record<string, unknown>;
       pct = computeIntradayPercentFromQuoteRow(row);
     } else {
-      const rows = await yahooHistoricalClient.historical(key, {
-        period1: getWindowStartDate(window),
-        period2: new Date().toISOString().slice(0, 10),
-        interval: "1d",
-      });
+      const rows = await withSuppressedYahooWarnings(async () =>
+        yahooHistoricalClient.historical(key, {
+          period1: getWindowStartDate(window),
+          period2: new Date().toISOString().slice(0, 10),
+          interval: "1d",
+        })
+      );
 
       const closes: number[] = Array.isArray(rows)
         ? rows
@@ -1318,11 +1323,13 @@ async function getTickerDailyHistory(
   }
 
   try {
-    const rowsUnknown = await yahooHistoricalClient.historical(key, {
-      period1: getWindowStartDate(window),
-      period2: new Date().toISOString().slice(0, 10),
-      interval: "1d",
-    });
+    const rowsUnknown = await withSuppressedYahooWarnings(async () =>
+      yahooHistoricalClient.historical(key, {
+        period1: getWindowStartDate(window),
+        period2: new Date().toISOString().slice(0, 10),
+        interval: "1d",
+      })
+    );
     const rows: Array<Record<string, unknown>> = Array.isArray(rowsUnknown)
       ? (rowsUnknown as Array<Record<string, unknown>>)
       : [];
@@ -1403,11 +1410,13 @@ async function getTickerIntradayTrend(ticker: string): Promise<number[]> {
     const now = new Date();
     const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
-    const rows = await yahooHistoricalClient.historical(key, {
-      period1: start.toISOString().slice(0, 10),
-      period2: now.toISOString().slice(0, 10),
-      interval: "5m",
-    });
+    const rows = await withSuppressedYahooWarnings(async () =>
+      yahooHistoricalClient.historical(key, {
+        period1: start.toISOString().slice(0, 10),
+        period2: now.toISOString().slice(0, 10),
+        interval: "5m",
+      })
+    );
 
     const points: number[] = Array.isArray(rows)
       ? rows

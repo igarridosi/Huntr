@@ -1,6 +1,11 @@
 import { FEATURES } from "@/lib/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
-import * as yahoo from "@/lib/api/yahoo";
+import {
+  getBatchEarningsInsightsFromAlphaVantage,
+  getFinancialsFromAlphaVantage,
+  getStockProfileFromAlphaVantage,
+  getStockQuoteFromAlphaVantage,
+} from "@/lib/api/alphavantage";
 import * as mock from "@/lib/mock-data";
 import type { EarningsInsight, StockProfile, StockQuote } from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
@@ -23,13 +28,18 @@ interface StockCacheRow {
   last_updated: string;
 }
 
+interface CachedEarningsDetailResult {
+  payload: EarningsDetailData;
+  stale: boolean;
+}
+
 function hasSufficientCachedDetail(payload: EarningsDetailData): boolean {
   const history = payload.insight?.history ?? [];
-  if (history.length < 10) return false;
+  if (history.length < 4) return false;
 
   const reportedCount = history.filter((row) => row.eps_actual != null).length;
   const estimateCount = history.filter((row) => row.eps_estimate != null).length;
-  return reportedCount >= 10 && estimateCount >= 6;
+  return reportedCount >= 2 || estimateCount >= 1;
 }
 
 function buildEmptyInsight(ticker: string): EarningsInsight {
@@ -49,7 +59,7 @@ function buildEmptyInsight(ticker: string): EarningsInsight {
 
 async function readEarningsDetailFromCache(
   ticker: string
-): Promise<EarningsDetailData | null> {
+): Promise<CachedEarningsDetailResult | null> {
   try {
     const supabase = createAdminClient();
     const { data, error } = await supabase
@@ -66,7 +76,20 @@ async function readEarningsDetailFromCache(
     if (!Number.isFinite(lastUpdated)) return null;
 
     if (Date.now() - lastUpdated > EARNINGS_DETAIL_TTL_MS) {
-      return null;
+      const payload = {
+        ...row.data,
+        ticker,
+        cached: true,
+      };
+
+      if (!hasSufficientCachedDetail(payload)) {
+        return null;
+      }
+
+      return {
+        payload,
+        stale: true,
+      };
     }
 
     const payload = {
@@ -79,7 +102,10 @@ async function readEarningsDetailFromCache(
       return null;
     }
 
-    return payload;
+    return {
+      payload,
+      stale: false,
+    };
   } catch {
     return null;
   }
@@ -108,23 +134,36 @@ async function writeEarningsDetailToCache(
 
 async function fetchFreshEarningsDetail(ticker: string): Promise<EarningsDetailData> {
   const [profile, quote, insightMap, financials] = await Promise.all([
-    FEATURES.ENABLE_REAL_API ? yahoo.getProfile(ticker) : mock.getStockProfile(ticker),
-    FEATURES.ENABLE_REAL_API ? yahoo.getPrice(ticker) : mock.getStockQuote(ticker),
+    FEATURES.ENABLE_REAL_API ? getStockProfileFromAlphaVantage(ticker) : mock.getStockProfile(ticker),
+    FEATURES.ENABLE_REAL_API ? getStockQuoteFromAlphaVantage(ticker) : mock.getStockQuote(ticker),
     FEATURES.ENABLE_REAL_API
-      ? yahoo.getBatchEarningsInsights([ticker])
+      ? getBatchEarningsInsightsFromAlphaVantage([ticker])
       : Promise.resolve({ [ticker]: buildEmptyInsight(ticker) }),
-    FEATURES.ENABLE_REAL_API ? yahoo.getFinancials(ticker) : mock.getCompanyFinancials(ticker),
+    FEATURES.ENABLE_REAL_API
+      ? getFinancialsFromAlphaVantage(ticker, process.env.ALPHAVANTAGE_API_KEY?.trim() ?? "")
+      : mock.getCompanyFinancials(ticker),
   ]);
+
+  const mergedInsight: EarningsInsight = insightMap[ticker] ?? buildEmptyInsight(ticker);
 
   return {
     ticker,
     profile,
     quote,
     financials,
-    insight: insightMap[ticker] ?? buildEmptyInsight(ticker),
+    insight: mergedInsight,
     cached: false,
     fetched_at: new Date().toISOString(),
   };
+}
+
+async function refreshEarningsDetailCache(ticker: string): Promise<void> {
+  try {
+    const fresh = await fetchFreshEarningsDetail(ticker);
+    await writeEarningsDetailToCache(ticker, fresh);
+  } catch {
+    // Background refresh must never block the user path.
+  }
 }
 
 export async function getEarningsDetailData(
@@ -133,7 +172,13 @@ export async function getEarningsDetailData(
   const key = ticker.toUpperCase();
 
   const cached = await readEarningsDetailFromCache(key);
-  if (cached) return cached;
+  if (cached) {
+    if (cached.stale) {
+      void refreshEarningsDetailCache(key);
+    }
+
+    return cached.payload;
+  }
 
   const fresh = await fetchFreshEarningsDetail(key);
   await writeEarningsDetailToCache(key, fresh);
