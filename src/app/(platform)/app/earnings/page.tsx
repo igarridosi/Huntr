@@ -89,6 +89,8 @@ interface SidePanelCache {
   nextEstEps: number | null;
   nextEstRevenue: number | null;
   nextEarningsDate: string | null;
+  historyLimit: number;
+  dataError?: string;
 }
 
 const PANEL_LOADING_DOTS = [
@@ -112,6 +114,8 @@ const PANEL_LOADING_DOTS = [
 ];
 
 const PERSISTED_WEEK_KEY = "huntr_earnings_current_week";
+const PREVIEW_HISTORY_LIMIT = 4;
+const FULL_HISTORY_LIMIT = 14;
 
 function getWeekStart(date: Date): Date {
   const copy = new Date(date);
@@ -354,8 +358,7 @@ function formatEarningsData(
   }
 
   return Array.from(merged.values())
-    .sort((a, b) => b.sortTs - a.sortTs)
-    .slice(0, 16);
+    .sort((a, b) => b.sortTs - a.sortTs);
 }
 
 function readPersistedWeekSnapshot(expectedWeekStartIso: string): PersistedWeekItem[] {
@@ -1121,8 +1124,7 @@ export default function EarningsPage() {
           row.revenueEstimate != null ||
           row.revenue != null
       )
-      .sort((a, b) => quarterSortValue(b) - quarterSortValue(a))
-      .slice(0, 16);
+      .sort((a, b) => quarterSortValue(b) - quarterSortValue(a));
   }, [selectedCache]);
 
   const chartRows = useMemo(() => {
@@ -1164,7 +1166,13 @@ export default function EarningsPage() {
     [filteredRows, chartMetric]
   );
 
-  const isPanelLoading = !!selectedTicker && loadingTicker === selectedTicker;
+  const isPanelLoading = !!selectedTicker && loadingTicker === selectedTicker && !selectedCache;
+  const isHistoryExpansionLoading =
+    !!selectedTicker &&
+    loadingTicker === selectedTicker &&
+    !!selectedCache &&
+    selectedCache.historyLimit < FULL_HISTORY_LIMIT;
+  const hasFullHistoryLoaded = (selectedCache?.historyLimit ?? 0) >= FULL_HISTORY_LIMIT;
   const isLoading = quotesLoading || profilesLoading;
 
   const handleSelectTicker = async (ticker: string): Promise<void> => {
@@ -1178,7 +1186,7 @@ export default function EarningsPage() {
     setLoadingTicker(ticker);
 
     try {
-      const detail = await fetchEarningsDetailData(ticker);
+      const detail = await fetchEarningsDetailData(ticker, PREVIEW_HISTORY_LIMIT);
       const insight = detail.insight ?? null;
       const rows = formatEarningsData(
         detail.financials?.income_statement?.quarterly,
@@ -1187,11 +1195,24 @@ export default function EarningsPage() {
 
       const marketCap = detail.quote?.market_cap ?? quoteMap.get(ticker)?.market_cap ?? null;
       const peRatio = detail.quote?.pe_ratio ?? quoteMap.get(ticker)?.pe_ratio ?? null;
+      const quarterlyIncome = detail.financials?.income_statement?.quarterly ?? [];
       const annual = detail.financials?.income_statement?.annual ?? [];
       const latestAnnualRevenue = annual.length > 0 ? annual[annual.length - 1].revenue : null;
+      const latestQuarterlyRevenue = quarterlyIncome
+        .slice(-4)
+        .map((entry) => numberOrNull(entry.revenue))
+        .filter((entry): entry is number => entry != null && Number.isFinite(entry));
+      const ttmRevenue =
+        latestQuarterlyRevenue.length === 4
+          ? latestQuarterlyRevenue.reduce((sum, value) => sum + value, 0)
+          : null;
+      const revenueBase =
+        latestAnnualRevenue != null && latestAnnualRevenue > 0
+          ? latestAnnualRevenue
+          : ttmRevenue;
       const psRatio =
-        marketCap != null && latestAnnualRevenue != null && latestAnnualRevenue > 0
-          ? marketCap / latestAnnualRevenue
+        marketCap != null && revenueBase != null && revenueBase > 0
+          ? marketCap / revenueBase
           : null;
 
       setPanelCache((prev) => ({
@@ -1204,6 +1225,67 @@ export default function EarningsPage() {
           nextEstEps: insight?.est_eps ?? null,
           nextEstRevenue: insight?.est_revenue ?? null,
           nextEarningsDate: detail.quote?.next_earnings_date ?? quoteMap.get(ticker)?.next_earnings_date ?? null,
+          historyLimit: PREVIEW_HISTORY_LIMIT,
+          dataError: detail.data_error ?? undefined,
+        },
+      }));
+    } finally {
+      setLoadingTicker(null);
+    }
+  };
+
+  const handleLoadMoreHistory = async (): Promise<void> => {
+    if (!selectedTicker) return;
+
+    const existing = panelCache[selectedTicker];
+    if (!existing || existing.historyLimit >= FULL_HISTORY_LIMIT) return;
+
+    setLoadingTicker(selectedTicker);
+
+    try {
+      const detail = await fetchEarningsDetailData(selectedTicker, FULL_HISTORY_LIMIT);
+      const insight = detail.insight ?? null;
+      const rows = formatEarningsData(
+        detail.financials?.income_statement?.quarterly,
+        insight?.history
+      );
+
+      const marketCap = detail.quote?.market_cap ?? quoteMap.get(selectedTicker)?.market_cap ?? existing.marketCap;
+      const peRatio = detail.quote?.pe_ratio ?? quoteMap.get(selectedTicker)?.pe_ratio ?? existing.peRatio;
+      const quarterlyIncome = detail.financials?.income_statement?.quarterly ?? [];
+      const annual = detail.financials?.income_statement?.annual ?? [];
+      const latestAnnualRevenue = annual.length > 0 ? annual[annual.length - 1].revenue : null;
+      const latestQuarterlyRevenue = quarterlyIncome
+        .slice(-4)
+        .map((entry) => numberOrNull(entry.revenue))
+        .filter((entry): entry is number => entry != null && Number.isFinite(entry));
+      const ttmRevenue =
+        latestQuarterlyRevenue.length === 4
+          ? latestQuarterlyRevenue.reduce((sum, value) => sum + value, 0)
+          : null;
+      const revenueBase =
+        latestAnnualRevenue != null && latestAnnualRevenue > 0
+          ? latestAnnualRevenue
+          : ttmRevenue;
+      const psRatio =
+        marketCap != null && revenueBase != null && revenueBase > 0
+          ? marketCap / revenueBase
+          : existing.psRatio;
+
+      setPanelCache((prev) => ({
+        ...prev,
+        [selectedTicker]: {
+          rows,
+          marketCap,
+          peRatio,
+          psRatio,
+          nextEstEps: insight?.est_eps ?? existing.nextEstEps,
+          nextEstRevenue: insight?.est_revenue ?? existing.nextEstRevenue,
+          nextEarningsDate:
+            detail.quote?.next_earnings_date ??
+            quoteMap.get(selectedTicker)?.next_earnings_date ??
+            existing.nextEarningsDate,
+          historyLimit: FULL_HISTORY_LIMIT,
         },
       }));
     } finally {
@@ -1225,6 +1307,7 @@ export default function EarningsPage() {
     const panelPeRatio = selectedCache?.peRatio ?? selectedItem.quote.pe_ratio ?? null;
     const panelPsRatio = selectedCache?.psRatio ?? null;
     const hasHistoryLoaded = !!selectedCache;
+    const panelError = selectedCache?.dataError ?? null;
 
     return (
       <div className="h-full min-h-0 flex flex-col">
@@ -1288,29 +1371,45 @@ export default function EarningsPage() {
         <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
           <div className="flex items-center justify-between gap-3">
             <p className="text-xs uppercase tracking-wide text-mist">Recent Earnings Quarters</p>
-            <div className="inline-flex rounded-full border border-wolf-border/40 bg-wolf-black/35 p-0.5">
-              <button
+            <div className="flex items-center gap-2">
+              <Button
                 type="button"
-                className={
-                  chartMetric === "revenue"
-                    ? "px-3 py-1 rounded-full text-xs font-medium bg-wolf-surface text-snow-peak"
-                    : "px-3 py-1 rounded-full text-xs text-mist"
-                }
-                onClick={() => setChartMetric("revenue")}
+                variant="outline"
+                size="sm"
+                onClick={handleLoadMoreHistory}
+                disabled={!selectedCache || hasFullHistoryLoaded || isHistoryExpansionLoading || isPanelLoading}
+                className="h-7 text-[11px] border-wolf-border/60"
               >
-                Revenue
-              </button>
-              <button
-                type="button"
-                className={
-                  chartMetric === "eps"
-                    ? "px-3 py-1 rounded-full text-xs font-medium bg-wolf-surface text-snow-peak"
-                    : "px-3 py-1 rounded-full text-xs text-mist"
-                }
-                onClick={() => setChartMetric("eps")}
-              >
-                EPS
-              </button>
+                {isHistoryExpansionLoading
+                  ? "Loading 14Q..."
+                  : hasFullHistoryLoaded
+                    ? "14Q loaded"
+                    : "Load 16 quarters"}
+              </Button>
+              <div className="inline-flex rounded-full border border-wolf-border/40 bg-wolf-black/35 p-0.5">
+                <button
+                  type="button"
+                  className={
+                    chartMetric === "revenue"
+                      ? "px-3 py-1 rounded-full text-xs font-medium bg-wolf-surface text-snow-peak"
+                      : "px-3 py-1 rounded-full text-xs text-mist"
+                  }
+                  onClick={() => setChartMetric("revenue")}
+                >
+                  Revenue
+                </button>
+                <button
+                  type="button"
+                  className={
+                    chartMetric === "eps"
+                      ? "px-3 py-1 rounded-full text-xs font-medium bg-wolf-surface text-snow-peak"
+                      : "px-3 py-1 rounded-full text-xs text-mist"
+                  }
+                  onClick={() => setChartMetric("eps")}
+                >
+                  EPS
+                </button>
+              </div>
             </div>
           </div>
 
@@ -1322,6 +1421,12 @@ export default function EarningsPage() {
                 : `Revenue: ${formatCompactMoney(selectedCache?.nextEstRevenue ?? null)}`}
             </p>
           </div>
+
+          {panelError ? (
+            <div className="rounded-lg border border-bearish/40 bg-bearish/10 px-3 py-2 text-xs text-bearish">
+              Earnings data error: {panelError}
+            </div>
+          ) : null}
 
           <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-gradient-to-b from-[#0A171B] to-[#091215] px-2 py-0 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
             {hasHistoryLoaded ? (

@@ -131,9 +131,10 @@ export async function fetchDefaultWatchlistTickers(): Promise<string[]> {
 }
 
 export async function fetchEarningsDetailData(
-  ticker: string
+  ticker: string,
+  historyLimit?: number
 ): Promise<EarningsDetailData> {
-  return dataService.getEarningsDetailData(ticker);
+  return dataService.getEarningsDetailData(ticker, historyLimit);
 }
 
 export async function prewarmEarningsDetailCacheForTickers(

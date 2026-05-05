@@ -30,6 +30,9 @@ import type {
 import type { CompanyFinancials } from "@/types/financials";
 import { buildTickerLogoUrl } from "@/lib/logo";
 import {
+  getFinancialsFromAlphaVantage,
+} from "@/lib/api/alphavantage";
+import {
   mapToStockProfile,
   mapToStockQuote,
   mapTimeSeriesFinancials,
@@ -358,9 +361,24 @@ export async function getPrice(ticker: string): Promise<StockQuote | null> {
  * @returns CompanyFinancials or null if not found
  */
 export async function getFinancials(
-  ticker: string
+  ticker: string,
+  options?: { preferAlphaVantage?: boolean }
 ): Promise<CompanyFinancials | null> {
   const key = ticker.toUpperCase();
+  const preferAlphaVantage = options?.preferAlphaVantage ?? true;
+  const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+
+  const isFinancialsShape = (
+    value: CompanyFinancials | null
+  ): value is CompanyFinancials => {
+    return (
+      value !== null &&
+      Array.isArray(value.income_statement?.annual) &&
+      Array.isArray(value.balance_sheet?.annual) &&
+      Array.isArray(value.cash_flow?.annual)
+    );
+  };
+
   const isTimeSeriesShape = (
     value: TimeSeriesFinancialsCache | null
   ): value is TimeSeriesFinancialsCache => {
@@ -375,19 +393,49 @@ export async function getFinancials(
     );
   };
 
-  const yahooRaw = await resolveWithSWR<TimeSeriesFinancialsCache>({
+  if (!alphaVantageApiKey || !preferAlphaVantage) {
+    const yahooRaw = await resolveWithSWR<TimeSeriesFinancialsCache>({
+      ticker: key,
+      cacheKey: "financials-v2",
+      ttlMs: TTL.FINANCIALS,
+      staleWhileRevalidateMs: SWR.FINANCIALS,
+      fetchFresh: async () => fetchAllFinancialTimeSeries(key),
+      isUsable: isTimeSeriesShape,
+      onRefreshError: (error) => {
+        console.error(`[Yahoo] Failed to fetch financials for ${key}:`, error);
+      },
+    });
+
+    return yahooRaw ? mapTimeSeriesFinancials(key, yahooRaw) : null;
+  }
+
+  const alphaPromise = resolveWithSWR<CompanyFinancials>({
     ticker: key,
-    cacheKey: "financials-v2",
-    ttlMs: TTL.FINANCIALS,
-    staleWhileRevalidateMs: SWR.FINANCIALS,
-    fetchFresh: async () => fetchAllFinancialTimeSeries(key),
-    isUsable: isTimeSeriesShape,
+    cacheKey: "financials-alpha-v2",
+    ttlMs: TTL.FINANCIALS_ALPHA,
+    staleWhileRevalidateMs: SWR.FINANCIALS_ALPHA,
+    fetchFresh: async () => getFinancialsFromAlphaVantage(key, alphaVantageApiKey),
+    isUsable: isFinancialsShape,
     onRefreshError: (error) => {
-      console.error(`[Yahoo] Failed to fetch financials for ${key}:`, error);
+      const message = error instanceof Error ? error.message : String(error);
+      if (/throttled|cooldown|rate limit/i.test(message)) {
+        console.info(`[AlphaVantage] Throttled for ${key}. Falling back to Yahoo for this request.`);
+        return;
+      }
+
+      console.warn(`[AlphaVantage] Failed to fetch financials for ${key}: ${message}`);
     },
   });
 
-  return yahooRaw ? mapTimeSeriesFinancials(key, yahooRaw) : null;
+  const alphaFinancials = await alphaPromise;
+
+  if (!alphaFinancials) {
+    console.warn(
+      `[AlphaVantage] Financials unavailable for ${key}. Yahoo fallback disabled while Alpha key is configured.`
+    );
+  }
+
+  return alphaFinancials;
 }
 
 /**
@@ -1021,9 +1069,9 @@ function hasSufficientEpsHistory(insight: EarningsInsight): boolean {
   return reportedCount >= 10 && estimateCount >= 6;
 }
 
-async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
+export async function getEarningsInsight(ticker: string): Promise<EarningsInsight> {
   const key = ticker.toUpperCase();
-  const cacheNamespace = "earnings-insight-v2";
+  const cacheNamespace = "earnings-insight-v3";
   const cached = await getCachedData<EarningsInsight>(key, cacheNamespace, TTL.EARNINGS_INSIGHT);
   if (cached && hasSufficientEpsHistory(cached)) return cached;
 
