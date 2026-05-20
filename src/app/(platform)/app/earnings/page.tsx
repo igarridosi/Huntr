@@ -1,9 +1,10 @@
 "use client";
 
-import { fetchEarningsDetailData } from "@/app/actions/stock";
+import { fetchEarningsDetailData, getAlphaAvailability } from "@/app/actions/stock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { Input } from "@/components/ui/input";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import {
@@ -18,7 +19,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -116,6 +117,32 @@ const PANEL_LOADING_DOTS = [
 const PERSISTED_WEEK_KEY = "huntr_earnings_current_week";
 const PREVIEW_HISTORY_LIMIT = 4;
 const FULL_HISTORY_LIMIT = 14;
+const ALPHA_LIMIT_MESSAGE =
+  "Alpha Vantage is currently rate-limiting or rejecting this request. We are still displaying quick data from Yahoo Finance; please try again later to load the full historical data.";
+
+function isAlphaLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ALPHA_VANTAGE_LIMIT_REACHED|AlphaVantage rate limited|cooling down|rate limit/i.test(message);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error("ALPHA_VANTAGE_TIMEOUT"));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
+}
 
 function getWeekStart(date: Date): Date {
   const copy = new Date(date);
@@ -911,6 +938,13 @@ export default function EarningsPage() {
   const [hoveredSeries, setHoveredSeries] = useState<HoverSeries | null>(null);
   const [panelCache, setPanelCache] = useState<Record<string, SidePanelCache>>({});
   const [chartMetric, setChartMetric] = useState<ChartMetric>("eps");
+  const [historyLoadError, setHistoryLoadError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    title: string;
+    message?: string;
+    variant: FeedbackToastVariant;
+  } | null>(null);
+  const activeRequestRef = useRef(0);
 
   const { data: quotes = [], isLoading: quotesLoading } = useAllQuotes();
   const { data: profiles = [], isLoading: profilesLoading } = useAllProfiles();
@@ -1176,17 +1210,21 @@ export default function EarningsPage() {
   const isLoading = quotesLoading || profilesLoading;
 
   const handleSelectTicker = async (ticker: string): Promise<void> => {
+    const requestId = activeRequestRef.current + 1;
+    activeRequestRef.current = requestId;
     setSelectedTicker(ticker);
     setIsPanelOpen(true);
     setHoveredChartIndex(null);
     setHoveredSeries(null);
+    setHistoryLoadError(null);
 
     if (panelCache[ticker]) return;
 
     setLoadingTicker(ticker);
 
     try {
-      const detail = await fetchEarningsDetailData(ticker, PREVIEW_HISTORY_LIMIT);
+      const detail = await withTimeout(fetchEarningsDetailData(ticker, PREVIEW_HISTORY_LIMIT), 10_000);
+      if (activeRequestRef.current !== requestId) return;
       const insight = detail.insight ?? null;
       const rows = formatEarningsData(
         detail.financials?.income_statement?.quarterly,
@@ -1229,29 +1267,59 @@ export default function EarningsPage() {
           dataError: detail.data_error ?? undefined,
         },
       }));
+    } catch (error) {
+      if (activeRequestRef.current !== requestId) return;
+      setHistoryLoadError(
+        isAlphaLimitError(error)
+          ? "Alpha Vantage is currently rate-limited. Yahoo preview remains available."
+          : "Earnings preview is temporarily unavailable."
+      );
     } finally {
-      setLoadingTicker(null);
+      if (activeRequestRef.current === requestId) {
+        setLoadingTicker(null);
+      }
     }
   };
 
   const handleLoadMoreHistory = async (): Promise<void> => {
     if (!selectedTicker) return;
+    const requestTicker = selectedTicker;
+    const requestId = activeRequestRef.current + 1;
+    activeRequestRef.current = requestId;
 
-    const existing = panelCache[selectedTicker];
+    const existing = panelCache[requestTicker];
     if (!existing || existing.historyLimit >= FULL_HISTORY_LIMIT) return;
 
-    setLoadingTicker(selectedTicker);
+    setLoadingTicker(requestTicker);
+    setHistoryLoadError(null);
 
     try {
-      const detail = await fetchEarningsDetailData(selectedTicker, FULL_HISTORY_LIMIT);
+      const alphaAvailability = await getAlphaAvailability();
+      if (activeRequestRef.current !== requestId || selectedTicker !== requestTicker) return;
+      if (!alphaAvailability.available) {
+        throw new Error(
+          alphaAvailability.reason === "throttled"
+            ? "ALPHA_VANTAGE_LIMIT_REACHED"
+            : "ALPHA_VANTAGE_NOT_CONFIGURED"
+        );
+      }
+
+      const detail = await withTimeout(
+        fetchEarningsDetailData(requestTicker, FULL_HISTORY_LIMIT),
+        20_000
+      );
+      if (activeRequestRef.current !== requestId || selectedTicker !== requestTicker) return;
+      if (detail.data_error && isAlphaLimitError(detail.data_error)) {
+        throw new Error("ALPHA_VANTAGE_LIMIT_REACHED");
+      }
       const insight = detail.insight ?? null;
       const rows = formatEarningsData(
         detail.financials?.income_statement?.quarterly,
         insight?.history
       );
 
-      const marketCap = detail.quote?.market_cap ?? quoteMap.get(selectedTicker)?.market_cap ?? existing.marketCap;
-      const peRatio = detail.quote?.pe_ratio ?? quoteMap.get(selectedTicker)?.pe_ratio ?? existing.peRatio;
+      const marketCap = detail.quote?.market_cap ?? quoteMap.get(requestTicker)?.market_cap ?? existing.marketCap;
+      const peRatio = detail.quote?.pe_ratio ?? quoteMap.get(requestTicker)?.pe_ratio ?? existing.peRatio;
       const quarterlyIncome = detail.financials?.income_statement?.quarterly ?? [];
       const annual = detail.financials?.income_statement?.annual ?? [];
       const latestAnnualRevenue = annual.length > 0 ? annual[annual.length - 1].revenue : null;
@@ -1274,7 +1342,7 @@ export default function EarningsPage() {
 
       setPanelCache((prev) => ({
         ...prev,
-        [selectedTicker]: {
+        [requestTicker]: {
           rows,
           marketCap,
           peRatio,
@@ -1283,13 +1351,29 @@ export default function EarningsPage() {
           nextEstRevenue: insight?.est_revenue ?? existing.nextEstRevenue,
           nextEarningsDate:
             detail.quote?.next_earnings_date ??
-            quoteMap.get(selectedTicker)?.next_earnings_date ??
+            quoteMap.get(requestTicker)?.next_earnings_date ??
             existing.nextEarningsDate,
           historyLimit: FULL_HISTORY_LIMIT,
         },
       }));
+    } catch (error) {
+      if (activeRequestRef.current !== requestId) return;
+      setHistoryLoadError(
+        isAlphaLimitError(error)
+          ? "Alpha Vantage is currently rate-limited. Yahoo preview remains available."
+          : "Full earnings history is temporarily unavailable."
+      );
+      setToast({
+        title: isAlphaLimitError(error) ? "Alpha Vantage is rate-limited." : "The complete history could not be loaded",
+        message: isAlphaLimitError(error)
+          ? ALPHA_LIMIT_MESSAGE
+          : "We're still showing quick data from Yahoo Finance. Please try again later.",
+        variant: "warning",
+      });
     } finally {
-      setLoadingTicker(null);
+      if (activeRequestRef.current === requestId) {
+        setLoadingTicker(null);
+      }
     }
   };
 
@@ -1307,7 +1391,7 @@ export default function EarningsPage() {
     const panelPeRatio = selectedCache?.peRatio ?? selectedItem.quote.pe_ratio ?? null;
     const panelPsRatio = selectedCache?.psRatio ?? null;
     const hasHistoryLoaded = !!selectedCache;
-    const panelError = selectedCache?.dataError ?? null;
+    const panelError = historyLoadError ?? selectedCache?.dataError ?? null;
 
     return (
       <div className="h-full min-h-0 flex flex-col">
@@ -1381,9 +1465,9 @@ export default function EarningsPage() {
                 className="h-7 text-[11px] border-wolf-border/60"
               >
                 {isHistoryExpansionLoading
-                  ? "Loading 14Q..."
+                  ? "Loading 16Q..."
                   : hasFullHistoryLoaded
-                    ? "14Q loaded"
+                    ? "16Q loaded"
                     : "Load 16 quarters"}
               </Button>
               <div className="inline-flex rounded-full border border-wolf-border/40 bg-wolf-black/35 p-0.5">
@@ -1467,6 +1551,10 @@ export default function EarningsPage() {
               metric={chartMetric}
               onHover={setHoveredChartIndex}
             />
+          ) : panelError ? (
+            <div className="rounded-md border border-wolf-border/35 px-3 py-4 text-xs text-mist">
+              Earnings history is unavailable right now.
+            </div>
           ) : (
             <div className="rounded-md border border-wolf-border/35 px-3 py-4 text-xs text-mist">
               Loading earnings history...
@@ -1479,6 +1567,15 @@ export default function EarningsPage() {
 
   return (
     <div className="w-full min-h-0 flex flex-col gap-4">
+      <FeedbackToast
+        open={!!toast}
+        title={toast?.title ?? ""}
+        message={toast?.message}
+        variant={toast?.variant ?? "warning"}
+        onClose={() => setToast(null)}
+        durationMs={7000}
+      />
+
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
           <CalendarClock className="w-5 h-5 text-sunset-orange" />

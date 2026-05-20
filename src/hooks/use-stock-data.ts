@@ -67,6 +67,7 @@ export function useFullStockData(ticker: string) {
     profile: StockProfile | null;
     quote: StockQuote | null;
     financials: CompanyFinancials | null;
+    financialsSource?: "alpha-cache" | "yahoo" | "mock";
   }>({
     queryKey: ["stock", "full", ticker],
     queryFn: () => fetchFullStockData(ticker),

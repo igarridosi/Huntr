@@ -21,7 +21,7 @@ import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
 import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
-import { getFinancialsFromAlphaVantage } from "@/lib/api/alphavantage";
+import { getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState } from "@/lib/api/alphavantage";
 import { getCachedDataState, setCachedData, withSingleFlight } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 
@@ -108,10 +108,17 @@ export async function fetchAlphaFinancials(
   return withSingleFlight(`${normalizedTicker}:financials-alpha-v2:fetch`, async () => {
     const alphaFinancials = await getFinancialsFromAlphaVantage(normalizedTicker, alphaKey);
 
-    if (!alphaFinancials) return null;
+    if (!alphaFinancials) {
+      throw new Error("ALPHA_VANTAGE_DATA_UNAVAILABLE");
+    }
 
     await setCachedData(normalizedTicker, "financials-alpha-v2", alphaFinancials);
     return alphaFinancials;
+  }).catch((error) => {
+    if (isAlphaThrottleError(error)) {
+      throw new Error("ALPHA_VANTAGE_LIMIT_REACHED");
+    }
+    throw error;
   });
 }
 
@@ -120,6 +127,17 @@ export async function fetchSearchTickers(
   limit: number = 10
 ): Promise<SearchEntry[]> {
   return dataService.searchTickers(query, limit);
+}
+
+export async function getAlphaAvailability(): Promise<{
+  available: boolean;
+  reason?: "throttled" | "not_configured";
+}> {
+  const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  if (!alphaKey) return { available: false, reason: "not_configured" };
+
+  const throttleState = await readAlphaThrottleState(alphaKey);
+  return throttleState ? { available: false, reason: "throttled" } : { available: true };
 }
 
 export async function fetchFullStockData(ticker: string) {

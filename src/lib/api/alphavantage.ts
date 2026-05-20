@@ -7,6 +7,7 @@ import type {
 import type { EarningsInsight, StockProfile, StockQuote } from "@/types/stock";
 import { buildTickerLogoUrl, normalizeWebsiteUrl } from "@/lib/logo";
 import { getCachedDataState, setCachedData, withSingleFlight } from "./cache";
+import { createHash } from "crypto";
 
 type AlphaFunction =
   | "GLOBAL_QUOTE"
@@ -21,29 +22,55 @@ const ALPHA_THROTTLE_RETRY_MS = 2_000;
 const ALPHA_MAX_RETRIES = 2;
 const ALPHA_THROTTLE_COOLDOWN_MS = 65_000;
 const ALPHA_THROTTLE_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
-const ALPHA_THROTTLE_CACHE_KEY = "alpha-throttle-v1";
-const ALPHA_THROTTLE_CACHE_TICKER = "GLOBAL";
+const ALPHA_THROTTLE_CACHE_KEY = "alpha-throttle-v2";
 const ALPHA_REQUEST_TIMEOUT_MS = 8_000;
 
 let alphaQueue: Promise<void> = Promise.resolve();
 let alphaNextAllowedAt = 0;
-let alphaThrottleUntil = 0;
+const alphaThrottleUntilByKey = new Map<string, number>();
 
 interface AlphaThrottleState {
   reason: string;
   until: string;
 }
 
-class AlphaThrottleError extends Error {
+function getAlphaThrottleCacheTicker(apiKey: string | undefined): string {
+  const normalized = apiKey?.trim();
+  if (!normalized) return "GLOBAL:NO_KEY";
+
+  const keyHash = createHash("sha256")
+    .update(normalized)
+    .digest("hex")
+    .slice(0, 12);
+
+  return `GLOBAL:${keyHash}`;
+}
+
+function getAlphaThrottleUntil(apiKey: string): number {
+  return alphaThrottleUntilByKey.get(getAlphaThrottleCacheTicker(apiKey)) ?? 0;
+}
+
+function setAlphaThrottleUntil(apiKey: string, untilMs: number): void {
+  alphaThrottleUntilByKey.set(getAlphaThrottleCacheTicker(apiKey), untilMs);
+}
+
+export class AlphaThrottleError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "AlphaThrottleError";
   }
 }
 
-async function readAlphaThrottleState(): Promise<AlphaThrottleState | null> {
+export class AlphaApiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "AlphaApiError";
+  }
+}
+
+export async function readAlphaThrottleState(apiKey?: string): Promise<AlphaThrottleState | null> {
   const lookup = await getCachedDataState<AlphaThrottleState>(
-    ALPHA_THROTTLE_CACHE_TICKER,
+    getAlphaThrottleCacheTicker(apiKey),
     ALPHA_THROTTLE_CACHE_KEY,
     ALPHA_THROTTLE_CACHE_TTL_MS
   );
@@ -56,19 +83,42 @@ async function readAlphaThrottleState(): Promise<AlphaThrottleState | null> {
   return lookup.data;
 }
 
-async function recordAlphaThrottleState(reason: string): Promise<void> {
-  const until = new Date(Date.now() + ALPHA_THROTTLE_COOLDOWN_MS).toISOString();
-  alphaThrottleUntil = Date.now() + ALPHA_THROTTLE_COOLDOWN_MS;
-  await setCachedData(ALPHA_THROTTLE_CACHE_TICKER, ALPHA_THROTTLE_CACHE_KEY, {
+async function recordAlphaThrottleState(reason: string, apiKey: string): Promise<void> {
+  const untilMs = Date.now() + ALPHA_THROTTLE_COOLDOWN_MS;
+  const until = new Date(untilMs).toISOString();
+  setAlphaThrottleUntil(apiKey, untilMs);
+  await setCachedData(getAlphaThrottleCacheTicker(apiKey), ALPHA_THROTTLE_CACHE_KEY, {
     reason,
     until,
   } satisfies AlphaThrottleState);
 }
 
-function isAlphaThrottleError(error: unknown): boolean {
+export function isAlphaThrottleError(error: unknown): boolean {
   if (error instanceof AlphaThrottleError) return true;
   const message = error instanceof Error ? error.message : String(error);
-  return /throttled|cooling down/i.test(message);
+  return /AlphaVantage rate limited|cooling down/i.test(message);
+}
+
+function isAlphaRateLimitMessage(message: string): boolean {
+  return /standard API rate limit|rate limit|frequency|calls per minute|calls per day/i.test(message);
+}
+
+function getAlphaPayloadMessage(
+  payload: AlphaFinancialResponse | AlphaEarningsResponse | AlphaTranscriptResponse
+): { message: string; throttled: boolean } | null {
+  const errorMessage = payload["Error Message"] ?? payload.ErrorMessage;
+  if (errorMessage) return { message: errorMessage, throttled: false };
+
+  if (payload.Note) return { message: payload.Note, throttled: isAlphaRateLimitMessage(payload.Note) };
+
+  if (payload.Information) {
+    return {
+      message: payload.Information,
+      throttled: isAlphaRateLimitMessage(payload.Information),
+    };
+  }
+
+  return null;
 }
 
 interface AlphaFinancialReport {
@@ -83,6 +133,7 @@ interface AlphaFinancialResponse {
   Note?: string;
   Information?: string;
   ErrorMessage?: string;
+  "Error Message"?: string;
 }
 
 interface AlphaEarningsPoint {
@@ -100,6 +151,7 @@ interface AlphaEarningsResponse {
   Note?: string;
   Information?: string;
   ErrorMessage?: string;
+  "Error Message"?: string;
 }
 
 interface AlphaTranscriptResponse {
@@ -112,6 +164,7 @@ interface AlphaTranscriptResponse {
   Note?: string;
   Information?: string;
   ErrorMessage?: string;
+  "Error Message"?: string;
 }
 
 interface AlphaOverviewResponse {
@@ -150,6 +203,7 @@ interface AlphaOverviewResponse {
   Note?: string;
   Information?: string;
   ErrorMessage?: string;
+  "Error Message"?: string;
   [key: string]: string | undefined;
 }
 
@@ -169,6 +223,7 @@ interface AlphaGlobalQuoteResponse {
   Note?: string;
   Information?: string;
   ErrorMessage?: string;
+  "Error Message"?: string;
 }
 
 export interface AlphaTranscriptDocument {
@@ -229,7 +284,7 @@ async function fetchAlphaFunction(
   apiKey: string,
   extraParams?: Record<string, string>
 ): Promise<AlphaFinancialResponse | AlphaEarningsResponse | AlphaTranscriptResponse> {
-  const throttleState = await readAlphaThrottleState();
+  const throttleState = await readAlphaThrottleState(apiKey);
   if (throttleState) {
     throw new AlphaThrottleError(
       `AlphaVantage cooling down until ${throttleState.until}`
@@ -266,11 +321,12 @@ async function fetchAlphaFunction(
       | AlphaFinancialResponse
       | AlphaEarningsResponse
       | AlphaTranscriptResponse;
-    if (payload.ErrorMessage) {
-      throw new Error(`AlphaVantage ${fn}: ${payload.ErrorMessage}`);
+    const alphaMessage = getAlphaPayloadMessage(payload);
+    if (alphaMessage?.throttled) {
+      throw new AlphaThrottleError(`AlphaVantage rate limited on ${fn}: ${alphaMessage.message}`);
     }
-    if (payload.Note || payload.Information) {
-      throw new AlphaThrottleError(`AlphaVantage throttled on ${fn}`);
+    if (alphaMessage) {
+      throw new AlphaApiError(`AlphaVantage ${fn}: ${alphaMessage.message}`);
     }
     return payload;
   } catch (error) {
@@ -685,7 +741,7 @@ async function fetchWithRetry(
   let lastError: unknown;
 
   for (let attempt = 0; attempt < ALPHA_MAX_RETRIES; attempt += 1) {
-    const cooldownWaitMs = alphaThrottleUntil - Date.now();
+    const cooldownWaitMs = getAlphaThrottleUntil(apiKey) - Date.now();
     if (cooldownWaitMs > 0) {
       await sleep(cooldownWaitMs);
     }
@@ -696,8 +752,8 @@ async function fetchWithRetry(
       lastError = error;
       const isThrottled = isAlphaThrottleError(error);
       if (isThrottled) {
-        await recordAlphaThrottleState(`AlphaVantage throttled on ${fn}`);
-        alphaThrottleUntil = Date.now() + ALPHA_THROTTLE_COOLDOWN_MS;
+        await recordAlphaThrottleState(`AlphaVantage throttled on ${fn}`, apiKey);
+        throw error;
       }
       if (!isThrottled || attempt === ALPHA_MAX_RETRIES - 1) {
         throw error;
@@ -705,7 +761,7 @@ async function fetchWithRetry(
 
       const waitMs = Math.max(
         ALPHA_THROTTLE_RETRY_MS,
-        alphaThrottleUntil - Date.now()
+        getAlphaThrottleUntil(apiKey) - Date.now()
       );
       if (waitMs > 0) {
         await sleep(waitMs);
@@ -724,7 +780,8 @@ async function fetchBundle(symbol: string, apiKey: string): Promise<AlphaBundle>
   ): Promise<T | null> => {
     try {
       return (await fetchWithRetry(symbol, fn, apiKey)) as T;
-    } catch {
+    } catch (error) {
+      if (isAlphaThrottleError(error)) throw error;
       return null;
     }
   };
@@ -743,7 +800,8 @@ async function fetchBundle(symbol: string, apiKey: string): Promise<AlphaBundle>
   if (needEarningsFallback) {
     try {
       earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
-    } catch {
+    } catch (error) {
+      if (isAlphaThrottleError(error)) throw error;
       earnings = {};
     }
   }
@@ -963,6 +1021,7 @@ export async function getFinancialsFromAlphaVantage(
       },
     };
   } catch (error) {
+    if (isAlphaThrottleError(error)) throw error;
     console.warn(
       `[AlphaVantage] Failed to fetch financials for ${ticker.toUpperCase()}:`,
       error
@@ -988,7 +1047,8 @@ export async function getEarningsInsightFromAlphaVantage(
   let earnings: AlphaEarningsResponse;
   try {
     earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
-  } catch {
+  } catch (error) {
+    if (isAlphaThrottleError(error)) throw error;
     return null;
   }
 
