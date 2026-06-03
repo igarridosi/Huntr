@@ -1,13 +1,3 @@
-/**
- * Server Actions for stock data.
- *
- * These bridge the gap between client-side TanStack Query hooks
- * and the server-only Yahoo Finance / cache layer.
- * Each action is a thin wrapper around the unified data service.
- *
- * Usage: imported by use-stock-data.ts hooks as queryFn callbacks.
- */
-
 "use server";
 
 import * as dataService from "@/lib/api";
@@ -21,14 +11,33 @@ import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
 import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
-import { getFinancialsFromAlphaVantage } from "@/lib/api/alphavantage";
+import { getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState } from "@/lib/api/alphavantage";
 import { getCachedDataState, setCachedData, withSingleFlight } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
+
+const TICKER_RE = /^[A-Z0-9.\-^]{1,12}$/;
+// 500 covers large portfolios/watchlists for authenticated users.
+// Server Actions are already session-gated by middleware.
+const BATCH_TICKER_LIMIT = 500;
+
+function sanitizeTicker(ticker: unknown): string {
+  if (typeof ticker !== "string") throw new Error("Invalid ticker");
+  const t = ticker.trim().toUpperCase();
+  if (!TICKER_RE.test(t)) throw new Error(`Invalid ticker: ${ticker}`);
+  return t;
+}
+
+function sanitizeTickers(tickers: unknown): string[] {
+  if (!Array.isArray(tickers)) throw new Error("tickers must be an array");
+  if (tickers.length > BATCH_TICKER_LIMIT)
+    throw new Error(`Batch size exceeds limit of ${BATCH_TICKER_LIMIT}`);
+  return tickers.map(sanitizeTicker);
+}
 
 export async function fetchStockProfile(
   ticker: string
 ): Promise<StockProfile | null> {
-  return dataService.getStockProfile(ticker);
+  return dataService.getStockProfile(sanitizeTicker(ticker));
 }
 
 export async function fetchAllProfiles(): Promise<StockProfile[]> {
@@ -38,7 +47,7 @@ export async function fetchAllProfiles(): Promise<StockProfile[]> {
 export async function fetchStockQuote(
   ticker: string
 ): Promise<StockQuote | null> {
-  return dataService.getStockQuote(ticker);
+  return dataService.getStockQuote(sanitizeTicker(ticker));
 }
 
 export async function fetchAllQuotes(): Promise<StockQuote[]> {
@@ -49,42 +58,49 @@ export async function fetchMarketIndices(): Promise<MarketIndexQuote[]> {
   return dataService.getMarketIndices();
 }
 
+const VALID_WINDOWS = new Set(["1D", "1W", "1M", "YTD", "1Y", "ALL"]);
+
 export async function fetchBatchPeriodPerformance(
   tickers: string[],
   window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL"
 ): Promise<Record<string, number>> {
-  return dataService.getBatchPeriodPerformance(tickers, window);
+  if (!VALID_WINDOWS.has(window)) throw new Error(`Invalid window: ${window}`);
+  return dataService.getBatchPeriodPerformance(sanitizeTickers(tickers), window);
 }
+
+const VALID_HISTORY_WINDOWS = new Set(["1W", "1M", "YTD", "1Y", "ALL"]);
 
 export async function fetchBatchDailyHistory(
   tickers: string[],
   window: "1W" | "1M" | "YTD" | "1Y" | "ALL"
 ): Promise<Record<string, Array<{ date: string; close: number }>>> {
-  return dataService.getBatchDailyHistory(tickers, window);
+  if (!VALID_HISTORY_WINDOWS.has(window))
+    throw new Error(`Invalid window: ${window}`);
+  return dataService.getBatchDailyHistory(sanitizeTickers(tickers), window);
 }
 
 export async function fetchBatchIntradayTrend(
   tickers: string[]
 ): Promise<Record<string, number[]>> {
-  return dataService.getBatchIntradayTrend(tickers);
+  return dataService.getBatchIntradayTrend(sanitizeTickers(tickers));
 }
 
 export async function fetchBatchBuybackStrength(
   tickers: string[]
 ): Promise<Record<string, number>> {
-  return dataService.getBatchBuybackStrength(tickers);
+  return dataService.getBatchBuybackStrength(sanitizeTickers(tickers));
 }
 
 export async function fetchBatchEarningsInsights(
   tickers: string[]
 ): Promise<Record<string, EarningsInsight>> {
-  return dataService.getBatchEarningsInsights(tickers);
+  return dataService.getBatchEarningsInsights(sanitizeTickers(tickers));
 }
 
 export async function fetchCompanyFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
-  return dataService.getCompanyFinancials(ticker);
+  return dataService.getCompanyFinancials(sanitizeTicker(ticker));
 }
 
 export async function fetchAlphaFinancials(
@@ -93,7 +109,7 @@ export async function fetchAlphaFinancials(
   const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
   if (!alphaKey) return null;
 
-  const normalizedTicker = ticker.toUpperCase();
+  const normalizedTicker = sanitizeTicker(ticker);
   const cached = await getCachedDataState<CompanyFinancials>(
     normalizedTicker,
     "financials-alpha-v2",
@@ -108,11 +124,29 @@ export async function fetchAlphaFinancials(
   return withSingleFlight(`${normalizedTicker}:financials-alpha-v2:fetch`, async () => {
     const alphaFinancials = await getFinancialsFromAlphaVantage(normalizedTicker, alphaKey);
 
-    if (!alphaFinancials) return null;
+    if (!alphaFinancials) {
+      throw new Error("ALPHA_VANTAGE_DATA_UNAVAILABLE");
+    }
 
     await setCachedData(normalizedTicker, "financials-alpha-v2", alphaFinancials);
     return alphaFinancials;
+  }).catch((error) => {
+    if (isAlphaThrottleError(error)) {
+      throw new Error("ALPHA_VANTAGE_LIMIT_REACHED");
+    }
+    throw error;
   });
+}
+
+export async function getAlphaAvailability(): Promise<{
+  available: boolean;
+  reason?: "throttled" | "not_configured";
+}> {
+  const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  if (!alphaKey) return { available: false, reason: "not_configured" };
+
+  const throttleState = await readAlphaThrottleState(alphaKey);
+  return throttleState ? { available: false, reason: "throttled" } : { available: true };
 }
 
 export async function fetchSearchTickers(
@@ -123,7 +157,7 @@ export async function fetchSearchTickers(
 }
 
 export async function fetchFullStockData(ticker: string) {
-  return dataService.getFullStockData(ticker);
+  return dataService.getFullStockData(sanitizeTicker(ticker));
 }
 
 export async function fetchDefaultWatchlistTickers(): Promise<string[]> {
@@ -134,19 +168,19 @@ export async function fetchEarningsDetailData(
   ticker: string,
   historyLimit?: number
 ): Promise<EarningsDetailData> {
-  return dataService.getEarningsDetailData(ticker, historyLimit);
+  return dataService.getEarningsDetailData(sanitizeTicker(ticker), historyLimit);
 }
 
 export async function prewarmEarningsDetailCacheForTickers(
   tickers: string[]
 ): Promise<{ total: number; warmed: number; failed: string[] }> {
-  return prewarmEarningsDetailCacheForTickersService(tickers);
+  return prewarmEarningsDetailCacheForTickersService(sanitizeTickers(tickers));
 }
 
 export async function fetchTranscriptPeriods(
   ticker: string
 ): Promise<TranscriptPeriod[]> {
-  return dataService.getTranscriptPeriods(ticker);
+  return dataService.getTranscriptPeriods(sanitizeTicker(ticker));
 }
 
 export async function fetchTranscriptDocument(
@@ -154,5 +188,11 @@ export async function fetchTranscriptDocument(
   year: number,
   quarter: number
 ): Promise<TranscriptDocument | null> {
-  return dataService.getTranscriptDocument(ticker, year, quarter);
+  const t = sanitizeTicker(ticker);
+  const y = Math.trunc(Number(year));
+  const q = Math.trunc(Number(quarter));
+  if (!Number.isFinite(y) || y < 1990 || y > 2100)
+    throw new Error("Invalid year");
+  if (q < 1 || q > 4) throw new Error("Invalid quarter");
+  return dataService.getTranscriptDocument(t, y, q);
 }

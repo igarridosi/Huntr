@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { useParams } from "next/navigation";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useFullStockData,
   useStockProfile,
+  useStockQuote,
 } from "@/hooks/use-stock-data";
 import { CategorizedMetrics } from "@/components/stock/categorized-metrics";
 import {
@@ -15,8 +17,12 @@ import { StockPriceCard } from "@/components/stock/stock-price-card";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
+import { fetchAlphaFinancials, getAlphaAvailability } from "@/app/actions/stock";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
+import type { CompanyFinancials } from "@/types/financials";
 
 function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
   return rows
@@ -51,6 +57,33 @@ function pickMostRecentPeriod<T extends { date: string }>(
 
 type YearRange = 5 | 10 | 15 | 20;
 
+const ALPHA_LIMIT_MESSAGE =
+  "Alpha Vantage is currently rate-limiting or rejecting this request. We are still displaying quick data from Yahoo Finance; please try again later to load the full historical data.";
+
+function isAlphaLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ALPHA_VANTAGE_LIMIT_REACHED|AlphaVantage rate limited|cooling down|rate limit/i.test(message);
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = window.setTimeout(() => {
+      reject(new Error("ALPHA_VANTAGE_TIMEOUT"));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        window.clearTimeout(timeout);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timeout);
+        reject(error);
+      }
+    );
+  });
+}
+
 function findNearestBalanceRow<T extends { date: string }>(rows: T[], targetDate: string): T | null {
   if (!rows.length) return null;
   const targetTs = new Date(targetDate).getTime();
@@ -72,9 +105,18 @@ function findNearestBalanceRow<T extends { date: string }>(rows: T[], targetDate
 export default function OverviewPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params.ticker ?? "").toUpperCase();
+  const queryClient = useQueryClient();
 
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
   const [yearRange, setYearRange] = useState<YearRange>(10);
+  const [deepFinancials, setDeepFinancials] = useState<CompanyFinancials | null>(null);
+  const [isLoadingDeepFinancials, setIsLoadingDeepFinancials] = useState(false);
+  const [deepFinancialsError, setDeepFinancialsError] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    title: string;
+    message?: string;
+    variant: FeedbackToastVariant;
+  } | null>(null);
 
   const {
     data: stockData,
@@ -82,12 +124,67 @@ export default function OverviewPage() {
     isFetching: stockDataFetching,
   } = useFullStockData(ticker);
   const { data: quickProfile } = useStockProfile(ticker);
+  const {
+    data: quickQuote,
+    isLoading: quickQuoteLoading,
+    isFetching: quickQuoteFetching,
+  } = useStockQuote(ticker);
 
   const profile = stockData?.profile ?? quickProfile ?? null;
-  const quote = stockData?.quote ?? null;
-  const financials = stockData?.financials ?? null;
-  const quoteLoading = stockDataLoading || stockDataFetching;
+  const quote = stockData?.quote ?? quickQuote ?? null;
+  const financials = deepFinancials ?? stockData?.financials ?? null;
+  const financialsSource = deepFinancials ? "alpha-cache" : stockData?.financialsSource;
+  const quoteLoading = quickQuoteLoading || quickQuoteFetching || stockDataLoading || stockDataFetching;
   const finLoading = stockDataLoading || stockDataFetching || !financials;
+  const hasDeepFinancials = financialsSource === "alpha-cache";
+
+  useEffect(() => {
+    setDeepFinancials(null);
+    setIsLoadingDeepFinancials(false);
+    setDeepFinancialsError(null);
+  }, [ticker]);
+
+  const handleLoadDeepFinancials = async (): Promise<void> => {
+    if (!ticker || isLoadingDeepFinancials || hasDeepFinancials) return;
+
+    setIsLoadingDeepFinancials(true);
+    setDeepFinancialsError(null);
+    try {
+      const alphaAvailability = await getAlphaAvailability();
+      if (!alphaAvailability.available) {
+        throw new Error(
+          alphaAvailability.reason === "throttled"
+            ? "ALPHA_VANTAGE_LIMIT_REACHED"
+            : "ALPHA_VANTAGE_NOT_CONFIGURED"
+        );
+      }
+
+      const alphaFinancials = await withTimeout(fetchAlphaFinancials(ticker), 50_000);
+      if (alphaFinancials) {
+        setDeepFinancials(alphaFinancials);
+        queryClient.setQueryData(["stock", "full", ticker], {
+          ...(stockData ?? { profile, quote }),
+          financials: alphaFinancials,
+          financialsSource: "alpha-cache" as const,
+        });
+      }
+    } catch (error) {
+      setDeepFinancialsError(
+        isAlphaLimitError(error)
+          ? "Alpha Vantage is currently rate-limited. Yahoo data remains available."
+          : "Full historical data is temporarily unavailable."
+      );
+      setToast({
+        title: isAlphaLimitError(error) ? "Alpha Vantage is rate-limited" : "The complete history could not be loaded",
+        message: isAlphaLimitError(error)
+          ? ALPHA_LIMIT_MESSAGE
+          : "We're still showing quick data from Yahoo Finance. Please try again later.",
+        variant: "warning",
+      });
+    } finally {
+      setIsLoadingDeepFinancials(false);
+    }
+  };
 
   const latestIncome = useMemo(() => {
     if (!financials) return null;
@@ -526,6 +623,15 @@ export default function OverviewPage() {
 
   return (
     <div className="space-y-6">
+      <FeedbackToast
+        open={!!toast}
+        title={toast?.title ?? ""}
+        message={toast?.message}
+        variant={toast?.variant ?? "warning"}
+        onClose={() => setToast(null)}
+        durationMs={7000}
+      />
+
       {/* Categorized Metrics Bar */}
       {quote && (
         <CategorizedMetrics
@@ -544,6 +650,23 @@ export default function OverviewPage() {
           <StockPriceCard ticker={ticker} quote={quote ?? null} />
 
           <div className="flex items-center justify-end gap-3">
+            {deepFinancialsError ? (
+              <p className="text-xs text-golden-hour">{deepFinancialsError}</p>
+            ) : null}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => { void handleLoadDeepFinancials(); }}
+              disabled={hasDeepFinancials || isLoadingDeepFinancials}
+              className="h-8 text-xs border-wolf-border/60"
+            >
+              {isLoadingDeepFinancials
+                ? "Loading 20Y..."
+                : hasDeepFinancials
+                  ? "20Y loaded"
+                  : "Load 20Y data"}
+            </Button>
             <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
               {([5, 10, 15, 20] as const).map((years) => (
                 <button

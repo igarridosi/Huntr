@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_FALLBACK_SRC = "https://www.allinvestview.com/favicon.ico";
@@ -46,27 +46,7 @@ export function TickerLogo({
     setAttemptedSymbolLookup(false);
   }, [candidates, fallbackSrc]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const tryResolveWithoutSource = async () => {
-      if (attemptedSymbolLookup) return;
-
-      setAttemptedSymbolLookup(true);
-      const resolved = await resolveLogoFromSymbol();
-      if (!cancelled && resolved) {
-        setCurrentSrc(resolved);
-      }
-    };
-
-    void tryResolveWithoutSource();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [attemptedSymbolLookup, ticker]);
-
-  const resolveLogoFromSymbol = async (): Promise<string | null> => {
+  const resolveLogoFromSymbol = useCallback(async (): Promise<string | null> => {
     try {
       const response = await fetch(
         `https://www.allinvestview.com/api/logo-search/?q=${encodeURIComponent(ticker)}`
@@ -97,7 +77,27 @@ export function TickerLogo({
     } catch {
       return null;
     }
-  };
+  }, [ticker]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const tryResolveWithoutSource = async () => {
+      if (attemptedSymbolLookup) return;
+
+      setAttemptedSymbolLookup(true);
+      const resolved = await resolveLogoFromSymbol();
+      if (!cancelled && resolved) {
+        setCurrentSrc(resolved);
+      }
+    };
+
+    void tryResolveWithoutSource();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [attemptedSymbolLookup, ticker, resolveLogoFromSymbol]);
 
   const handleError = async () => {
     if (sourceIndex + 1 < candidates.length) {

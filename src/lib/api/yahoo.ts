@@ -1052,9 +1052,7 @@ function parseNextEarningsDate(data: YahooQuoteSummaryResult): string | null {
   return future ?? parsed[parsed.length - 1] ?? null;
 }
 
-function parseEarningsTimingFromSummary(data: YahooQuoteSummaryResult): "Before Open" | "After Close" | "Time TBD" {
-  const nextDate = parseNextEarningsDate(data);
-  if (!nextDate) return "Time TBD";
+function parseEarningsTimingFromSummary(): "Before Open" | "After Close" | "Time TBD" {
   return "Time TBD";
 }
 
@@ -1169,7 +1167,7 @@ export async function getEarningsInsight(ticker: string): Promise<EarningsInsigh
       ticker: key,
       company_name: raw.price?.longName ?? raw.price?.shortName ?? key,
       next_earnings_date: parseNextEarningsDate(raw),
-      earnings_timing: parseEarningsTimingFromSummary(raw),
+      earnings_timing: parseEarningsTimingFromSummary(),
       est_eps: mergedEstEps,
       est_revenue: estRevenueFromCalendar ?? estRevenueFromTrend,
       history: mergedHistory,

@@ -7,15 +7,14 @@ import { createClient } from "@supabase/supabase-js";
 export function createAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-  if (!url || (!serviceRoleKey && !anonKey)) {
-    throw new Error("Missing Supabase environment variables");
+  if (!url || !serviceRoleKey) {
+    throw new Error(
+      "createAdminClient requires NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY"
+    );
   }
 
-  const key = serviceRoleKey ?? anonKey!;
-
-  return createClient(url, key, {
+  return createClient(url, serviceRoleKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

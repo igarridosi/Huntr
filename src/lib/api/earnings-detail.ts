@@ -3,9 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import * as yahoo from "@/lib/api/yahoo";
 import * as mock from "@/lib/mock-data";
 import {
-  getFinancialsFromAlphaVantage,
   getEarningsInsightFromAlphaVantage,
+  isAlphaThrottleError,
+  readAlphaThrottleState,
 } from "@/lib/api/alphavantage";
+import { getCachedDataState } from "@/lib/api/cache";
 import { getQuarterlyMetricsFromYfinance } from "@/lib/api/yfinance";
 import type {
   EarningsHistoryPoint,
@@ -385,12 +387,25 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
     let cachePayload = await readAlphaEarningsCache(ticker.toUpperCase());
     if (!isPreviewMode && (!cachePayload || !Array.isArray(cachePayload.rows) || cachePayload.rows.length === 0)) {
       const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
-      if (alphaKey) {
+      const throttleState = alphaKey ? await readAlphaThrottleState(alphaKey) : null;
+      if (throttleState) {
+        dataError = "Alpha Vantage is currently rate-limited. Yahoo preview remains available.";
+      }
+      if (alphaKey && !throttleState) {
         try {
-          const [alphaInsight, alphaFinancials] = await Promise.all([
+          const [alphaInsight, alphaFinancialsCached] = await Promise.all([
             getEarningsInsightFromAlphaVantage(ticker, alphaKey),
-            getFinancialsFromAlphaVantage(ticker, alphaKey),
+            getCachedDataState<CompanyFinancials>(
+              ticker.toUpperCase(),
+              "financials-alpha-v2",
+              12 * 60 * 60 * 1000,
+              7 * 24 * 60 * 60 * 1000
+            ),
           ]);
+          const alphaFinancials =
+            alphaFinancialsCached.status !== "miss" && alphaFinancialsCached.data
+              ? alphaFinancialsCached.data
+              : null;
 
           if (alphaInsight && Array.isArray(alphaInsight.history) && alphaInsight.history.length > 0) {
             const incomeRows = (alphaFinancials?.income_statement?.quarterly ?? []).map((r) => ({
@@ -516,9 +531,11 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
             dataError = "Alpha Vantage cache missing. Run the sync job to populate earnings data.";
           }
         } catch (err) {
-          dataError = "Alpha Vantage fetch failed. Try again later.";
+          dataError = isAlphaThrottleError(err)
+            ? "Alpha Vantage is currently rate-limited. Yahoo preview remains available."
+            : "Alpha Vantage fetch failed. Try again later.";
         }
-      } else {
+      } else if (!throttleState) {
         dataError = "Alpha Vantage cache missing. Run the sync job to populate earnings data.";
       }
     }
@@ -526,7 +543,7 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
     // Process cachePayload into financials/insight (from cache hit OR fresh Alpha fetch)
     if (cachePayload && Array.isArray(cachePayload.rows) && cachePayload.rows.length > 0 && insight.history.length === 0) {
       // If cache is incomplete, attempt a best-effort enrichment from yfinance (only on full history requests)
-      if (!isPreviewMode && cachePayload.rows.length < DEFAULT_HISTORY_LIMIT) {
+      if (!isPreviewMode && !dataError && cachePayload.rows.length < DEFAULT_HISTORY_LIMIT) {
         try {
           const yf = await getQuarterlyMetricsFromYfinance(ticker, DEFAULT_HISTORY_LIMIT);
           if (yf && Array.isArray(yf.rows) && yf.rows.length > 0) {
@@ -644,7 +661,7 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
         const yahooInsight = await yahoo.getEarningsInsight(ticker);
         if (yahooInsight && Array.isArray(yahooInsight.history) && yahooInsight.history.length > 0) {
           insight = yahooInsight;
-          dataError = null;
+          if (isPreviewMode) dataError = null;
         }
       } catch {
         // Yahoo fallback failed — original dataError remains

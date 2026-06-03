@@ -248,7 +248,7 @@ export async function getCompanyFinancials(
       return alphaCached.data;
     }
 
-    return yahoo.getFinancials(ticker);
+    return yahoo.getFinancials(ticker, { preferAlphaVantage: false });
   }
   return mock.getCompanyFinancials(ticker);
 }
@@ -271,12 +271,18 @@ export async function getFullStockData(ticker: string) {
       ),
     ]);
 
+    const hasAlphaFinancials = alphaCached.status !== "miss" && !!alphaCached.data;
     const financials =
       alphaCached.status !== "miss" && alphaCached.data
         ? alphaCached.data
-        : await yahoo.getFinancials(key);
+        : await yahoo.getFinancials(key, { preferAlphaVantage: false });
 
-    return { profile, quote, financials };
+    return {
+      profile,
+      quote,
+      financials,
+      financialsSource: hasAlphaFinancials ? "alpha-cache" as const : "yahoo" as const,
+    };
   }
   // Mock fallback: combine separate calls
   const [profile, quote, financials] = await Promise.all([
@@ -284,7 +290,7 @@ export async function getFullStockData(ticker: string) {
     mock.getStockQuote(ticker),
     mock.getCompanyFinancials(ticker),
   ]);
-  return { profile, quote, financials };
+  return { profile, quote, financials, financialsSource: "mock" as const };
 }
 
 // ─────────────────────────────────────────────────────────
