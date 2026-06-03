@@ -19,6 +19,7 @@ import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
+import { ChartErrorBoundary } from "@/components/ui/chart-error-boundary";
 import { fetchAlphaFinancials, getAlphaAvailability } from "@/app/actions/stock";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
@@ -687,6 +688,7 @@ export default function OverviewPage() {
             <PeriodToggle value={periodType} onChange={setPeriodType} />
           </div>
 
+          <ChartErrorBoundary label="Financial charts">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
             <MetricChartCard
             title="Revenue"
@@ -849,8 +851,9 @@ export default function OverviewPage() {
             defaultYearRange={20}
           />
         </div>
+          </ChartErrorBoundary>
           </div>
-          
+
       ) : null}
 
       {/* Company Description */}

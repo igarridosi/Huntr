@@ -1,13 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, memo } from "react";
 import {
   Lightbulb,
   ChevronLeft,
   ChevronRight,
   Lock,
-  Loader2,
   CircleHelp,
   Star,
   Check,
@@ -26,6 +25,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ErrorState } from "@/components/ui/error-state";
+import { Spinner } from "@/components/ui/spinner";
 import { cn, formatCompactNumber, formatCurrency, formatPercent } from "@/lib/utils";
 import type { StockProfile, StockQuote } from "@/types/stock";
 
@@ -96,8 +97,8 @@ export default function InsightsPage() {
   const [pickerTicker, setPickerTicker] = useState<string | null>(null);
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
   const PAGE_SIZE = 12;
-  const { data: quotes = [], isLoading } = useAllQuotes();
-  const { data: profiles = [] } = useAllProfiles();
+  const { data: quotes = [], isLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
+  const { data: profiles = [], isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
   const { lists, addTicker, removeTicker, isInWatchlist } = useWatchlist();
 
   const profileMap = useMemo(
@@ -338,7 +339,9 @@ export default function InsightsPage() {
   };
 
   return (
-    <div className="space-y-6 w-full">
+    // suppressHydrationWarning: browser extensions (e.g. Honey/BIS) inject
+    // attributes like `bis_skin_checked` that don't exist server-side.
+    <div className="space-y-6 w-full" suppressHydrationWarning>
       <div className="flex items-center gap-3">
         <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
           <Lightbulb className="w-5 h-5 text-sunset-orange" />
@@ -409,7 +412,15 @@ export default function InsightsPage() {
         </CardHeader>
 
         <CardContent className="p-0">
-          {isLoading || isPageTransitioning ? (
+          {(quotesError || profilesError) ? (
+            <ErrorState
+              title="Could not load market data"
+              message="Check your connection or try refreshing."
+              variant="network"
+              onRetry={() => { void refetchQuotes(); void refetchProfiles(); }}
+              className="m-4"
+            />
+          ) : isLoading || isPageTransitioning ? (
             <InsightsSkeleton />
           ) : (
             <>
@@ -596,7 +607,7 @@ export default function InsightsPage() {
                   </div>
                   {(isPerformanceLoading || isBuybackFetching) && (
                     <div className="inline-flex items-center gap-1 text-[10px] text-mist">
-                      <Loader2 className="h-3 w-3 animate-spin" /> updating
+                      <Spinner size="xs" color="mist" /> updating
                     </div>
                   )}
                 </div>
@@ -685,7 +696,7 @@ export default function InsightsPage() {
   );
 }
 
-function SignalColumn({
+const SignalColumn = memo(function SignalColumn({
   title,
   rows,
   metric,
@@ -771,7 +782,8 @@ function SignalColumn({
       </div>
     </div>
   );
-}
+});
+SignalColumn.displayName = "SignalColumn";
 
 function InsightsSkeleton() {
   return (

@@ -33,6 +33,7 @@ import {
   ExternalLink,
   History,
 } from "lucide-react";
+import { Spinner } from "@/components/ui/spinner";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -280,6 +281,7 @@ function EditPositionDialog({
   const [avgCost, setAvgCost] = useState("");
   const [notes, setNotes] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
     if (!position) return;
@@ -292,7 +294,7 @@ function EditPositionDialog({
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!position) return;
+    if (!position || isSaving) return;
 
     const parsedShares = parseFloat(shares);
     const parsedAvgCost = parseFloat(avgCost);
@@ -307,8 +309,14 @@ function EditPositionDialog({
 
     if (parsedAvgCost <= 0) return;
 
-    onSave(position.ticker, parsedShares, parsedAvgCost, notes.trim(), purchaseDate);
-    onOpenChange(false);
+    setIsSaving(true);
+    // onSave is synchronous (localStorage), but wrapping keeps the UX consistent
+    try {
+      onSave(position.ticker, parsedShares, parsedAvgCost, notes.trim(), purchaseDate);
+    } finally {
+      setIsSaving(false);
+      onOpenChange(false);
+    }
   };
 
   return (
@@ -426,7 +434,10 @@ function EditPositionDialog({
                 <Button type="button" variant="ghost" onClick={() => onOpenChange(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Save Changes</Button>
+                <Button type="submit" disabled={isSaving} className="gap-2">
+                  {isSaving && <Spinner size="sm" color="white" />}
+                  {isSaving ? "Saving…" : "Save Changes"}
+                </Button>
               </div>
             </div>
           </form>
@@ -2645,7 +2656,12 @@ export default function PortfoliosPage() {
 
   useEffect(() => {
     if (watchlistLoading) return;
-    setDismissedScoutInboxIds((prev) => prev.filter((id) => scoutInbox.some((item) => item.id === id)));
+    setDismissedScoutInboxIds((prev) => {
+      const next = prev.filter((id) => scoutInbox.some((item) => item.id === id));
+      // Return the exact same reference when nothing changed — prevents re-render loop
+      // caused by scoutInbox getting a new array reference on each render cycle.
+      return next.length === prev.length ? prev : next;
+    });
   }, [watchlistLoading, scoutInbox]);
 
   useEffect(() => {

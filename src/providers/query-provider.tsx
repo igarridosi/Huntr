@@ -2,6 +2,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState, type ReactNode } from "react";
+import { TooltipProvider } from "@/components/ui/tooltip";
 
 /**
  * TanStack Query Provider.
@@ -27,7 +28,9 @@ export function QueryProvider({ children }: { children: ReactNode }) {
 
   return (
     <QueryClientProvider client={queryClient}>
-      {children}
+      <TooltipProvider delayDuration={300}>
+        {children}
+      </TooltipProvider>
     </QueryClientProvider>
   );
 }

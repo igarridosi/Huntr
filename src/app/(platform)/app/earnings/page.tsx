@@ -4,7 +4,9 @@ import { fetchEarningsDetailData } from "@/app/actions/stock";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import {
   ArrowDown,
@@ -584,6 +586,16 @@ function EarningsHoverTooltip({
   );
 }
 
+// Design-system color aliases for Recharts (which doesn't read CSS vars directly)
+const C = {
+  border:  "#2A3B40", // wolf-border
+  mist:    "#8C9DA1", // mist
+  orange:  "#FF8C42", // sunset-orange
+  neutral: "#7D8697", // mist/darker
+  gray:    "#6b7280", // neutral gray
+  grayDim: "#4b5563", // gray-600
+} as const;
+
 function EarningsMetricChart({
   metric,
   data,
@@ -616,12 +628,12 @@ function EarningsMetricChart({
       <ResponsiveContainer width="100%" height="100%">
         {metric === "revenue" ? (
           <BarChart data={revenueData} margin={{ top: 30, right: 10, left: 0, bottom: 0 }} barGap={4} barCategoryGap={8}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" opacity={0.3} />
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} opacity={0.3} />
             <XAxis
               dataKey="quarter"
-              tick={{ fill: "#8C9DA1", fontSize: 10 }}
+              tick={{ fill: C.mist, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: "#2A3B40" }}
+              axisLine={{ stroke: C.border }}
               interval={0}
               angle={-45}
               textAnchor="end"
@@ -631,9 +643,9 @@ function EarningsMetricChart({
               tickFormatter={formatQuarterTick}
             />
             <YAxis
-              tick={{ fill: "#8C9DA1", fontSize: 10 }}
+              tick={{ fill: C.mist, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: "#2A3B40" }}
+              axisLine={{ stroke: C.border }}
               width={56}
               domain={[(dataMin: number) => floorRevenueAxisMin(dataMin), "auto"]}
               tickFormatter={formatRevenueTick}
@@ -646,7 +658,7 @@ function EarningsMetricChart({
                   return (
                     <Cell
                       key={`rev-next-est-cell-${row.quarter}-${idx}`}
-                      fill="#7D8697"
+                      fill={C.neutral}
                       opacity={0.72}
                       onMouseEnter={(event) => onPointHover(idx, "revEstimate", event)}
                     />
@@ -656,7 +668,7 @@ function EarningsMetricChart({
                 return (
                   <Cell
                     key={`rev-cell-${row.quarter}-${idx}`}
-                    fill="#f97316"
+                    fill={C.orange}
                     opacity={hoveredIndex === idx && hoverSeries === "revReported" ? 1 : 0.92}
                     onMouseEnter={(event) => onPointHover(idx, "revReported", event)}
                   />
@@ -666,13 +678,13 @@ function EarningsMetricChart({
           </BarChart>
         ) : (
           <ComposedChart data={data} margin={{ top: 30, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" opacity={0.3} />
+            <CartesianGrid strokeDasharray="3 3" stroke={C.border} opacity={0.3} />
             <XAxis
               dataKey="quarter"
               type="category"
-              tick={{ fill: "#8C9DA1", fontSize: 10 }}
+              tick={{ fill: C.mist, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: "#2A3B40" }}
+              axisLine={{ stroke: C.border }}
               interval={0}
               angle={-45}
               textAnchor="end"
@@ -684,9 +696,9 @@ function EarningsMetricChart({
             <YAxis
               type="number"
               domain={["auto", "auto"]}
-              tick={{ fill: "#8C9DA1", fontSize: 10 }}
+              tick={{ fill: C.mist, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: "#2A3B40" }}
+              axisLine={{ stroke: C.border }}
               width={52}
               tickFormatter={formatEpsTick}
             />
@@ -695,7 +707,7 @@ function EarningsMetricChart({
             <Scatter
               dataKey="estimate"
               fill="none"
-              stroke="#6b7280"
+              stroke={C.gray}
               strokeWidth={2}
               shape={(props: unknown) => {
                 const p = props as { cx?: number; cy?: number; index?: number };
@@ -706,7 +718,7 @@ function EarningsMetricChart({
                     cy={p.cy}
                     r={active ? 6 : 4.5}
                     fill="none"
-                    stroke="#6b7280"
+                    stroke={C.gray}
                     strokeWidth={active ? 2.6 : 2}
                     onMouseEnter={(event) => {
                       if (typeof p.index === "number") onPointHover(p.index, "epsEstimate", event);
@@ -747,7 +759,7 @@ function EarningsMetricChart({
                       y1={estimateCy}
                       x2={p.cx}
                       y2={p.cy}
-                      stroke="#4b5563"
+                      stroke={C.grayDim}
                       strokeWidth={1}
                     />
                     <circle
@@ -912,8 +924,8 @@ export default function EarningsPage() {
   const [panelCache, setPanelCache] = useState<Record<string, SidePanelCache>>({});
   const [chartMetric, setChartMetric] = useState<ChartMetric>("eps");
 
-  const { data: quotes = [], isLoading: quotesLoading } = useAllQuotes();
-  const { data: profiles = [], isLoading: profilesLoading } = useAllProfiles();
+  const { data: quotes = [], isLoading: quotesLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
+  const { data: profiles = [], isLoading: profilesLoading, isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
   const { lists } = useWatchlist();
 
   const currentWeekStart = useMemo(() => getWeekStart(new Date()), []);
@@ -1423,9 +1435,11 @@ export default function EarningsPage() {
           </div>
 
           {panelError ? (
-            <div className="rounded-lg border border-bearish/40 bg-bearish/10 px-3 py-2 text-xs text-bearish">
-              Earnings data error: {panelError}
-            </div>
+            <ErrorState
+              inline
+              variant="server"
+              title={panelError}
+            />
           ) : null}
 
           <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-gradient-to-b from-[#0A171B] to-[#091215] px-2 py-0 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
@@ -1602,12 +1616,16 @@ export default function EarningsPage() {
                     </div>
 
                     <div className="p-2 space-y-2 min-h-[280px] sm:min-h-[320px] xl:min-h-[380px] max-h-[58vh] xl:max-h-[520px] overflow-y-auto">
-                      {isLoading ? (
+                      {(quotesError || profilesError) ? (
+                        <ErrorState
+                          inline
+                          title="Could not load earnings data"
+                          onRetry={() => { void refetchQuotes(); void refetchProfiles(); }}
+                        />
+                      ) : isLoading ? (
                         <div className="rounded-xl border border-wolf-border/45 bg-[#0A171B]/75 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
                           <div className="flex items-center gap-3">
-                            <div className="relative h-7 w-7 rounded-full border border-sunset-orange/45 bg-sunset-orange/10">
-                              <span className="absolute inset-0 rounded-full border-2 border-transparent border-t-sunset-orange border-r-sunset-orange animate-[spin_1.2s_linear_infinite]" />
-                            </div>
+                            <Spinner size="lg" />
                             <div>
                               <p className="text-xs font-semibold text-snow-peak">Loading weekly earnings</p>
                               <p className="text-[11px] text-mist/80">Syncing quotes and profiles...</p>

@@ -3,10 +3,11 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crosshair, ArrowRight, Loader2 } from "lucide-react";
+import { Crosshair, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@/components/ui/spinner";
 import { ROUTES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
 
@@ -140,7 +141,7 @@ export default function SignupPage() {
 
         <Button type="submit" className="w-full" disabled={loading}>
           {loading ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
+            <Spinner size="sm" color="white" />
           ) : (
             <>
               Create Account

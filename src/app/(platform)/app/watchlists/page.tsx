@@ -34,6 +34,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
+import { ErrorState } from "@/components/ui/error-state";
 import type { PriceAlert, WatchlistView } from "@/types/watchlist";
 
 const VIEW_OPTIONS: Array<{
@@ -53,6 +54,7 @@ export default function WatchlistsPage() {
   const {
     data: entries,
     isLoading,
+    isError: watchlistError,
     lists,
     activeListId,
     activeList,
@@ -642,7 +644,14 @@ export default function WatchlistsPage() {
             </div>
           ) : null}
 
-          {isLoading ? (
+          {watchlistError ? (
+            <ErrorState
+              title="Could not load your watchlist"
+              message="Your data could not be retrieved. Check your connection."
+              variant="server"
+              className="m-4"
+            />
+          ) : isLoading ? (
             <WatchlistTableSkeleton />
           ) : isEmpty ? (
             <EmptyState onSearchClick={handleSearchClick} />
