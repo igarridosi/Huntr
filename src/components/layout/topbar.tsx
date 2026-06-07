@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { KoFiSupport } from "@/components/ui/kofi-support";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
+import { AddTickerDialog } from "@/components/ui/add-ticker-dialog";
 
 interface TopbarProps {
   onSearchClick?: () => void;
@@ -62,12 +63,15 @@ export function Topbar({
 
       <div className="flex-1" />
 
+      {/* Add ticker */}
+      <AddTickerDialog />
+
       {/* Search trigger (mobile + desktop) */}
       <button
         type="button"
         onClick={onSearchClick}
         className={cn(
-          "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm",
+          "ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm",
           "text-mist hover:text-snow-peak",
           "bg-wolf-surface/50 border border-wolf-border/50",
           "hover:bg-wolf-surface transition-all duration-200",

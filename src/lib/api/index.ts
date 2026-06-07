@@ -338,8 +338,13 @@ export async function searchTickers(
         const cap = capMap.get(row.ticker.toUpperCase()) ?? 0;
         if (cap >= MIN_MARKET_CAP) return true;
 
-        // Prevent false "no results" when market-cap batch quote is temporarily missing.
+        // For empty queries (browsing popular stocks), only show large caps.
         if (!normalizedQuery) return false;
+
+        // For an explicit search: always surface a strong match regardless of
+        // market cap — this ensures user-added tickers (e.g. mid/small caps added
+        // via the "Add ticker" dialog) appear immediately when searched by symbol
+        // or name, even if they are below the >$10B threshold used for broad results.
         const ticker = row.ticker.toLowerCase();
         const name = row.name.toLowerCase();
         const isStrongMatch =
@@ -347,7 +352,7 @@ export async function searchTickers(
           ticker.startsWith(normalizedQuery) ||
           name.startsWith(normalizedQuery);
 
-        return cap === 0 && isStrongMatch;
+        return isStrongMatch;
       });
 
       const mappedDb: SearchEntry[] = filtered.map((r) => ({
