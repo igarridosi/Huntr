@@ -1087,6 +1087,44 @@ export async function getEarningsInsightFromAlphaVantage(
   };
 }
 
+/**
+ * Fetches quarterly revenue from Alpha Vantage INCOME_STATEMENT and returns a map
+ * keyed by period label ("Q4 2025") → revenue (number).
+ *
+ * Used by the earnings-detail flow to populate revenue_actual when the full
+ * financials cache (financials-alpha-v2) is unavailable — so revenue always comes
+ * from the same Alpha Vantage source as EPS without relying on a separate cache
+ * being pre-populated.
+ */
+export async function getQuarterlyRevenueMapFromAlpha(
+  ticker: string,
+  apiKey: string
+): Promise<Map<string, number> | null> {
+  const symbol = ticker.toUpperCase();
+  try {
+    const income = (await fetchWithRetry(symbol, "INCOME_STATEMENT", apiKey)) as AlphaFinancialResponse;
+    const rows = income.quarterlyReports ?? [];
+    if (rows.length === 0) return null;
+
+    const map = new Map<string, number>();
+    for (const row of rows) {
+      if (!row.fiscalDateEnding) continue;
+      const date = getDate(row.fiscalDateEnding);
+      if (Number.isNaN(date.getTime())) continue;
+      const revenue = parseNumber(row.totalRevenue);
+      if (revenue > 0) {
+        // Key by period label ("Q4 2025") — same format produced by toPeriodLabel()
+        // in getEarningsInsightFromAlphaVantage, so both sides always agree.
+        map.set(toPeriodLabel(date, "quarterly"), revenue);
+      }
+    }
+    return map.size > 0 ? map : null;
+  } catch (error) {
+    if (isAlphaThrottleError(error)) throw error;
+    return null;
+  }
+}
+
 export async function getEarningsCallTranscriptFromAlphaVantage(
   ticker: string,
   year: number,

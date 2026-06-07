@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -11,9 +12,9 @@ import {
   MessageSquareText,
   Calculator,
   BriefcaseBusiness,
+  SlidersHorizontal,
   Settings,
   LogOut,
-  Crosshair,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -45,6 +46,11 @@ const mainNav: NavItem[] = [
     href: ROUTES.APP_INSIGHTS,
     icon: Lightbulb,
     matchExact: true,
+  },
+  {
+    label: "Screener",
+    href: ROUTES.APP_SCREENER,
+    icon: SlidersHorizontal,
   },
   {
     label: "Watchlists",
@@ -120,12 +126,20 @@ export function Sidebar({
         )}
       >
       {/* ---- Logo / Brand ---- */}
-      <div className="flex items-center gap-3 px-6 h-16 shrink-0">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-sunset-orange/15">
-          <Crosshair className="w-5 h-5 text-sunset-orange" />
+      <div className="flex items-center gap-3 px-4 h-14 shrink-0 border-b border-wolf-border/50">
+        {/* Fixed dark container keeps the white wolf visible in both themes */}
+        <div className="flex items-center justify-center shrink-0 rounded-md bg-[#162225] p-1">
+          <Image
+            src="/logo/HunterLogoCut-removebg.png"
+            alt="Huntr"
+            width={44}
+            height={32}
+            className="object-contain"
+            priority
+          />
         </div>
-        <div>
-          <h1 className="text-base font-bold text-snow-peak tracking-tight">
+        <div className="min-w-0">
+          <h1 className="text-base font-bold text-snow-peak tracking-tight leading-tight">
             HUNTR
           </h1>
           <p className="text-[10px] text-mist/60 font-mono uppercase tracking-widest">
@@ -143,8 +157,6 @@ export function Sidebar({
           </button>
         ) : null}
       </div>
-
-      <Separator className="opacity-50" />
 
       {/* ---- Search Trigger ---- */}
       <div className="px-3 py-3">

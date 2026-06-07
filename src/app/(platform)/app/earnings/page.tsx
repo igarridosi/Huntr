@@ -35,6 +35,7 @@ import {
 } from "recharts";
 import { useAllProfiles, useAllQuotes } from "@/hooks/use-stock-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import type { CompanyFinancials } from "@/types/financials";
 import type { EarningsHistoryPoint, StockProfile, StockQuote } from "@/types/stock";
 
@@ -578,23 +579,13 @@ function EarningsHoverTooltip({
   if (!hoverText) return null;
 
   return (
-    <div className="rounded-lg border border-wolf-border/70 bg-[#0A1417]/95 px-3 py-1.5 text-xs shadow-lg backdrop-blur-sm">
+    <div className="rounded-lg border border-wolf-border px-3 py-1.5 text-xs shadow-lg bg-wolf-surface">
       <p className="text-snow-peak">
         {hoverText.label} <span className="font-semibold">{hoverText.value}</span>
       </p>
     </div>
   );
 }
-
-// Design-system color aliases for Recharts (which doesn't read CSS vars directly)
-const C = {
-  border:  "#2A3B40", // wolf-border
-  mist:    "#8C9DA1", // mist
-  orange:  "#FF8C42", // sunset-orange
-  neutral: "#7D8697", // mist/darker
-  gray:    "#6b7280", // neutral gray
-  grayDim: "#4b5563", // gray-600
-} as const;
 
 function EarningsMetricChart({
   metric,
@@ -611,6 +602,9 @@ function EarningsMetricChart({
   onPointHover: (index: number, series: HoverSeries, event?: unknown) => void;
   onPointLeave: () => void;
 }) {
+  // Theme-aware color tokens (Recharts SVG attributes don't support CSS vars)
+  const c = useChartColors();
+
   const revenueData = data.map((row) => {
     const estimateOnlyNextQuarter =
       row.revenue == null && row.revenueEstimate != null;
@@ -628,12 +622,12 @@ function EarningsMetricChart({
       <ResponsiveContainer width="100%" height="100%">
         {metric === "revenue" ? (
           <BarChart data={revenueData} margin={{ top: 30, right: 10, left: 0, bottom: 0 }} barGap={4} barCategoryGap={8}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} opacity={0.3} />
+            <CartesianGrid strokeDasharray="3 3" stroke={c.grid} opacity={0.3} />
             <XAxis
               dataKey="quarter"
-              tick={{ fill: C.mist, fontSize: 10 }}
+              tick={{ fill: c.tick, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: C.border }}
+              axisLine={{ stroke: c.grid }}
               interval={0}
               angle={-45}
               textAnchor="end"
@@ -643,9 +637,9 @@ function EarningsMetricChart({
               tickFormatter={formatQuarterTick}
             />
             <YAxis
-              tick={{ fill: C.mist, fontSize: 10 }}
+              tick={{ fill: c.tick, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: C.border }}
+              axisLine={{ stroke: c.grid }}
               width={56}
               domain={[(dataMin: number) => floorRevenueAxisMin(dataMin), "auto"]}
               tickFormatter={formatRevenueTick}
@@ -658,7 +652,7 @@ function EarningsMetricChart({
                   return (
                     <Cell
                       key={`rev-next-est-cell-${row.quarter}-${idx}`}
-                      fill={C.neutral}
+                      fill={c.neutral}
                       opacity={0.72}
                       onMouseEnter={(event) => onPointHover(idx, "revEstimate", event)}
                     />
@@ -668,7 +662,7 @@ function EarningsMetricChart({
                 return (
                   <Cell
                     key={`rev-cell-${row.quarter}-${idx}`}
-                    fill={C.orange}
+                    fill={c.primary}
                     opacity={hoveredIndex === idx && hoverSeries === "revReported" ? 1 : 0.92}
                     onMouseEnter={(event) => onPointHover(idx, "revReported", event)}
                   />
@@ -678,13 +672,13 @@ function EarningsMetricChart({
           </BarChart>
         ) : (
           <ComposedChart data={data} margin={{ top: 30, right: 10, left: 0, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke={C.border} opacity={0.3} />
+            <CartesianGrid strokeDasharray="3 3" stroke={c.grid} opacity={0.3} />
             <XAxis
               dataKey="quarter"
               type="category"
-              tick={{ fill: C.mist, fontSize: 10 }}
+              tick={{ fill: c.tick, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: C.border }}
+              axisLine={{ stroke: c.grid }}
               interval={0}
               angle={-45}
               textAnchor="end"
@@ -696,9 +690,9 @@ function EarningsMetricChart({
             <YAxis
               type="number"
               domain={["auto", "auto"]}
-              tick={{ fill: C.mist, fontSize: 10 }}
+              tick={{ fill: c.tick, fontSize: 10 }}
               tickLine={false}
-              axisLine={{ stroke: C.border }}
+              axisLine={{ stroke: c.grid }}
               width={52}
               tickFormatter={formatEpsTick}
             />
@@ -707,7 +701,7 @@ function EarningsMetricChart({
             <Scatter
               dataKey="estimate"
               fill="none"
-              stroke={C.gray}
+              stroke={c.tick}
               strokeWidth={2}
               shape={(props: unknown) => {
                 const p = props as { cx?: number; cy?: number; index?: number };
@@ -718,7 +712,7 @@ function EarningsMetricChart({
                     cy={p.cy}
                     r={active ? 6 : 4.5}
                     fill="none"
-                    stroke={C.gray}
+                    stroke={c.tick}
                     strokeWidth={active ? 2.6 : 2}
                     onMouseEnter={(event) => {
                       if (typeof p.index === "number") onPointHover(p.index, "epsEstimate", event);
@@ -759,7 +753,7 @@ function EarningsMetricChart({
                       y1={estimateCy}
                       x2={p.cx}
                       y2={p.cy}
-                      stroke={C.grayDim}
+                      stroke={c.grid}
                       strokeWidth={1}
                     />
                     <circle
@@ -1396,7 +1390,7 @@ export default function EarningsPage() {
                   ? "Loading 14Q..."
                   : hasFullHistoryLoaded
                     ? "14Q loaded"
-                    : "Load 16 quarters"}
+                    : "Load 14 quarters"}
               </Button>
               <div className="inline-flex rounded-full border border-wolf-border/40 bg-wolf-black/35 p-0.5">
                 <button
@@ -1425,7 +1419,7 @@ export default function EarningsPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-wolf-border/35 bg-[#0A171B]/70 px-3 py-2">
+          <div className="rounded-lg border border-wolf-border/35 bg-wolf-black/50 px-3 py-2">
             <p className="text-[11px] uppercase tracking-wide text-mist">Next estimate</p>
             <p className="mt-1 text-sm font-semibold text-snow-peak">
               {chartMetric === "eps"
@@ -1442,7 +1436,7 @@ export default function EarningsPage() {
             />
           ) : null}
 
-          <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-gradient-to-b from-[#0A171B] to-[#091215] px-2 py-0 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
+          <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-wolf-black/30 px-2 py-0 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
             {hasHistoryLoaded ? (
               <EarningsMetricChart
                 metric={chartMetric}
@@ -1623,7 +1617,7 @@ export default function EarningsPage() {
                           onRetry={() => { void refetchQuotes(); void refetchProfiles(); }}
                         />
                       ) : isLoading ? (
-                        <div className="rounded-xl border border-wolf-border/45 bg-[#0A171B]/75 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
+                        <div className="rounded-xl border border-wolf-border/45 bg-wolf-black/50 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
                           <div className="flex items-center gap-3">
                             <Spinner size="lg" />
                             <div>

@@ -202,6 +202,15 @@ export async function getBatchBuybackStrength(
   );
 }
 
+export async function getBatchBeta5YMonthly(
+  tickers: string[]
+): Promise<Record<string, number | null>> {
+  if (FEATURES.ENABLE_REAL_API) {
+    return yahoo.getBatchBeta5YMonthly(tickers);
+  }
+  return Object.fromEntries(tickers.map((t) => [t.toUpperCase(), null]));
+}
+
 export async function getBatchEarningsInsights(
   tickers: string[]
 ): Promise<Record<string, EarningsInsight>> {

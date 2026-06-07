@@ -1,9 +1,11 @@
 "use client";
 
-import { Search, Menu, Crosshair } from "lucide-react";
+import Image from "next/image";
+import { Search, Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { KoFiSupport } from "@/components/ui/kofi-support";
+import { ThemeToggle } from "@/components/ui/theme-toggle";
 
 interface TopbarProps {
   onSearchClick?: () => void;
@@ -45,7 +47,16 @@ export function Topbar({
 
       {/* Mobile brand */}
       <div className="flex items-center gap-2 lg:hidden">
-        <Crosshair className="w-4 h-4 text-sunset-orange" />
+        <div className="flex items-center justify-center rounded-lg bg-[#162225] p-1">
+          <Image
+            src="/logo/HunterLogoCut-removebg.png"
+            alt="Huntr"
+            width={36}
+            height={26}
+            className="object-contain"
+            priority
+          />
+        </div>
         <span className="text-sm font-bold tracking-tight">HUNTR</span>
       </div>
 
@@ -72,6 +83,7 @@ export function Topbar({
         </kbd>
       </button>
 
+      <ThemeToggle className="ml-2" />
       <KoFiSupport className="ml-2 hidden md:block" text="Support Huntr" />
     </header>
   );

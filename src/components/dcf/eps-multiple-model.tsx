@@ -19,6 +19,7 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import { TrendingUp, TrendingDown, Calculator, Zap } from "lucide-react";
 
 export interface EPSMultipleInputs {
@@ -341,21 +342,22 @@ function ProjectionLineChart({
   data: Array<{ period: string; projectedPrice: number }>;
   height: number;
 }) {
+  const c = useChartColors();
   return (
     <ResponsiveContainer width="100%" height={height}>
       <LineChart data={data} margin={{ top: 8, right: 12, left: 8, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="2 3" stroke="#2A3B40" strokeOpacity={0.35} vertical={false} />
+        <CartesianGrid strokeDasharray="2 3" stroke={c.grid} strokeOpacity={0.35} vertical={false} />
         <XAxis
           dataKey="period"
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "#8C9DA1", fontSize: 11 }}
+          tick={{ fill: c.tick, fontSize: 11 }}
           dy={8}
         />
         <YAxis
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "#8C9DA1", fontSize: 11 }}
+          tick={{ fill: c.tick, fontSize: 11 }}
           width={60}
           tickFormatter={(v: number) =>
             Intl.NumberFormat("en-US", {
@@ -370,7 +372,7 @@ function ProjectionLineChart({
             if (!active || !payload || payload.length === 0) return null;
             const value = Number(payload[0]?.value ?? 0);
             return (
-              <div className="rounded-md border border-wolf-border bg-wolf-black/95 px-2.5 py-2 shadow-xl">
+              <div className="rounded-md border border-wolf-border bg-wolf-surface px-2.5 py-2 shadow-xl">
                 <p className="text-[10px] text-mist mb-0.5">{label}</p>
                 <p className="text-xs font-mono text-snow-peak">
                   Projected Price: {formatCurrency(value)}
@@ -384,8 +386,8 @@ function ProjectionLineChart({
           dataKey="projectedPrice"
           stroke="#4DC990"
           strokeWidth={2.5}
-          dot={{ r: 4, fill: "#4DC990", stroke: "#0B1416", strokeWidth: 2 }}
-          activeDot={{ r: 5, fill: "#4DC990", stroke: "#0B1416", strokeWidth: 2 }}
+          dot={{ r: 4, fill: "#4DC990", stroke: c.dotStroke, strokeWidth: 2 }}
+          activeDot={{ r: 5, fill: "#4DC990", stroke: c.dotStroke, strokeWidth: 2 }}
         />
       </LineChart>
     </ResponsiveContainer>

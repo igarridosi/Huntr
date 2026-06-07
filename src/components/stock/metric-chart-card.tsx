@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatPercent } from "@/lib/utils";
 
@@ -313,6 +314,7 @@ function MetricChartRender({
   showYAxis,
   gradientId,
 }: MetricChartRenderProps) {
+  const c = useChartColors();
   const yDomain = useMemo<[number, number]>(() => {
     return computeYAxisDomain({
       data,
@@ -362,7 +364,7 @@ function MetricChartRender({
         >
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#2A3B40"
+            stroke={c.grid}
             strokeOpacity={0.3}
             vertical={false}
           />
@@ -370,7 +372,7 @@ function MetricChartRender({
             dataKey="period"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#8C9DA1", fontSize: 10 }}
+            tick={{ fill: c.tick, fontSize: 10 }}
             dy={4}
             interval="preserveStartEnd"
           />
@@ -378,7 +380,7 @@ function MetricChartRender({
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "#8C9DA1", fontSize: 10 }}
+              tick={{ fill: c.tick, fontSize: 10 }}
               width={48}
               domain={yDomain}
               tickFormatter={(v: number) =>
@@ -426,7 +428,7 @@ function MetricChartRender({
           </defs>
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#2A3B40"
+            stroke={c.grid}
             strokeOpacity={0.3}
             vertical={false}
           />
@@ -434,7 +436,7 @@ function MetricChartRender({
             dataKey="period"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#8C9DA1", fontSize: 10 }}
+            tick={{ fill: c.tick, fontSize: 10 }}
             dy={4}
             interval="preserveStartEnd"
           />
@@ -442,7 +444,7 @@ function MetricChartRender({
             <YAxis
               axisLine={false}
               tickLine={false}
-              tick={{ fill: "#8C9DA1", fontSize: 10 }}
+              tick={{ fill: c.tick, fontSize: 10 }}
               width={48}
               domain={yDomain}
               tickFormatter={(v: number) =>
@@ -472,7 +474,7 @@ function MetricChartRender({
             activeDot={{
               r: 3,
               fill: color,
-              stroke: "#0B1416",
+              stroke: c.dotStroke,
               strokeWidth: 2,
             }}
           />

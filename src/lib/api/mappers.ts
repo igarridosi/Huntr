@@ -19,6 +19,7 @@ import type {
   TimeSeriesFinancialsCache,
 } from "@/types/yahoo";
 import { buildTickerLogoUrl, normalizeWebsiteUrl } from "@/lib/logo";
+import { sanitizeSector } from "./sector-overrides";
 
 // ─────────────────────────────────────────────────────────
 // Helpers
@@ -80,7 +81,7 @@ export function mapToStockProfile(
   return {
     ticker: ticker.toUpperCase(),
     name: price?.longName ?? price?.shortName ?? ticker.toUpperCase(),
-    sector: profile?.sector ?? "Unknown",
+    sector: sanitizeSector(profile?.sector, ticker),
     industry: profile?.industry ?? "Unknown",
     exchange: price?.exchangeName ?? price?.exchange ?? "Unknown",
     currency: price?.currency ?? "USD",

@@ -65,6 +65,7 @@ import { usePortfolio } from "@/hooks/use-portfolio";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { useBatchDailyHistory, useBatchPeriodPerformance, useSearch } from "@/hooks/use-stock-data";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import type {
   EnrichedPosition,
   PortfolioImportResult,
@@ -646,6 +647,7 @@ function PortfolioEvolutionChart({
 }) {
   const [range, setRange] = useState<PerformanceRange>("1M");
   const [compareBenchmark, setCompareBenchmark] = useState(true);
+  const c = useChartColors();
 
   const tickers = useMemo(
     () =>
@@ -1079,27 +1081,27 @@ function PortfolioEvolutionChart({
                   <stop offset="100%" stopColor="#FF8C42" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" strokeOpacity={0.35} vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke={c.grid} strokeOpacity={0.35} vertical={false} />
               <XAxis
                 dataKey="isoDate"
                 axisLine={false}
                 tickLine={false}
                 minTickGap={68}
                 tickMargin={8}
-                tick={{ fill: "#6b7280", fontSize: 11 }}
+                tick={{ fill: c.tick, fontSize: 11 }}
                 tickFormatter={formatXAxis}
               />
               <YAxis
                 orientation="left"
                 axisLine={false}
                 tickLine={false}
-                tick={{ fill: "#6b7280", fontSize: 11 }}
+                tick={{ fill: c.tick, fontSize: 11 }}
                 domain={yAxisConfig.domain}
                 ticks={yAxisConfig.ticks}
                 tickFormatter={(v: number) => formatPct(v)}
               />
               <Tooltip
-                cursor={{ stroke: "#8C9DA1", strokeWidth: 1, strokeDasharray: "4 4" }}
+                cursor={{ stroke: c.tick, strokeWidth: 1, strokeDasharray: "4 4" }}
                 content={renderTooltip}
                 labelFormatter={(_, payload) => {
                   const row = payload?.[0]?.payload as { tooltipDate?: string } | undefined;
@@ -1113,7 +1115,7 @@ function PortfolioEvolutionChart({
                 strokeWidth={2.9}
                 fill="url(#portfolioArea)"
                 dot={false}
-                activeDot={{ r: 3.5, stroke: "#FF8C42", strokeWidth: 2, fill: "#0B1416" }}
+                activeDot={{ r: 3.5, stroke: "#FF8C42", strokeWidth: 2, fill: c.dotStroke }}
               />
               {compareBenchmark && (
                 <Area
@@ -1123,7 +1125,7 @@ function PortfolioEvolutionChart({
                   strokeWidth={2.7}
                   fill="transparent"
                   dot={false}
-                  activeDot={{ r: 3, stroke: "#7A8FA8", strokeWidth: 2, fill: "#0B1416" }}
+                  activeDot={{ r: 3, stroke: "#7A8FA8", strokeWidth: 2, fill: c.dotStroke }}
                 />
               )}
             </AreaChart>

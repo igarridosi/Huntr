@@ -20,6 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartErrorBoundary } from "@/components/ui/chart-error-boundary";
+import { QualityScorecard, QualityScorecardSkeleton } from "@/components/stock/quality-scorecard";
+import { calculateQualityScore } from "@/lib/calculations/quality-score";
 import { fetchAlphaFinancials, getAlphaAvailability } from "@/app/actions/stock";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
@@ -633,13 +635,14 @@ export default function OverviewPage() {
         durationMs={7000}
       />
 
-      {/* Categorized Metrics Bar */}
+      {/* Categorized Metrics Bar — Rule 4: pass fundamentals period for data freshness footer */}
       {quote && (
         <CategorizedMetrics
           quote={quote}
           income={latestIncome}
           balance={latestBalance}
           cashFlow={latestCashFlow}
+          fundamentalsPeriod={latestIncome?.period ?? latestBalance?.period ?? undefined}
         />
       )}
 
@@ -854,6 +857,13 @@ export default function OverviewPage() {
           </ChartErrorBoundary>
           </div>
 
+      ) : null}
+
+      {/* Quality Scorecard — after charts so financials are already loaded */}
+      {finLoading && !financials ? (
+        <QualityScorecardSkeleton />
+      ) : financials && quote ? (
+        <QualityScorecard result={calculateQualityScore(financials, quote)} />
       ) : null}
 
       {/* Company Description */}

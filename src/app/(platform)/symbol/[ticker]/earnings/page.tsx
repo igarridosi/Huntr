@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useParams } from "next/navigation";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import { useQuery } from "@tanstack/react-query";
 import {
   CartesianGrid,
@@ -123,7 +124,10 @@ function formatEarningsData(
 
     if (existing) {
       if (existing.revenue == null) {
-        existing.revenue = numberOrNull(row.revenue);
+        // Use nonZeroNumberOrNull: buildFinancialsFromMetrics stores 0 as a sentinel for
+        // "no revenue data available" (since IncomeStatement.revenue is typed as number,
+        // not nullable). Treating 0 as null here prevents phantom $0 revenue bars.
+        existing.revenue = nonZeroNumberOrNull(row.revenue);
       }
       if (existing.reported == null && epsFromFinancials != null) {
         existing.reported = epsFromFinancials;
@@ -143,7 +147,7 @@ function formatEarningsData(
       reported: epsFromFinancials,
       surprise: null,
       revenueEstimate: null,
-      revenue: numberOrNull(row.revenue),
+      revenue: nonZeroNumberOrNull(row.revenue),
       sortTs,
     });
   }
@@ -262,7 +266,7 @@ function EarningsHoverTooltip({
   if (!hoverText) return null;
 
   return (
-    <div className="rounded-lg border border-wolf-border/70 bg-[#0A1417]/95 px-3 py-1.5 text-xs shadow-lg backdrop-blur-sm">
+    <div className="rounded-lg border border-wolf-border px-3 py-1.5 text-xs shadow-lg bg-wolf-surface">
       <p className="text-snow-peak">
         {hoverText.label} <span className="font-semibold">{hoverText.value}</span>
       </p>
@@ -276,6 +280,7 @@ export default function SymbolEarningsPage() {
 
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoverSeries, setHoverSeries] = useState<HoverSeries | null>(null);
+  const c = useChartColors();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["symbol", "earnings-detail", ticker],
@@ -395,7 +400,7 @@ export default function SymbolEarningsPage() {
 
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-wolf-border/40 bg-[#081317] p-3" onMouseLeave={onPointLeave}>
+            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-3" onMouseLeave={onPointLeave}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-semibold text-snow-peak">EPS</p>
                 <Badge variant="outline" className="text-[11px] border-wolf-border/70 text-mist">Estimate vs Reported</Badge>
@@ -403,12 +408,12 @@ export default function SymbolEarningsPage() {
               <div className="h-[380px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <ComposedChart data={chartRows} margin={{ top: 20, right: 12, left: 0, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" opacity={0.3} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={c.grid} opacity={0.3} />
                     <XAxis
                       dataKey="quarter"
-                      tick={{ fill: "#8C9DA1", fontSize: 10 }}
+                      tick={{ fill: c.tick, fontSize: 10 }}
                       tickLine={false}
-                      axisLine={{ stroke: "#2A3B40" }}
+                      axisLine={{ stroke: c.axisLine }}
                       interval={0}
                       angle={-45}
                       textAnchor="end"
@@ -418,9 +423,9 @@ export default function SymbolEarningsPage() {
                       tickFormatter={formatQuarterTick}
                     />
                     <YAxis
-                      tick={{ fill: "#8C9DA1", fontSize: 10 }}
+                      tick={{ fill: c.tick, fontSize: 10 }}
                       tickLine={false}
-                      axisLine={{ stroke: "#2A3B40" }}
+                      axisLine={{ stroke: c.axisLine }}
                       width={52}
                     />
                     <Tooltip cursor={false} content={<EarningsHoverTooltip hoverSeries={hoverSeries} />} />
@@ -504,7 +509,7 @@ export default function SymbolEarningsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-wolf-border/40 bg-[#081317] p-3" onMouseLeave={onPointLeave}>
+            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-3" onMouseLeave={onPointLeave}>
               <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-semibold text-snow-peak">Revenue</p>
                 <Badge variant="outline" className="text-[11px] border-wolf-border/70 text-mist">Reported + Next Estimate</Badge>
@@ -512,12 +517,12 @@ export default function SymbolEarningsPage() {
               <div className="h-[380px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={revenueRows} margin={{ top: 20, right: 12, left: 6, bottom: 12 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" opacity={0.3} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={c.grid} opacity={0.3} />
                     <XAxis
                       dataKey="quarter"
-                      tick={{ fill: "#8C9DA1", fontSize: 10 }}
+                      tick={{ fill: c.tick, fontSize: 10 }}
                       tickLine={false}
-                      axisLine={{ stroke: "#2A3B40" }}
+                      axisLine={{ stroke: c.axisLine }}
                       interval={0}
                       angle={-45}
                       textAnchor="end"
@@ -527,9 +532,9 @@ export default function SymbolEarningsPage() {
                       tickFormatter={formatQuarterTick}
                     />
                     <YAxis
-                      tick={{ fill: "#8C9DA1", fontSize: 10 }}
+                      tick={{ fill: c.tick, fontSize: 10 }}
                       tickLine={false}
-                      axisLine={{ stroke: "#2A3B40" }}
+                      axisLine={{ stroke: c.grid }}
                       width={70}
                       domain={[(dataMin: number) => floorRevenueAxisMin(dataMin), "auto"]}
                       tickFormatter={formatRevenueAxisTick}

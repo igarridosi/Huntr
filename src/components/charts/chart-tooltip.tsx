@@ -31,8 +31,8 @@ export function ChartTooltip({
   return (
     <div
       className={cn(
-        "rounded-lg border border-wolf-border/90 bg-[#0B1416] px-3 py-2 shadow-[0_14px_36px_rgba(0,0,0,0.55)] ring-1 ring-black/30",
-        "text-xs"
+        "rounded-lg border border-wolf-border px-3 py-2 shadow-[0_14px_36px_rgba(0,0,0,0.22)] ring-1 ring-black/10",
+        "bg-wolf-surface text-xs"
       )}
       style={{
         backdropFilter: "none",

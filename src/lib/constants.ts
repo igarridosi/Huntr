@@ -12,6 +12,7 @@ export const ROUTES = {
   APP_TRANSCRIPTS: "/app/transcripts",
   APP_DCF_CALCULATOR: "/app/dcf-calculator",
   APP_PORTFOLIOS: "/app/portfolios",
+  APP_SCREENER: "/app/screener",
   APP_SETTINGS: "/app/settings",
   LOGIN: "/login",
   SIGNUP: "/signup",

@@ -4,6 +4,7 @@ import * as yahoo from "@/lib/api/yahoo";
 import * as mock from "@/lib/mock-data";
 import {
   getEarningsInsightFromAlphaVantage,
+  getQuarterlyRevenueMapFromAlpha,
   isAlphaThrottleError,
   readAlphaThrottleState,
 } from "@/lib/api/alphavantage";
@@ -357,7 +358,7 @@ function buildInsightFromMergedRows(
     next_earnings_date: nextEarningsDate ?? quote?.next_earnings_date ?? null,
     earnings_timing: quote?.earnings_timing ?? "Time TBD",
     est_eps: nextEstimate?.eps_estimate ?? latestEstimate?.eps_estimate ?? null,
-    est_revenue: null,
+    est_revenue: nextEstimate?.revenue_estimate ?? null,
     history,
     investor_relations_url: profile?.website ?? null,
     webcast_url: profile?.website ?? null,
@@ -429,6 +430,27 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
               } as AlphaEarningsCacheRow;
             });
 
+            // If revenue is still missing (alphaFinancials wasn't cached), fetch
+            // INCOME_STATEMENT directly from Alpha — same source as EPS, no yfinance needed.
+            // Period labels from both endpoints use the same toPeriodLabel() format ("Q4 2025")
+            // so there is no date-key mismatch here.
+            const needsAlphaRevenue = rows.some((r) => r.revenue_actual == null);
+            if (needsAlphaRevenue) {
+              try {
+                const alphaRevMap = await getQuarterlyRevenueMapFromAlpha(ticker, alphaKey);
+                if (alphaRevMap) {
+                  for (const r of rows) {
+                    if (r.revenue_actual == null && r.quarter) {
+                      const rev = alphaRevMap.get(r.quarter);
+                      if (rev != null) r.revenue_actual = rev;
+                    }
+                  }
+                }
+              } catch {
+                // Non-fatal: yfinance enrichment below acts as fallback
+              }
+            }
+
             let nextEstimate: AlphaEarningsCacheRow | null = alphaInsight.next_earnings_date
               ? ({
                   fiscal_date: alphaInsight.next_earnings_date,
@@ -441,8 +463,12 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
                 } as AlphaEarningsCacheRow)
               : null;
 
-            // If Alpha provided limited history, attempt to enrich with yfinance (estimates + revenue)
-            if (rows.length < DEFAULT_HISTORY_LIMIT) {
+            // Enrich with yfinance when Alpha history is incomplete OR revenue is missing.
+            // Alpha often lacks revenue when its financials aren't separately cached; yfinance
+            // always returns quarterly revenue. Key-mismatch between Alpha's report_date and
+            // yfinance's fiscal close_date is handled by a quarter-label fallback in the merge.
+            const missingRevenue = rows.some((r) => r.revenue_actual == null);
+            if (rows.length < DEFAULT_HISTORY_LIMIT || missingRevenue) {
               try {
                 const yf = await getQuarterlyMetricsFromYfinance(ticker, DEFAULT_HISTORY_LIMIT);
                 if (yf && Array.isArray(yf.rows) && yf.rows.length > 0) {
@@ -460,7 +486,6 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
                   for (const y of yf.rows) {
                     const fiscal = y.close_date ?? y.quarter ?? null;
                     const k = fiscal ?? `${y.quarter}-${y.close_date}`;
-                    const existing = mergedMap.get(k);
                     const yRow: AlphaEarningsCacheRow = {
                       fiscal_date: y.close_date ?? null,
                       report_date: y.close_date ?? null,
@@ -471,11 +496,22 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
                       revenue_estimate: null,
                     };
 
-                    if (!existing) {
+                    // Primary lookup by date key; fallback by quarter label because Alpha stores
+                    // report_date (e.g. "2026-01-28") while yfinance stores fiscal close_date
+                    // (e.g. "2025-12-31") — these are different dates and never match by key alone.
+                    let existingKey: string | null = mergedMap.has(k) ? k : null;
+                    if (existingKey === null && y.quarter) {
+                      for (const [mk, mv] of mergedMap.entries()) {
+                        if (mv.quarter === y.quarter) { existingKey = mk; break; }
+                      }
+                    }
+
+                    if (existingKey === null) {
                       mergedMap.set(k, yRow);
                     } else {
-                      // prefer alpha values when present, otherwise fill from yfinance
-                      mergedMap.set(k, {
+                      const existing = mergedMap.get(existingKey)!;
+                      // Prefer Alpha values when present; fill from yfinance only where Alpha has nulls
+                      mergedMap.set(existingKey, {
                         fiscal_date: existing.fiscal_date ?? yRow.fiscal_date,
                         report_date: existing.report_date ?? yRow.report_date,
                         quarter: existing.quarter ?? yRow.quarter,
@@ -542,8 +578,36 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
 
     // Process cachePayload into financials/insight (from cache hit OR fresh Alpha fetch)
     if (cachePayload && Array.isArray(cachePayload.rows) && cachePayload.rows.length > 0 && insight.history.length === 0) {
-      // If cache is incomplete, attempt a best-effort enrichment from yfinance (only on full history requests)
-      if (!isPreviewMode && !dataError && cachePayload.rows.length < DEFAULT_HISTORY_LIMIT) {
+      // PRIMARY: if the cached rows lack revenue, fetch INCOME_STATEMENT from Alpha directly.
+      // This is the same API family as the EARNINGS endpoint that provided EPS — no external
+      // sources needed. Period labels ("Q4 2025") are consistent between both Alpha endpoints.
+      const cacheMissingRevenue = cachePayload.rows.some((r) => r.revenue_actual == null);
+      if (!isPreviewMode && cacheMissingRevenue) {
+        const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+        if (alphaKey) {
+          try {
+            const alphaRevMap = await getQuarterlyRevenueMapFromAlpha(ticker, alphaKey);
+            if (alphaRevMap) {
+              for (const r of cachePayload.rows) {
+                if (r.revenue_actual == null && r.quarter) {
+                  const rev = alphaRevMap.get(r.quarter);
+                  if (rev != null) r.revenue_actual = rev;
+                }
+              }
+              // Persist enriched revenue into cache so future hits don't need to refetch
+              await writeAlphaEarningsCache(ticker, cachePayload);
+            }
+          } catch {
+            // Non-fatal: yfinance enrichment below acts as fallback
+          }
+        }
+      }
+
+      // FALLBACK: enrich from yfinance when cache is incomplete OR revenue still missing.
+      // The quarter-label fallback in the merge loop handles the Alpha report_date vs
+      // yfinance fiscal close_date key mismatch that previously blocked revenue matching.
+      const stillMissingRevenue = cachePayload.rows.some((r) => r.revenue_actual == null);
+      if (!isPreviewMode && !dataError && (cachePayload.rows.length < DEFAULT_HISTORY_LIMIT || stillMissingRevenue)) {
         try {
           const yf = await getQuarterlyMetricsFromYfinance(ticker, DEFAULT_HISTORY_LIMIT);
           if (yf && Array.isArray(yf.rows) && yf.rows.length > 0) {
@@ -556,7 +620,6 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
             for (const y of yf.rows) {
               const fiscal = y.close_date ?? y.quarter ?? null;
               const k = fiscal ?? `${y.quarter}-${y.close_date}`;
-              const existing = existingMap.get(k);
               const yRow: AlphaEarningsCacheRow = {
                 fiscal_date: y.close_date ?? null,
                 report_date: y.close_date ?? null,
@@ -567,9 +630,19 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
                 revenue_estimate: null,
               };
 
-              if (!existing) existingMap.set(k, yRow);
+              // Primary lookup by date key; fallback by quarter label for the
+              // Alpha report_date vs yfinance close_date mismatch.
+              let existingKey: string | null = existingMap.has(k) ? k : null;
+              if (existingKey === null && y.quarter) {
+                for (const [mk, mv] of existingMap.entries()) {
+                  if (mv.quarter === y.quarter) { existingKey = mk; break; }
+                }
+              }
+
+              if (existingKey === null) existingMap.set(k, yRow);
               else {
-                existingMap.set(k, {
+                const existing = existingMap.get(existingKey)!;
+                existingMap.set(existingKey, {
                   fiscal_date: existing.fiscal_date ?? yRow.fiscal_date,
                   report_date: existing.report_date ?? yRow.report_date,
                   quarter: existing.quarter ?? yRow.quarter,
@@ -652,6 +725,36 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
       dataError = null;
     }
 
+    // Use Yahoo Finance consensus estimates for the next (unreported) quarter: both EPS and Revenue.
+    // Alpha EARNINGS supplies est_eps but Yahoo is more frequently updated and also provides
+    // est_revenue which Alpha does not supply.
+    // SAFETY: only the future quarter row (eps_actual == null) is ever patched.
+    // Historical rows (eps_actual != null) are returned unchanged — their actuals are untouched.
+    if (!isPreviewMode && insight.history.length > 0) {
+      try {
+        const yahooForEst = await yahoo.getEarningsInsight(ticker);
+        if (yahooForEst) {
+          insight = {
+            ...insight,
+            est_eps: yahooForEst.est_eps ?? insight.est_eps,
+            est_revenue: yahooForEst.est_revenue ?? insight.est_revenue,
+            history: insight.history.map((h) => {
+              // Historical reported rows — never touch
+              if (h.eps_actual != null) return h;
+              // Next-quarter estimate row: apply Yahoo consensus for EPS and Revenue
+              return {
+                ...h,
+                eps_estimate: yahooForEst.est_eps ?? h.eps_estimate,
+                revenue_estimate: yahooForEst.est_revenue ?? h.revenue_estimate,
+              };
+            }),
+          };
+        }
+      } catch {
+        // non-fatal: estimates remain from Alpha
+      }
+    }
+
     // Yahoo Finance fallback if Alpha Vantage provided no data.
     // getEarningsInsight already includes revenue via the financialData Yahoo module
     // so calling getFinancials (which defaults to Alpha Vantage) is not needed here
@@ -665,6 +768,52 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
         }
       } catch {
         // Yahoo fallback failed — original dataError remains
+      }
+    }
+
+    // In preview mode the Alpha cache (when present) skips revenue enrichment to stay fast.
+    // Use Yahoo Finance to fill revenue gaps in historical rows AND apply Yahoo consensus
+    // estimates (EPS + Revenue) for the next quarter row.
+    // SAFETY: historical EPS actuals (eps_actual != null) are never modified.
+    if (isPreviewMode && insight.history.length > 0) {
+      try {
+        const yahooInsight = await yahoo.getEarningsInsight(ticker);
+        if (yahooInsight?.history?.length) {
+          const revMap = new Map<string, { revenue_actual: number | null; revenue_estimate: number | null }>();
+          for (const h of yahooInsight.history) {
+            if (h.quarter) {
+              revMap.set(h.quarter, {
+                revenue_actual: h.revenue_actual ?? null,
+                revenue_estimate: h.revenue_estimate ?? null,
+              });
+            }
+          }
+          insight = {
+            ...insight,
+            est_eps: yahooInsight.est_eps ?? insight.est_eps,
+            est_revenue: yahooInsight.est_revenue ?? insight.est_revenue,
+            history: insight.history.map((h) => {
+              const yh = h.quarter ? revMap.get(h.quarter) : undefined;
+              if (h.eps_actual != null) {
+                // Historical reported row: fill missing revenue only — EPS actuals untouched
+                return {
+                  ...h,
+                  revenue_actual: h.revenue_actual ?? yh?.revenue_actual ?? null,
+                  revenue_estimate: h.revenue_estimate ?? yh?.revenue_estimate ?? null,
+                };
+              }
+              // Next-quarter estimate row: use Yahoo consensus for both EPS and Revenue
+              return {
+                ...h,
+                eps_estimate: yahooInsight.est_eps ?? h.eps_estimate,
+                revenue_actual: h.revenue_actual ?? yh?.revenue_actual ?? null,
+                revenue_estimate: yahooInsight.est_revenue ?? yh?.revenue_estimate ?? h.revenue_estimate,
+              };
+            }),
+          };
+        }
+      } catch {
+        // non-fatal: estimates remain as-is
       }
     }
   } else {

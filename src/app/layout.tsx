@@ -4,6 +4,7 @@ import { Outfit } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { QueryProvider } from "@/providers/query-provider";
 import { SupabaseProvider } from "@/providers/supabase-provider";
+import { ThemeProvider } from "@/providers/theme-provider";
 import { TallyFeedbackWidget } from "@/components/ui/tally-feedback";
 import "./globals.css";
 
@@ -149,8 +150,20 @@ export default function RootLayout({
   };
 
   return (
-    <html lang="en" className="dark">
+    /* suppressHydrationWarning: the inline FOWT script may modify className
+       before React hydrates — suppressing the mismatch warning is correct here. */
+    <html lang="en" suppressHydrationWarning>
       <head>
+        {/* ── Anti-FOWT script ──────────────────────────────────────────────
+            Runs synchronously before the first paint so the correct theme
+            class is applied before any CSS is rendered.
+            Dark is the default (no class needed); only "light" is added.
+        ──────────────────────────────────────────────────────────────── */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('huntr-theme');var s=!t&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if((t||s)==='light')document.documentElement.classList.add('light');}catch(e){}})();`,
+          }}
+        />
         <script
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaMarkup) }}
@@ -160,21 +173,23 @@ export default function RootLayout({
         suppressHydrationWarning
         className={`${outfit.variable} ${geistMono.variable} antialiased bg-wolf-black text-snow-peak`}
       >
-        <SupabaseProvider>
-          <QueryProvider>
-            {/* Google Analytics */}
-            <Script
-              async
-              src="https://www.googletagmanager.com/gtag/js?id=G-ZKVECX6NY1"
-              strategy="afterInteractive"
-            />
-            <Script id="gtag-init" strategy="afterInteractive">
-              {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-ZKVECX6NY1');`}
-            </Script>
-            {children}
-            <TallyFeedbackWidget />
-          </QueryProvider>
-        </SupabaseProvider>
+        <ThemeProvider>
+          <SupabaseProvider>
+            <QueryProvider>
+              {/* Google Analytics */}
+              <Script
+                async
+                src="https://www.googletagmanager.com/gtag/js?id=G-ZKVECX6NY1"
+                strategy="afterInteractive"
+              />
+              <Script id="gtag-init" strategy="afterInteractive">
+                {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-ZKVECX6NY1');`}
+              </Script>
+              {children}
+              <TallyFeedbackWidget />
+            </QueryProvider>
+          </SupabaseProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

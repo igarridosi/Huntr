@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { ChartTooltip } from "./chart-tooltip";
+import { useChartColors } from "@/hooks/use-chart-colors";
 
 interface BarChartProps {
   data: Record<string, unknown>[];
@@ -37,6 +38,7 @@ export function BarChart({
   showGrid = true,
   showYAxis = true,
 }: BarChartProps) {
+  const c = useChartColors();
   return (
     <ResponsiveContainer width="100%" height={height}>
       <RechartsBarChart
@@ -48,7 +50,7 @@ export function BarChart({
         {showGrid && (
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#2A3B40"
+            stroke={c.grid}
             strokeOpacity={0.4}
             vertical={false}
           />
@@ -58,7 +60,7 @@ export function BarChart({
           dataKey={xAxisKey}
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "#8C9DA1", fontSize: 11 }}
+          tick={{ fill: c.tick, fontSize: 11 }}
           dy={8}
         />
 
@@ -66,7 +68,7 @@ export function BarChart({
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#8C9DA1", fontSize: 11 }}
+            tick={{ fill: c.tick, fontSize: 11 }}
             width={60}
             tickFormatter={(v: number) =>
               Intl.NumberFormat("en-US", {

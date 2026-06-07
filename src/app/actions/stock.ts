@@ -12,7 +12,8 @@ import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
 import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
 import { getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState } from "@/lib/api/alphavantage";
-import { getCachedDataState, setCachedData, withSingleFlight } from "@/lib/api/cache";
+import { getCachedDataState, setCachedData, withSingleFlight, getBatchCachedScreenerMetrics } from "@/lib/api/cache";
+import type { ScreenerMetrics } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 
 const TICKER_RE = /^[A-Z0-9.\-^]{1,12}$/;
@@ -195,4 +196,79 @@ export async function fetchTranscriptDocument(
     throw new Error("Invalid year");
   if (q < 1 || q > 4) throw new Error("Invalid quarter");
   return dataService.getTranscriptDocument(t, y, q);
+}
+
+/**
+ * Fetch screener metrics from Supabase cache only — safe to call with many tickers.
+ * No Yahoo API calls. Used to enrich ALL rows before filtering.
+ */
+export async function fetchAllCachedScreenerMetrics(
+  tickers: string[]
+): Promise<Record<string, ScreenerMetrics>> {
+  const sanitized = sanitizeTickers(tickers);
+  if (sanitized.length === 0) return {};
+  return getBatchCachedScreenerMetrics(sanitized);
+}
+
+/**
+ * Fetch screener metrics for a SMALL batch (visible page, ≤ PAGE_SIZE).
+ * Strategy:
+ *   1. Read from Supabase "quote" cache (one query).
+ *   2. For any ticker still missing, trigger individual getStockQuote() —
+ *      this hits Yahoo quoteSummary (financialData + summaryDetail) and caches result.
+ *   3. Re-read from cache after population.
+ * Only call with ≤ 20 tickers to avoid rate limits.
+ */
+export async function fetchScreenerMetrics(
+  tickers: string[]
+): Promise<Record<string, ScreenerMetrics>> {
+  const sanitized = sanitizeTickers(tickers);
+  if (sanitized.length === 0) return {};
+
+  // Safety: never fire more than 20 individual Yahoo requests at once
+  const safeList = sanitized.slice(0, 20);
+
+  // Pass 1: batch Supabase cache read
+  const cached = await getBatchCachedScreenerMetrics(safeList);
+
+  // Pass 2: fire individual quoteSummary for tickers still missing ALL enriched fields
+  const missing = safeList.filter(
+    (t) =>
+      !cached[t] ||
+      (cached[t].beta === null &&
+        cached[t].earnings_growth === null &&
+        cached[t].revenue_growth === null)
+  );
+
+  if (missing.length > 0) {
+    await Promise.allSettled(missing.map((t) => dataService.getStockQuote(t)));
+    const fresh = await getBatchCachedScreenerMetrics(missing);
+    Object.assign(cached, fresh);
+  }
+
+  // Pass 3: compute 5-Year Monthly Beta (Cov/Var formula) for tickers still missing beta.
+  // Fetches 60 monthly closes per ticker + cached ^GSPC baseline.
+  // Results are stored in "beta-5y-monthly" (30-day TTL) and picked up by Pass 3
+  // of getBatchCachedScreenerMetrics on subsequent screener loads.
+  const needsBeta = safeList.filter((t) => !cached[t] || cached[t].beta === null);
+  if (needsBeta.length > 0) {
+    const betaResults = await dataService.getBatchBeta5YMonthly(needsBeta);
+    for (const [ticker, beta] of Object.entries(betaResults)) {
+      if (beta === null) continue;
+      if (cached[ticker]) {
+        cached[ticker].beta = beta;
+      } else {
+        cached[ticker] = {
+          beta,
+          earnings_growth: null,
+          revenue_growth: null,
+          normalized_pe: null,
+          payout_ratio: null,
+          fetched_at: null,
+        };
+      }
+    }
+  }
+
+  return cached;
 }

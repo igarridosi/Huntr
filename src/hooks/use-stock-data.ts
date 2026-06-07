@@ -30,7 +30,10 @@ import {
   fetchSearchTickers,
   fetchTranscriptPeriods,
   fetchTranscriptDocument,
+  fetchScreenerMetrics,
+  fetchAllCachedScreenerMetrics,
 } from "@/app/actions/stock";
+import type { ScreenerMetrics } from "@/lib/api/cache";
 
 // ---------- Stock Profile ----------
 
@@ -239,5 +242,26 @@ export function useTranscriptDocument(
     queryFn: () => fetchTranscriptDocument(ticker, year ?? 0, quarter ?? 0),
     staleTime: STALE_TIMES.STATIC,
     enabled: enabled && !!ticker && year != null && quarter != null,
+  });
+}
+
+// ---------- Screener enrichment metrics (beta, earnings_growth, revenue_growth) ----------
+
+/**
+ * Fetches beta + earnings/revenue growth for a list of tickers.
+ * Uses two-pass strategy: Supabase cache first, individual fetch for misses.
+ * Intended to enrich the screener page — only call with the VISIBLE page tickers
+ * (≤ PAGE_SIZE) to avoid hammering the API.
+ */
+export function useScreenerMetrics(
+  tickers: string[],
+  enabled = true
+) {
+  const key = tickers.slice().sort().join(",");
+  return useQuery<Record<string, ScreenerMetrics>>({
+    queryKey: ["screener", "metrics", key],
+    queryFn: () => fetchScreenerMetrics(tickers),
+    staleTime: STALE_TIMES.FINANCIALS, // 15 min — these don't change often
+    enabled: enabled && tickers.length > 0,
   });
 }

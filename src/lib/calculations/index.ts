@@ -21,6 +21,16 @@ export {
   estimateWACC,
   generateDCFScenarios,
 } from "./dcf";
+export {
+  calculateQualityScore,
+  gradeFromScore,
+} from "./quality-score";
+export type {
+  QualityGrade,
+  QualityMetric,
+  QualityDimension,
+  QualityScoreResult,
+} from "./quality-score";
 export type {
   DCFInputs,
   DCFResult,

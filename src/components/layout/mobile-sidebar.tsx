@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import {
   Lightbulb,
   Star,
@@ -12,7 +13,6 @@ import {
   Settings,
   LogOut,
   X,
-  Crosshair,
   Search,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
@@ -88,9 +88,18 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
       {/* Drawer */}
       <div className="fixed left-0 top-0 bottom-0 w-72 bg-wolf-surface border-r border-wolf-border/50 flex flex-col animate-in slide-in-from-left">
         {/* Header */}
-        <div className="flex items-center justify-between px-5 h-14 shrink-0">
-          <div className="flex items-center gap-2">
-            <Crosshair className="w-5 h-5 text-sunset-orange" />
+        <div className="flex items-center justify-between px-4 h-14 shrink-0 border-b border-wolf-border/50">
+          <div className="flex items-center gap-2.5">
+            <div className="flex items-center justify-center rounded-lg bg-[#162225] p-1">
+              <Image
+                src="/logo/HunterLogoCut-removebg.png"
+                alt="Huntr"
+                width={40}
+                height={29}
+                className="object-contain"
+                priority
+              />
+            </div>
             <span className="text-base font-bold tracking-tight">HUNTR</span>
           </div>
           <button
@@ -103,8 +112,6 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
         </div>
-
-        <Separator className="opacity-50" />
 
         {/* Search */}
         <div className="px-3 py-3">

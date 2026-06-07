@@ -10,6 +10,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { StockProfile } from "@/types/stock";
 import { buildTickerLogoUrl, normalizeWebsiteUrl } from "@/lib/logo";
+import { sanitizeSector } from "./sector-overrides";
 
 // ─────────────────────────────────────────────────────────
 // Types
@@ -93,7 +94,7 @@ export function tickerRowsToProfiles(rows: TickerRow[]): StockProfile[] {
   return rows.map((row) => ({
     ticker: row.symbol,
     name: row.name,
-    sector: row.sector,
+    sector: sanitizeSector(row.sector, row.symbol),
     industry: "",
     exchange: "US",
     currency: "USD",

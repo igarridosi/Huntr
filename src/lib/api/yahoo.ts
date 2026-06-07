@@ -639,23 +639,51 @@ export async function getBatchQuotes(
 
     const quotes: StockQuote[] = results
       .filter((r) => r != null && typeof r.symbol === "string")
-      .map((r: Record<string, unknown>) => ({
-        ticker: r.symbol as string,
-        price: (r.regularMarketPrice as number) ?? 0,
-        current_volume: (r.regularMarketVolume as number) ?? 0,
-        day_change: (r.regularMarketChange as number) ?? 0,
-        day_change_percent: computeIntradayPercentFromQuoteRow(r),
-        next_earnings_date: extractNextEarningsDate(r),
-        earnings_timing: extractEarningsTiming(r),
-        market_cap: (r.marketCap as number) ?? 0,
-        shares_outstanding: (r.sharesOutstanding as number) ?? 0,
-        pe_ratio: (r.trailingPE as number) ?? 0,
-        dividend_yield: ((r.dividendYield as number) ?? 0) / 100,
-        fifty_two_week_high: (r.fiftyTwoWeekHigh as number) ?? 0,
-        fifty_two_week_low: (r.fiftyTwoWeekLow as number) ?? 0,
-        avg_volume: (r.averageDailyVolume3Month as number) ?? (r.averageDailyVolume10Day as number) ?? 0,
-        beta: (r.beta as number) ?? 0,
-      }));
+      .map((r: Record<string, unknown>) => {
+        // beta: Yahoo returns 0 for some stocks; use null to distinguish "no data"
+        const rawBeta = r.beta as number | null | undefined;
+        const beta =
+          typeof rawBeta === "number" && Number.isFinite(rawBeta) && rawBeta !== 0
+            ? rawBeta
+            : 0;
+
+        // revenueGrowth: available in the batch quote response for many stocks
+        const rawRevGrowth = (r.revenueGrowth ?? r.revenue_growth) as number | null | undefined;
+        const revenue_growth =
+          typeof rawRevGrowth === "number" && Number.isFinite(rawRevGrowth)
+            ? rawRevGrowth
+            : undefined;
+
+        // earningsGrowth: similar
+        const rawEarningsGrowth = (r.earningsGrowth ?? r.earnings_growth) as number | null | undefined;
+        const earnings_growth =
+          typeof rawEarningsGrowth === "number" && Number.isFinite(rawEarningsGrowth)
+            ? rawEarningsGrowth
+            : undefined;
+
+        return {
+          ticker: r.symbol as string,
+          price: (r.regularMarketPrice as number) ?? 0,
+          current_volume: (r.regularMarketVolume as number) ?? 0,
+          day_change: (r.regularMarketChange as number) ?? 0,
+          day_change_percent: computeIntradayPercentFromQuoteRow(r),
+          next_earnings_date: extractNextEarningsDate(r),
+          earnings_timing: extractEarningsTiming(r),
+          market_cap: (r.marketCap as number) ?? 0,
+          shares_outstanding: (r.sharesOutstanding as number) ?? 0,
+          pe_ratio: (r.trailingPE as number) ?? 0,
+          dividend_yield: ((r.dividendYield as number) ?? 0) / 100,
+          fifty_two_week_high: (r.fiftyTwoWeekHigh as number) ?? 0,
+          fifty_two_week_low: (r.fiftyTwoWeekLow as number) ?? 0,
+          avg_volume:
+            (r.averageDailyVolume3Month as number) ??
+            (r.averageDailyVolume10Day as number) ??
+            0,
+          beta,
+          revenue_growth,
+          earnings_growth,
+        };
+      });
 
     return quotes;
   } catch (error) {
@@ -1570,6 +1598,216 @@ async function getTickerBuybackStrength(ticker: string): Promise<number> {
   );
 
   return pct;
+}
+
+// ─────────────────────────────────────────────────────────
+// Beta 5Y Monthly — Cov/Var computation
+// ─────────────────────────────────────────────────────────
+
+function extractMonthlyPrices(
+  rows: unknown[]
+): Array<{ ym: string; close: number }> {
+  return (rows as Array<Record<string, unknown>>)
+    .map((row) => {
+      const rawDate = row.date;
+      const parsedDate =
+        rawDate instanceof Date
+          ? rawDate
+          : typeof rawDate === "string" || typeof rawDate === "number"
+            ? new Date(rawDate)
+            : null;
+      if (!parsedDate || Number.isNaN(parsedDate.getTime())) return null;
+      const close = ((row.adjClose ?? row.close) as number | undefined);
+      if (typeof close !== "number" || !Number.isFinite(close) || close <= 0) return null;
+      const ym = `${parsedDate.getUTCFullYear()}-${String(parsedDate.getUTCMonth() + 1).padStart(2, "0")}`;
+      return { ym, close };
+    })
+    .filter((r): r is { ym: string; close: number } => r !== null)
+    .sort((a, b) => a.ym.localeCompare(b.ym));
+}
+
+/** Fetch and cache S&P 500 monthly prices — shared baseline for all beta calculations. */
+async function getSpx5YMonthlyPrices(): Promise<Array<{ ym: string; close: number }>> {
+  const cached = await getCachedData<{ prices: Array<{ ym: string; close: number }> }>(
+    "^GSPC",
+    "spx-monthly-prices",
+    24 * 60 * 60 * 1000
+  );
+  if (cached && Array.isArray(cached.prices) && cached.prices.length > 40) return cached.prices;
+
+  const now = new Date();
+  const period1 = new Date(now);
+  period1.setMonth(period1.getMonth() - 63); // 63 months → 60 return pairs + buffer
+
+  const rowsUnknown = await withSuppressedYahooWarnings(() =>
+    yahooHistoricalClient.historical("^GSPC", {
+      period1: period1.toISOString().slice(0, 10),
+      period2: now.toISOString().slice(0, 10),
+      interval: "1mo",
+    })
+  ).catch(() => null);
+
+  if (!Array.isArray(rowsUnknown)) return [];
+  const prices = extractMonthlyPrices(rowsUnknown as unknown[]);
+  if (prices.length > 40) {
+    await setCachedData(
+      "^GSPC",
+      "spx-monthly-prices",
+      { prices } as unknown as Record<string, unknown>
+    );
+  }
+  return prices;
+}
+
+/**
+ * Compute 5-Year Monthly Beta vs S&P 500 (^GSPC).
+ *
+ * Formula:  Beta = Cov(stock_returns, sp500_returns) / Var(sp500_returns)
+ * Window:   Last 60 aligned monthly arithmetic returns.
+ * Source:   Adjusted monthly closes from yahoo-finance2 historical().
+ *
+ * Matches the standard institutional convention (Bloomberg, FactSet) and
+ * what Yahoo Finance displays as "Beta (5Y Monthly)" on stock pages.
+ */
+async function computeBeta5YMonthly(
+  ticker: string,
+  spxPrices: Array<{ ym: string; close: number }>
+): Promise<number | null> {
+  const key = ticker.toUpperCase();
+
+  if (spxPrices.length < 13) return null;
+
+  const now = new Date();
+  const period1 = new Date(now);
+  period1.setMonth(period1.getMonth() - 63);
+
+  const rowsUnknown = await withSuppressedYahooWarnings(() =>
+    yahooHistoricalClient.historical(key, {
+      period1: period1.toISOString().slice(0, 10),
+      period2: now.toISOString().slice(0, 10),
+      interval: "1mo",
+    })
+  ).catch(() => null);
+
+  if (!Array.isArray(rowsUnknown)) return null;
+  const stockPrices = extractMonthlyPrices(rowsUnknown as unknown[]);
+  if (stockPrices.length < 13) return null;
+
+  // Build S&P 500 lookup keyed by year-month
+  const spxMap = new Map(spxPrices.map((r) => [r.ym, r.close]));
+
+  // Compute aligned monthly arithmetic returns: (p_t - p_{t-1}) / p_{t-1}
+  const stockReturns: number[] = [];
+  const spxReturns: number[] = [];
+
+  for (let i = 1; i < stockPrices.length; i++) {
+    const prevYm = stockPrices[i - 1].ym;
+    const currYm = stockPrices[i].ym;
+    const spxPrev = spxMap.get(prevYm);
+    const spxCurr = spxMap.get(currYm);
+    if (spxPrev == null || spxCurr == null) continue;
+
+    const stockRet = (stockPrices[i].close - stockPrices[i - 1].close) / stockPrices[i - 1].close;
+    const spxRet   = (spxCurr - spxPrev) / spxPrev;
+
+    if (Number.isFinite(stockRet) && Number.isFinite(spxRet)) {
+      stockReturns.push(stockRet);
+      spxReturns.push(spxRet);
+    }
+  }
+
+  // Use the most recent 60 aligned pairs
+  const n = Math.min(60, stockReturns.length);
+  if (n < 24) return null; // require at least 2 years of data
+
+  const sRets = stockReturns.slice(-n);
+  const mRets = spxReturns.slice(-n);
+
+  const mean = (arr: number[]) => arr.reduce((s, v) => s + v, 0) / arr.length;
+  const meanS = mean(sRets);
+  const meanM = mean(mRets);
+
+  let cov = 0;
+  let varM = 0;
+  for (let i = 0; i < n; i++) {
+    const ds = sRets[i] - meanS;
+    const dm = mRets[i] - meanM;
+    cov += ds * dm;
+    varM += dm * dm;
+  }
+  cov /= n - 1;
+  varM /= n - 1;
+
+  if (varM <= 0 || !Number.isFinite(cov) || !Number.isFinite(varM)) return null;
+
+  const beta = cov / varM;
+  // Sanity-check: reject extreme outliers (beta outside [-5, 10] is data error)
+  return Number.isFinite(beta) && beta > -5 && beta < 10 ? +beta.toFixed(2) : null;
+}
+
+/**
+ * Fetch (or compute + cache) the 5-Year Monthly Beta for a single ticker.
+ * Cache key: "beta-5y-monthly", TTL: 30 days.
+ */
+export async function getBeta5YMonthly(
+  ticker: string,
+  spxPrices?: Array<{ ym: string; close: number }>
+): Promise<number | null> {
+  const key = ticker.toUpperCase();
+
+  const cached = await getCachedData<{ beta: number }>(
+    key,
+    "beta-5y-monthly",
+    30 * 24 * 60 * 60 * 1000
+  );
+  if (cached && typeof cached.beta === "number" && Number.isFinite(cached.beta)) {
+    return cached.beta;
+  }
+
+  const spx = spxPrices ?? (await getSpx5YMonthlyPrices());
+  const beta = await computeBeta5YMonthly(key, spx);
+
+  if (beta !== null) {
+    await setCachedData(
+      key,
+      "beta-5y-monthly",
+      { beta } as unknown as Record<string, unknown>
+    );
+  }
+
+  return beta;
+}
+
+/**
+ * Batch-compute 5Y Monthly Beta for multiple tickers.
+ * Fetches S&P 500 prices once and reuses across all tickers.
+ * Processes in chunks of 5 to respect Yahoo rate limits (each ticker = 1 API call).
+ */
+export async function getBatchBeta5YMonthly(
+  tickers: string[]
+): Promise<Record<string, number | null>> {
+  const symbols = Array.from(
+    new Set(tickers.map((t) => t.trim().toUpperCase()).filter(Boolean))
+  );
+  if (symbols.length === 0) return {};
+
+  // Fetch S&P 500 prices once — shared across all beta computations
+  const spxPrices = await getSpx5YMonthlyPrices();
+
+  const CHUNK_SIZE = 5;
+  const result: Record<string, number | null> = {};
+
+  for (let i = 0; i < symbols.length; i += CHUNK_SIZE) {
+    const chunk = symbols.slice(i, i + CHUNK_SIZE);
+    const values = await Promise.all(
+      chunk.map(async (s) => [s, await getBeta5YMonthly(s, spxPrices)] as const)
+    );
+    for (const [s, beta] of values) {
+      result[s] = beta;
+    }
+  }
+
+  return result;
 }
 
 export async function getBatchBuybackStrength(

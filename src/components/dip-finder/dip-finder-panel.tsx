@@ -14,6 +14,7 @@ import {
   Cell,
 } from "recharts";
 import { useBatchDailyHistory } from "@/hooks/use-stock-data";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercent, cn } from "@/lib/utils";
 
@@ -105,6 +106,7 @@ export function DipFinderPanel({
   items: DipItem[];
 }) {
   const [mode, setMode] = useState<DipMode>("sma50");
+  const c = useChartColors();
 
   const tickers = useMemo(
     () => Array.from(new Set(items.map((item) => item.ticker.toUpperCase()).filter(Boolean))),
@@ -206,21 +208,21 @@ export function DipFinderPanel({
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={rows} margin={{ top: 6, right: 8, left: 0, bottom: 20 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" strokeOpacity={0.32} vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={c.grid} strokeOpacity={0.32} vertical={false} />
                 <XAxis
                   dataKey="ticker"
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  tick={{ fill: c.tick, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   tickFormatter={(v) => `${v}%`}
-                  tick={{ fill: "#94a3b8", fontSize: 11 }}
+                  tick={{ fill: c.tick, fontSize: 11 }}
                   axisLine={false}
                   tickLine={false}
                   width={42}
                 />
-                <ReferenceLine y={0} stroke="#6b7280" strokeOpacity={0.5} />
+                <ReferenceLine y={0} stroke={c.tick} strokeOpacity={0.5} />
                 <Tooltip
                   cursor={{ fill: "rgba(255,255,255,0.04)" }}
                   formatter={(value) => {
@@ -229,11 +231,11 @@ export function DipFinderPanel({
                   }}
                   labelFormatter={(label) => `${label}`}
                   contentStyle={{
-                    background: "#a2b1a8af",
-                    border: "1px solid rgba(255,255,255,0.14)",
+                    background: c.tooltipBg,
+                    border: `1px solid ${c.tooltipBorder}`,
                     borderRadius: 10,
-                    color: "black",
-                    fontSize: 16,
+                    color: c.tick,
+                    fontSize: 13,
                     fontWeight: "bold",
                   }}
                 />

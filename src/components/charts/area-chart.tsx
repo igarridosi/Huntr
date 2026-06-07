@@ -10,6 +10,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { ChartTooltip } from "./chart-tooltip";
+import { useChartColors } from "@/hooks/use-chart-colors";
 
 interface AreaChartProps {
   data: Record<string, unknown>[];
@@ -43,6 +44,7 @@ export function AreaChart({
   tightX = false,
   xTickInterval,
 }: AreaChartProps) {
+  const c = useChartColors();
   const gId = gradientId ?? `gradient-${dataKey}`;
 
   return (
@@ -61,7 +63,7 @@ export function AreaChart({
         {showGrid && (
           <CartesianGrid
             strokeDasharray="3 3"
-            stroke="#2A3B40"
+            stroke={c.grid}
             strokeOpacity={0.4}
             vertical={false}
           />
@@ -71,7 +73,7 @@ export function AreaChart({
           dataKey={xAxisKey}
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "#8C9DA1", fontSize: 11 }}
+          tick={{ fill: c.tick, fontSize: 11 }}
           dy={8}
           interval={xTickInterval}
           padding={tightX ? { left: 0, right: 0 } : undefined}
@@ -81,7 +83,7 @@ export function AreaChart({
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#8C9DA1", fontSize: 11 }}
+            tick={{ fill: c.tick, fontSize: 11 }}
             width={60}
             tickFormatter={(v: number) =>
               Intl.NumberFormat("en-US", {
@@ -109,7 +111,7 @@ export function AreaChart({
           activeDot={{
             r: 4,
             fill: color,
-            stroke: "#0B1416",
+            stroke: c.dotStroke,
             strokeWidth: 2,
           }}
         />

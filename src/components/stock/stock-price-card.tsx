@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import { useBatchDailyHistory } from "@/hooks/use-stock-data";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import type { StockQuote } from "@/types/stock";
 
 type PriceRange = "5D" | "1M" | "6M" | "YTD" | "1A" | "5A" | "10Y";
@@ -278,6 +279,7 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
 }
 
 function PriceChart({ data, stroke }: { data: PricePoint[]; stroke: string }) {
+  const c = useChartColors();
   return (
     <ResponsiveContainer width="100%" height="100%">
       <AreaChart data={data} margin={{ top: 6, right: 8, left: 4, bottom: 0 }}>
@@ -288,12 +290,12 @@ function PriceChart({ data, stroke }: { data: PricePoint[]; stroke: string }) {
           </linearGradient>
         </defs>
 
-        <CartesianGrid strokeDasharray="3 3" stroke="#2A3B40" strokeOpacity={0.35} vertical={false} />
+        <CartesianGrid strokeDasharray="3 3" stroke={c.grid} strokeOpacity={0.35} vertical={false} />
         <XAxis
           dataKey="x"
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "#8C9DA1", fontSize: 10 }}
+          tick={{ fill: c.tick, fontSize: 10 }}
           tickMargin={10}
           interval="preserveStartEnd"
           minTickGap={18}
@@ -301,7 +303,7 @@ function PriceChart({ data, stroke }: { data: PricePoint[]; stroke: string }) {
         <YAxis
           axisLine={false}
           tickLine={false}
-          tick={{ fill: "#8C9DA1", fontSize: 10 }}
+          tick={{ fill: c.tick, fontSize: 10 }}
           width={48}
           tickFormatter={(v: number) => formatCurrency(v, { compact: true })}
           domain={["auto", "auto"]}
@@ -321,7 +323,7 @@ function PriceChart({ data, stroke }: { data: PricePoint[]; stroke: string }) {
           animationEasing="ease-out"
           fill="url(#stock-price-gradient)"
           dot={false}
-          activeDot={{ r: 3, fill: stroke, stroke: "#0B1416", strokeWidth: 2 }}
+          activeDot={{ r: 3, fill: stroke, stroke: c.dotStroke, strokeWidth: 2 }}
         />
       </AreaChart>
     </ResponsiveContainer>
