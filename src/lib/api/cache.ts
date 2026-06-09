@@ -12,6 +12,8 @@
 
 import { createClient } from "@/lib/supabase/server";
 import type { CompanyFinancials } from "@/types/financials";
+import type { TimeSeriesFinancialsCache } from "@/types/yahoo";
+import { mapTimeSeriesFinancials } from "@/lib/api/mappers";
 
 // ─────────────────────────────────────────────────────────
 // Constants
@@ -520,6 +522,34 @@ function computeEpsGrowthFromFinancials(data: unknown): number | null {
 /**
  * Read screener metrics for many tickers at once.
  *
+/**
+ * Detect whether raw cache data is in the `TimeSeriesFinancialsCache` shape
+ * (financials-v2) vs the `CompanyFinancials` shape (financials-alpha-v2 / legacy).
+ *
+ * `financials-v2` stores:  { income: { annual, quarterly }, balance: { … }, cashflow: { … } }
+ * `CompanyFinancials` is:  { income_statement: { annual, quarterly }, balance_sheet: { … }, cash_flow: { … } }
+ */
+function isTimeSeriesShape(data: unknown): data is TimeSeriesFinancialsCache {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  const income = d.income as Record<string, unknown> | undefined;
+  return Array.isArray(income?.annual);
+}
+
+/**
+ * Normalise raw cache data to `CompanyFinancials` regardless of which
+ * shape was stored (TimeSeriesFinancialsCache or CompanyFinancials).
+ */
+function toCompanyFinancials(ticker: string, data: unknown): CompanyFinancials {
+  if (isTimeSeriesShape(data)) {
+    return mapTimeSeriesFinancials(ticker, data);
+  }
+  return data as CompanyFinancials;
+}
+
+/**
+ * Read screener metrics for many tickers at once.
+ *
  * Three-pass Supabase batch strategy (no Yahoo API calls):
  *   1. Query "quote" cache         → earnings/revenue growth, market cap, fetched_at.
  *   2. Query "financials" cache    → normalized_pe, FCF yield, EPS growth fallback/ADR fix.
@@ -610,16 +640,19 @@ export async function getBatchCachedScreenerMetrics(
       const price     = priceByTicker[ticker]     ?? 0;
       const marketCap = marketCapByTicker[ticker] ?? 0;
 
+      // Normalise to CompanyFinancials — financials-v2 stores TimeSeriesFinancialsCache,
+      // financials-alpha-v2 stores CompanyFinancials directly.
+      const financials = toCompanyFinancials(ticker, fin.data);
+
       // a) Normalized P/E
-      const normPe = computeNormalizedPeFromFinancials(fin.data, price);
+      const normPe = computeNormalizedPeFromFinancials(financials, price);
 
       // b+c) EPS growth fallback + ADR check
-      const p2EpsGrowth = computeEpsGrowthFromFinancials(fin.data);
+      const p2EpsGrowth = computeEpsGrowthFromFinancials(financials);
 
       // c) FCF Yield
       let fcfYield: number | null = null;
       try {
-        const financials = fin.data as CompanyFinancials;
         const annualCF = [...(financials?.cash_flow?.annual ?? [])]
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         const lastFCF = annualCF[0]?.free_cash_flow;

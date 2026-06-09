@@ -17,7 +17,9 @@
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calculateQualityScore } from "@/lib/calculations/quality-score";
+import { mapTimeSeriesFinancials } from "@/lib/api/mappers";
 import type { CompanyFinancials } from "@/types/financials";
+import type { TimeSeriesFinancialsCache } from "@/types/yahoo";
 import type { StockQuote } from "@/types/stock";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -70,6 +72,29 @@ function extractYahooNum(v: unknown): number | null {
     }
   }
   return null;
+}
+
+// ─── Cache shape normalisation ───────────────────────────────────────────────
+// `financials-v2` (Yahoo) stores TimeSeriesFinancialsCache:
+//   { income: { annual, quarterly }, balance: { … }, cashflow: { … } }
+//
+// The quality engine and calculateQualityScore expect CompanyFinancials:
+//   { income_statement: { annual, quarterly }, balance_sheet: { … }, cash_flow: { … } }
+//
+// Detect which shape we have and map to CompanyFinancials when needed.
+
+function isTimeSeriesShape(data: unknown): data is TimeSeriesFinancialsCache {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  const income = d.income as Record<string, unknown> | undefined;
+  return Array.isArray(income?.annual);
+}
+
+function toCompanyFinancials(ticker: string, data: unknown): CompanyFinancials {
+  if (isTimeSeriesShape(data)) {
+    return mapTimeSeriesFinancials(ticker, data);
+  }
+  return data as CompanyFinancials;
 }
 
 // ─── Main export ──────────────────────────────────────────────────────────────
@@ -228,7 +253,9 @@ export async function computeQualityScores(
         continue;
       }
 
-      const financials = finData as CompanyFinancials;
+      // Normalise cache shape: financials-v2 stores TimeSeriesFinancialsCache,
+      // not CompanyFinancials. Apply the same mapping that getFinancials() uses.
+      const financials = toCompanyFinancials(ticker, finData);
       const annualCount = financials?.income_statement?.annual?.length ?? 0;
 
       // Require at least 2 annual periods for meaningful scores
