@@ -400,6 +400,42 @@ const COLUMNS: ColDef[] = [
     },
   },
   {
+    key: "quality_overall",
+    label: "Quality",
+    sortKey: "quality_overall",
+    align: "right",
+    tooltip: "Platform Quality Score (0–100) — sector-relative composite of Profitability, Growth, Financial Health, Cash Generation and Capital Allocation. Pre-computed weekly from cached Yahoo financials.",
+    format: (row) => {
+      const v = row.quality_overall;
+      if (v === null)
+        return (
+          <Tooltip content={`Quality score not yet computed for ${row.ticker}`} side="top">
+            <span className="inline-flex items-center justify-end cursor-help">
+              <span className="font-mono text-[10px] text-mist/30 border-b border-dashed border-mist/25 leading-none pb-px">
+                —
+              </span>
+            </span>
+          </Tooltip>
+        );
+      return (
+        <span
+          className={cn(
+            "font-mono text-xs tabular-nums font-semibold",
+            v >= 80
+              ? "text-bullish"
+              : v >= 65
+                ? "text-teal-400"
+                : v >= 50
+                  ? "text-snow-peak"
+                  : "text-bearish"
+          )}
+        >
+          {v}
+        </span>
+      );
+    },
+  },
+  {
     key: "sector",
     label: "Sector",
     sortKey: "sector",

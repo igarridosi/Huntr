@@ -201,12 +201,18 @@ export async function fetchTranscriptDocument(
 /**
  * Fetch screener metrics from Supabase cache only — safe to call with many tickers.
  * No Yahoo API calls. Used to enrich ALL rows before filtering.
+ *
+ * NOTE: does NOT use sanitizeTickers() because that function enforces
+ * BATCH_TICKER_LIMIT (500) which is designed to protect Yahoo API rate limits.
+ * This function only reads from Supabase so it is safe with 1000+ tickers.
  */
 export async function fetchAllCachedScreenerMetrics(
   tickers: string[]
 ): Promise<Record<string, ScreenerMetrics>> {
-  const sanitized = sanitizeTickers(tickers);
-  if (sanitized.length === 0) return {};
+  if (!Array.isArray(tickers) || tickers.length === 0) return {};
+  if (tickers.length > 2000) throw new Error("Screener universe exceeds 2000 tickers");
+  // Validate each ticker individually (no batch size limit for this endpoint)
+  const sanitized = tickers.map(sanitizeTicker);
   return getBatchCachedScreenerMetrics(sanitized);
 }
 

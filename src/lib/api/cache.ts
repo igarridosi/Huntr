@@ -695,14 +695,33 @@ export async function getBatchCachedScreenerMetrics(
     // ── Pass 3: quality scores from pre-computed table ────────────────────────
     // A single SQL query replaces per-ticker quality engine invocations.
     // Scores are populated weekly by the cron job at /api/cron/quality-scores.
-    // Tickers with no row yet return null (enriched-field pass-through in filter).
+    //
+    // IMPORTANT: most screener tickers never go through Pass 1 (no individual
+    // getStockQuote call), so result[ticker] may not exist yet. We must create
+    // a minimal entry for those tickers so their quality scores are surfaced to
+    // the filter layer — otherwise mergeMetrics() has nothing to merge.
     const { data: qualityRows } = await supabase
       .from("stock_quality_scores")
       .select("ticker, quality_overall, quality_profitability, quality_financial_health, quality_cash_generation")
       .in("ticker", normalizedTickers);
 
     for (const qr of qualityRows ?? []) {
-      if (!result[qr.ticker]) continue;
+      if (!result[qr.ticker]) {
+        // Ticker has a pre-computed quality score but no quote/financials cache
+        // entry yet — create a minimal metrics stub so the scores are visible.
+        result[qr.ticker] = {
+          earnings_growth:          null,
+          revenue_growth:           null,
+          normalized_pe:            null,
+          payout_ratio:             null,
+          fcf_yield:                null,
+          quality_overall:          null,
+          quality_profitability:    null,
+          quality_financial_health: null,
+          quality_cash_generation:  null,
+          fetched_at:               null,
+        };
+      }
       result[qr.ticker].quality_overall           = qr.quality_overall          ?? null;
       result[qr.ticker].quality_profitability     = qr.quality_profitability    ?? null;
       result[qr.ticker].quality_financial_health  = qr.quality_financial_health ?? null;
