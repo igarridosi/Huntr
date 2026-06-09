@@ -859,11 +859,20 @@ export default function OverviewPage() {
 
       ) : null}
 
-      {/* Quality Scorecard — after charts so financials are already loaded */}
+      {/* Quality Scorecard
+           Standard mode (4Y): Yahoo data — score is stable regardless of chart range.
+           Deep mode (10Y): automatically activated when AlphaVantage data is loaded
+           (annual.length ≥ 8). Profile is passed for sector-relative percentile scoring. */}
       {finLoading && !financials ? (
         <QualityScorecardSkeleton />
-      ) : financials && quote ? (
-        <QualityScorecard result={calculateQualityScore(financials, quote)} />
+      ) : (stockData?.financials ?? financials) && quote ? (
+        <QualityScorecard
+          result={calculateQualityScore(
+            deepFinancials ?? stockData?.financials ?? financials!,
+            quote,
+            profile
+          )}
+        />
       ) : null}
 
       {/* Company Description */}

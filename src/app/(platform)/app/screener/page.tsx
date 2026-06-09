@@ -67,8 +67,6 @@ const FILTER_DEFS: FilterDef[] = [
     label: "Market Cap",
     tooltip: "Total market capitalisation in USD (price × shares outstanding)",
     unit: "",
-    // Raw market-cap values are in raw USD (e.g. 200000000000). Use formatCompactNumber
-    // so the chip reads "≥200B" instead of "≥200000000000.0".
     formatValue: (v) => formatCompactNumber(v),
     presets: [
       { label: "All", min: null, max: null },
@@ -80,7 +78,7 @@ const FILTER_DEFS: FilterDef[] = [
   {
     id: "pe_ratio",
     label: "P/E (TTM Adj.)",
-    tooltip: "How many dollars you pay per $1 of annual profit. Lower = cheaper. Under 15x is value territory, 15–25x is fair, above 25x means the market expects strong growth. We strip out one-time windfalls (asset sales, M&A) for a cleaner number.",
+    tooltip: "Price ÷ annual earnings per share. We strip one-time items (asset sales, M&A) for a cleaner multiple. Under 15× = value, 15–25× = fair, above 25× = growth premium.",
     unit: "x",
     presets: [
       { label: "All", min: null, max: null },
@@ -103,7 +101,19 @@ const FILTER_DEFS: FilterDef[] = [
     ],
   },
   {
-    // Rule 2 — explicit YoY window in filter label
+    id: "fcf_yield",
+    label: "FCF Yield (TTM)",
+    tooltip: "Last annual Free Cash Flow ÷ Market Cap. Higher = the stock generates more cash per dollar of market value. A classic value screen for capital-light businesses. Computed from cached financials — shows '—' until a stock page has been loaded once.",
+    unit: "%",
+    displayScale: 100,
+    presets: [
+      { label: "All", min: null, max: null },
+      { label: ">2%", min: 0.02, max: null },
+      { label: ">4%", min: 0.04, max: null },
+      { label: ">6%", min: 0.06, max: null },
+    ],
+  },
+  {
     id: "earnings_growth",
     label: "EPS Growth (YoY)",
     tooltip: "Year-over-Year EPS growth: current TTM diluted EPS vs prior TTM. Sourced from Yahoo financialData or computed from cached income statement.",
@@ -117,19 +127,6 @@ const FILTER_DEFS: FilterDef[] = [
     ],
   },
   {
-    // Rule 3 — Beta 5Y Monthly
-    id: "beta",
-    label: "β 5Y Monthly",
-    tooltip: "5-Year Monthly Beta vs S&P 500 — measures systematic market risk over a full business cycle. Standard institutional convention (avoids short-term noise).",
-    unit: "x",
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: "Defensive <0.8", min: null, max: 0.8 },
-      { label: "Market 0.8–1.2", min: 0.8, max: 1.2 },
-      { label: "Aggressive >1.5", min: 1.5, max: null },
-    ],
-  },
-  {
     id: "from_52w_high",
     label: "Distance 52W High",
     tooltip: "Current price ÷ 52-week high − 1. Negative = below peak. Near 0% = breakout zone.",
@@ -140,6 +137,58 @@ const FILTER_DEFS: FilterDef[] = [
       { label: "Near high >-5%", min: -0.05, max: null },
       { label: "Pullback -10 to -25%", min: -0.25, max: -0.10 },
       { label: "Dip <-25%", min: null, max: -0.25 },
+    ],
+  },
+];
+
+// Quality score filter definitions — separate section in the sidebar
+const QUALITY_FILTER_DEFS: FilterDef[] = [
+  {
+    id: "quality_overall",
+    label: "Overall Quality",
+    tooltip: "Platform Quality Score (0–100) — composite of Profitability, Growth, Financial Health, Cash Generation and Capital Allocation. Sector-relative. Computed from cached financials.",
+    unit: "",
+    presets: [
+      { label: "All", min: null, max: null },
+      { label: "Good >60", min: 60, max: null },
+      { label: "Strong >70", min: 70, max: null },
+      { label: "Elite >80", min: 80, max: null },
+    ],
+  },
+  {
+    id: "quality_profitability",
+    label: "Profitability",
+    tooltip: "Profitability dimension of the Quality Score — driven by ROIC vs WACC spread, operating margin and net margin trend vs sector peers.",
+    unit: "",
+    presets: [
+      { label: "All", min: null, max: null },
+      { label: ">60", min: 60, max: null },
+      { label: ">70", min: 70, max: null },
+      { label: ">80", min: 80, max: null },
+    ],
+  },
+  {
+    id: "quality_financial_health",
+    label: "Financial Health",
+    tooltip: "Financial Health dimension — Net Debt/EBITDA, D/E ratio, interest coverage and current ratio, all vs sector benchmarks.",
+    unit: "",
+    presets: [
+      { label: "All", min: null, max: null },
+      { label: ">60", min: 60, max: null },
+      { label: ">70", min: 70, max: null },
+      { label: ">80", min: 80, max: null },
+    ],
+  },
+  {
+    id: "quality_cash_generation",
+    label: "Cash Generation",
+    tooltip: "Cash Generation dimension — FCF margin, FCF yield, FCF/NI conversion ratio and FCF trend vs sector benchmarks.",
+    unit: "",
+    presets: [
+      { label: "All", min: null, max: null },
+      { label: ">60", min: 60, max: null },
+      { label: ">65", min: 65, max: null },
+      { label: ">75", min: 75, max: null },
     ],
   },
 ];
@@ -290,19 +339,15 @@ const COLUMNS: ColDef[] = [
     },
   },
   {
-    // Rule 3 — Beta 5Y Monthly label
-    key: "beta",
-    label: "β 5Y",
-    sortKey: "beta",
+    key: "fcf_yield",
+    label: "FCF Yield",
+    sortKey: "fcf_yield",
     align: "right",
-    tooltip: "5-Year Monthly Beta vs S&P 500. Standard institutional measure — avoids short-term noise. <0.8 = defensive, >1.5 = high systematic risk.",
+    tooltip: "Last annual Free Cash Flow ÷ Market Cap. Shows '—' until the stock's financial data is cached (visit the stock page once to populate).",
     format: (row) => {
-      if (row.beta === null || row.beta === 0)
+      if (row.fcf_yield === null)
         return (
-          <Tooltip
-            content={`Browse ${row.ticker} once to compute β`}
-            side="top"
-          >
+          <Tooltip content={`Browse ${row.ticker} once to compute FCF Yield`} side="top">
             <span className="inline-flex items-center justify-end cursor-help">
               <span className="font-mono text-[10px] text-mist/30 border-b border-dashed border-mist/25 leading-none pb-px">
                 —
@@ -310,18 +355,23 @@ const COLUMNS: ColDef[] = [
             </span>
           </Tooltip>
         );
+      const v = row.fcf_yield;
+      // Negative FCF yield means negative FCF (loss) — show in red
       return (
         <span
           className={cn(
             "font-mono text-xs tabular-nums",
-            row.beta < 0.8
-              ? "text-teal-400"
-              : row.beta > 1.5
-                ? "text-sunset-orange"
-                : "text-snow-peak"
+            v < 0
+              ? "text-bearish"
+              : v >= 0.06
+                ? "text-bullish"
+                : v >= 0.03
+                  ? "text-teal-400"
+                  : "text-snow-peak"
           )}
         >
-          {row.beta.toFixed(2)}
+          {v >= 0 ? "" : ""}
+          {formatPercent(v, 1)}
         </span>
       );
     },
@@ -421,6 +471,72 @@ function ThCell({
 
 // ─── Filter panel ─────────────────────────────────────────────────────────────
 
+function FilterGroup({
+  defs,
+  activeFilters,
+  onSetFilter,
+  onRemove,
+}: {
+  defs: FilterDef[];
+  activeFilters: ReturnType<typeof useScreener>["activeFilters"];
+  onSetFilter: (id: FilterId, min: number | null, max: number | null) => void;
+  onRemove: (id: FilterId) => void;
+}) {
+  return (
+    <>
+      {defs.map((def) => {
+        const current = activeFilters[def.id];
+        const isActive = !!current;
+        return (
+          <div key={def.id} className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <Tooltip content={def.tooltip} side="right">
+                <span className="text-[11px] font-medium text-mist cursor-help">
+                  {def.label}
+                </span>
+              </Tooltip>
+              {isActive && (
+                <button
+                  type="button"
+                  onClick={() => onRemove(def.id)}
+                  className="text-mist/50 hover:text-bearish transition-colors"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {def.presets.map((preset) => {
+                const isNone = preset.min === null && preset.max === null;
+                const isSelected = isNone
+                  ? !isActive
+                  : current?.min === preset.min && current?.max === preset.max;
+                return (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() =>
+                      isNone ? onRemove(def.id) : onSetFilter(def.id, preset.min, preset.max)
+                    }
+                    className={cn(
+                      "px-2 py-0.5 rounded text-[10px] font-medium transition-all border",
+                      isSelected
+                        ? "bg-sunset-orange/12 text-sunset-orange border-sunset-orange/25"
+                        : "text-mist/70 border-wolf-border/30 hover:border-wolf-border/60 hover:text-snow-peak bg-transparent"
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 function FilterPanel({
   activeFilters,
   onSetFilter,
@@ -436,6 +552,7 @@ function FilterPanel({
 }) {
   return (
     <div className="space-y-5">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <SlidersHorizontal className="h-3.5 w-3.5 text-mist" />
@@ -457,60 +574,38 @@ function FilterPanel({
         )}
       </div>
 
-      {FILTER_DEFS.map((def) => {
-        const current = activeFilters[def.id];
-        const isActive = !!current;
+      {/* Standard market filters */}
+      <FilterGroup
+        defs={FILTER_DEFS}
+        activeFilters={activeFilters}
+        onSetFilter={onSetFilter}
+        onRemove={onRemove}
+      />
 
-        return (
-          <div key={def.id} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Tooltip content={def.tooltip} side="right">
-                <span className="text-[11px] font-medium text-mist cursor-help">
-                  {def.label}
-                </span>
-              </Tooltip>
-              {isActive && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(def.id)}
-                  className="text-mist/50 hover:text-bearish transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-
-            <div className="flex flex-wrap gap-1">
-              {def.presets.map((preset) => {
-                const isNone = preset.min === null && preset.max === null;
-                const isSelected = isNone
-                  ? !isActive
-                  : current?.min === preset.min && current?.max === preset.max;
-
-                return (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() =>
-                      isNone
-                        ? onRemove(def.id)
-                        : onSetFilter(def.id, preset.min, preset.max)
-                    }
-                    className={cn(
-                      "px-2 py-0.5 rounded text-[10px] font-medium transition-all border",
-                      isSelected
-                        ? "bg-sunset-orange/12 text-sunset-orange border-sunset-orange/25"
-                        : "text-mist/70 border-wolf-border/30 hover:border-wolf-border/60 hover:text-snow-peak bg-transparent"
-                    )}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
+      {/* Quality Ratings section */}
+      <div className="pt-1 border-t border-wolf-border/20">
+        <div className="flex items-center gap-1.5 mb-3">
+          <span className="text-[9px] uppercase tracking-widest text-mist/50 font-semibold">
+            Quality Ratings
+          </span>
+          <Tooltip
+            content="Platform-computed quality scores (0–100). Calculated from cached financial data using sector-relative benchmarks. Scores appear once a stock's financials have been cached (visit the stock page once)."
+            side="right"
+          >
+            <span className="inline-flex cursor-help">
+              <SlidersHorizontal className="h-2.5 w-2.5 text-mist/30" />
+            </span>
+          </Tooltip>
+        </div>
+        <div className="space-y-5">
+          <FilterGroup
+            defs={QUALITY_FILTER_DEFS}
+            activeFilters={activeFilters}
+            onSetFilter={onSetFilter}
+            onRemove={onRemove}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -524,6 +619,7 @@ function ActiveChips({
   activeFilters: ReturnType<typeof useScreener>["activeFilters"];
   onRemove: (id: FilterId) => void;
 }) {
+  const allDefs = [...FILTER_DEFS, ...QUALITY_FILTER_DEFS];
   const entries = Object.entries(activeFilters) as [
     FilterId,
     { min: number | null; max: number | null },
@@ -533,7 +629,7 @@ function ActiveChips({
   return (
     <div className="flex flex-wrap gap-1.5">
       {entries.map(([id, range]) => {
-        const def = FILTER_DEFS.find((d) => d.id === id);
+        const def = allDefs.find((d) => d.id === id);
         const scale = def?.displayScale ?? 1;
         const unit = def?.unit ?? "";
 
@@ -670,7 +766,7 @@ export default function ScreenerPage() {
   );
 
   // For the visible 13 tickers, trigger individual Yahoo quoteSummary fetch
-  // (summaryDetail.beta + financialData.earningsGrowth/revenueGrowth).
+  // (financialData.earningsGrowth/revenueGrowth + financials cache for FCF/quality).
   // This populates the Supabase "quote" cache and returns real values.
   const pageTickers = useMemo(() => pageRows.map((r) => r.ticker), [pageRows]);
   const { data: pageMetrics } = useScreenerMetrics(pageTickers, !isLoading);
@@ -766,7 +862,7 @@ export default function ScreenerPage() {
       {/* Active filter chips */}
       <ActiveChips activeFilters={activeFilters} onRemove={handleRemoveFilter} />
 
-      {/* Enrichment data notice — shown when beta/earnings filters active with partial data */}
+      {/* Enrichment data notice — shown when quality/FCF/growth filters are active */}
       {enrichedFieldsActive && (metricsLoading || nullEnrichedCount > 0) && (
         <div className="flex items-center gap-2 rounded-lg border border-golden-hour/20 bg-golden-hour/6 px-3 py-2">
           {metricsLoading ? (
@@ -776,8 +872,8 @@ export default function ScreenerPage() {
           )}
           <p className="text-[11px] text-mist/80">
             {metricsLoading
-              ? "Loading growth, beta & payout data from cache…"
-              : `${nullEnrichedCount} stock${nullEnrichedCount !== 1 ? "s" : ""} pending data — shown unfiltered until their page is browsed and the cache populates.`}
+              ? "Loading quality scores & FCF data from cache…"
+              : `${nullEnrichedCount} stock${nullEnrichedCount !== 1 ? "s" : ""} shown unfiltered — quality data not yet cached. Browse their stock pages once to populate.`}
           </p>
         </div>
       )}
@@ -917,7 +1013,7 @@ export default function ScreenerPage() {
             {!isLoading && (
               <div className="border-t border-wolf-border/15 px-4 py-2 flex items-center justify-between gap-2">
                 <span className="text-[10px] text-mist/35">
-                  Data from Yahoo Finance · TTM Adj. P/E uses Operating NOPAT ÷ diluted shares · Not financial advice
+                  Data from Yahoo Finance · Quality scores & FCF Yield computed from cached financials · Not financial advice
                 </span>
                 <span className="text-[10px] text-mist/35 shrink-0 tabular-nums">
                   {latestSyncTs

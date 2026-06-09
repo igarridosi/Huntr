@@ -11,6 +11,7 @@
  */
 
 import { createClient } from "@/lib/supabase/server";
+import type { CompanyFinancials } from "@/types/financials";
 
 // ─────────────────────────────────────────────────────────
 // Constants
@@ -201,7 +202,6 @@ export async function getCachedDataState<T = Record<string, unknown>>(
 // ─────────────────────────────────────────────────────────
 
 export interface ScreenerMetrics {
-  beta: number | null;
   earnings_growth: number | null;
   revenue_growth: number | null;
   /**
@@ -217,6 +217,22 @@ export interface ScreenerMetrics {
    * null when not yet cached (treat as enriched field in filter logic).
    */
   payout_ratio: number | null;
+  /**
+   * FCF Yield (TTM) = last annual free cash flow / market cap.
+   * Computed from the financials cache when available.
+   * null when financials are not yet cached for this ticker.
+   */
+  fcf_yield: number | null;
+  /**
+   * Platform quality scores (0–100) computed by the quality-score engine
+   * on the cached CompanyFinancials. Sector-relative with default benchmarks
+   * (no profile available in the screener batch pipeline).
+   * null until the stock has been individually browsed and financials are cached.
+   */
+  quality_overall: number | null;
+  quality_profitability: number | null;
+  quality_financial_health: number | null;
+  quality_cash_generation: number | null;
   /** ISO timestamp of when this metrics record was last populated from the cache */
   fetched_at: string | null;
 }
@@ -502,14 +518,14 @@ function computeEpsGrowthFromFinancials(data: unknown): number | null {
 }
 
 /**
- * Read beta / earningsGrowth / revenueGrowth for many tickers at once.
+ * Read screener metrics for many tickers at once.
  *
- * Two-pass Supabase batch strategy (no Yahoo API calls):
- *   1. Query the "quote" cache → beta, earnings/revenue growth, current price, fetched_at.
- *   2. Query the financials cache for all tickers → normalized_pe (Operating NOPAT TTM),
- *      plus YoY EPS growth fallback for tickers that had no quote cache entry.
+ * Three-pass Supabase batch strategy (no Yahoo API calls):
+ *   1. Query "quote" cache         → earnings/revenue growth, market cap, fetched_at.
+ *   2. Query "financials" cache    → normalized_pe, FCF yield, EPS growth fallback/ADR fix.
+ *   3. Query stock_quality_scores  → pre-computed quality scores (populated by weekly cron).
  *
- * Two Supabase queries total regardless of ticker count.
+ * Three Supabase queries total regardless of ticker count.
  */
 export async function getBatchCachedScreenerMetrics(
   tickers: string[]
@@ -528,46 +544,50 @@ export async function getBatchCachedScreenerMetrics(
       .eq("cache_key", "quote");
 
     const result: Record<string, ScreenerMetrics> = {};
-    // Temp map: ticker → current price (for normalized_pe in Pass 2)
-    const priceByTicker: Record<string, number> = {};
+    // Temp maps used in Pass 2
+    const priceByTicker:     Record<string, number> = {};
+    const marketCapByTicker: Record<string, number> = {};
 
     if (!quoteErr && quoteRows) {
       for (const row of quoteRows) {
         const raw = row.data as Record<string, unknown> | null;
         if (!raw) continue;
-        const summaryDetail = raw.summaryDetail as Record<string, unknown> | null;
-        const financialData = raw.financialData as Record<string, unknown> | null;
+        const summaryDetail    = raw.summaryDetail            as Record<string, unknown> | null;
+        const financialData    = raw.financialData            as Record<string, unknown> | null;
+        const keyStats         = raw.defaultKeyStatistics     as Record<string, unknown> | null;
 
         const currentPrice = extractYahooNum(financialData?.currentPrice);
         if (currentPrice && currentPrice > 0) priceByTicker[row.ticker] = currentPrice;
+
+        const marketCap = extractYahooNum(summaryDetail?.marketCap) ?? extractYahooNum(keyStats?.marketCap);
+        if (marketCap && marketCap > 0) marketCapByTicker[row.ticker] = marketCap;
 
         const rawEarningsGrowth = extractYahooNum(financialData?.earningsGrowth);
         const rawRevenueGrowth  = extractYahooNum(financialData?.revenueGrowth);
 
         // Store the winsorized Yahoo value as-is. ADR / currency artifact detection
-        // is done in Pass 2 where we can cross-check against actual NI figures —
-        // a revenue-growth heuristic here is too blunt and breaks legitimate recovery
-        // stocks (e.g. Allstate recovering from catastrophe-loss years: EPS +200%,
-        // revenue +8% — that's real, not an artifact).
+        // is done in Pass 2 where we can cross-check against actual NI figures.
         result[row.ticker] = {
-          beta:            extractYahooNum(summaryDetail?.beta),
-          earnings_growth: rawEarningsGrowth !== null ? winsorizeGrowth(rawEarningsGrowth) : null,
-          revenue_growth:  rawRevenueGrowth,
-          normalized_pe:   null,
-          // payoutRatio lives in summaryDetail (not financialData) — already a ratio (0–1)
-          payout_ratio:    extractYahooNum(summaryDetail?.payoutRatio),
-          fetched_at:      row.last_updated ?? null,
+          earnings_growth:      rawEarningsGrowth !== null ? winsorizeGrowth(rawEarningsGrowth) : null,
+          revenue_growth:       rawRevenueGrowth,
+          normalized_pe:        null,
+          payout_ratio:         extractYahooNum(summaryDetail?.payoutRatio),
+          fcf_yield:            null,
+          quality_overall:      null,
+          quality_profitability:null,
+          quality_financial_health: null,
+          quality_cash_generation:  null,
+          fetched_at:           row.last_updated ?? null,
         };
       }
     }
 
-    // ── Pass 2: financials cache for all tickers ─────────────────────────────
-    // Used for three purposes:
-    //   a) normalized_pe (Operating NOPAT TTM / diluted shares) for ALL tickers
-    //   b) earnings_growth fallback for tickers with no Pass-1 value
-    //   c) ADR/currency artifact override: if Pass-1 value is extreme (>100%) and
-    //      the financials-computed value is reasonable (<50%) with a 5× divergence,
-    //      the financials value is more reliable (immune to ADR ratio / FX mismatches)
+    // ── Pass 2: financials cache ─────────────────────────────────────────────
+    // Used for:
+    //   a) normalized_pe (Operating NOPAT TTM / diluted shares)
+    //   b) earnings_growth fallback / ADR artifact override
+    //   c) FCF Yield = last annual FCF / market cap
+    //   d) Platform quality scores (Overall, Profitability, Financial Health, Cash Generation)
     const { data: finRows } = await supabase
       .from("stock_cache")
       .select("ticker, data, cache_key")
@@ -587,73 +607,73 @@ export async function getBatchCachedScreenerMetrics(
       const fin = finByTicker[ticker];
       if (!fin) continue;
 
-      const price = priceByTicker[ticker] ?? 0;
+      const price     = priceByTicker[ticker]     ?? 0;
+      const marketCap = marketCapByTicker[ticker] ?? 0;
 
       // a) Normalized P/E
       const normPe = computeNormalizedPeFromFinancials(fin.data, price);
 
-      // b+c) Always compute from financials so we can use it as fallback AND cross-check
+      // b+c) EPS growth fallback + ADR check
       const p2EpsGrowth = computeEpsGrowthFromFinancials(fin.data);
 
+      // c) FCF Yield
+      let fcfYield: number | null = null;
+      try {
+        const financials = fin.data as CompanyFinancials;
+        const annualCF = [...(financials?.cash_flow?.annual ?? [])]
+          .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const lastFCF = annualCF[0]?.free_cash_flow;
+        if (lastFCF != null && Number.isFinite(lastFCF) && marketCap > 0) {
+          fcfYield = lastFCF / marketCap;
+        }
+      } catch { /* silently skip */ }
+
       if (result[ticker]) {
-        if (normPe !== null) result[ticker].normalized_pe = normPe;
+        if (normPe !== null)   result[ticker].normalized_pe = normPe;
+        if (fcfYield !== null) result[ticker].fcf_yield     = fcfYield;
 
         const p1Growth = result[ticker].earnings_growth;
-
         if (p1Growth === null) {
-          // Standard fallback: no Yahoo value → use financials
           if (p2EpsGrowth !== null) result[ticker].earnings_growth = p2EpsGrowth;
         } else if (
           p2EpsGrowth !== null &&
-          Math.abs(p1Growth) > ADR_SANITY_THRESHOLD &&   // P1 is extreme  (>100%)
-          Math.abs(p2EpsGrowth) < ADR_SANITY_THRESHOLD / 2 && // P2 is reasonable (<50%)
-          Math.abs(p1Growth) > Math.abs(p2EpsGrowth) * 5  // They diverge by 5× or more
+          Math.abs(p1Growth) > ADR_SANITY_THRESHOLD &&
+          Math.abs(p2EpsGrowth) < ADR_SANITY_THRESHOLD / 2 &&
+          Math.abs(p1Growth) > Math.abs(p2EpsGrowth) * 5
         ) {
-          // ADR / currency artifact: Yahoo's earningsGrowth is inflated by a ratio
-          // mismatch between periods (e.g. HSBC: USD/ADR vs GBP/ordinary-share).
-          // The financials-computed value uses net income, which is ratio-invariant.
           result[ticker].earnings_growth = p2EpsGrowth;
         }
-        // else: keep P1 — both agree, or both are extreme (genuine high-growth)
       } else {
         result[ticker] = {
-          beta: null,
-          earnings_growth: p2EpsGrowth,
-          revenue_growth: null,
-          normalized_pe: normPe,
-          payout_ratio: null,
-          fetched_at: null,
+          earnings_growth:          p2EpsGrowth,
+          revenue_growth:           null,
+          normalized_pe:            normPe,
+          payout_ratio:             null,
+          fcf_yield:                fcfYield,
+          quality_overall:          null,
+          quality_profitability:    null,
+          quality_financial_health: null,
+          quality_cash_generation:  null,
+          fetched_at:               null,
         };
       }
     }
 
-    // ── Pass 3: precisely-computed 5Y Monthly Beta cache ────────────────────
-    // Written by getBeta5YMonthly() (yahoo.ts) when a user browses a screener page.
-    // Overrides the Yahoo-reported beta with our Cov/Var calculation when available.
-    const { data: betaRows } = await supabase
-      .from("stock_cache")
-      .select("ticker, data")
-      .in("ticker", normalizedTickers)
-      .eq("cache_key", "beta-5y-monthly");
+    // ── Pass 3: quality scores from pre-computed table ────────────────────────
+    // A single SQL query replaces per-ticker quality engine invocations.
+    // Scores are populated weekly by the cron job at /api/cron/quality-scores.
+    // Tickers with no row yet return null (enriched-field pass-through in filter).
+    const { data: qualityRows } = await supabase
+      .from("stock_quality_scores")
+      .select("ticker, quality_overall, quality_profitability, quality_financial_health, quality_cash_generation")
+      .in("ticker", normalizedTickers);
 
-    for (const row of betaRows ?? []) {
-      const raw = row.data as Record<string, unknown> | null;
-      const computedBeta =
-        typeof raw?.beta === "number" && Number.isFinite(raw.beta) ? raw.beta : null;
-      if (computedBeta === null) continue;
-
-      if (result[row.ticker]) {
-        result[row.ticker].beta = computedBeta;
-      } else {
-        result[row.ticker] = {
-          beta: computedBeta,
-          earnings_growth: null,
-          revenue_growth: null,
-          normalized_pe: null,
-          payout_ratio: null,
-          fetched_at: null,
-        };
-      }
+    for (const qr of qualityRows ?? []) {
+      if (!result[qr.ticker]) continue;
+      result[qr.ticker].quality_overall           = qr.quality_overall          ?? null;
+      result[qr.ticker].quality_profitability     = qr.quality_profitability    ?? null;
+      result[qr.ticker].quality_financial_health  = qr.quality_financial_health ?? null;
+      result[qr.ticker].quality_cash_generation   = qr.quality_cash_generation  ?? null;
     }
 
     return result;

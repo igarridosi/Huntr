@@ -20,13 +20,15 @@ import { STALE_TIMES } from "@/lib/constants";
 
 const VALID_FILTER_IDS = new Set<FilterId>([
   "market_cap", "pe_ratio", "dividend_yield", "revenue_growth",
-  "earnings_growth", "beta", "from_52w_high", "range_52w", "payout_ratio",
+  "earnings_growth", "fcf_yield", "from_52w_high", "range_52w", "payout_ratio",
+  "quality_overall", "quality_profitability", "quality_financial_health", "quality_cash_generation",
 ]);
 
 const VALID_SORT_KEYS = new Set<string>([
   "ticker", "name", "sector", "market_cap", "price", "pe_ratio",
   "normalized_pe", "dividend_yield", "earnings_growth", "revenue_growth",
-  "beta", "from_52w_high_pct", "range_52w_pct", "payout_ratio",
+  "fcf_yield", "from_52w_high_pct", "range_52w_pct", "payout_ratio",
+  "quality_overall", "quality_profitability", "quality_financial_health", "quality_cash_generation",
 ]);
 
 /**
@@ -70,13 +72,15 @@ export function paramToSort(s: string | null): SortState {
   return { key: key as SortKey, dir: dir === "asc" ? "asc" : "desc" };
 }
 
-// ─── Fields that come only from quoteSummary (not batch quote) ──────────────
-// For these, null means "data not yet fetched" — we use pass-through so the
-// filter doesn't return 0 results while data is still loading/warming up.
-// payout_ratio is also enriched — it comes from quoteSummary (not batch quote),
-// so it starts null and is filled lazily. Without this it would exclude all
-// stocks when the Dividend Income preset's payout_ratio filter is applied.
-const ENRICHED_FIELDS = new Set<FilterId>(["earnings_growth", "beta", "revenue_growth", "payout_ratio"]);
+// ─── Fields that require per-ticker enrichment (not in batch quote) ──────────
+// For these, null means "data not yet fetched". The filter uses a pass-through
+// so the universe doesn't shrink to zero while the cache warms up.
+// As users browse the screener page by page, more values get populated.
+const ENRICHED_FIELDS = new Set<FilterId>([
+  "earnings_growth", "revenue_growth", "payout_ratio",
+  "fcf_yield",
+  "quality_overall", "quality_profitability", "quality_financial_health", "quality_cash_generation",
+]);
 
 // ─── Build ScreenerRow from quote + profile ───────────────────────────────────
 
@@ -127,9 +131,15 @@ function buildScreenerRows(
       range_52w_pct: range52wPct,
       from_52w_high_pct: from52wHighPct,
 
-      beta: q.beta > 0 ? q.beta : null,
       payout_ratio: q.payout_ratio && q.payout_ratio > 0 ? q.payout_ratio : null,
       avg_volume: q.avg_volume,
+
+      // Enriched fields — null until financials are cached per-ticker
+      fcf_yield:               null,
+      quality_overall:         null,
+      quality_profitability:   null,
+      quality_financial_health:null,
+      quality_cash_generation: null,
     };
   });
 }
@@ -144,15 +154,22 @@ function mergeMetrics(
   return rows.map((row) => {
     const m = metrics[row.ticker];
     if (!m) return row;
+    // Helper: only override if enriched value is non-null
+    const pick = <T>(enriched: T | null, base: T | null): T | null =>
+      enriched !== null ? enriched : base;
+
     return {
       ...row,
-      // Only override if enriched value is non-null (don't overwrite known data with null)
-      beta: m.beta !== null ? m.beta : row.beta,
-      earnings_growth: m.earnings_growth !== null ? m.earnings_growth : row.earnings_growth,
-      revenue_growth: m.revenue_growth !== null ? m.revenue_growth : row.revenue_growth,
-      normalized_pe: m.normalized_pe !== null ? m.normalized_pe : row.normalized_pe,
-      payout_ratio: m.payout_ratio !== null ? m.payout_ratio : row.payout_ratio,
-      metrics_fetched_at: m.fetched_at !== null ? m.fetched_at : row.metrics_fetched_at,
+      earnings_growth:         pick(m.earnings_growth,         row.earnings_growth),
+      revenue_growth:          pick(m.revenue_growth,          row.revenue_growth),
+      normalized_pe:           pick(m.normalized_pe,           row.normalized_pe),
+      payout_ratio:            pick(m.payout_ratio,            row.payout_ratio),
+      fcf_yield:               pick(m.fcf_yield,               row.fcf_yield),
+      quality_overall:         pick(m.quality_overall,         row.quality_overall),
+      quality_profitability:   pick(m.quality_profitability,   row.quality_profitability),
+      quality_financial_health:pick(m.quality_financial_health,row.quality_financial_health),
+      quality_cash_generation: pick(m.quality_cash_generation, row.quality_cash_generation),
+      metrics_fetched_at:      m.fetched_at !== null ? m.fetched_at : row.metrics_fetched_at,
     };
   });
 }
@@ -160,15 +177,19 @@ function mergeMetrics(
 // ─── Filter application ───────────────────────────────────────────────────────
 
 const FILTER_FIELD: Record<FilterId, keyof ScreenerRow> = {
-  market_cap:      "market_cap",
-  pe_ratio:        "pe_ratio",
-  dividend_yield:  "dividend_yield",
-  revenue_growth:  "revenue_growth",
-  earnings_growth: "earnings_growth",
-  beta:            "beta",
-  from_52w_high:   "from_52w_high_pct",
-  range_52w:       "range_52w_pct",
-  payout_ratio:    "payout_ratio",
+  market_cap:               "market_cap",
+  pe_ratio:                 "pe_ratio",
+  dividend_yield:           "dividend_yield",
+  revenue_growth:           "revenue_growth",
+  earnings_growth:          "earnings_growth",
+  fcf_yield:                "fcf_yield",
+  from_52w_high:            "from_52w_high_pct",
+  range_52w:                "range_52w_pct",
+  payout_ratio:             "payout_ratio",
+  quality_overall:          "quality_overall",
+  quality_profitability:    "quality_profitability",
+  quality_financial_health: "quality_financial_health",
+  quality_cash_generation:  "quality_cash_generation",
 };
 
 function applyFilters(rows: ScreenerRow[], filters: ActiveFilters): ScreenerRow[] {
@@ -179,9 +200,8 @@ function applyFilters(rows: ScreenerRow[], filters: ActiveFilters): ScreenerRow[
       const value = row[field] as number | null;
 
       if (value === null) {
-        // For enriched fields (earnings_growth, beta, revenue_growth):
-        // null means "data not yet cached" — pass through so we don't lose
-        // the entire stock universe while the cache is warming up.
+        // For enriched fields, null means "data not yet cached" — pass through
+        // so the universe doesn't shrink to zero while the cache is warming up.
         if (ENRICHED_FIELDS.has(filterId)) continue;
 
         // For always-available fields (P/E, market_cap, etc.):
@@ -262,7 +282,7 @@ export function useScreener() {
     searchParams.get("preset") ?? null
   );
 
-  // Base rows from batch quote (no beta/earnings_growth yet)
+  // Base rows from batch quote (enriched fields start as null)
   const baseRows = useMemo(
     () => buildScreenerRows(quotes, profiles),
     [quotes, profiles]
@@ -274,7 +294,7 @@ export function useScreener() {
     [baseRows]
   );
 
-  // Fetch beta + earnings/revenue growth for ALL tickers from Supabase "quote" cache ONLY.
+  // Fetch earnings/revenue growth + FCF yield + quality scores for ALL tickers from Supabase cache ONLY.
   // This is ONE Supabase SELECT IN query — safe with 864+ tickers, no Yahoo calls.
   // For tickers not yet in cache (no prior getStockQuote call), values stay null.
   // Per-page enrichment via useScreenerMetrics in the screener page fills gaps progressively.
@@ -307,16 +327,21 @@ export function useScreener() {
     const activeEnriched = Object.keys(activeFilters).filter((id) =>
       ENRICHED_FIELDS.has(id as FilterId)
     ) as FilterId[];
-    const fieldToRow: Record<FilterId, keyof typeof filteredRows[0]> = {
-      earnings_growth: "earnings_growth",
-      beta: "beta",
-      revenue_growth: "revenue_growth",
-      payout_ratio: "payout_ratio",
-      market_cap: "market_cap",
-      pe_ratio: "pe_ratio",
-      dividend_yield: "dividend_yield",
-      from_52w_high: "from_52w_high_pct",
-      range_52w: "range_52w_pct",
+    const fieldToRow: Record<FilterId, keyof ScreenerRow> = {
+      earnings_growth:          "earnings_growth",
+      revenue_growth:           "revenue_growth",
+      payout_ratio:             "payout_ratio",
+      fcf_yield:                "fcf_yield",
+      quality_overall:          "quality_overall",
+      quality_profitability:    "quality_profitability",
+      quality_financial_health: "quality_financial_health",
+      quality_cash_generation:  "quality_cash_generation",
+      // Non-enriched — included for type completeness
+      market_cap:      "market_cap",
+      pe_ratio:        "pe_ratio",
+      dividend_yield:  "dividend_yield",
+      from_52w_high:   "from_52w_high_pct",
+      range_52w:       "range_52w_pct",
     };
     return filteredRows.filter((r) =>
       activeEnriched.some((id) => r[fieldToRow[id]] === null)

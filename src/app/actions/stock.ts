@@ -231,43 +231,20 @@ export async function fetchScreenerMetrics(
   // Pass 1: batch Supabase cache read
   const cached = await getBatchCachedScreenerMetrics(safeList);
 
-  // Pass 2: fire individual quoteSummary for tickers still missing ALL enriched fields
+  // Pass 2: fire individual quoteSummary for tickers still missing earnings/revenue growth.
+  // This hits Yahoo quoteSummary (financialData + summaryDetail) and caches the result.
+  // Quality scores and FCF yield are then computed from the financials cache in the
+  // batch getBatchCachedScreenerMetrics call.
   const missing = safeList.filter(
     (t) =>
       !cached[t] ||
-      (cached[t].beta === null &&
-        cached[t].earnings_growth === null &&
-        cached[t].revenue_growth === null)
+      (cached[t].earnings_growth === null && cached[t].revenue_growth === null)
   );
 
   if (missing.length > 0) {
     await Promise.allSettled(missing.map((t) => dataService.getStockQuote(t)));
     const fresh = await getBatchCachedScreenerMetrics(missing);
     Object.assign(cached, fresh);
-  }
-
-  // Pass 3: compute 5-Year Monthly Beta (Cov/Var formula) for tickers still missing beta.
-  // Fetches 60 monthly closes per ticker + cached ^GSPC baseline.
-  // Results are stored in "beta-5y-monthly" (30-day TTL) and picked up by Pass 3
-  // of getBatchCachedScreenerMetrics on subsequent screener loads.
-  const needsBeta = safeList.filter((t) => !cached[t] || cached[t].beta === null);
-  if (needsBeta.length > 0) {
-    const betaResults = await dataService.getBatchBeta5YMonthly(needsBeta);
-    for (const [ticker, beta] of Object.entries(betaResults)) {
-      if (beta === null) continue;
-      if (cached[ticker]) {
-        cached[ticker].beta = beta;
-      } else {
-        cached[ticker] = {
-          beta,
-          earnings_growth: null,
-          revenue_growth: null,
-          normalized_pe: null,
-          payout_ratio: null,
-          fetched_at: null,
-        };
-      }
-    }
   }
 
   return cached;

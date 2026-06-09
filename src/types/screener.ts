@@ -43,10 +43,21 @@ export interface ScreenerRow {
   range_52w_pct: number | null;
   /** price / 52w_high - 1 */
   from_52w_high_pct: number | null;
-  beta: number | null;
 
   // Dividend
   payout_ratio: number | null;
+
+  // Platform-computed enrichment (available once financials are cached)
+  /** Last annual FCF ÷ Market Cap */
+  fcf_yield: number | null;
+  /** Platform Quality Score – Overall (0–100) */
+  quality_overall: number | null;
+  /** Platform Quality Score – Profitability dimension (0–100) */
+  quality_profitability: number | null;
+  /** Platform Quality Score – Financial Health dimension (0–100) */
+  quality_financial_health: number | null;
+  /** Platform Quality Score – Cash Generation dimension (0–100) */
+  quality_cash_generation: number | null;
 
   // Volume
   avg_volume: number;
@@ -60,10 +71,14 @@ export type FilterId =
   | "dividend_yield"
   | "revenue_growth"
   | "earnings_growth"
-  | "beta"
+  | "fcf_yield"
   | "from_52w_high"
   | "range_52w"
-  | "payout_ratio";
+  | "payout_ratio"
+  | "quality_overall"
+  | "quality_profitability"
+  | "quality_financial_health"
+  | "quality_cash_generation";
 
 // Keep this interface before ScreenerPreset is defined
 export interface ScreenerPreset {
@@ -174,15 +189,15 @@ export const SCREENER_PRESETS: ScreenerPreset[] = [
     sortDir: "desc",
   },
   {
-    id: "low_vol",
-    label: "Low Volatility",
-    description: "Defensive: low beta + dividend income",
+    id: "defensive_quality",
+    label: "Defensive Quality",
+    description: "Strong balance sheet + reliable cash generation — resilient in downturns",
     icon: "Shield",
     filters: {
-      beta: { min: null, max: 0.8 },
-      dividend_yield: { min: 0.01, max: null },
+      quality_financial_health: { min: 70, max: null },
+      quality_cash_generation:  { min: 65, max: null },
     },
-    sortBy: "beta",
-    sortDir: "asc",
+    sortBy: "quality_overall",
+    sortDir: "desc",
   },
 ];

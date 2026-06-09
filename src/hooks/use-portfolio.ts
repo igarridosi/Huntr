@@ -199,7 +199,7 @@ function enrichPositions(
     const cost_basis = pos.avg_cost * pos.shares;
     const gain_loss = market_value - cost_basis;
     const gain_loss_percent = cost_basis > 0 ? gain_loss / cost_basis : 0;
-    const dayChangePercent = (quote?.day_change_percent ?? 0) / 100;
+    const dayChangePercent = quote?.day_change_percent ?? 0;
     const previousValue = market_value / (1 + dayChangePercent);
     const day_gain_loss = market_value - previousValue;
     const day_gain_loss_percent = dayChangePercent;

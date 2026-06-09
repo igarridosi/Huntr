@@ -32,6 +32,8 @@ import {
   MinusCircle,
   ExternalLink,
   History,
+  LayoutList,
+  List,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -61,6 +63,10 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
+import { RiskMetricsPanel } from "@/components/portfolio/risk-metrics-panel";
+import { CorrelationHeatmap } from "@/components/portfolio/correlation-heatmap";
+import { WhatIfSimulator } from "@/components/portfolio/what-if-simulator";
+import { RebalanceAdvisor } from "@/components/portfolio/rebalance-advisor";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { useBatchDailyHistory, useBatchPeriodPerformance, useSearch } from "@/hooks/use-stock-data";
@@ -94,6 +100,14 @@ type SortDir = "asc" | "desc";
 type ViewMode = "table" | "cards";
 type PerformanceRange = "1W" | "1M" | "YTD" | "1Y" | "ALL";
 type ContentView = "positions" | "transactions" | "watchlist" | "dipfinder";
+type QuickFilter =
+  | "all"
+  | "winners"
+  | "losers"
+  | "big-losers"   // down > 10%
+  | "big-winners"  // up > 25%
+  | "today-up"
+  | "today-down";
 const SCOUT_INBOX_READ_KEY = "huntr_portfolio_watchlist_scout_inbox_read_v1";
 
 function normalizeDividendYield(raw: number | null | undefined): number {
@@ -1317,6 +1331,8 @@ function AddTransactionDialog({
   );
 }
 
+type TxViewMode = "large" | "compact";
+
 function TransactionActivityFeed({
   transactions,
   positions,
@@ -1326,6 +1342,8 @@ function TransactionActivityFeed({
   positions: EnrichedPosition[];
   isLoading: boolean;
 }) {
+  const [viewMode, setViewMode] = useState<TxViewMode>("large");
+
   const sortedTransactions = useMemo(
     () =>
       [...transactions].sort(
@@ -1405,73 +1423,176 @@ function TransactionActivityFeed({
   }
 
   return (
-    <div className="space-y-2">
-      {sortedTransactions.length === 0 ? (
-        <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
-          No transactions recorded yet.
-        </div>
-      ) : (
-        sortedTransactions.map((tx) => {
-          const sideLabel = tx.side === "buy" ? "Bought" : "Sold";
-          const sideColor = tx.side === "buy" ? "text-bullish" : "text-bearish";
-          const position = positionMap.get(tx.ticker.toUpperCase()) ?? null;
+    <div className="space-y-3">
 
-          const currentWeight = position?.weight ?? 0;
-          const txWeights = txWeightById.get(tx.id);
-          const beforeWeight = txWeights?.before ?? 0;
-          const afterWeight = txWeights?.after ?? currentWeight;
-
-          const realizedDenominator = tx.shares * tx.price - tx.realized_gain_loss;
-          const sellGainPct = realizedDenominator > 0 ? tx.realized_gain_loss / realizedDenominator : 0;
-
-          const operationPnL = tx.realized_gain_loss;
-          const operationPct = sellGainPct;
-          const pnlColor = operationPnL >= 0 ? "text-bullish" : "text-bearish";
-
-          return (
-            <div
-              key={tx.id}
-              className="rounded-xl border border-wolf-border/50 bg-gradient-to-r from-wolf-surface/95 to-wolf-black/80 p-2"
+      {/* ── View toggle ── */}
+      {sortedTransactions.length > 0 && (
+        <div className="flex justify-end">
+          <div className="flex rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5 gap-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode("large")}
+              title="Detailed view"
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-[11px] transition-colors",
+                viewMode === "large"
+                  ? "bg-sunset-orange/20 text-sunset-orange"
+                  : "text-mist hover:text-snow-peak"
+              )}
             >
-              <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_210px]">
-                <div className="rounded-xl bg-wolf-black/30 px-5 py-4">
-                  <div className={cn("text-[28px] leading-tight font-bold tracking-tight", sideColor)}>
-                    <span className="text-[26px]">{sideLabel}</span>
-                    <span className="mx-2 inline-flex align-middle">
-                      <TickerLogo ticker={tx.ticker} className="h-5 w-5" imageClassName="rounded-full" fallbackClassName="rounded-full text-[8px]" />
-                    </span>
-                    <span className="text-snow-peak">{tx.ticker}</span>
-                    <span className="text-snow-peak/90"> @ {formatCurrency(tx.price)}</span>
+              <LayoutList className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Detailed</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode("compact")}
+              title="Compact view"
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1.5 rounded-sm text-[11px] transition-colors",
+                viewMode === "compact"
+                  ? "bg-sunset-orange/20 text-sunset-orange"
+                  : "text-mist hover:text-snow-peak"
+              )}
+            >
+              <List className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Compact</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Transaction list ── */}
+      <div className={cn("space-y-2", viewMode === "compact" && "space-y-1")}>
+        {sortedTransactions.length === 0 ? (
+          <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
+            No transactions recorded yet.
+          </div>
+        ) : (
+          sortedTransactions.map((tx) => {
+            const sideLabel = tx.side === "buy" ? "Bought" : "Sold";
+            const sideColor = tx.side === "buy" ? "text-bullish" : "text-bearish";
+            const position = positionMap.get(tx.ticker.toUpperCase()) ?? null;
+
+            const currentWeight = position?.weight ?? 0;
+            const txWeights = txWeightById.get(tx.id);
+            const beforeWeight = txWeights?.before ?? 0;
+            const afterWeight = txWeights?.after ?? currentWeight;
+
+            const realizedDenominator = tx.shares * tx.price - tx.realized_gain_loss;
+            const sellGainPct = realizedDenominator > 0 ? tx.realized_gain_loss / realizedDenominator : 0;
+
+            const operationPnL = tx.realized_gain_loss;
+            const operationPct = sellGainPct;
+            const pnlColor = operationPnL >= 0 ? "text-bullish" : "text-bearish";
+
+            /* ── Large card (original) ── */
+            if (viewMode === "large") {
+              return (
+                <div
+                  key={tx.id}
+                  className="rounded-xl border border-wolf-border/50 bg-gradient-to-r from-wolf-surface/95 to-wolf-black/80 p-2"
+                >
+                  <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_210px]">
+                    <div className="rounded-xl bg-wolf-black/30 px-5 py-4">
+                      <div className={cn("text-[28px] leading-tight font-bold tracking-tight", sideColor)}>
+                        <span className="text-[26px]">{sideLabel}</span>
+                        <span className="mx-2 inline-flex align-middle">
+                          <TickerLogo ticker={tx.ticker} className="h-5 w-5" imageClassName="rounded-full" fallbackClassName="rounded-full text-[8px]" />
+                        </span>
+                        <span className="text-snow-peak">{tx.ticker}</span>
+                        <span className="text-snow-peak/90"> @ {formatCurrency(tx.price)}</span>
+                      </div>
+                      {tx.side === "sell" ? (
+                        <p className={cn("mt-1 text-xl font-bold", pnlColor)}>
+                          {operationPnL >= 0 ? "+" : ""}
+                          {formatPercent(operationPct, 2)} {operationPnL >= 0 ? "gain" : "loss"}
+                        </p>
+                      ) : null}
+                      <p className="mt-3 inline-flex items-center rounded-full bg-wolf-black/65 px-3 py-1 text-xs text-mist">
+                        {tx.side === "buy" ? <PlusCircle className="mr-1.5 h-3 w-3" /> : <MinusCircle className="mr-1.5 h-3 w-3" />}
+                        {tx.side === "buy" ? "position up" : "position down"} by {formatPercent(Math.abs(afterWeight - beforeWeight), 2)}
+                      </p>
+                    </div>
+
+                    <div className="rounded-xl bg-wolf-black/35 px-4 py-3 flex flex-col justify-center">
+                      <div className="flex items-center gap-1.5 text-mist/80 text-xs mb-2">
+                        <History className="h-4 w-4" />
+                        <span>{formatDate(tx.executed_at)}</span>
+                      </div>
+                      <p className="font-mono text-xl font-bold text-snow-peak">
+                        {(beforeWeight * 100).toFixed(2)}
+                        <span className="mx-1 text-mist">→</span>
+                        {(afterWeight * 100).toFixed(2)}%
+                      </p>
+                      <p className="text-sm text-mist">of total portfolio</p>
+                    </div>
                   </div>
-                  {tx.side === "sell" ? (
-                    <p className={cn("mt-1 text-xl font-bold", pnlColor)}>
-                      {operationPnL >= 0 ? "+" : ""}
-                      {formatPercent(operationPct, 2)} {operationPnL >= 0 ? "gain" : "loss"}
-                    </p>
-                  ) : null}
-                  <p className="mt-3 inline-flex items-center rounded-full bg-wolf-black/65 px-3 py-1 text-xs text-mist">
-                    {tx.side === "buy" ? <PlusCircle className="mr-1.5 h-3 w-3" /> : <MinusCircle className="mr-1.5 h-3 w-3" />}
-                    {tx.side === "buy" ? "position up" : "position down"} by {formatPercent(Math.abs(afterWeight - beforeWeight), 2)}
-                  </p>
+                </div>
+              );
+            }
+
+            /* ── Compact row ── */
+            return (
+              <div
+                key={tx.id}
+                className="flex items-center gap-3 rounded-lg border border-wolf-border/35 bg-wolf-black/30 px-3 py-2 hover:bg-wolf-black/50 transition-colors"
+              >
+                {/* Side badge */}
+                <span
+                  className={cn(
+                    "shrink-0 min-w-[38px] text-center text-[10px] font-bold font-mono px-1.5 py-0.5 rounded",
+                    tx.side === "buy"
+                      ? "bg-bullish/15 text-bullish"
+                      : "bg-bearish/15 text-bearish"
+                  )}
+                >
+                  {tx.side === "buy" ? "BUY" : "SELL"}
+                </span>
+
+                {/* Logo + ticker */}
+                <div className="flex items-center gap-1.5 min-w-[70px]">
+                  <TickerLogo ticker={tx.ticker} className="h-4 w-4 shrink-0" imageClassName="rounded-full" fallbackClassName="rounded-full text-[7px]" />
+                  <span className="text-xs font-mono font-semibold text-snow-peak">{tx.ticker}</span>
                 </div>
 
-                <div className="rounded-xl bg-wolf-black/35 px-4 py-3 flex flex-col justify-center">
-                  <div className="flex items-center gap-1.5 text-mist/80 text-xs mb-2">
-                    <History className="h-4 w-4" />
-                    <span>{formatDate(tx.executed_at)}</span>
-                  </div>
-                  <p className="font-mono text-xl font-bold text-snow-peak">
-                    {(beforeWeight * 100).toFixed(2)}
-                    <span className="mx-1 text-mist">→</span>
-                    {(afterWeight * 100).toFixed(2)}%
-                  </p>
-                  <p className="text-sm text-mist">of total portfolio</p>
-                </div>
+                {/* Shares × price */}
+                <span className="text-xs font-mono text-mist whitespace-nowrap">
+                  {tx.shares} × {formatCurrency(tx.price)}
+                </span>
+
+                {/* Sell gain/loss badge */}
+                {tx.side === "sell" ? (
+                  <span
+                    className={cn(
+                      "shrink-0 text-[10px] font-semibold font-mono px-1.5 py-0.5 rounded",
+                      operationPnL >= 0
+                        ? "bg-bullish/10 text-bullish"
+                        : "bg-bearish/10 text-bearish"
+                    )}
+                  >
+                    {operationPnL >= 0 ? "+" : ""}{formatPercent(operationPct, 2)}
+                  </span>
+                ) : null}
+
+                {/* Spacer */}
+                <div className="flex-1" />
+
+                {/* Weight before → after */}
+                <span className="shrink-0 text-[10px] font-mono text-mist/60 whitespace-nowrap hidden sm:block">
+                  {(beforeWeight * 100).toFixed(2)}
+                  <span className="mx-0.5 text-mist/40">→</span>
+                  {(afterWeight * 100).toFixed(2)}%
+                </span>
+
+                {/* Date */}
+                <span className="shrink-0 text-[10px] text-mist/50 whitespace-nowrap min-w-[80px] text-right">
+                  {formatDate(tx.executed_at)}
+                </span>
               </div>
-            </div>
-          );
-        })
-      )}
+            );
+          })
+        )}
+      </div>
     </div>
   );
 }
@@ -1551,19 +1672,64 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
 // SECTOR & ALLOCATION BREAKDOWN
 // ═══════════════════════════════════════════════════════
 
+// ─────────────────────────────────────────────────────────
+// Sector palette — engineered for max contrast in dark mode.
+// Each colour sits ~30° apart in the HSL wheel so adjacent donut
+// slices are always visually distinct.
+//
+// Includes ALL alias variants that Yahoo Finance / Alpha Vantage /
+// Supabase profiles may return (e.g. "Information Technology" vs
+// "Technology", "Financials" vs "Financial Services", etc.) so that
+// no sector ever falls through to the neutral grey.
+// ─────────────────────────────────────────────────────────
 const SECTOR_COLORS: Record<string, { dotClass: string; hex: string }> = {
-  Technology: { dotClass: "bg-blue-500", hex: "#3B82F6" },
-  "Communication Services": { dotClass: "bg-violet-500", hex: "#8B5CF6" },
-  "Consumer Cyclical": { dotClass: "bg-amber-500", hex: "#F59E0B" },
-  "Consumer Defensive": { dotClass: "bg-emerald-500", hex: "#10B981" },
-  Healthcare: { dotClass: "bg-rose-500", hex: "#F43F5E" },
-  Industrials: { dotClass: "bg-slate-400", hex: "#94A3B8" },
-  "Financial Services": { dotClass: "bg-cyan-500", hex: "#06B6D4" },
-  Energy: { dotClass: "bg-orange-500", hex: "#F97316" },
-  "Basic Materials": { dotClass: "bg-lime-500", hex: "#84CC16" },
-  "Real Estate": { dotClass: "bg-teal-500", hex: "#14B8A6" },
-  Utilities: { dotClass: "bg-indigo-400", hex: "#818CF8" },
-  Unknown: { dotClass: "bg-wolf-border", hex: "#334155" },
+  // ── Energy (0° red) ──────────────────────────────────────
+  Energy:                      { dotClass: "bg-red-500",     hex: "#EF4444" },
+
+  // ── Consumer Cyclical / Discretionary (38° amber) ────────
+  "Consumer Cyclical":         { dotClass: "bg-amber-500",   hex: "#F59E0B" },
+  "Consumer Discretionary":    { dotClass: "bg-amber-500",   hex: "#F59E0B" },
+
+  // ── Utilities (48° yellow) ───────────────────────────────
+  Utilities:                   { dotClass: "bg-yellow-400",  hex: "#FACC15" },
+
+  // ── Basic Materials (83° lime) ───────────────────────────
+  "Basic Materials":           { dotClass: "bg-lime-500",    hex: "#84CC16" },
+  Materials:                   { dotClass: "bg-lime-500",    hex: "#84CC16" },
+
+  // ── Consumer Defensive / Staples (142° green) ────────────
+  "Consumer Defensive":        { dotClass: "bg-green-500",   hex: "#22C55E" },
+  "Consumer Staples":          { dotClass: "bg-green-500",   hex: "#22C55E" },
+
+  // ── Real Estate (173° teal) ──────────────────────────────
+  "Real Estate":               { dotClass: "bg-teal-500",    hex: "#14B8A6" },
+
+  // ── Financial Services / Financials (189° cyan) ──────────
+  "Financial Services":        { dotClass: "bg-cyan-500",    hex: "#06B6D4" },
+  Financials:                  { dotClass: "bg-cyan-500",    hex: "#06B6D4" },
+  Finance:                     { dotClass: "bg-cyan-500",    hex: "#06B6D4" },
+
+  // ── Technology / Information Technology (217° blue) ──────
+  Technology:                  { dotClass: "bg-blue-500",    hex: "#3B82F6" },
+  "Information Technology":    { dotClass: "bg-blue-500",    hex: "#3B82F6" },
+
+  // ── Industrials (239° indigo) ────────────────────────────
+  Industrials:                 { dotClass: "bg-indigo-500",  hex: "#6366F1" },
+  Industrial:                  { dotClass: "bg-indigo-500",  hex: "#6366F1" },
+
+  // ── Communication Services (271° purple) ─────────────────
+  "Communication Services":    { dotClass: "bg-purple-500",  hex: "#A855F7" },
+  "Telecommunications":        { dotClass: "bg-purple-500",  hex: "#A855F7" },
+  "Telecom":                   { dotClass: "bg-purple-500",  hex: "#A855F7" },
+
+  // ── Healthcare / Health Care (330° pink) ─────────────────
+  Healthcare:                  { dotClass: "bg-pink-500",    hex: "#EC4899" },
+  "Health Care":               { dotClass: "bg-pink-500",    hex: "#EC4899" },
+  "Health Sciences":           { dotClass: "bg-pink-500",    hex: "#EC4899" },
+
+  // ── Neutral fallback ─────────────────────────────────────
+  Unknown:                     { dotClass: "bg-slate-500",   hex: "#64748B" },
+  Other:                       { dotClass: "bg-slate-500",   hex: "#64748B" },
 };
 
 function getSectorColorClass(sector: string) {
@@ -1894,7 +2060,7 @@ function PositionTable({
     { key: "weight", label: "Weight", headerClass: "text-right" },
     { key: "gain_loss", label: "Gain/Loss", headerClass: "text-right" },
     { key: "gain_loss_percent", label: "Return %", headerClass: "text-right" },
-    { key: "day_gain_loss", label: "Day P&L", headerClass: "text-right" },
+    { key: "day_gain_loss_percent", label: "Day %", headerClass: "text-right" },
   ];
 
   const grouped = useMemo(() => {
@@ -1948,8 +2114,10 @@ function PositionTable({
           {pos.gain_loss_percent >= 0 ? "+" : ""}{(pos.gain_loss_percent * 100).toFixed(2)}%
         </span>
       </td>
-      <td className={cn("py-2.5 px-2 text-right font-mono", glColor(pos.day_gain_loss))}>
-        {pos.day_gain_loss >= 0 ? "+" : ""}{formatCurrency(pos.day_gain_loss, { compact: Math.abs(pos.day_gain_loss) >= 100_000 })}
+      <td className="py-2.5 px-2 text-right">
+        <span className={cn("text-[11px] font-mono px-1.5 py-0.5 rounded", glBg(pos.day_gain_loss_percent))}>
+          {pos.day_gain_loss_percent >= 0 ? "+" : ""}{(pos.day_gain_loss_percent * 100).toFixed(2)}%
+        </span>
       </td>
       <td className="py-2.5 px-2 text-center">
         <div className="opacity-0 group-hover:opacity-100 transition-opacity">
@@ -2461,6 +2629,149 @@ function PortfolioSelector({
 }
 
 // ═══════════════════════════════════════════════════════
+// ADVANCED ANALYTICS SECTION
+// ───────────────────────────────────────────────────────
+// Wraps the 4 new analytics cards in a tabbed shell so the
+// page stays scannable. The tabs avoid stacking 4 heavy
+// charts vertically (which would push the positions table
+// out of the fold on most screens).
+// ═══════════════════════════════════════════════════════
+
+type AnalyticsTab = "risk" | "correlation" | "whatif" | "rebalance";
+
+function AdvancedAnalyticsSection({
+  positions,
+  summary,
+  transactionHistory,
+  isLoading,
+}: {
+  positions: EnrichedPosition[];
+  summary: PortfolioSummary;
+  transactionHistory: PortfolioTransaction[];
+  isLoading: boolean;
+}) {
+  const [tab, setTab] = useState<AnalyticsTab>("risk");
+
+  const tabs: Array<{
+    id: AnalyticsTab;
+    label: string;
+    icon: React.ComponentType<{ className?: string }>;
+  }> = [
+    { id: "risk", label: "Risk & Return", icon: Shield },
+    { id: "correlation", label: "Correlation", icon: BarChart3 },
+    { id: "whatif", label: "What-If", icon: Activity },
+    { id: "rebalance", label: "Rebalance", icon: ArrowUpDown },
+  ];
+
+  return (
+    <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+      <CardHeader className="pb-2">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Activity className="w-4 h-4 text-sunset-orange" />
+            Advanced Analytics
+          </CardTitle>
+          <div className="flex flex-wrap rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5">
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setTab(t.id)}
+                className={cn(
+                  "px-2.5 py-1 text-[11px] rounded-sm transition-colors flex items-center gap-1.5",
+                  tab === t.id
+                    ? "bg-sunset-orange/20 text-sunset-orange"
+                    : "text-mist hover:text-snow-peak"
+                )}
+              >
+                <t.icon className="w-3 h-3" />
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pt-2">
+        {tab === "risk" ? (
+          <RiskMetricsPanel
+            positions={positions}
+            transactionHistory={transactionHistory}
+            isLoading={isLoading}
+          />
+        ) : null}
+        {tab === "correlation" ? (
+          <CorrelationHeatmap positions={positions} />
+        ) : null}
+        {tab === "whatif" ? (
+          <WhatIfSimulator positions={positions} summary={summary} />
+        ) : null}
+        {tab === "rebalance" ? (
+          <RebalanceAdvisor
+            positions={positions}
+            totalMarketValue={summary.total_market_value}
+          />
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+// QUICK FILTER CHIP
+// ═══════════════════════════════════════════════════════
+
+function QuickFilterChip({
+  active,
+  onClick,
+  label,
+  count,
+  tone,
+}: {
+  active: boolean;
+  onClick: () => void;
+  label: string;
+  count: number;
+  tone?: "bullish" | "bearish";
+}) {
+  const inactiveToneClass =
+    tone === "bullish"
+      ? "text-bullish/80 border-bullish/25 hover:bg-bullish/10"
+      : tone === "bearish"
+        ? "text-bearish/80 border-bearish/25 hover:bg-bearish/10"
+        : "text-mist border-wolf-border/40 hover:text-snow-peak hover:bg-wolf-black/40";
+
+  const activeToneClass =
+    tone === "bullish"
+      ? "bg-bullish/15 text-bullish border-bullish/40"
+      : tone === "bearish"
+        ? "bg-bearish/15 text-bearish border-bearish/40"
+        : "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/40";
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={count === 0 && !active}
+      className={cn(
+        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+        active ? activeToneClass : inactiveToneClass,
+        count === 0 && !active && "opacity-40 cursor-not-allowed"
+      )}
+    >
+      <span>{label}</span>
+      <span
+        className={cn(
+          "px-1 py-px rounded-sm text-[10px] font-mono",
+          active ? "bg-wolf-black/30" : "bg-wolf-black/40 text-mist"
+        )}
+      >
+        {count}
+      </span>
+    </button>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════
 
@@ -2492,6 +2803,7 @@ export default function PortfoliosPage() {
   const [groupBySector, setGroupBySector] = useState(false);
   const [sortKey, setSortKey] = useState<SortKey>("market_value");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("all");
   const [isMobileViewport, setIsMobileViewport] = useState(false);
   const [isScoutInboxOpen, setIsScoutInboxOpen] = useState(false);
   const [isAlertDialogOpen, setIsAlertDialogOpen] = useState(false);
@@ -2527,9 +2839,31 @@ export default function PortfoliosPage() {
 
   const effectiveViewMode: ViewMode = isMobileViewport ? "cards" : viewMode;
 
-  // Sorting logic
+  // Quick filter + sorting logic
+  // The filter pass runs first so the visible row count chip is accurate.
+  const filteredPositions = useMemo(() => {
+    const all = portfolio.positions;
+    switch (quickFilter) {
+      case "winners":
+        return all.filter((p) => p.gain_loss_percent > 0);
+      case "losers":
+        return all.filter((p) => p.gain_loss_percent < 0);
+      case "big-winners":
+        return all.filter((p) => p.gain_loss_percent > 0.25);
+      case "big-losers":
+        return all.filter((p) => p.gain_loss_percent < -0.10);
+      case "today-up":
+        return all.filter((p) => p.day_gain_loss_percent > 0);
+      case "today-down":
+        return all.filter((p) => p.day_gain_loss_percent < 0);
+      case "all":
+      default:
+        return all;
+    }
+  }, [portfolio.positions, quickFilter]);
+
   const sortedPositions = useMemo(() => {
-    const arr = [...portfolio.positions];
+    const arr = [...filteredPositions];
     const dir = sortDir === "asc" ? 1 : -1;
     arr.sort((a, b) => {
       const valA = sortKey === "ticker" ? a.ticker : sortKey === "price" ? (a.quote?.price ?? 0) : (a as unknown as Record<string, number>)[sortKey];
@@ -2538,7 +2872,21 @@ export default function PortfoliosPage() {
       return ((valA as number) - (valB as number)) * dir;
     });
     return arr;
-  }, [portfolio.positions, sortKey, sortDir]);
+  }, [filteredPositions, sortKey, sortDir]);
+
+  // Precompute per-filter counts so the chips show "(5)" inline
+  const filterCounts = useMemo(() => {
+    const all = portfolio.positions;
+    return {
+      all: all.length,
+      winners: all.filter((p) => p.gain_loss_percent > 0).length,
+      losers: all.filter((p) => p.gain_loss_percent < 0).length,
+      bigWinners: all.filter((p) => p.gain_loss_percent > 0.25).length,
+      bigLosers: all.filter((p) => p.gain_loss_percent < -0.10).length,
+      todayUp: all.filter((p) => p.day_gain_loss_percent > 0).length,
+      todayDown: all.filter((p) => p.day_gain_loss_percent < 0).length,
+    };
+  }, [portfolio.positions]);
 
   const portfolioTickers = useMemo(() => {
     return new Set(portfolio.positions.map((p) => p.ticker.toUpperCase()));
@@ -3044,6 +3392,69 @@ export default function PortfoliosPage() {
             </div>
           )}
 
+          {/* ── Quick filter chips (positions view only) ── */}
+          {contentView === "positions" && portfolio.positions.length > 0 ? (
+            <div className="flex items-center gap-1.5 flex-wrap border-b border-wolf-border/30 px-3 sm:px-4 py-2">
+              <span className="text-[10px] uppercase tracking-wide text-mist mr-1">
+                Filter:
+              </span>
+              <QuickFilterChip
+                active={quickFilter === "all"}
+                onClick={() => setQuickFilter("all")}
+                label="All"
+                count={filterCounts.all}
+              />
+              <QuickFilterChip
+                active={quickFilter === "winners"}
+                onClick={() => setQuickFilter("winners")}
+                label="Winners"
+                count={filterCounts.winners}
+                tone="bullish"
+              />
+              <QuickFilterChip
+                active={quickFilter === "losers"}
+                onClick={() => setQuickFilter("losers")}
+                label="Losers"
+                count={filterCounts.losers}
+                tone="bearish"
+              />
+              <QuickFilterChip
+                active={quickFilter === "big-winners"}
+                onClick={() => setQuickFilter("big-winners")}
+                label="Up >25%"
+                count={filterCounts.bigWinners}
+                tone="bullish"
+              />
+              <QuickFilterChip
+                active={quickFilter === "big-losers"}
+                onClick={() => setQuickFilter("big-losers")}
+                label="Down >10%"
+                count={filterCounts.bigLosers}
+                tone="bearish"
+              />
+              <span className="text-mist/40 mx-1">|</span>
+              <QuickFilterChip
+                active={quickFilter === "today-up"}
+                onClick={() => setQuickFilter("today-up")}
+                label="Today ↑"
+                count={filterCounts.todayUp}
+                tone="bullish"
+              />
+              <QuickFilterChip
+                active={quickFilter === "today-down"}
+                onClick={() => setQuickFilter("today-down")}
+                label="Today ↓"
+                count={filterCounts.todayDown}
+                tone="bearish"
+              />
+              {quickFilter !== "all" ? (
+                <span className="ml-auto text-[10px] text-mist font-mono">
+                  Showing {filteredPositions.length} of {portfolio.positions.length}
+                </span>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="p-4">
             {contentView === "transactions" ? (
               <TransactionActivityFeed
@@ -3142,6 +3553,16 @@ export default function PortfoliosPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Advanced Analytics ── */}
+      {portfolio.positions.length > 0 ? (
+        <AdvancedAnalyticsSection
+          positions={portfolio.positions}
+          summary={portfolio.summary}
+          transactionHistory={portfolio.transactionHistory}
+          isLoading={portfolio.isLoading}
+        />
+      ) : null}
 
       <EditPositionDialog
         open={!!editingPosition}
