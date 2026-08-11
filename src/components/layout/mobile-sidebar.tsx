@@ -12,6 +12,8 @@ import {
   BriefcaseBusiness,
   Settings,
   LogOut,
+  LogIn,
+  UserPlus,
   X,
   Search,
 } from "lucide-react";
@@ -43,7 +45,7 @@ const navItems = [
 export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const { supabase } = useSupabase();
+  const { supabase, user } = useSupabase();
   const { data: profiles = [] } = useAllProfiles();
   const [recentSearches, setRecentSearches] = useState<string[]>([]);
 
@@ -186,26 +188,49 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
         {/* Bottom */}
         <div className="px-3 py-3 space-y-1 shrink-0">
           <Separator className="opacity-50 mb-3" />
-          <Link
-            href={ROUTES.APP_SETTINGS}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all cursor-pointer"
-            onClick={onClose}
-          >
-            <Settings className="w-4 h-4 shrink-0" />
-            Settings
-          </Link>
-          <button
-            type="button"
-            onClick={async () => {
-              await supabase.auth.signOut();
-              onClose();
-              router.push(ROUTES.LOGIN);
-            }}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-bearish hover:bg-bearish/10 transition-all cursor-pointer"
-          >
-            <LogOut className="w-4 h-4 shrink-0" />
-            Sign Out
-          </button>
+          {user ? (
+            <>
+              <Link
+                href={ROUTES.APP_SETTINGS}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all cursor-pointer"
+                onClick={onClose}
+              >
+                <Settings className="w-4 h-4 shrink-0" />
+                Settings
+              </Link>
+              <button
+                type="button"
+                onClick={async () => {
+                  await supabase.auth.signOut();
+                  onClose();
+                  router.push(ROUTES.LOGIN);
+                }}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-bearish hover:bg-bearish/10 transition-all cursor-pointer"
+              >
+                <LogOut className="w-4 h-4 shrink-0" />
+                Sign Out
+              </button>
+            </>
+          ) : (
+            <>
+              <Link
+                href={ROUTES.SIGNUP}
+                onClick={onClose}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-wolf-black bg-sunset-orange hover:bg-sunset-orange/90 transition-all cursor-pointer"
+              >
+                <UserPlus className="w-4 h-4 shrink-0" />
+                Create free account
+              </Link>
+              <Link
+                href={ROUTES.LOGIN}
+                onClick={onClose}
+                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all cursor-pointer"
+              >
+                <LogIn className="w-4 h-4 shrink-0" />
+                Log in
+              </Link>
+            </>
+          )}
 
           <div className="px-3 pt-2 pb-1">
             <KoFiSupport text="Support Huntr" />

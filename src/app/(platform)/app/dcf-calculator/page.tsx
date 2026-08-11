@@ -26,6 +26,7 @@ import {
   useFinancials,
 } from "@/hooks/use-stock-data";
 import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import { useDCFScenarios } from "@/hooks/use-dcf-scenarios";
 import {
   runDCF,
@@ -82,6 +83,7 @@ export default function DcfCalculatorPage() {
   const [saveStatus, setSaveStatus] = useState<"idle" | "saved" | "error">("idle");
   const animationRef = useRef<number | null>(null);
   const { user } = useSupabase();
+  const { openGate } = useAuthGate();
   const { savedScenarios, isLoading: savedScenariosLoading, saveScenario, deleteScenario } = useDCFScenarios();
 
   const {
@@ -310,7 +312,11 @@ export default function DcfCalculatorPage() {
   }, [quote?.price, ticker]);
 
   const handleSaveScenarios = useCallback(async () => {
-    if (!user || !ticker || !scenarios) return;
+    if (!ticker || !scenarios) return;
+    if (!user) {
+      openGate("dcf");
+      return;
+    }
 
     const sanitizeCurrentPrice = (scenarioInputs: DCFInputs): DCFInputs => ({
       ...scenarioInputs,
@@ -347,7 +353,7 @@ export default function DcfCalculatorPage() {
 
     setScenarios(scenariosToSave);
     setSaveStatus(ok ? "saved" : "error");
-  }, [activeScenario, inputs, saveScenario, scenarios, ticker, user, waccEstimate]);
+  }, [activeScenario, inputs, openGate, saveScenario, scenarios, ticker, user, waccEstimate]);
 
   const handleDeleteSavedScenario = useCallback(async (savedTicker: string) => {
     await deleteScenario(savedTicker);
@@ -691,7 +697,7 @@ export default function DcfCalculatorPage() {
                     </Button>
                   )}
 
-                  {isPopulated && user && scenarios && (
+                  {isPopulated && scenarios && (
                     <Button
                       size="sm"
                       variant="outline"

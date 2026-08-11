@@ -18,6 +18,8 @@ import {
   useBatchBuybackStrength,
 } from "@/hooks/use-stock-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import { ROUTES } from "@/lib/constants";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
@@ -100,6 +102,8 @@ export default function InsightsPage() {
   const { data: quotes = [], isLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
   const { data: profiles = [], isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
   const { lists, addTicker, removeTicker, isInWatchlist } = useWatchlist();
+  const { user } = useSupabase();
+  const { openGate } = useAuthGate();
 
   const profileMap = useMemo(
     () =>
@@ -297,6 +301,10 @@ export default function InsightsPage() {
   }, [lists, pickerTicker]);
 
   const openPickerForTicker = (ticker: string) => {
+    if (!user) {
+      openGate("watchlist");
+      return;
+    }
     setPickerTicker(ticker);
     const upperTicker = ticker.toUpperCase();
     setSelectedLists(

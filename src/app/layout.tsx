@@ -4,6 +4,7 @@ import { Outfit } from "next/font/google";
 import { Geist_Mono } from "next/font/google";
 import { QueryProvider } from "@/providers/query-provider";
 import { SupabaseProvider } from "@/providers/supabase-provider";
+import { AuthGateProvider } from "@/providers/auth-gate-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { TallyFeedbackWidget } from "@/components/ui/tally-feedback";
 import "./globals.css";
@@ -176,17 +177,19 @@ export default function RootLayout({
         <ThemeProvider>
           <SupabaseProvider>
             <QueryProvider>
-              {/* Google Analytics */}
-              <Script
-                async
-                src="https://www.googletagmanager.com/gtag/js?id=G-ZKVECX6NY1"
-                strategy="afterInteractive"
-              />
-              <Script id="gtag-init" strategy="afterInteractive">
-                {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-ZKVECX6NY1');`}
-              </Script>
-              {children}
-              <TallyFeedbackWidget />
+              <AuthGateProvider>
+                {/* Google Analytics */}
+                <Script
+                  async
+                  src="https://www.googletagmanager.com/gtag/js?id=G-ZKVECX6NY1"
+                  strategy="afterInteractive"
+                />
+                <Script id="gtag-init" strategy="afterInteractive">
+                  {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-ZKVECX6NY1');`}
+                </Script>
+                {children}
+                <TallyFeedbackWidget />
+              </AuthGateProvider>
             </QueryProvider>
           </SupabaseProvider>
         </ThemeProvider>

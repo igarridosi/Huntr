@@ -9,6 +9,7 @@ import { CTA } from "@/components/landing/cta";
 import { Footer } from "@/components/landing/footer";
 import { LandingSideMenu } from "@/components/landing/side-menu";
 import { KoFiSupport } from "@/components/ui/kofi-support";
+import { Compass } from "lucide-react";
 
 export default function Home() {
   return (
@@ -26,6 +27,13 @@ export default function Home() {
             HUNTR
           </span>
           <div className="flex items-center gap-3">
+            <a
+              href="/app"
+              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-snow-peak border border-wolf-border/60 hover:border-sunset-orange/50 hover:text-sunset-orange bg-wolf-black/40 hover:bg-sunset-orange/5 px-3.5 py-1.5 rounded-lg transition-colors"
+            >
+              <Compass className="w-3.5 h-3.5" />
+              Explore as Guest
+            </a>
             <a
               href="/login"
               className="text-sm text-mist hover:text-snow-peak transition-colors"

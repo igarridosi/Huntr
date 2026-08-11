@@ -40,7 +40,9 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const PROTECTED_PREFIXES = ["/app", "/symbol"];
+  // Browsing (/app, /symbol) is open to guests; only account-specific
+  // pages require a session.
+  const PROTECTED_PREFIXES = ["/app/settings"];
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     request.nextUrl.pathname.startsWith(prefix)
   );

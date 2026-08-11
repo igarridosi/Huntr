@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { STALE_TIMES } from "@/lib/constants";
 import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import {
   fetchStockProfile,
   fetchStockQuote,
@@ -286,6 +287,7 @@ function computeSummary(positions: EnrichedPosition[]): PortfolioSummary {
 
 export function usePortfolio() {
   const { supabase, user, isLoading: isAuthLoading } = useSupabase();
+  const { openGate } = useAuthGate();
   const queryClient = useQueryClient();
   const portfolioQueryKey = [...PORTFOLIO_KEY, user?.id ?? "anon"] as const;
 
@@ -311,7 +313,10 @@ export function usePortfolio() {
 
   const updateStore = useCallback(
     (updater: (s: PortfolioStore) => PortfolioStore) => {
-      if (!user) return;
+      if (!user) {
+        openGate("portfolio");
+        return;
+      }
 
       queryClient.setQueryData<PortfolioStore>(portfolioQueryKey, (previous) => {
         const current = normalizeStore(previous ?? createDefaultStore());
@@ -320,7 +325,7 @@ export function usePortfolio() {
         return updated;
       });
     },
-    [portfolioQueryKey, queryClient, supabase, user]
+    [openGate, portfolioQueryKey, queryClient, supabase, user]
   );
 
   // ── Set active portfolio ──

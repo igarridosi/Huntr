@@ -29,12 +29,16 @@ import { useQueryClient } from "@tanstack/react-query";
 import { lookupTickerPreview, addTickerToDatabase } from "@/app/actions/add-ticker";
 import type { StockProfile } from "@/types/stock";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import { cn } from "@/lib/utils";
 
 type Step = "input" | "preview" | "success";
 
 export function AddTickerDialog() {
   const queryClient = useQueryClient();
+  const { user } = useSupabase();
+  const { openGate } = useAuthGate();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<Step>("input");
   const [symbol, setSymbol] = useState("");
@@ -69,7 +73,14 @@ export function AddTickerDialog() {
     setAddLoading(false);
   }, []);
 
-  const handleOpen = () => { reset(); setOpen(true); };
+  const handleOpen = () => {
+    if (!user) {
+      openGate("addTicker");
+      return;
+    }
+    reset();
+    setOpen(true);
+  };
   const handleClose = () => { setOpen(false); reset(); };
 
   // ── Step 1: look up ticker ──────────────────────────────────────────────────

@@ -5,6 +5,8 @@ import { Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useWatchlist } from "@/hooks/use-watchlist";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 
 interface AddToWatchlistProps {
   ticker: string;
@@ -23,9 +25,19 @@ export function AddToWatchlist({
     isAdding,
     isRemoving,
   } = useWatchlist();
+  const { user } = useSupabase();
+  const { openGate } = useAuthGate();
 
   const [open, setOpen] = useState(false);
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
+
+  const handleTrigger = () => {
+    if (!user) {
+      openGate("watchlist");
+      return;
+    }
+    setOpen(true);
+  };
 
   const listsWithMembership = useMemo(
     () =>
@@ -73,7 +85,7 @@ export function AddToWatchlist({
         <Button
           variant={inList ? "secondary" : "default"}
           size="icon-sm"
-          onClick={() => setOpen(true)}
+          onClick={handleTrigger}
           disabled={isAdding || isRemoving}
           aria-label={`Manage ${ticker} watchlists`}
         >
@@ -100,7 +112,7 @@ export function AddToWatchlist({
       <Button
         variant={inList ? "secondary" : "default"}
         size="sm"
-        onClick={() => setOpen(true)}
+        onClick={handleTrigger}
         disabled={isAdding || isRemoving}
         className="gap-1.5"
       >

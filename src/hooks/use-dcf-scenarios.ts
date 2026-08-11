@@ -3,6 +3,7 @@
 import { useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import type { DCFScenarioKey, DCFScenarioSet, WACCEstimate } from "@/lib/calculations";
 
 export interface SavedDCFScenario {
@@ -25,6 +26,7 @@ const DCF_SCENARIOS_KEY = ["dcf", "scenarios", "v1"] as const;
 
 export function useDCFScenarios() {
   const { supabase, user, isLoading: isAuthLoading } = useSupabase();
+  const { openGate } = useAuthGate();
   const queryClient = useQueryClient();
   const queryKey = [...DCF_SCENARIOS_KEY, user?.id ?? "anon"] as const;
 
@@ -63,7 +65,10 @@ export function useDCFScenarios() {
       activeScenario: DCFScenarioKey;
       waccEstimate: WACCEstimate | null;
     }): Promise<boolean> => {
-      if (!user) return false;
+      if (!user) {
+        openGate("dcf");
+        return false;
+      }
 
       const { error } = await supabase.from("user_dcf_scenarios").upsert(
         {
@@ -84,12 +89,15 @@ export function useDCFScenarios() {
       await queryClient.invalidateQueries({ queryKey });
       return true;
     },
-    [queryClient, queryKey, supabase, user]
+    [openGate, queryClient, queryKey, supabase, user]
   );
 
   const deleteScenario = useCallback(
     async (ticker: string): Promise<boolean> => {
-      if (!user) return false;
+      if (!user) {
+        openGate("dcf");
+        return false;
+      }
 
       const { error } = await supabase
         .from("user_dcf_scenarios")
@@ -105,7 +113,7 @@ export function useDCFScenarios() {
       await queryClient.invalidateQueries({ queryKey });
       return true;
     },
-    [queryClient, queryKey, supabase, user]
+    [openGate, queryClient, queryKey, supabase, user]
   );
 
   return {
