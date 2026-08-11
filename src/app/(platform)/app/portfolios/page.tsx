@@ -34,6 +34,9 @@ import {
   History,
   LayoutList,
   List,
+  Lock,
+  UserPlus,
+  LogIn,
 } from "lucide-react";
 import { Spinner } from "@/components/ui/spinner";
 import {
@@ -72,6 +75,8 @@ import { useWatchlist } from "@/hooks/use-watchlist";
 import { useBatchDailyHistory, useBatchPeriodPerformance, useSearch } from "@/hooks/use-stock-data";
 import { formatCurrency, formatPercent, cn } from "@/lib/utils";
 import { useChartColors } from "@/hooks/use-chart-colors";
+import { useSupabase } from "@/providers/supabase-provider";
+import { ROUTES } from "@/lib/constants";
 import type {
   EnrichedPosition,
   PortfolioImportResult,
@@ -2772,10 +2777,64 @@ function QuickFilterChip({
 }
 
 // ═══════════════════════════════════════════════════════
+// LOCKED STATE (guests)
+// ═══════════════════════════════════════════════════════
+
+function PortfolioLockedState() {
+  return (
+    <div className="space-y-4 sm:space-y-6 w-full">
+      <div className="flex items-center gap-3">
+        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
+          <BriefcaseBusiness className="w-5 h-5 text-sunset-orange" />
+        </div>
+        <div>
+          <h1 className="text-xl font-bold tracking-tight text-snow-peak">Portfolio Tracker</h1>
+          <p className="text-xs text-mist mt-0.5">
+            Track positions, P&L, allocation and risk metrics
+          </p>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center gap-4 px-6 py-16 text-center">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-sunset-orange/10 text-sunset-orange">
+            <Lock className="h-6 w-6" />
+          </div>
+          <div className="space-y-1.5 max-w-sm">
+            <p className="text-base font-semibold text-snow-peak">
+              Create a free account to track your portfolio
+            </p>
+            <p className="text-xs leading-relaxed text-mist">
+              Portfolio tracking is only available to registered users — sign up free to
+              add positions, track P&amp;L, and monitor risk metrics.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 pt-2">
+            <Link href={ROUTES.SIGNUP}>
+              <Button className="gap-1.5 w-full sm:w-auto">
+                <UserPlus className="w-3.5 h-3.5" />
+                Create free account
+              </Button>
+            </Link>
+            <Link href={ROUTES.LOGIN}>
+              <Button variant="ghost" className="gap-1.5 w-full sm:w-auto">
+                <LogIn className="w-3.5 h-3.5" />
+                I already have an account
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 // MAIN PAGE
 // ═══════════════════════════════════════════════════════
 
 export default function PortfoliosPage() {
+  const { user, isLoading: isAuthLoading } = useSupabase();
   const portfolio = usePortfolio();
   const {
     data: watchlistData = [],
@@ -3159,6 +3218,10 @@ export default function PortfoliosPage() {
     },
     []
   );
+
+  if (!isAuthLoading && !user) {
+    return <PortfolioLockedState />;
+  }
 
   return (
     <div className="space-y-4 sm:space-y-6 w-full">

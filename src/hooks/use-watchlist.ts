@@ -4,6 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import { STALE_TIMES } from "@/lib/constants";
 import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import {
   fetchStockProfile,
   fetchStockQuote,
@@ -202,6 +203,7 @@ const ALERTS_QUERY_KEY = ["watchlist", "alerts"] as const;
 
 export function useWatchlist() {
   const { supabase, user, isLoading: isAuthLoading } = useSupabase();
+  const { openGate } = useAuthGate();
   const queryClient = useQueryClient();
   const watchlistQueryKey = [...WATCHLIST_KEY, user?.id ?? "anon"] as const;
   const alertsQueryKey = [...ALERTS_QUERY_KEY, user?.id ?? "anon"] as const;
@@ -230,7 +232,10 @@ export function useWatchlist() {
 
   const updateStore = useCallback(
     (updater: (s: WatchlistStore) => WatchlistStore) => {
-      if (!user) return;
+      if (!user) {
+        openGate("watchlist");
+        return;
+      }
 
       queryClient.setQueryData<WatchlistStore>(watchlistQueryKey, (previous) => {
         const current = previous ?? createDefaultStore();
@@ -244,7 +249,7 @@ export function useWatchlist() {
       });
       queryClient.invalidateQueries({ queryKey: WATCHLIST_ENRICHED_KEY });
     },
-    [alertsQueryKey, queryClient, supabase, user, watchlistQueryKey]
+    [alertsQueryKey, openGate, queryClient, supabase, user, watchlistQueryKey]
   );
 
   // ── Set active list ──
@@ -494,6 +499,11 @@ export function useWatchlist() {
 
   const addAlert = useCallback(
     (alert: Omit<PriceAlert, "id" | "created_at">) => {
+      if (!user) {
+        openGate("watchlist");
+        return;
+      }
+
       const current = queryClient.getQueryData<PriceAlert[]>(alertsQueryKey) ?? alerts;
       const updated = [
         ...current,
@@ -509,7 +519,7 @@ export function useWatchlist() {
         });
       }
     },
-    [alerts, alertsQueryKey, queryClient, store, supabase, user, watchlistQueryKey]
+    [alerts, alertsQueryKey, openGate, queryClient, store, supabase, user, watchlistQueryKey]
   );
 
   const removeAlert = useCallback(

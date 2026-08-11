@@ -36,6 +36,8 @@ import {
 import { useAllProfiles, useAllQuotes } from "@/hooks/use-stock-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { useChartColors } from "@/hooks/use-chart-colors";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import type { CompanyFinancials } from "@/types/financials";
 import type { EarningsHistoryPoint, StockProfile, StockQuote } from "@/types/stock";
 
@@ -921,6 +923,8 @@ export default function EarningsPage() {
   const { data: quotes = [], isLoading: quotesLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
   const { data: profiles = [], isLoading: profilesLoading, isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
   const { lists } = useWatchlist();
+  const { user } = useSupabase();
+  const { openGate } = useAuthGate();
 
   const currentWeekStart = useMemo(() => getWeekStart(new Date()), []);
   const weekStart = useMemo(
@@ -1245,6 +1249,11 @@ export default function EarningsPage() {
 
     const existing = panelCache[selectedTicker];
     if (!existing || existing.historyLimit >= FULL_HISTORY_LIMIT) return;
+
+    if (!user) {
+      openGate("deepData");
+      return;
+    }
 
     setLoadingTicker(selectedTicker);
 

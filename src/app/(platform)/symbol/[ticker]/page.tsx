@@ -23,6 +23,8 @@ import { ChartErrorBoundary } from "@/components/ui/chart-error-boundary";
 import { QualityScorecard, QualityScorecardSkeleton } from "@/components/stock/quality-scorecard";
 import { calculateQualityScore } from "@/lib/calculations/quality-score";
 import { fetchAlphaFinancials, getAlphaAvailability } from "@/app/actions/stock";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
 import type { CompanyFinancials } from "@/types/financials";
@@ -109,6 +111,8 @@ export default function OverviewPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params.ticker ?? "").toUpperCase();
   const queryClient = useQueryClient();
+  const { user } = useSupabase();
+  const { openGate } = useAuthGate();
 
   const [periodType, setPeriodType] = useState<PeriodType>("annual");
   const [yearRange, setYearRange] = useState<YearRange>(10);
@@ -149,6 +153,10 @@ export default function OverviewPage() {
 
   const handleLoadDeepFinancials = async (): Promise<void> => {
     if (!ticker || isLoadingDeepFinancials || hasDeepFinancials) return;
+    if (!user) {
+      openGate("deepData");
+      return;
+    }
 
     setIsLoadingDeepFinancials(true);
     setDeepFinancialsError(null);
