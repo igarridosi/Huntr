@@ -34,7 +34,7 @@ export function Footer() {
           </div>
           <div className="flex flex-col gap-3">
             <span className="font-semibold text-snow-peak">Company</span>
-            <Link href="/#pricing" className="text-mist/70 hover:text-orange-500 transition-colors">Pricing</Link>
+            <a href="https://ko-fi.com/E1E21WMFA8" target="_blank" rel="noopener noreferrer" className="text-mist/70 hover:text-orange-500 transition-colors">Support Us</a>
             <Link href="https://twitter.com/huntrvalue" target="_blank" rel="noopener noreferrer" className="text-mist/70 hover:text-orange-500 transition-colors">Twitter</Link>
           </div>
         </nav>

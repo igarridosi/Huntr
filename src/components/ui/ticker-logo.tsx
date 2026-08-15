@@ -79,26 +79,6 @@ export function TickerLogo({
     }
   }, [ticker]);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    const tryResolveWithoutSource = async () => {
-      if (attemptedSymbolLookup) return;
-
-      setAttemptedSymbolLookup(true);
-      const resolved = await resolveLogoFromSymbol();
-      if (!cancelled && resolved) {
-        setCurrentSrc(resolved);
-      }
-    };
-
-    void tryResolveWithoutSource();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [attemptedSymbolLookup, ticker, resolveLogoFromSymbol]);
-
   const handleError = async () => {
     if (sourceIndex + 1 < candidates.length) {
       const nextIndex = sourceIndex + 1;

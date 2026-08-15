@@ -3,13 +3,15 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crosshair, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthField } from "@/components/auth/auth-field";
+import { AuthError, AuthNotice } from "@/components/auth/auth-feedback";
 import { ROUTES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
+import { humanizeAuthError } from "@/lib/auth-errors";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,16 +20,22 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [shouldCheckEmail, setShouldCheckEmail] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [sendingReset, setSendingReset] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    setShouldCheckEmail(params.get("checkEmail") === "1");
+    if (params.get("checkEmail") === "1") {
+      setNotice("Account created. Check your inbox to confirm it, then sign in.");
+    } else if (params.get("reset") === "1") {
+      setNotice("Password updated. Sign in with your new password.");
+    }
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    setNotice(null);
     setLoading(true);
 
     try {
@@ -36,109 +44,120 @@ export default function LoginPage() {
         password,
       });
 
-      if (signInError) {
-        throw signInError;
-      }
+      if (signInError) throw signInError;
 
       router.replace(ROUTES.APP);
       router.refresh();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Login failed. Please try again."
-      );
+      setError(humanizeAuthError(err, "Couldn't sign you in. Please try again."));
     } finally {
       setLoading(false);
     }
   }
 
+  /**
+   * Reset needs the address, and asking for it in a separate screen loses what
+   * is already typed — so the field on screen is reused, and it only prompts
+   * when empty.
+   */
+  async function handleForgotPassword() {
+    setError(null);
+    setNotice(null);
+
+    const address = email.trim();
+    if (!address) {
+      setError("Enter your email address above, then choose “Forgot password?”.");
+      return;
+    }
+
+    setSendingReset(true);
+
+    try {
+      const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
+      const baseUrl = (configuredSiteUrl || window.location.origin).replace(/\/+$/, "");
+
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(address, {
+        redirectTo: `${baseUrl}/reset-password`,
+      });
+
+      if (resetError) throw resetError;
+
+      // Deliberately not confirming whether the address exists — that would let
+      // anyone probe for registered users.
+      setNotice(`If an account exists for ${address}, a reset link is on its way.`);
+    } catch (err) {
+      setError(humanizeAuthError(err, "Couldn't send the reset link. Please try again."));
+    } finally {
+      setSendingReset(false);
+    }
+  }
+
   return (
-    <div className="w-full max-w-sm space-y-8">
-      {/* Brand */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-sunset-orange/15 border border-sunset-orange/20">
-            <Crosshair className="w-6 h-6 text-sunset-orange" />
-          </div>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-snow-peak">
-          Welcome back, hunter
-        </h1>
-        <p className="text-sm text-mist">
-          Sign in to your account to continue.
-        </p>
-      </div>
+    <AuthShell
+      title="Welcome back"
+      subtitle="Sign in to pick up where you left off."
+      footer={
+        <>
+          Don&apos;t have an account?{" "}
+          <Link
+            href={ROUTES.SIGNUP}
+            className="font-medium text-sunset-orange transition-colors hover:text-sunset-orange/80"
+          >
+            Create one
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        {notice && <AuthNotice>{notice}</AuthNotice>}
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-5">
-        {shouldCheckEmail && (
-          <div className="text-sm text-sunset-orange bg-sunset-orange/10 border border-sunset-orange/20 rounded-lg px-3 py-2">
-            Account created. Check your email to confirm your account before signing in.
-          </div>
-        )}
+        <AuthField
+          label="Email"
+          icon={Mail}
+          type="email"
+          inputMode="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          autoFocus
+        />
 
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="wolf@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            autoFocus
-          />
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
-            <Label htmlFor="password">Password</Label>
+        <AuthField
+          label="Password"
+          icon={Lock}
+          revealable
+          placeholder="Your password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="current-password"
+          action={
             <button
               type="button"
-              className="text-xs text-sunset-orange hover:text-sunset-orange/80 transition-colors cursor-pointer"
+              onClick={handleForgotPassword}
+              disabled={sendingReset}
+              className="cursor-pointer text-xs text-sunset-orange transition-colors hover:text-sunset-orange/80 disabled:opacity-60"
             >
-              Forgot password?
+              {sendingReset ? "Sending…" : "Forgot password?"}
             </button>
-          </div>
-          <Input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="current-password"
-          />
-        </div>
+          }
+        />
 
-        {error && (
-          <div className="text-sm text-bearish bg-bearish/10 border border-bearish/20 rounded-lg px-3 py-2">
-            {error}
-          </div>
-        )}
+        {error && <AuthError>{error}</AuthError>}
 
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" size="lg" className="w-full" disabled={loading}>
           {loading ? (
             <Spinner size="sm" color="white" />
           ) : (
             <>
-              Sign In
-              <ArrowRight className="w-4 h-4" />
+              Sign in
+              <ArrowRight className="h-4 w-4" />
             </>
           )}
         </Button>
       </form>
-
-      {/* Footer */}
-      <p className="text-center text-sm text-mist">
-        Don&apos;t have an account?{" "}
-        <Link
-          href={ROUTES.SIGNUP}
-          className="text-sunset-orange hover:text-sunset-orange/80 font-medium transition-colors"
-        >
-          Sign up
-        </Link>
-      </p>
-    </div>
+    </AuthShell>
   );
 }
