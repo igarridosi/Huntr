@@ -1,4 +1,4 @@
-import { HeroParallax } from "@/components/landing/HeroParallax";
+import { HeroForest } from "@/components/landing/hero-forest";
 import { Features } from "@/components/landing/features";
 import { Preview } from "@/components/landing/preview";
 import { DCFShowcase } from "@/components/landing/dcf-showcase";
@@ -8,8 +8,9 @@ import { Transparency } from "@/components/landing/transparency";
 import { CTA } from "@/components/landing/cta";
 import { Footer } from "@/components/landing/footer";
 import { LandingSideMenu } from "@/components/landing/side-menu";
+import { Journey, JourneyStep } from "@/components/landing/journey";
+import { LandingNav } from "@/components/landing/landing-nav";
 import { KoFiSupport } from "@/components/ui/kofi-support";
-import { Compass } from "lucide-react";
 
 export default function Home() {
   return (
@@ -20,55 +21,35 @@ export default function Home() {
         <KoFiSupport text="Support Huntr on Ko-fi" />
       </div>
 
-      {/* Sticky nav bar */}
-      <nav className="sticky top-0 z-40 border-b border-wolf-border/30 bg-wolf-black/80 backdrop-blur-md px-6 py-3">
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <span className="text-lg font-extrabold tracking-tight text-snow-peak">
-            HUNTR
-          </span>
-          <div className="flex items-center gap-3">
-            <a
-              href="/app"
-              className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-snow-peak border border-wolf-border/60 hover:border-sunset-orange/50 hover:text-sunset-orange bg-wolf-black/40 hover:bg-sunset-orange/5 px-3.5 py-1.5 rounded-lg transition-colors"
-            >
-              <Compass className="w-3.5 h-3.5" />
-              Explore as Guest
-            </a>
-            <a
-              href="/login"
-              className="text-sm text-mist hover:text-snow-peak transition-colors"
-            >
-              Login
-            </a>
-            <a
-              href="/signup"
-              className="text-sm font-semibold text-wolf-black bg-sunset-orange hover:bg-sunset-orange/90 px-4 py-1.5 rounded-lg transition-colors"
-            >
-              Start Free
-            </a>
-          </div>
-        </div>
-      </nav>
+      <LandingNav />
 
       <main className="flex-1">
-        <div id="hero" className="scroll-mt-24">
-          <HeroParallax />
+        {/* Pulled under the nav so the scene is full-bleed — when the nav fades
+            for the intro it reveals forest rather than an empty strip. */}
+        <div id="hero" className="-mt-[3.75rem]">
+          <HeroForest />
         </div>
+
         <div id="features" className="scroll-mt-24">
           <Features />
         </div>
-        <div id="radar" className="scroll-mt-24">
-          <Preview />
-        </div>
-        <div id="dcf" className="scroll-mt-24">
-          <DCFShowcase />
-        </div>
-        <div id="earnings" className="scroll-mt-24">
-          <EarningsShowcase />
-        </div>
-        <div id="portfolios" className="scroll-mt-24">
-          <PortfoliosShowcase />
-        </div>
+
+        {/* Product tour — threaded by the scroll-filled rail */}
+        <Journey>
+          <JourneyStep index={1} eyebrow="Discover" id="radar">
+            <Preview />
+          </JourneyStep>
+          <JourneyStep index={2} eyebrow="Value" id="dcf">
+            <DCFShowcase />
+          </JourneyStep>
+          <JourneyStep index={3} eyebrow="Anticipate" id="earnings">
+            <EarningsShowcase />
+          </JourneyStep>
+          <JourneyStep index={4} eyebrow="Manage" id="portfolios">
+            <PortfoliosShowcase />
+          </JourneyStep>
+        </Journey>
+
         <div id="transparency" className="scroll-mt-24">
           <Transparency />
         </div>

@@ -3,13 +3,15 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Crosshair, ArrowRight } from "lucide-react";
+import { Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
+import { AuthShell } from "@/components/auth/auth-shell";
+import { AuthField } from "@/components/auth/auth-field";
+import { AuthError, PasswordRules } from "@/components/auth/auth-feedback";
 import { ROUTES } from "@/lib/constants";
 import { createClient } from "@/lib/supabase/client";
+import { checkPassword, humanizeAuthError, passwordMeetsRules } from "@/lib/auth-errors";
 
 export default function SignupPage() {
   const router = useRouter();
@@ -17,20 +19,28 @@ export default function SignupPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [confirmTouched, setConfirmTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const rules = checkPassword(password);
+  const strongEnough = passwordMeetsRules(password);
+  // Only a mismatch once they have moved on — flagging mid-typing reads as
+  // an error for text that simply is not finished yet.
+  const mismatch = confirmTouched && confirmPassword.length > 0 && confirmPassword !== password;
+  const canSubmit = email.trim().length > 0 && strongEnough && confirmPassword === password;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
 
-    if (password !== confirmPassword) {
-      setError("Passwords don't match.");
+    if (!strongEnough) {
+      setError("Your password doesn't meet the requirements yet.");
       return;
     }
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (password !== confirmPassword) {
+      setError("The two passwords don't match.");
       return;
     }
 
@@ -39,23 +49,16 @@ export default function SignupPage() {
     try {
       const configuredSiteUrl = process.env.NEXT_PUBLIC_SITE_URL?.trim();
       const baseUrl = (configuredSiteUrl || window.location.origin).replace(/\/+$/, "");
-      const emailRedirectTo = `${baseUrl}${ROUTES.LOGIN}`;
 
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: {
-          emailRedirectTo,
-        },
+        options: { emailRedirectTo: `${baseUrl}${ROUTES.LOGIN}` },
       });
 
-      if (signUpError) {
-        throw signUpError;
-      }
+      if (signUpError) throw signUpError;
 
-      const hasSession = Boolean(data.session);
-
-      if (hasSession) {
+      if (data.session) {
         router.replace(ROUTES.APP);
         router.refresh();
         return;
@@ -63,104 +66,89 @@ export default function SignupPage() {
 
       router.replace(`${ROUTES.LOGIN}?checkEmail=1`);
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : "Registration failed. Please try again."
-      );
+      setError(humanizeAuthError(err, "Couldn't create your account. Please try again."));
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="w-full max-w-sm space-y-8">
-      {/* Brand */}
-      <div className="text-center space-y-2">
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <div className="flex items-center justify-center w-12 h-12 rounded-xl bg-sunset-orange/15 border border-sunset-orange/20">
-            <Crosshair className="w-6 h-6 text-sunset-orange" />
-          </div>
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight text-snow-peak">
-          Join the hunt
-        </h1>
-        <p className="text-sm text-mist">
-          Create your account to start analyzing.
-        </p>
-      </div>
+    <AuthShell
+      title="Create your account"
+      subtitle="Free while Huntr is in beta. No card required."
+      footer={
+        <>
+          Already have an account?{" "}
+          <Link
+            href={ROUTES.LOGIN}
+            className="font-medium text-sunset-orange transition-colors hover:text-sunset-orange/80"
+          >
+            Sign in
+          </Link>
+        </>
+      }
+    >
+      <form onSubmit={handleSubmit} className="space-y-5" noValidate>
+        <AuthField
+          label="Email"
+          icon={Mail}
+          type="email"
+          inputMode="email"
+          placeholder="you@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          required
+          autoComplete="email"
+          autoFocus
+        />
 
-      {/* Form */}
-      <form onSubmit={handleSubmit} className="space-y-5">
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            placeholder="wolf@example.com"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            autoComplete="email"
-            autoFocus
-          />
-        </div>
+        <AuthField
+          label="Password"
+          icon={Lock}
+          revealable
+          placeholder="Create a password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          required
+          autoComplete="new-password"
+          hint={<PasswordRules rules={rules} />}
+        />
 
-        <div className="space-y-2">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            placeholder="••••••••"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-            minLength={6}
-          />
-        </div>
+        <AuthField
+          label="Confirm password"
+          icon={ShieldCheck}
+          revealable
+          placeholder="Repeat your password"
+          value={confirmPassword}
+          onChange={(e) => setConfirmPassword(e.target.value)}
+          onBlur={() => setConfirmTouched(true)}
+          required
+          autoComplete="new-password"
+          error={mismatch}
+          hint={
+            mismatch ? (
+              <span className="text-bearish">Both passwords must match.</span>
+            ) : undefined
+          }
+        />
 
-        <div className="space-y-2">
-          <Label htmlFor="confirmPassword">Confirm Password</Label>
-          <Input
-            id="confirmPassword"
-            type="password"
-            placeholder="••••••••"
-            value={confirmPassword}
-            onChange={(e) => setConfirmPassword(e.target.value)}
-            required
-            autoComplete="new-password"
-          />
-        </div>
+        {error && <AuthError>{error}</AuthError>}
 
-        {error && (
-          <div className="text-sm text-bearish bg-bearish/10 border border-bearish/20 rounded-lg px-3 py-2">
-            {error}
-          </div>
-        )}
-
-        <Button type="submit" className="w-full" disabled={loading}>
+        <Button type="submit" size="lg" className="w-full" disabled={loading || !canSubmit}>
           {loading ? (
             <Spinner size="sm" color="white" />
           ) : (
             <>
-              Create Account
-              <ArrowRight className="w-4 h-4" />
+              Create account
+              <ArrowRight className="h-4 w-4" />
             </>
           )}
         </Button>
-      </form>
 
-      {/* Footer */}
-      <p className="text-center text-sm text-mist">
-        Already have an account?{" "}
-        <Link
-          href={ROUTES.LOGIN}
-          className="text-sunset-orange hover:text-sunset-orange/80 font-medium transition-colors"
-        >
-          Sign in
-        </Link>
-      </p>
-    </div>
+        <p className="text-center text-xs leading-relaxed text-mist/70">
+          By creating an account you agree to our terms and privacy policy.
+        </p>
+      </form>
+    </AuthShell>
   );
 }

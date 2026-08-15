@@ -80,6 +80,9 @@
   --transition-fast: var(--duration-fast) var(--ease-out);
   --transition-base: var(--duration-base) var(--ease-in-out);
   --transition-slow: var(--duration-slow) var(--ease-out);
+
+  /* Animations — exposed as utilities (animate-*) so the build owns them */
+  --animate-huntr-marquee: huntr-marquee 48s linear infinite;
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -173,3 +176,11 @@ body {
 }
 .premium-veiled         { pointer-events: none; }
 .premium-veiled-content { filter: blur(4px); }
+
+/* ─── Landing: hero ticker marquee ──────────────────────────────────────── */
+/* The track holds two copies of the list, so translating by half its width
+ * lands exactly on the seam and the loop reads as continuous. */
+@keyframes huntr-marquee {
+  from { transform: translate3d(0, 0, 0); }
+  to   { transform: translate3d(-50%, 0, 0); }
+}

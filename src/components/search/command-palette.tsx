@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { useQueryClient } from "@tanstack/react-query";
@@ -28,6 +29,7 @@ export function CommandPalette({
   const router = useRouter();
   const queryClient = useQueryClient();
   const inputRef = useRef<HTMLInputElement>(null);
+  const paletteRef = useRef<HTMLDivElement>(null);
 
   // Cmd+K shortcut to toggle
   useKeyboardShortcut(
@@ -89,18 +91,54 @@ export function CommandPalette({
     return () => document.removeEventListener("keydown", handleKey);
   }, [open, onOpenChange]);
 
-  if (!open) return null;
+  // Lock page scroll while open — the palette is the only thing meant to move.
+  // <html> is the actual scrolling box in standards mode, so body alone isn't
+  // enough to stop it, and iOS Safari ignores overflow: hidden for touch
+  // scrolling entirely — so wheel/touchmove are blocked directly too.
+  useEffect(() => {
+    if (!open) return;
+    const root = document.documentElement;
+    const previousRootOverflow = root.style.overflow;
+    const previousBodyOverflow = document.body.style.overflow;
+    root.style.overflow = "hidden";
+    document.body.style.overflow = "hidden";
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center pt-[18vh]">
-      {/* Backdrop */}
+    const blockScroll = (event: Event) => {
+      if (event.target instanceof Node && paletteRef.current?.contains(event.target)) {
+        return;
+      }
+      event.preventDefault();
+    };
+
+    document.addEventListener("wheel", blockScroll, { passive: false });
+    document.addEventListener("touchmove", blockScroll, { passive: false });
+
+    return () => {
+      root.style.overflow = previousRootOverflow;
+      document.body.style.overflow = previousBodyOverflow;
+      document.removeEventListener("wheel", blockScroll);
+      document.removeEventListener("touchmove", blockScroll);
+    };
+  }, [open]);
+
+  if (!open || typeof document === "undefined") return null;
+
+  // Rendered into <body> on purpose. Inline, the palette inherits whatever
+  // subtree it was mounted in — the hero wraps it in a transformed, z-indexed,
+  // centered block, which pinned `fixed` to that box, trapped z-[100] beneath
+  // the side menu's z-50, and centred the result text. The portal escapes all
+  // three so the overlay covers the viewport and veils everything under it.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[18vh] text-left">
+      {/* Backdrop — sits above the floating side menu (z-50) so it reads as
+          veiled and inactive, not layered underneath the palette. */}
       <div
-        className="fixed inset-0 bg-wolf-black/70 backdrop-blur-sm"
+        className="fixed inset-0 bg-wolf-black/70 backdrop-blur-md"
         onClick={() => onOpenChange(false)}
       />
 
       {/* Palette */}
-      <div className="relative z-50 w-full max-w-xl mx-4">
+      <div ref={paletteRef} className="relative z-50 w-full max-w-xl mx-4">
         <Command
           className={cn(
             "rounded-xl bg-wolf-surface border border-wolf-border shadow-2xl overflow-hidden",
@@ -143,7 +181,7 @@ export function CommandPalette({
                     onMouseEnter={() => prefetchTicker(entry.ticker)}
                     onFocus={() => prefetchTicker(entry.ticker)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-2.5 rounded-lg cursor-pointer",
+                      "flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer",
                       "text-snow-peak transition-colors duration-150",
                       "data-[selected=true]:bg-sunset-orange/10 data-[selected=true]:text-sunset-orange",
                       "hover:bg-wolf-black/30 aria-selected:bg-sunset-orange/10"
@@ -159,16 +197,16 @@ export function CommandPalette({
                     />
 
                     {/* Info */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 text-left">
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm font-mono">
+                        <span className="font-bold text-base font-mono tracking-tight">
                           {entry.ticker}
                         </span>
-                        <span className="text-xs text-mist/50 px-1.5 py-0.5 bg-wolf-black/30 rounded">
+                        <span className="shrink-0 text-[11px] text-mist/70 px-1.5 py-0.5 bg-wolf-black/30 rounded">
                           {entry.sector}
                         </span>
                       </div>
-                      <p className="text-xs text-mist truncate mt-0.5">
+                      <p className="mt-1 truncate text-[15px] font-medium leading-snug text-snow-peak/85">
                         {entry.name}
                       </p>
                     </div>
@@ -193,7 +231,8 @@ export function CommandPalette({
           </div>
         </Command>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 
