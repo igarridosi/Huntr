@@ -14,7 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
-import { formatCompactNumber } from "@/lib/utils";
+import { cn, formatCompactNumber } from "@/lib/utils";
 import type { DCFResult } from "@/lib/calculations/dcf";
 
 interface DCFFCFChartProps {
@@ -137,7 +137,12 @@ function FCFBreakdownChart({
   const chartHeight = horizonChanges.length > 0 ? Math.max(140, height - 38) : height;
 
   return (
-    <div className="rounded-xl border border-wolf-border/30 bg-wolf-black/20 p-2 m-2" style={{ height: height + height/20 }}>
+    // minHeight, not height: the horizon chips wrap to two lines on a phone and
+    // a fixed box pushed them outside the card border.
+    <div
+      className="rounded-xl border border-wolf-border/30 bg-wolf-black/20 p-2 m-2"
+      style={{ minHeight: height + height / 20 }}
+    >
       <div style={{ height: chartHeight }}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 10, right: 14, left: 8, bottom: 4 }}>
@@ -173,7 +178,9 @@ function FCFBreakdownChart({
               const changeVsBase = base !== 0 ? (row.fcf - base) / Math.abs(base) : 0;
 
               return (
-                <div className="rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-3 shadow-xl min-w-[210px]">
+                // Recharts keeps the tooltip inside the chart box, so a 210px
+                // card swallowed a phone-width chart whole.
+                <div className="min-w-[136px] rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-2.5 shadow-xl sm:min-w-[210px] sm:p-3">
                   <p className="text-sm font-semibold text-snow-peak mb-2">{label}</p>
 
                   <p className="text-[11px] text-emerald-300 font-mono">
@@ -205,18 +212,21 @@ function FCFBreakdownChart({
           <Line dataKey="pvFcf" type="monotone" stroke="#f8fafc" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 4 }} />
           </ComposedChart>
         </ResponsiveContainer>
+        {/* One row, always. Wrapping is what pushed these out of the card, so
+            they share the width evenly and shed padding instead of folding. */}
         {horizonChanges.length > 0 ? (
-        <div className="flex flex-wrap justify-center items-center w-full gap-2">
+        <div className="mt-1 flex w-full flex-nowrap items-center justify-center gap-1 sm:gap-2">
           {horizonChanges.map((item) => {
             const positive = item.change >= 0;
             return (
               <span
                 key={item.label}
-                className={
+                className={cn(
+                  "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border px-1 py-1 font-mono text-[10px] whitespace-nowrap sm:px-2.5 sm:text-xs",
                   positive
-                    ? "inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono text-emerald-300"
-                    : "inline-flex items-center gap-1 rounded-md border border-rose-400/20 bg-rose-500/15 px-2.5 py-1 text-xs font-mono text-rose-300"
-                }
+                    ? "border-emerald-400/20 bg-emerald-500/15 text-emerald-300"
+                    : "border-rose-400/20 bg-rose-500/15 text-rose-300"
+                )}
               >
                 {item.label}: {item.change > 0 ? "+" : ""}{(item.change * 100).toFixed(1)}%
               </span>

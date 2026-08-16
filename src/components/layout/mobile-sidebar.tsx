@@ -97,8 +97,8 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
                 src="/logo/HunterLogoCut-removebg.png"
                 alt="Huntr"
                 width={40}
-                height={29}
-                className="object-contain"
+                height={30}
+                className="h-auto w-10 object-contain"
                 priority
               />
             </div>

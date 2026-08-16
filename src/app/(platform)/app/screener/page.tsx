@@ -25,6 +25,7 @@ import { SCREENER_PRESETS } from "@/types/screener";
 import type { FilterId, ScreenerRow } from "@/types/screener";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CompactLabel } from "@/components/ui/compact-label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -226,7 +227,9 @@ const COLUMNS: ColDef[] = [
           <p className="font-mono text-xs font-semibold text-snow-peak group-hover/link:text-sunset-orange transition-colors truncate">
             {row.ticker}
           </p>
-          <p className="text-[10px] text-mist truncate max-w-[140px]">{row.name}</p>
+          <p className="max-w-[140px] truncate text-[10px] text-mist">
+            <CompactLabel text={row.name} />
+          </p>
         </div>
       </Link>
     ),
@@ -467,7 +470,9 @@ function ThCell({
       onClick={() => col.sortKey && onSort(col.sortKey)}
       disabled={!col.sortKey}
       className={cn(
-        "inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider transition-colors",
+        // Padding rather than height: the label stays put, but sorting becomes
+        // tappable instead of a 15px sliver.
+        "inline-flex items-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors sm:py-0",
         col.sortKey ? "cursor-pointer" : "cursor-default",
         isActive ? "text-sunset-orange" : "text-mist/60 hover:text-mist"
       )}
@@ -555,7 +560,7 @@ function FilterGroup({
                       isNone ? onRemove(def.id) : onSetFilter(def.id, preset.min, preset.max)
                     }
                     className={cn(
-                      "px-2 py-0.5 rounded text-[10px] font-medium transition-all border",
+                      "min-h-8 rounded border px-2.5 py-1.5 text-[10px] font-medium transition-all sm:min-h-0 sm:px-2 sm:py-0.5",
                       isSelected
                         ? "bg-sunset-orange/12 text-sunset-orange border-sunset-orange/25"
                         : "text-mist/70 border-wolf-border/30 hover:border-wolf-border/60 hover:text-snow-peak bg-transparent"
@@ -847,7 +852,7 @@ export default function ScreenerPage() {
             placeholder="Ticker or company…"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
-            className="pl-8 h-8 text-xs bg-wolf-black/40 border-wolf-border/40 focus:border-sunset-orange/50"
+            className="h-10 pl-8 text-xs bg-wolf-black/40 border-wolf-border/40 focus:border-sunset-orange/50 sm:h-8"
           />
           {search && (
             <button
@@ -872,7 +877,7 @@ export default function ScreenerPage() {
                 type="button"
                 onClick={() => { setPage(1); applyPreset(preset); }}
                 className={cn(
-                  "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-all",
+                  "inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all sm:min-h-0 sm:py-1.5",
                   isActive
                     ? "bg-sunset-orange/12 border-sunset-orange/30 text-sunset-orange"
                     : "border-wolf-border/40 text-mist hover:border-wolf-border hover:text-snow-peak"
@@ -888,7 +893,7 @@ export default function ScreenerPage() {
           <button
             type="button"
             onClick={handleClear}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-wolf-border/30 text-[10px] text-mist hover:text-bearish hover:border-bearish/30 transition-colors"
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-wolf-border/30 px-2.5 py-2 text-[10px] text-mist transition-colors hover:border-bearish/30 hover:text-bearish sm:min-h-0 sm:py-1.5"
           >
             <X className="h-2.5 w-2.5" /> Clear
           </button>
@@ -1003,7 +1008,7 @@ export default function ScreenerPage() {
                         type="button"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={safePage === 1}
-                        className="flex h-7 w-7 items-center justify-center rounded border border-wolf-border/40 text-mist hover:border-wolf-border hover:text-snow-peak transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="flex h-9 w-9 items-center justify-center rounded border border-wolf-border/40 text-mist transition-colors hover:border-wolf-border hover:text-snow-peak disabled:cursor-not-allowed disabled:opacity-30 sm:h-7 sm:w-7"
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
                       </button>
@@ -1022,7 +1027,7 @@ export default function ScreenerPage() {
                             type="button"
                             onClick={() => setPage(p)}
                             className={cn(
-                              "flex h-7 w-7 items-center justify-center rounded border text-[11px] font-mono transition-all",
+                              "flex h-9 w-9 items-center justify-center rounded border font-mono text-[11px] transition-all sm:h-7 sm:w-7",
                               safePage === p
                                 ? "border-sunset-orange/40 bg-sunset-orange/10 text-sunset-orange"
                                 : "border-wolf-border/40 text-mist hover:border-wolf-border hover:text-snow-peak"
@@ -1036,7 +1041,7 @@ export default function ScreenerPage() {
                         type="button"
                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={safePage === totalPages}
-                        className="flex h-7 w-7 items-center justify-center rounded border border-wolf-border/40 text-mist hover:border-wolf-border hover:text-snow-peak transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="flex h-9 w-9 items-center justify-center rounded border border-wolf-border/40 text-mist transition-colors hover:border-wolf-border hover:text-snow-peak disabled:cursor-not-allowed disabled:opacity-30 sm:h-7 sm:w-7"
                       >
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>

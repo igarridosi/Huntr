@@ -39,7 +39,7 @@ function ToggleButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "px-3 py-1.5 text-xs font-medium rounded-md transition-all cursor-pointer",
+        "min-h-9 cursor-pointer rounded-md px-3 py-2 text-xs font-medium transition-all sm:min-h-0 sm:py-1.5",
         active
           ? "bg-sunset-orange/15 text-sunset-orange border border-sunset-orange/20"
           : "text-mist hover:text-snow-peak"

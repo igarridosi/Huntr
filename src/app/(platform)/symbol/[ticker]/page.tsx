@@ -661,9 +661,11 @@ export default function OverviewPage() {
         <div className="flex flex-col gap-6">
           <StockPriceCard ticker={ticker} quote={quote ?? null} />
 
-          <div className="flex items-center justify-end gap-3">
+          {/* Wraps on narrow screens — justify-end with no wrap pushed the
+              first control off the left edge of the viewport. */}
+          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end sm:gap-3">
             {deepFinancialsError ? (
-              <p className="text-xs text-golden-hour">{deepFinancialsError}</p>
+              <p className="w-full text-xs text-golden-hour sm:w-auto">{deepFinancialsError}</p>
             ) : null}
             <Button
               type="button"
@@ -671,7 +673,7 @@ export default function OverviewPage() {
               size="sm"
               onClick={() => { void handleLoadDeepFinancials(); }}
               disabled={hasDeepFinancials || isLoadingDeepFinancials}
-              className="h-8 text-xs border-wolf-border/60"
+              className="text-xs border-wolf-border/60"
             >
               {isLoadingDeepFinancials
                 ? "Loading 20Y..."
@@ -686,7 +688,7 @@ export default function OverviewPage() {
                   type="button"
                   onClick={() => setYearRange(years)}
                   className={cn(
-                    "px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                    "min-h-9 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 sm:min-h-0 sm:px-2.5 sm:py-1",
                     yearRange === years
                       ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
                       : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"

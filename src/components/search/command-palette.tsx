@@ -12,6 +12,7 @@ import { useSearch } from "@/hooks/use-stock-data";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { fetchStockProfile, fetchStockQuote, fetchFullStockData } from "@/app/actions/stock";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { CompactLabel } from "@/components/ui/compact-label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 interface CommandPaletteProps {
@@ -207,7 +208,7 @@ export function CommandPalette({
                         </span>
                       </div>
                       <p className="mt-1 truncate text-[15px] font-medium leading-snug text-snow-peak/85">
-                        {entry.name}
+                        <CompactLabel text={entry.name} />
                       </p>
                     </div>
 

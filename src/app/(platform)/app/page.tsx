@@ -6,7 +6,6 @@ import {
   Lightbulb,
   ChevronLeft,
   ChevronRight,
-  Lock,
   CircleHelp,
   Star,
   Check,
@@ -22,6 +21,7 @@ import { useSupabase } from "@/providers/supabase-provider";
 import { useAuthGate } from "@/providers/auth-gate-provider";
 import { ROUTES } from "@/lib/constants";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { CompactLabel } from "@/components/ui/compact-label";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -366,8 +366,16 @@ export default function InsightsPage() {
 
       <Card>
         <CardHeader className="pb-3">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2 overflow-x-auto">
+          {/* Stacked on phones: side by side, the counter squeezed the tab
+              strip into a stub and left the native scrollbar on show. */}
+          <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div
+              className={cn(
+                "order-2 flex items-center gap-2 overflow-x-auto overscroll-x-contain sm:order-1",
+                "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
+                "[mask-image:linear-gradient(to_right,black_0,black_calc(100%-24px),transparent_100%)] sm:[mask-image:none]"
+              )}
+            >
               {tabs.map((tab) => (
                 <button
                   key={tab.key}
@@ -376,7 +384,7 @@ export default function InsightsPage() {
                     setActiveTab(tab.key);
                     setPage(0);
                   }}
-                  className={`px-3 py-1.5 text-xs rounded-md border transition-colors whitespace-nowrap cursor-pointer ${
+                  className={`min-h-9 whitespace-nowrap rounded-md border px-3 py-2 text-xs transition-colors cursor-pointer sm:min-h-0 sm:py-1.5 ${
                     activeTab === tab.key
                       ? "bg-sunset-orange/10 text-sunset-orange border-sunset-orange/30"
                       : "bg-wolf-black/30 text-mist border-wolf-border/40 hover:text-snow-peak"
@@ -400,7 +408,7 @@ export default function InsightsPage() {
                 </button>
               )}
             </div>
-            <Badge variant="secondary" className="font-mono">
+            <Badge variant="secondary" className="order-1 shrink-0 self-start font-mono sm:order-2 sm:self-auto">
               {startItem}-{endItem} / {insightRows.length} ideas
             </Badge>
           </div>
@@ -457,7 +465,7 @@ export default function InsightsPage() {
                           {quote.ticker}
                         </p>
                         <p className="text-xs text-mist truncate mt-0.5">
-                          {profile?.name ?? quote.ticker}
+                          <CompactLabel text={profile?.name ?? quote.ticker} />
                         </p>
                         <p className="text-[11px] text-mist/75 font-mono mt-1">
                           {contextMetric.label}: {contextMetric.value}
@@ -489,7 +497,10 @@ export default function InsightsPage() {
                         event.stopPropagation();
                         openPickerForTicker(quote.ticker);
                       }}
-                      className={`absolute left-1/2 top-2 z-10 inline-flex -translate-x-1/2 translate-y-4 items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] font-medium transition-all duration-200 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 pointer-events-none group-hover:pointer-events-auto ${
+                      // Hidden on touch: it crowded the card and duplicated the
+                      // watchlist action already on the stock page. Desktop
+                      // keeps it as a hover affordance.
+                      className={`absolute left-1/2 top-2 z-10 hidden -translate-x-1/2 translate-y-4 items-center gap-1 rounded-md border px-2.5 py-1 text-[10px] font-medium opacity-0 transition-all duration-200 pointer-events-none sm:inline-flex sm:group-hover:translate-y-0 sm:group-hover:opacity-100 sm:group-hover:pointer-events-auto ${
                         inAnyWatchlist
                           ? "border-sunset-orange/35 bg-sunset-orange/12 text-sunset-orange"
                           : "border-wolf-border/50 bg-wolf-black/70 text-mist hover:text-sunset-orange"
@@ -584,18 +595,15 @@ export default function InsightsPage() {
               <h2 className="text-sm font-semibold text-snow-peak">Opportunity Radar</h2>
               <p className="text-xs text-mist mt-0.5">Premium signals for faster stock discovery</p>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs flex items-center gap-1">
-                <Lock className="h-3 w-3" /> Pro
-              </Badge>
-            </div>
           </div>
         </CardHeader>
         <CardContent>
           <div className="mb-4 mt-2 grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/25 p-3 lg:col-span-2">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[11px] text-mist">Price Momentum Window (Top Gainers / Top Losers)</p>
+                <p className="text-[11px] text-mist">
+                  <CompactLabel text="Price Momentum Window (Top Gainers / Top Losers)" />
+                </p>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1 rounded-md border border-wolf-border/40 bg-wolf-black/30 p-1">
                     {performanceWindows.map((window) => (
@@ -603,7 +611,7 @@ export default function InsightsPage() {
                         key={window}
                         type="button"
                         onClick={() => setPerformanceWindow(window)}
-                        className={`px-2 py-1 text-[10px] font-mono rounded transition-colors cursor-pointer ${
+                        className={`min-h-8 rounded px-2.5 py-1.5 font-mono text-[10px] transition-colors cursor-pointer sm:min-h-0 sm:px-2 sm:py-1 ${
                           performanceWindow === window
                             ? "bg-sunset-orange/15 text-sunset-orange"
                             : "text-mist hover:text-snow-peak"
@@ -777,7 +785,9 @@ const SignalColumn = memo(function SignalColumn({
               />
               <div className="min-w-0 flex-1">
                 <p className="text-xs font-semibold text-snow-peak truncate">{row.quote.ticker}</p>
-                <p className="text-[10px] text-mist truncate">{row.profile?.name ?? row.quote.ticker}</p>
+                <p className="truncate text-[10px] text-mist">
+                  <CompactLabel text={row.profile?.name ?? row.quote.ticker} />
+                </p>
               </div>
               <span className={`text-xs font-mono font-semibold ${metricColorClass ?? (negativeMetric ? "text-[#FF4242]" : "text-sunset-orange")}`}>
                 {metric}: {metricValue(row)}

@@ -135,8 +135,8 @@ export function Sidebar({
             src="/logo/HunterLogoCut-removebg.png"
             alt="Huntr"
             width={44}
-            height={32}
-            className="object-contain"
+            height={33}
+            className="h-auto w-11 object-contain"
             priority
           />
         </div>

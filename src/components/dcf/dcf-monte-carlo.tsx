@@ -97,7 +97,9 @@ export function DCFMonteCarlo({
                   style={{ height: `${Math.max(1, height)}%` }}
                 />
                 {/* Tooltip */}
-                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[9px] font-mono text-snow-peak bg-wolf-black border border-wolf-border rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+                {/* group-active covers touch: the value shows while the finger
+                    is held on the bar, since there is no hover to rely on. */}
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-wolf-border bg-wolf-black px-2 py-1 font-mono text-[9px] text-snow-peak opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100">
                   {formatCurrency(bucket.mid, { decimals: 0 })} ({bucket.count})
                 </div>
               </div>

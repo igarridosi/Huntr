@@ -165,15 +165,20 @@ export default function RootLayout({
             __html: `(function(){try{var t=localStorage.getItem('huntr-theme');var s=!t&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if((t||s)==='light')document.documentElement.classList.add('light');}catch(e){}})();`,
           }}
         />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaMarkup) }}
-        />
       </head>
       <body
         suppressHydrationWarning
         className={`${outfit.variable} ${geistMono.variable} antialiased bg-wolf-black text-snow-peak`}
       >
+        {/* JSON-LD lives in the body, not the head. Crawlers accept it anywhere
+            in the document, while <head> is exactly where browser extensions
+            inject their own scripts — and an injected sibling shifts the
+            children React expects, producing a hydration mismatch we cannot
+            fix from here. Out of the head, that class of clash goes away. */}
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaMarkup) }}
+        />
         <ThemeProvider>
           <SupabaseProvider>
             <QueryProvider>

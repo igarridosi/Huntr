@@ -662,11 +662,26 @@ function MetricCard({
 
 function InfoHint({ text }: { text: string }) {
   return (
-    <div className="group relative inline-flex items-center">
-      <Info className="w-3 h-3 text-mist/70 cursor-help" />
-      <div className="pointer-events-none absolute ml-5 left-1/2 top-full z-30 mt-2 w-56 -translate-x-1/2 rounded-md border border-wolf-border/60 bg-wolf-black/95 px-2 py-1.5 text-[10px] leading-relaxed text-snow-peak opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+    <span className="group relative inline-flex items-center">
+      {/* Focusable so the hint is reachable by touch and keyboard, not just hover */}
+      <button
+        type="button"
+        aria-label="More information"
+        className="inline-flex h-6 w-6 cursor-help items-center justify-center rounded text-mist/70 transition-colors hover:text-mist focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sunset-orange sm:h-3 sm:w-3"
+      >
+        <Info className="h-3 w-3" />
+      </button>
+      {/* Anchored to the icon there is no room on a phone — centred on a trigger
+          near the right edge it ran 59px past the viewport. Below sm it docks to
+          the bottom of the screen instead, where it always fits whole. The old
+          version also carried a stray ml-5 that pushed it further out, and being
+          absolute it counted toward page scroll width even while invisible. */}
+      <span
+        role="tooltip"
+        className="pointer-events-none fixed inset-x-4 bottom-4 z-50 rounded-md border border-wolf-border/60 bg-wolf-black/95 px-3 py-2 text-[11px] leading-relaxed text-snow-peak opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 sm:absolute sm:inset-x-auto sm:left-1/2 sm:top-full sm:bottom-auto sm:z-30 sm:mt-2 sm:w-56 sm:-translate-x-1/2 sm:px-2 sm:py-1.5 sm:text-[10px]"
+      >
         {text}
-      </div>
-    </div>
+      </span>
+    </span>
   );
 }

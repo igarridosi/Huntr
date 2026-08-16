@@ -76,8 +76,13 @@ export default function PlatformLayout({
           showDesktopMenuToggle={useDesktopOverlaySidebar}
         />
 
-        {/* Page Content */}
-        <main className="flex-1 px-4 py-6 lg:px-8 lg:py-8">
+        {/* Page Content
+            overflow-x-clip, not hidden: it stops any absolutely-positioned
+            decoration (tooltips, popovers) from dragging the page sideways,
+            without turning this into a scroll container — which would break the
+            sticky topbar. Content that genuinely needs to scroll sideways, like
+            wide tables, still does so in its own container. */}
+        <main className="flex-1 overflow-x-clip px-4 py-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </div>

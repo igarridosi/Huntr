@@ -27,7 +27,7 @@ export function Topbar({
       <Button
         variant="ghost"
         size="icon-sm"
-        className="inline-flex lg:hidden mr-2"
+        className="mr-2 inline-flex h-10 w-10 lg:hidden"
         onClick={onMenuClick}
         aria-label="Toggle menu"
       >
@@ -53,8 +53,8 @@ export function Topbar({
             src="/logo/HunterLogoCut-removebg.png"
             alt="Huntr"
             width={36}
-            height={26}
-            className="object-contain"
+            height={27}
+            className="h-auto w-9 object-contain"
             priority
           />
         </div>
@@ -71,7 +71,7 @@ export function Topbar({
         type="button"
         onClick={onSearchClick}
         className={cn(
-          "ml-2 flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm",
+          "ml-2 flex h-10 items-center gap-2 rounded-lg px-3 text-sm sm:h-auto sm:py-1.5",
           "text-mist hover:text-snow-peak",
           "bg-wolf-surface/50 border border-wolf-border/50",
           "hover:bg-wolf-surface transition-all duration-200",
