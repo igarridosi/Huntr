@@ -1,0 +1,17 @@
+{
+  "artboards": [
+    { "file": "Current.dc.html", "title": "Current", "x": 0, "y": 0, "w": 1180, "h": 1080 },
+    { "file": "Main.dc.html", "title": "Proposed", "x": 1260, "y": 0, "w": 1180, "h": 1080 },
+    { "file": "Motion.dc.html", "title": "Motion", "x": 2520, "y": 0, "w": 1180, "h": 1240 }
+  ],
+  "annotations": [
+    {
+      "id": "read-me",
+      "x": 0,
+      "y": -150,
+      "w": 520,
+      "text": "Read left to right.\n\nCurrent marks five things that get in the way, keyed 1-5.\nProposed answers the same five, same keys, same density.\nMotion is live - click the tabs, hold the row, hammer Next."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}
