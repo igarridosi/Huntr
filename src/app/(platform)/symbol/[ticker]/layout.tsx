@@ -1,6 +1,5 @@
 import { Metadata } from "next";
 import TickerClientLayout from "./client-layout";
-import Script from "next/script";
 import { getStockProfile, getStockQuote } from "@/lib/api";
 
 // Proxy function to get real API data
@@ -115,8 +114,11 @@ export default async function TickerLayout({
 
   return (
     <>
-      <Script
-        id={`financial-quote-schema-${ticker}`}
+      {/* Plain <script>, not next/script: that component manages the tag on the
+          client and drops `type` during SSR, so the attribute differed between
+          server and client and broke hydration. JSON-LD is inert data anyway —
+          it never needs the loading strategies next/script exists for. */}
+      <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(financialQuoteSchema) }}
       />

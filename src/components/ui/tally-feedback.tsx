@@ -53,13 +53,14 @@ export function TallyFeedbackWidget() {
             },
           });
         }}
-        className="inline-flex items-center gap-2 rounded-full border border-wolf-border/60 bg-wolf-black/85 px-4 py-2 text-sm font-medium text-snow-peak shadow-lg shadow-wolf-black/45 backdrop-blur-md transition hover:border-sunset-orange/45 hover:bg-wolf-surface"
+        className="inline-flex items-center gap-2 rounded-full border border-wolf-border/60 bg-wolf-black/85 p-2 text-sm font-medium text-snow-peak shadow-lg shadow-wolf-black/45 backdrop-blur-md transition hover:border-sunset-orange/45 hover:bg-wolf-surface sm:px-4 sm:py-2"
         aria-label="Report an idea or bug"
       >
         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-sunset-orange/15 text-sunset-orange">
           <Bug className="h-3.5 w-3.5" />
         </span>
-        <span>Report idea or bug</span>
+        {/* Label costs half the width of a phone screen and covers content */}
+        <span className="hidden sm:inline">Report idea or bug</span>
       </button>
     </div>
   );

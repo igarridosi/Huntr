@@ -6,6 +6,7 @@ import Link from "next/link";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
 import { Search, ArrowRight, Radio, FileText, BarChart3 } from "lucide-react";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 import { CommandPalette } from "@/components/search/command-palette";
 import { ROUTES } from "@/lib/constants";
 
@@ -308,6 +309,12 @@ export function HeroForest() {
                 <span className="font-mono text-[10px] text-snow-peak/75">{label}</span>
               </div>
             ))}
+          </div>
+
+          {/* Mobile only — desktop gets this in the nav next to "Start Free"
+              instead, where the trust badges have less room to spare. */}
+          <div className="mt-3 flex justify-center sm:hidden">
+            <KoFiSupport text="Support Huntr on Ko-fi" />
           </div>
 
             <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} redirectTo={ROUTES.SIGNUP} />

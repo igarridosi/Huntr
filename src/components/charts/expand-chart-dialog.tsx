@@ -29,7 +29,7 @@ export function ExpandChartDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-wolf-border/60 bg-wolf-black/30 text-mist hover:text-snow-peak hover:bg-wolf-border/30 transition-colors"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-wolf-border/60 bg-wolf-black/30 text-mist transition-colors hover:bg-wolf-border/30 hover:text-snow-peak sm:h-7 sm:w-7"
         aria-label={`Expand ${title} chart`}
         title="Expand chart"
       >

@@ -1,6 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
+import { CompactLabel } from "@/components/ui/compact-label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { AddToWatchlist } from "@/components/watchlist/add-to-watchlist";
@@ -69,22 +70,23 @@ export function StockHeader({
       )}
 
       {/* Top Row: Logo + Name + Watchlist */}
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4">
+      <div className="flex items-start justify-between gap-3 sm:gap-4">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
           {/* Logo */}
           <TickerLogo
             ticker={profile.ticker}
             src={profile.logo_url}
-            className="w-[60px] h-[60px]"
+            className="h-11 w-11 shrink-0 sm:h-[60px] sm:w-[60px]"
             imageClassName="rounded-[8px]"
             fallbackClassName="rounded-[8px]"
           />
 
-          {/* Name + ticker */}
-          <div>
-            <div className="flex items-center gap-2.5">
-              <h1 className="text-2xl font-bold tracking-tight text-snow-peak">
-                {profile.name}
+          {/* Name + ticker — min-w-0 lets the long company name shrink instead
+              of shoving the watchlist button off the right edge */}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <h1 className="truncate text-lg font-bold tracking-tight text-snow-peak sm:text-2xl">
+                <CompactLabel text={profile.name} />
               </h1>
               <Badge variant="secondary" className="font-mono text-xs">
                 {profile.exchange}
@@ -103,7 +105,9 @@ export function StockHeader({
         </div>
 
         {/* Watchlist button */}
-        <AddToWatchlist ticker={profile.ticker} />
+        <div className="shrink-0">
+          <AddToWatchlist ticker={profile.ticker} />
+        </div>
       </div>
 
       {/* Price Row */}

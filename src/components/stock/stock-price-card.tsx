@@ -185,7 +185,7 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
           <button
             type="button"
             onClick={handleToggleCompact}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-wolf-border/60 bg-wolf-black/30 text-mist hover:text-snow-peak hover:bg-wolf-border/30 transition-colors"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-wolf-border/60 bg-wolf-black/30 text-mist transition-colors hover:bg-wolf-border/30 hover:text-snow-peak sm:h-7 sm:w-7"
             aria-label={isCompact ? "Expand stock price card" : "Collapse stock price card"}
             title={isCompact ? "Expandir vista en tarjeta" : "Volver a vista compacta"}
           >
@@ -202,7 +202,7 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
                     type="button"
                     onClick={() => setRange(item)}
                     className={cn(
-                      "px-2 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+                      "min-h-9 px-3 py-2 text-xs font-medium rounded-lg transition-all duration-150 sm:min-h-0 sm:px-2 sm:py-1",
                       range === item
                         ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
                         : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
@@ -251,7 +251,7 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
             type="button"
             onClick={() => setRange(item)}
             className={cn(
-              "px-2 py-1 text-xs font-medium rounded-lg transition-all duration-150",
+              "min-h-9 px-3 py-2 text-xs font-medium rounded-lg transition-all duration-150 sm:min-h-0 sm:px-2 sm:py-1",
               range === item
                 ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
                 : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"

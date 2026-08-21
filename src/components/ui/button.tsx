@@ -21,7 +21,8 @@ const buttonVariants = cva(
       },
       size: {
         default: "h-10 px-4 py-2",
-        sm: "h-8 px-3 text-xs rounded-md",
+        // Taller on touch screens — 32px is well under a comfortable tap target
+        sm: "h-9 px-3 text-xs rounded-md sm:h-8",
         lg: "h-12 px-6 text-base rounded-xl",
         icon: "h-10 w-10",
         "icon-sm": "h-8 w-8",

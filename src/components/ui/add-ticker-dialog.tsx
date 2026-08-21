@@ -147,7 +147,7 @@ export function AddTickerDialog() {
       title="Add ticker to Huntr"
       aria-label="Add ticker to Huntr"
       className={cn(
-        "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-all duration-200",
+        "flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm transition-all duration-200 sm:h-auto sm:py-1.5",
         "border border-wolf-border/50 cursor-pointer",
         open
           ? "bg-sunset-orange/10 border-sunset-orange/40 text-sunset-orange"

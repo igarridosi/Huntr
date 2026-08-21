@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: Outfit, system-ui, sans-serif; background: #0B1416; }
+    a { color: #FF8C42; } a:hover { color: #FFBF69; }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+  </style>
+</helmet>
+
+<div style="width: 1180px; padding: 40px; background: #0B1416; color: #F2F4F3; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px;">
+
+  <!-- Artboard label -->
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; background: rgba(255,140,66,0.14); border: 1px solid rgba(255,140,66,0.30); color: {{accent}}; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;">Proposed</span>
+    <span style="font-size: 13px; color: #8C9DA1;">Same density, same data &mdash; the friction removed</span>
+  </div>
+
+  <!-- ===== Screen recreation ===== -->
+  <div style="position: relative; padding: 32px; background: #0B1416; border: 1px solid rgba(42,59,64,0.5); border-radius: 16px;">
+
+    <!-- Page header -->
+    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+      <div style="width: 40px; height: 40px; border-radius: 16px; background: rgba(255,140,66,0.10); border: 1px solid rgba(255,140,66,0.15); display: flex; align-items: center; justify-content: center;">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{accent}}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"></path><path d="M9 18h6"></path><path d="M10 22h4"></path></svg>
+      </div>
+      <div>
+        <div style="font-size: 20px; font-weight: 700; letter-spacing: -0.022em; color: #F2F4F3; line-height: 1.2;">Insights</div>
+        <div style="font-size: 12px; color: #8C9DA1; margin-top: 2px;">Market ideas and trending opportunities</div>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <div style="border-radius: 16px; background: #162225; border: 1px solid rgba(42,59,64,0.5);">
+
+      <!-- Card header: tabs + counter -->
+      <div style="padding: 24px 24px 12px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div style="display: flex; align-items: center; gap: 8px; position: relative;">
+          <!-- traveling pill: shown mid-flight between tab 1 and tab 2 -->
+          <div style="position: absolute; left: 12px; top: 0; bottom: 0; width: 92px; border-radius: 8px; background: rgba(255,140,66,0.10); border: 1px solid rgba(255,140,66,0.30);"></div>
+          <div style="position: absolute; left: 2px; top: 0; bottom: 0; width: 92px; border-radius: 8px; background: rgba(255,140,66,0.04); border: 1px solid rgba(255,140,66,0.10);"></div>
+          <div style="position: relative; padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #8C9DA1;">S&amp;P 500</div>
+          <div style="position: relative; padding: 6px 12px; border-radius: 8px; font-size: 12px; color: {{accent}};">Most Trending</div>
+          <div style="position: relative; padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #8C9DA1;">Growth</div>
+          <div style="position: relative; padding: 6px 12px; border-radius: 8px; font-size: 12px; color: #8C9DA1;">Dividend</div>
+          <div style="position: absolute; left: -14px; top: -20px;">
+            <div style="width: 22px; height: 22px; border-radius: 11px; background: {{accent}}; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;">3</div>
+          </div>
+        </div>
+        <div style="display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 8px; background: #162225; color: #8C9DA1; border: 1px solid #2A3B40; font-size: 12px; font-weight: 500;" class="mono">1-12 / 819 ideas</div>
+      </div>
+
+      <!-- Rows grid -->
+      <div style="position: relative; padding: 8px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;">
+        <sc-for list="{{rows}}" as="row" hint-placeholder-count="6">
+          <div style="display: flex; align-items: center; gap: 12px; border-radius: 12px; border: 1px solid {{row.border}}; background: {{row.surface}}; padding: 14px 12px; transform: {{row.transform}};">
+            <div style="width: 36px; height: 36px; border-radius: 6px; background: #F2F4F3; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{row.initials}}</div>
+            <div style="min-width: 0; flex-grow: 1;">
+              <div style="font-size: 14px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; color: #F2F4F3;">{{row.ticker}}</div>
+              <div style="font-size: 12px; color: #8C9DA1; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">{{row.name}}</div>
+              <div style="font-size: 11px; letter-spacing: 0.02em; color: rgba(140,157,161,0.75); margin-top: 4px;" class="mono">Market Cap: {{row.cap}}</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px; flex-shrink: 0;">
+              <div style="text-align: right;">
+                <div style="font-size: 16px; font-weight: 600; line-height: 1.25; color: #F2F4F3; font-variant-numeric: tabular-nums;" class="mono">{{row.price}}</div>
+                <div style="margin-top: 4px;">
+                  <span style="display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: {{row.chg.fg}}; background: {{row.chg.bg}};" class="mono">{{row.chg.text}}</span>
+                </div>
+              </div>
+              <!-- persistent watchlist affordance -->
+              <div style="width: 32px; height: 32px; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: {{row.star.fg}}; background: {{row.star.bg}};">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="{{row.star.fill}}" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M11.5 3.2a.6.6 0 0 1 1 0l2.3 4.7 5.2.7a.6.6 0 0 1 .3 1l-3.8 3.6.9 5.2a.6.6 0 0 1-.9.6L12 16.6l-4.6 2.4a.6.6 0 0 1-.9-.6l.9-5.2-3.8-3.6a.6.6 0 0 1 .3-1l5.2-.7Z"></path></svg>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+
+        <div style="position: absolute; left: -14px; top: 46px;">
+          <div style="width: 22px; height: 22px; border-radius: 11px; background: {{accent}}; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;">2</div>
+        </div>
+        <div style="position: absolute; right: -14px; top: 46px;">
+          <div style="width: 22px; height: 22px; border-radius: 11px; background: {{accent}}; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;">4</div>
+        </div>
+        <div style="position: absolute; left: 300px; bottom: -12px;">
+          <div style="width: 22px; height: 22px; border-radius: 11px; background: {{accent}}; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;">5</div>
+        </div>
+      </div>
+
+      <!-- Pagination footer: scroll-edge fade instead of a hard rule -->
+      <div style="position: relative; display: flex; align-items: center; justify-content: space-between; padding: 10px 12px;">
+        <div style="position: absolute; left: 0; right: 0; top: 0; height: 20px; background: linear-gradient(to bottom, rgba(11,20,22,0.28), rgba(11,20,22,0));"></div>
+        <div style="position: relative; font-size: 11px; letter-spacing: 0.02em; color: #8C9DA1;" class="mono">1&ndash;12 of 819</div>
+        <div style="position: relative; display: flex; align-items: center; gap: 8px;">
+          <div style="display: inline-flex; align-items: center; gap: 4px; border-radius: 8px; border: 1px solid rgba(42,59,64,0.4); padding: 6px 10px; font-size: 12px; color: rgba(140,157,161,0.4);">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+            Prev
+          </div>
+          <div style="display: inline-flex; align-items: center; gap: 4px; border-radius: 8px; border: 1px solid rgba(255,140,66,0.30); background: rgba(255,140,66,0.10); padding: 6px 10px; font-size: 12px; color: {{accent}}; transform: scale(0.97);">
+            Next
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+          </div>
+          <div style="position: absolute; right: -14px; top: -10px;">
+            <div style="width: 22px; height: 22px; border-radius: 11px; background: {{accent}}; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center;">1</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Fixes ===== -->
+  <div style="display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-size: 13px; font-weight: 600; color: #F2F4F3;">What changes</div>
+    <div style="display: grid; grid-template-columns: repeat(1, minmax(0, 1fr)); gap: 8px;">
+      <sc-for list="{{fixes}}" as="f" hint-placeholder-count="5">
+        <div style="display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border-radius: 12px; background: #162225; border: 1px solid rgba(42,59,64,0.5);">
+          <div style="width: 22px; height: 22px; border-radius: 11px; background: rgba(255,140,66,0.16); border: 1px solid rgba(255,140,66,0.35); color: {{accent}}; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{f.n}}</div>
+          <div style="min-width: 0; flex-grow: 1;">
+            <div style="font-size: 13px; font-weight: 600; color: #F2F4F3;">{{f.title}}</div>
+            <div style="font-size: 12px; color: #8C9DA1; margin-top: 3px; line-height: 1.5;">{{f.body}}</div>
+          </div>
+          <div style="flex-shrink: 0; font-size: 10px; color: {{accent}}; letter-spacing: 0.04em; text-transform: uppercase; padding-top: 3px;">{{f.tag}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#FF8C42","section":"Theme"}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const up = { fg: "#34D399", bg: "rgba(16,185,129,0.15)" };
+    const down = { fg: "#FF4242", bg: "rgba(255,66,66,0.15)" };
+    const rest = "rgba(242,244,243,0.03)";
+    const restBorder = "rgba(42,59,64,0.55)";
+    const idle = { fg: "rgba(140,157,161,0.55)", bg: "transparent", fill: "none" };
+    const saved = { fg: "#FF8C42", bg: "rgba(255,140,66,0.12)", fill: "#FF8C42" };
+
+    const base = [
+      { ticker: "NVDA", initials: "NV", name: "Nvidia", cap: "5.45T", price: "$225.16", chg: { ...down, text: "-0.06%" }, star: saved },
+      { ticker: "AAPL", initials: "AA", name: "Apple Inc.", cap: "4.46T", price: "$305.93", chg: { ...up, text: "+0.22%" }, star: idle },
+      { ticker: "GOOGL", initials: "GO", name: "Alphabet Inc.", cap: "4.23T", price: "$345.90", chg: { ...down, text: "-0.13%" }, star: idle },
+      { ticker: "MSFT", initials: "MS", name: "Microsoft", cap: "3.68T", price: "$495.40", chg: { ...down, text: "-0.30%" }, star: saved },
+      { ticker: "AMZN", initials: "AM", name: "Amazon", cap: "2.83T", price: "$262.65", chg: { ...down, text: "-0.94%" }, star: idle },
+      { ticker: "TSM", initials: "TS", name: "Taiwan Semiconductor", cap: "2.21T", price: "$426.00", chg: { ...down, text: "-0.96%" }, star: idle }
+    ];
+
+    // Row 2 is drawn mid-press, to show the pointer-down state in situ.
+    const rows = base.map((r, i) => ({
+      ...r,
+      surface: i === 1 ? "rgba(242,244,243,0.06)" : rest,
+      border: i === 1 ? "rgba(255,140,66,0.28)" : restBorder,
+      transform: i === 1 ? "scale(0.985)" : "none"
+    }));
+
+    return {
+      accent: this.props.accent ?? "#FF8C42",
+      rows,
+      fixes: [
+        { n: "1", tag: "Response", title: "Paging becomes instant, and stays interruptible", body: "Both timers and the skeleton go. The page index changes on the click; the grid cross-fades and slides ~12px in the direction of travel on a spring. No early return, so a second click during the motion re-targets from wherever the grid currently is instead of being dropped." },
+        { n: "2", tag: "Response", title: "Every row and control answers on pointer-down", body: "scale(0.985) plus a one-step-lighter surface at 100ms ease-out, committed on pointer-up and cancelled if the finger leaves. Applied to rows, tabs and the pager, so touch gets the same acknowledgement as hover." },
+        { n: "3", tag: "Continuity", title: "One pill travels between tabs", body: "The active background lifts out into a single indicator that springs to the new tab — critically damped, ~0.35s response, so it arrives without bounce. Grabbing another tab mid-flight re-targets from its current position; the label colours cross-fade underneath." },
+        { n: "4", tag: "Agency", title: "The watchlist star is always there", body: "A persistent 32px control at the end of each row: hairline mist when idle, filled sunset-orange when saved. No hover dependency, so it works identically on touch — and it reads as part of the row rather than something that appears out of nowhere." },
+        { n: "5", tag: "Material", title: "Raised rows get lighter, not darker", body: "Row surface moves from bg-wolf-black/25 to a 3% snow-peak tint, so the nearer plane is the lighter one and the grid reads as sitting on the card. The pager rule becomes a short gradient edge instead of a 1px divider." }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

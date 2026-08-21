@@ -495,7 +495,7 @@ export default function DcfCalculatorPage() {
                 <DCFTickerInput value={ticker} onSelect={handleTickerSelect} />
 
                 {ticker && profile && (
-                  <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                  <div className="flex w-full min-w-0 flex-1 items-center gap-2.5">
                     <TickerLogo ticker={ticker} className="w-8 h-8 rounded-lg" />
                     <div className="min-w-0">
                       <p className="text-sm font-semibold text-snow-peak truncate">
@@ -654,7 +654,7 @@ export default function DcfCalculatorPage() {
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
                   <DCFTickerInput value={ticker} onSelect={handleTickerSelect} />
                   {ticker && profile && (
-                    <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                    <div className="flex w-full min-w-0 flex-1 items-center gap-2.5">
                       <TickerLogo ticker={ticker} className="w-8 h-8 rounded-lg" />
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-snow-peak truncate">

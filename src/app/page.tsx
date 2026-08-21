@@ -10,17 +10,15 @@ import { Footer } from "@/components/landing/footer";
 import { LandingSideMenu } from "@/components/landing/side-menu";
 import { Journey, JourneyStep } from "@/components/landing/journey";
 import { LandingNav } from "@/components/landing/landing-nav";
-import { KoFiSupport } from "@/components/ui/kofi-support";
 
 export default function Home() {
   return (
     <div className="min-h-screen bg-wolf-black flex flex-col">
       <LandingSideMenu />
 
-      <div className="fixed bottom-4 right-4 z-50">
-        <KoFiSupport text="Support Huntr on Ko-fi" />
-      </div>
-
+      {/* Ko-fi now lives inline: next to "Start Free" on desktop (LandingNav)
+          and centered under the trust badges on mobile (HeroForest), instead
+          of floating fixed over the page. */}
       <LandingNav />
 
       <main className="flex-1">

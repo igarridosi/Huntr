@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+  <style>
+    body { margin: 0; font-family: Outfit, system-ui, sans-serif; background: #0B1416; }
+    a { color: #FF8C42; } a:hover { color: #FFBF69; }
+    .mono { font-family: "Geist Mono", ui-monospace, monospace; }
+    .demo-tab { cursor: pointer; user-select: none; }
+    .demo-row { cursor: pointer; user-select: none; touch-action: none; }
+    .pager { cursor: pointer; user-select: none; }
+  </style>
+</helmet>
+
+<div style="width: 1180px; padding: 40px; background: #0B1416; color: #F2F4F3; box-sizing: border-box; display: flex; flex-direction: column; gap: 28px;">
+
+  <div style="display: flex; align-items: center; gap: 12px;">
+    <span style="display: inline-flex; align-items: center; height: 24px; padding: 0 10px; border-radius: 6px; background: rgba(255,191,105,0.14); border: 1px solid rgba(255,191,105,0.30); color: #FFBF69; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;">Motion</span>
+    <span style="font-size: 13px; color: #8C9DA1;">Live &mdash; these three respond to real input. Interrupt them mid-flight.</span>
+  </div>
+
+  <!-- ===== Demo 1: traveling tab pill ===== -->
+  <div style="padding: 24px; border-radius: 16px; background: #162225; border: 1px solid rgba(42,59,64,0.5); display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #F2F4F3;">1 &middot; The pill travels</div>
+        <div style="font-size: 12px; color: #8C9DA1; margin-top: 3px;">Click any tab, then click another before it lands &mdash; it re-targets from where it is, it does not restart.</div>
+      </div>
+      <div style="font-size: 11px; color: rgba(140,157,161,0.75); white-space: nowrap;" class="mono">damping 1.0 &middot; response 0.35s</div>
+    </div>
+
+    <div style="position: relative; height: 34px;">
+      <div style="position: absolute; top: 0; left: 0; height: 30px; border-radius: 8px; background: rgba(255,140,66,0.10); border: 1px solid rgba(255,140,66,0.30); transform: translateX({{pillX}}px); width: {{pillW}}px;"></div>
+      <div style="position: absolute; top: 0; left: 0; display: flex; gap: 8px;">
+        <sc-for list="{{tabs}}" as="t" hint-placeholder-count="4">
+          <div class="demo-tab" onClick="{{t.pick}}" style="width: {{t.w}}px; height: 30px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; border-radius: 8px; font-size: 12px; color: {{t.color}};">{{t.label}}</div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="font-size: 11px; color: rgba(140,157,161,0.6);" class="mono">x = {{pillReadout}}</div>
+  </div>
+
+  <!-- ===== Demo 2: press feedback ===== -->
+  <div style="padding: 24px; border-radius: 16px; background: #162225; border: 1px solid rgba(42,59,64,0.5); display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #F2F4F3;">2 &middot; The row answers the press</div>
+        <div style="font-size: 12px; color: #8C9DA1; margin-top: 3px;">Hold it down. Feedback lands on pointer-down; drag off before releasing and it cancels without navigating.</div>
+      </div>
+      <div style="font-size: 11px; color: rgba(140,157,161,0.75); white-space: nowrap;" class="mono">scale 0.985 &middot; 100ms ease-out</div>
+    </div>
+
+    <div class="demo-row" onPointerDown="{{press}}" onPointerUp="{{release}}" onPointerLeave="{{release}}" style="display: flex; align-items: center; gap: 12px; border-radius: 12px; border: 1px solid {{rowBorder}}; background: {{rowSurface}}; padding: 14px 12px; max-width: 380px; transform: scale({{rowScale}}); transition: transform 100ms cubic-bezier(0,0,0.2,1), background-color 100ms cubic-bezier(0,0,0.2,1), border-color 100ms cubic-bezier(0,0,0.2,1);">
+      <div style="width: 36px; height: 36px; border-radius: 6px; background: #F2F4F3; color: #0B1416; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">NV</div>
+      <div style="min-width: 0; flex-grow: 1;">
+        <div style="font-size: 14px; font-weight: 600; line-height: 1.25; letter-spacing: -0.01em; color: #F2F4F3;">NVDA</div>
+        <div style="font-size: 12px; color: #8C9DA1; margin-top: 2px;">Nvidia</div>
+        <div style="font-size: 11px; letter-spacing: 0.02em; color: rgba(140,157,161,0.75); margin-top: 4px;" class="mono">Market Cap: 5.45T</div>
+      </div>
+      <div style="text-align: right; flex-shrink: 0;">
+        <div style="font-size: 16px; font-weight: 600; line-height: 1.25; color: #F2F4F3; font-variant-numeric: tabular-nums;" class="mono">$225.16</div>
+        <div style="margin-top: 4px;">
+          <span style="display: inline-flex; align-items: center; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #FF4242; background: rgba(255,66,66,0.15);" class="mono">-0.06%</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="font-size: 11px; color: rgba(140,157,161,0.6);" class="mono">state = {{pressReadout}}</div>
+  </div>
+
+  <!-- ===== Demo 3: page transition ===== -->
+  <div style="padding: 24px; border-radius: 16px; background: #162225; border: 1px solid rgba(42,59,64,0.5); display: flex; flex-direction: column; gap: 16px;">
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+      <div>
+        <div style="font-size: 13px; font-weight: 600; color: #F2F4F3;">3 &middot; Paging moves in the direction of travel</div>
+        <div style="font-size: 12px; color: #8C9DA1; margin-top: 3px;">No skeleton, no lockout, no waiting. Hammer Next &mdash; every click registers and re-targets from the current offset.</div>
+      </div>
+      <div style="font-size: 11px; color: rgba(140,157,161,0.75); white-space: nowrap;" class="mono">damping 1.0 &middot; response 0.30s &middot; 12px</div>
+    </div>
+
+    <div style="overflow: hidden; border-radius: 12px; border: 1px solid rgba(42,59,64,0.55); background: rgba(11,20,22,0.35); padding: 8px;">
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; transform: translateX({{slideX}}px); opacity: {{slideOpacity}};">
+        <sc-for list="{{pageRows}}" as="row" hint-placeholder-count="3">
+          <div style="display: flex; align-items: center; gap: 10px; border-radius: 12px; border: 1px solid rgba(42,59,64,0.55); background: rgba(242,244,243,0.03); padding: 12px;">
+            <div style="width: 30px; height: 30px; border-radius: 6px; background: #F2F4F3; color: #0B1416; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">{{row.initials}}</div>
+            <div style="min-width: 0; flex-grow: 1;">
+              <div style="font-size: 13px; font-weight: 600; color: #F2F4F3; letter-spacing: -0.01em;">{{row.ticker}}</div>
+              <div style="font-size: 11px; letter-spacing: 0.02em; color: rgba(140,157,161,0.75); margin-top: 2px;" class="mono">{{row.cap}}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+      <div style="font-size: 11px; letter-spacing: 0.02em; color: #8C9DA1;" class="mono">{{pageLabel}}</div>
+      <div style="display: flex; gap: 8px;">
+        <div class="pager" onClick="{{prev}}" style="display: inline-flex; align-items: center; gap: 4px; border-radius: 8px; border: 1px solid rgba(42,59,64,0.4); padding: 6px 10px; font-size: 12px; color: #8C9DA1;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"></path></svg>
+          Prev
+        </div>
+        <div class="pager" onClick="{{next}}" style="display: inline-flex; align-items: center; gap: 4px; border-radius: 8px; border: 1px solid rgba(42,59,64,0.4); padding: 6px 10px; font-size: 12px; color: #8C9DA1;">
+          Next
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"></path></svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Spec ===== -->
+  <div style="padding: 24px; border-radius: 16px; background: #162225; border: 1px solid rgba(42,59,64,0.5); display: flex; flex-direction: column; gap: 14px;">
+    <div style="font-size: 13px; font-weight: 600; color: #F2F4F3;">Implementation values</div>
+    <div style="display: flex; flex-direction: column; gap: 6px;">
+      <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.6fr; gap: 12px; padding: 0 4px 6px 4px; border-bottom: 1px solid rgba(42,59,64,0.5); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(140,157,161,0.7);">
+        <div>Interaction</div><div>Damping</div><div>Response</div><div>Note</div>
+      </div>
+      <sc-for list="{{spec}}" as="s" hint-placeholder-count="5">
+        <div style="display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.6fr; gap: 12px; padding: 7px 4px; font-size: 12px; color: #F2F4F3; align-items: baseline;">
+          <div>{{s.what}}</div>
+          <div style="color: #FFBF69;" class="mono">{{s.damping}}</div>
+          <div style="color: #FFBF69;" class="mono">{{s.response}}</div>
+          <div style="color: #8C9DA1; font-size: 11px; line-height: 1.5;">{{s.note}}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top: 4px; padding: 12px 14px; border-radius: 12px; background: rgba(11,20,22,0.4); border: 1px solid rgba(42,59,64,0.5); font-size: 12px; color: #8C9DA1; line-height: 1.6;">
+      Under <span style="color: #F2F4F3;" class="mono">prefers-reduced-motion</span> every spring above collapses to a 120ms opacity cross-fade: no travel, no scale, no overshoot. The press tint stays &mdash; it is feedback, not motion.
+    </div>
+  </div>
+
+</div>
+</x-dc>
+
+<script data-dc-script data-props='{"accent":{"editor":"color","default":"#FF8C42","section":"Theme"}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = {
+      tab: 1, pillX: 118, pillV: 0,
+      pressed: false,
+      page: 1, slideX: 0, slideV: 0
+    };
+    this.frame = 0;
+    this.last = 0;
+    this.tick = this.tick.bind(this);
+  }
+
+  componentWillUnmount() {
+    if (this.frame) cancelAnimationFrame(this.frame);
+  }
+
+  tabDefs() {
+    return [
+      { label: "S&P 500", w: 78 },
+      { label: "Most Trending", w: 110 },
+      { label: "Growth", w: 70 },
+      { label: "Dividend", w: 78 }
+    ];
+  }
+
+  tabX(index) {
+    const defs = this.tabDefs();
+    let x = 0;
+    for (let i = 0; i < index; i += 1) x += defs[i].w + 8;
+    return x;
+  }
+
+  start() {
+    if (this.frame) return;
+    this.last = performance.now();
+    this.frame = requestAnimationFrame(this.tick);
+  }
+
+  // Critically damped spring, integrated per frame. Always advances from the
+  // CURRENT value, which is what lets a mid-flight re-target continue smoothly
+  // instead of snapping back to a start position.
+  step(x, v, target, response, dt) {
+    const omega = (2 * Math.PI) / response;
+    const accel = -2 * omega * v - omega * omega * (x - target);
+    const nv = v + accel * dt;
+    const nx = x + nv * dt;
+    if (Math.abs(nx - target) < 0.05 && Math.abs(nv) < 0.05) {
+      return { x: target, v: 0, done: true };
+    }
+    return { x: nx, v: nv, done: false };
+  }
+
+  tick(now) {
+    this.frame = 0;
+    const dt = Math.min((now - this.last) / 1000, 1 / 30);
+    this.last = now;
+
+    const pill = this.step(this.state.pillX, this.state.pillV, this.tabX(this.state.tab), 0.35, dt);
+    const slide = this.step(this.state.slideX, this.state.slideV, 0, 0.3, dt);
+
+    this.setState({ pillX: pill.x, pillV: pill.v, slideX: slide.x, slideV: slide.v });
+    if (!pill.done || !slide.done) this.start();
+  }
+
+  pickTab(i) {
+    this.setState({ tab: i });
+    this.start();
+  }
+
+  turn(dir) {
+    const nextPage = Math.min(68, Math.max(1, this.state.page + dir));
+    if (nextPage === this.state.page) return;
+    // Offset opposite to travel, then spring home: the grid arrives from the
+    // side you are heading toward.
+    this.setState({ page: nextPage, slideX: dir > 0 ? 12 : -12 });
+    this.start();
+  }
+
+  renderVals() {
+    const accent = this.props.accent ?? "#FF8C42";
+    const defs = this.tabDefs();
+    const page = this.state.page;
+    const seed = ["NVDA", "AAPL", "GOOGL", "MSFT", "AMZN", "TSM", "META", "AVGO", "LLY"];
+    const caps = ["5.45T", "4.46T", "4.23T", "3.68T", "2.83T", "2.21T", "1.86T", "1.62T", "1.04T"];
+    const offset = ((page - 1) * 3) % seed.length;
+
+    return {
+      accent,
+      tabs: defs.map((d, i) => ({
+        label: d.label,
+        w: d.w,
+        color: i === this.state.tab ? accent : "#8C9DA1",
+        pick: () => this.pickTab(i)
+      })),
+      pillX: Math.round(this.state.pillX * 100) / 100,
+      pillW: defs[this.state.tab].w,
+      pillReadout: this.state.pillX.toFixed(1) + "px   v " + this.state.pillV.toFixed(0) + "px/s",
+
+      pressed: this.state.pressed,
+      rowScale: this.state.pressed ? 0.985 : 1,
+      rowSurface: this.state.pressed ? "rgba(242,244,243,0.06)" : "rgba(242,244,243,0.03)",
+      rowBorder: this.state.pressed ? "rgba(255,140,66,0.28)" : "rgba(42,59,64,0.55)",
+      pressReadout: this.state.pressed ? "pressed" : "idle",
+      press: () => this.setState({ pressed: true }),
+      release: () => this.setState({ pressed: false }),
+
+      pageRows: [0, 1, 2].map((i) => ({
+        ticker: seed[(offset + i) % seed.length],
+        initials: seed[(offset + i) % seed.length].slice(0, 2),
+        cap: caps[(offset + i) % caps.length]
+      })),
+      slideX: Math.round(this.state.slideX * 100) / 100,
+      slideOpacity: Math.max(0.35, 1 - Math.abs(this.state.slideX) / 22),
+      pageLabel: (page * 12 - 11) + "–" + page * 12 + " of 819",
+      prev: () => this.turn(-1),
+      next: () => this.turn(1),
+
+      spec: [
+        { what: "Tab pill", damping: "1.0", response: "0.35s", note: "No overshoot: a nav indicator that bounces reads as sloppy, not lively." },
+        { what: "Page slide", damping: "1.0", response: "0.30s", note: "12px against the direction of travel, springing home as opacity lifts." },
+        { what: "Press feedback", damping: "—", response: "100ms", note: "Plain ease-out, not a spring. It must land inside one frame budget." },
+        { what: "Swipe release", damping: "0.8", response: "0.35s", note: "Bounce is earned here: the gesture carried momentum into it." },
+        { what: "Star toggle", damping: "0.8", response: "0.25s", note: "A small overshoot on commit reads as the state snapping into place." }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

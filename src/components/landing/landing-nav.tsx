@@ -2,6 +2,7 @@
 
 import { Compass } from "lucide-react";
 import { chromeOpacity, useIntroProgress } from "@/hooks/use-intro-progress";
+import { KoFiSupport } from "@/components/ui/kofi-support";
 
 /**
  * Top bar. Sits over the hero rather than above it, so when it clears out for
@@ -54,6 +55,11 @@ export function LandingNav() {
           >
             Start Free
           </a>
+          {/* Desktop only — the mobile placement is under the hero's trust
+              badges instead, where there's room for it without crowding nav. */}
+          <div className="hidden sm:block">
+            <KoFiSupport text="Support Huntr on Ko-fi" />
+          </div>
         </div>
       </div>
     </nav>

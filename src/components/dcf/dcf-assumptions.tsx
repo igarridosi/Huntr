@@ -70,12 +70,23 @@ function SliderInput({
             {label}
           </Label>
           {tooltip && (
-            <div className="group relative">
-              <Info className="w-3 h-3 text-mist/50 cursor-help" />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-[10px] text-snow-peak bg-wolf-black border border-wolf-border rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50">
+            <span className="group relative inline-flex">
+              {/* A focusable trigger, not a bare icon: hover alone left this
+                  explanation unreachable on touch and by keyboard. */}
+              <button
+                type="button"
+                aria-label={`What is ${label}?`}
+                className="inline-flex h-6 w-6 cursor-help items-center justify-center rounded text-mist/50 transition-colors hover:text-mist focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sunset-orange sm:h-3 sm:w-3"
+              >
+                <Info className="h-3 w-3" />
+              </button>
+              <span
+                role="tooltip"
+                className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-wolf-border bg-wolf-black px-2 py-1 text-[10px] text-snow-peak opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100"
+              >
                 {tooltip}
-              </div>
-            </div>
+              </span>
+            </span>
           )}
         </div>
         <span className="text-xs font-mono font-bold text-snow-peak tabular-nums">

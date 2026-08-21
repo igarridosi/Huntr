@@ -83,6 +83,19 @@
 
   /* Animations — exposed as utilities (animate-*) so the build owns them */
   --animate-huntr-marquee: huntr-marquee 48s linear infinite;
+
+  /* Paging enters from the side you are heading toward, so the motion points
+   * at the outcome instead of interpolating blindly to it. */
+  --animate-insight-next: insight-next 260ms cubic-bezier(0.32, 0.72, 0, 1);
+  --animate-insight-prev: insight-prev 260ms cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Critically damped feel: arrives without overshoot. A nav indicator that
+   * bounces reads as sloppy rather than lively. */
+  --ease-settle: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /* Strong ease-out for entrances. Kept alongside the existing --ease-out
+   * rather than replacing it, since other components are tuned to that one. */
+  --ease-entrance: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -183,4 +196,54 @@ body {
 @keyframes huntr-marquee {
   from { transform: translate3d(0, 0, 0); }
   to   { transform: translate3d(-50%, 0, 0); }
+}
+
+/* ─── Insights: directional paging ──────────────────────────────────────── */
+@keyframes insight-next {
+  from { opacity: 0; transform: translate3d(10px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes insight-prev {
+  from { opacity: 0; transform: translate3d(-10px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* Reduced motion keeps the feedback, drops the travel: a cross-fade carries
+ * the same "this changed" signal without the vestibular cost. */
+@media (prefers-reduced-motion: reduce) {
+  @keyframes insight-next { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes insight-prev { from { opacity: 0; } to { opacity: 1; } }
+}
+
+/* ─── Insights: rows arriving with data ─────────────────────────────────────
+ * A CSS animation rather than JS on purpose: this plays at the exact moment
+ * the page is busy parsing a few hundred quotes, and rAF-driven motion drops
+ * frames under that load while compositor-driven keyframes do not.
+ *
+ * `both` fill matters — without it a row with a stagger delay paints at full
+ * opacity first and then snaps back to start.
+ * ─────────────────────────────────────────────────────────────────────── */
+@keyframes insight-row-enter {
+  from { opacity: 0; transform: translate3d(0, 6px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes insight-row-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.insight-enter {
+  animation: insight-row-enter 240ms var(--ease-entrance) both;
+  animation-delay: var(--enter-delay, 0ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Gentler, not gone: the fade still says "this is new", and the delay is
+   * dropped so no content is withheld from someone who asked for less motion. */
+  .insight-enter {
+    animation: insight-row-fade 160ms ease both;
+    animation-delay: 0ms;
+  }
 }
