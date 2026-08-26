@@ -28,7 +28,7 @@ export function DataHuntingLoader({
   return (
     <div
       className={cn(
-        "rounded-xl border border-wolf-border/50 bg-wolf-surface px-6 py-8",
+        "insight-enter rounded-xl bg-wolf-surface px-6 py-8 ring-1 ring-inset ring-wolf-border/50",
         className
       )}
     >
@@ -59,20 +59,20 @@ export function DataHuntingLoader({
             </div>
           ) : null}
 
-          <p className="text-lg font-semibold text-snow-peak">
+          <p className="text-[17px] font-semibold tracking-[-0.015em] text-snow-peak">
             We are Hunting all the data for {symbol}
           </p>
-          <p className="text-sm text-mist">
+          <p className="text-[13px] leading-relaxed text-mist">
             Crunching statements, validating signals and preparing your charts...
           </p>
-          {detailMessage ? <p className="text-xs text-sunset-orange/80">{detailMessage}</p> : null}
+          {detailMessage ? <p className="text-[12px] text-sunset-orange/80">{detailMessage}</p> : null}
 
           <div className="space-y-2 pt-1">
             <div className="flex flex-wrap gap-1.5">
               {pipelineStages.map((stage, index) => (
                 <span
                   key={stage}
-                  className="inline-flex items-center rounded-full border border-sunset-orange/15 bg-sunset-orange/10 px-2.5 py-1 text-[10px] font-mono text-sunset-orange/90"
+                  className="inline-flex items-center rounded-full bg-sunset-orange/10 px-2.5 py-1 font-mono text-[10px] tracking-[0.04em] text-sunset-orange/90 ring-1 ring-inset ring-sunset-orange/20"
                   style={{ animationDelay: `${index * 140}ms` }}
                 >
                   {stage}
@@ -86,12 +86,8 @@ export function DataHuntingLoader({
           {[18, 34, 26, 48, 32, 56, 42, 62].map((h, i) => (
             <div
               key={`${h}-${i}`}
-              className="w-3 rounded-sm bg-sunset-orange/80 animate-pulse"
-              style={{
-                height: `${h}px`,
-                animationDelay: `${i * 120}ms`,
-                animationDuration: "1200ms",
-              }}
+              className="huntr-bar w-3 rounded-sm bg-sunset-orange/80"
+              style={{ height: `${h}px`, animationDelay: `${i * 110}ms` }}
             />
           ))}
         </div>

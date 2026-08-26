@@ -239,11 +239,31 @@ body {
   animation-delay: var(--enter-delay, 0ms);
 }
 
+/* Loading bars that build like a chart rather than blink like a placeholder.
+ * scaleY from the base is the transform equivalent of a bar growing, so it
+ * stays on the compositor — animating `height` would relayout every frame. */
+@keyframes huntr-bar-rise {
+  0%, 100% { transform: scaleY(0.35); opacity: 0.45; }
+  50%      { transform: scaleY(1);    opacity: 1; }
+}
+
+.huntr-bar {
+  transform-origin: bottom;
+  animation: huntr-bar-rise 1400ms ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* Gentler, not gone: the fade still says "this is new", and the delay is
    * dropped so no content is withheld from someone who asked for less motion. */
   .insight-enter {
     animation: insight-row-fade 160ms ease both;
     animation-delay: 0ms;
+  }
+
+  /* The bars keep breathing in opacity — a loading indicator that stops moving
+   * entirely reads as a frozen page — but they no longer change size. */
+  @keyframes huntr-bar-rise {
+    0%, 100% { opacity: 0.45; }
+    50%      { opacity: 1; }
   }
 }

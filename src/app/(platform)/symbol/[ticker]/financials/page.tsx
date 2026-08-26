@@ -169,16 +169,19 @@ export default function FinancialsPage() {
       {/* Controls: Statement tabs + Period toggle */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         {/* Statement tabs */}
-        <div className="flex items-center gap-1">
+        <div className="inline-flex items-center gap-0.5 self-start rounded-xl bg-wolf-black/40 p-1 ring-1 ring-inset ring-wolf-border/40">
           {statementTabs.map((tab) => (
             <button
               key={tab.key}
               type="button"
               onClick={() => setActiveStatement(tab.key)}
+              aria-pressed={activeStatement === tab.key}
               className={cn(
-                "px-3 py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer",
+                "min-h-9 cursor-pointer whitespace-nowrap rounded-lg px-3.5 text-[12px] font-medium",
+                "transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.96]",
+                "motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-7",
                 activeStatement === tab.key
-                  ? "bg-wolf-surface text-snow-peak border border-wolf-border"
+                  ? "bg-sunset-orange/12 text-sunset-orange"
                   : "text-mist hover:text-snow-peak"
               )}
             >
@@ -191,7 +194,7 @@ export default function FinancialsPage() {
       </div>
 
       {/* Financial Table */}
-      <div className="bg-wolf-surface rounded-xl border border-wolf-border/50 px-6 py-4">
+      <div className="insight-enter rounded-xl bg-wolf-surface px-6 py-4 ring-1 ring-inset ring-wolf-border/50">
         <FinancialTable data={getData()} rows={getRows()} />
       </div>
 

@@ -18,6 +18,8 @@ import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/spinner";
+import { Check, LineChart } from "lucide-react";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartErrorBoundary } from "@/components/ui/chart-error-boundary";
 import { QualityScorecard, QualityScorecardSkeleton } from "@/components/stock/quality-scorecard";
@@ -667,31 +669,54 @@ export default function OverviewPage() {
             {deepFinancialsError ? (
               <p className="w-full text-xs text-golden-hour sm:w-auto">{deepFinancialsError}</p>
             ) : null}
-            <Button
+            {/* Matches the height and inset-ring language of the toggles beside
+                it, instead of carrying its own outline. It also earns accent
+                colour while it is still an action, and drops to muted once the
+                data is in — the label alone was doing that work before. */}
+            <button
               type="button"
-              variant="outline"
-              size="sm"
               onClick={() => { void handleLoadDeepFinancials(); }}
               disabled={hasDeepFinancials || isLoadingDeepFinancials}
-              className="text-xs border-wolf-border/60"
+              className={cn(
+                "inline-flex min-h-9 cursor-pointer items-center gap-1.5 rounded-xl px-3.5 text-[12px] font-medium",
+                "ring-1 ring-inset transition-[color,background-color,transform] duration-150 ease-out",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                "motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-9",
+                hasDeepFinancials
+                  ? "bg-bullish/10 text-bullish ring-bullish/25"
+                  : isLoadingDeepFinancials
+                    ? "bg-wolf-black/40 text-mist ring-wolf-border/40"
+                    : "bg-sunset-orange/10 text-sunset-orange ring-sunset-orange/30 hover:bg-sunset-orange/15 active:scale-[0.97]"
+              )}
             >
-              {isLoadingDeepFinancials
-                ? "Loading 20Y..."
-                : hasDeepFinancials
-                  ? "20Y loaded"
-                  : "Load 20Y data"}
-            </Button>
-            <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
+              {isLoadingDeepFinancials ? (
+                <>
+                  <Spinner size="xs" color="mist" /> Loading 20Y…
+                </>
+              ) : hasDeepFinancials ? (
+                <>
+                  <Check className="h-3.5 w-3.5" /> 20Y loaded
+                </>
+              ) : (
+                <>
+                  <LineChart className="h-3.5 w-3.5" /> Load 20Y data
+                </>
+              )}
+            </button>
+            <div className="inline-flex items-center gap-0.5 rounded-xl bg-wolf-black/40 p-1 ring-1 ring-inset ring-wolf-border/40">
               {([5, 10, 15, 20] as const).map((years) => (
                 <button
                   key={years}
                   type="button"
                   onClick={() => setYearRange(years)}
+                  aria-pressed={yearRange === years}
                   className={cn(
-                    "min-h-9 rounded-lg px-3 py-2 text-xs font-medium transition-all duration-150 sm:min-h-0 sm:px-2.5 sm:py-1",
+                    "min-h-9 cursor-pointer rounded-lg px-3 font-mono text-[11px] font-medium tracking-[0.02em]",
+                    "transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.96]",
+                    "motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-7 sm:px-2.5",
                     yearRange === years
-                      ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                      : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+                      ? "bg-sunset-orange/12 text-sunset-orange"
+                      : "text-mist hover:text-snow-peak"
                   )}
                 >
                   {years}Y
@@ -702,7 +727,11 @@ export default function OverviewPage() {
           </div>
 
           <ChartErrorBoundary label="Financial charts">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          {/* Cards carry their own `insight-enter`; the shared delay makes the
+              ten of them settle as one wave instead of ten separate arrivals. */}
+          <div
+            className="grid grid-cols-1 gap-4 [&>*:nth-child(2)]:[--enter-delay:30ms] [&>*:nth-child(3)]:[--enter-delay:60ms] [&>*:nth-child(4)]:[--enter-delay:90ms] [&>*:nth-child(5)]:[--enter-delay:120ms] [&>*:nth-child(6)]:[--enter-delay:150ms] [&>*:nth-child(7)]:[--enter-delay:180ms] [&>*:nth-child(n+8)]:[--enter-delay:200ms] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5"
+          >
             <MetricChartCard
             title="Revenue"
             data={charts.revenue.data}
@@ -887,12 +916,14 @@ export default function OverviewPage() {
 
       {/* Company Description */}
       {profile?.description && (
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-base">About {profile.name}</CardTitle>
+        <Card className="insight-enter">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+              About {profile.name}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-mist leading-relaxed">
+            <p className="text-[13.5px] leading-[1.75] text-mist/85">
               {profile.description}
             </p>
             {profile.website && (
@@ -900,7 +931,7 @@ export default function OverviewPage() {
                 href={profile.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-block mt-3 text-xs text-sunset-orange hover:text-sunset-orange/80 transition-colors"
+                className="mt-4 inline-flex min-h-9 items-center text-[12px] font-medium text-sunset-orange transition-colors hover:text-golden-hour"
               >
                 {profile.website.replace(/^https?:\/\//, "")} →
               </a>

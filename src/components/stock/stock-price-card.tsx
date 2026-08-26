@@ -20,7 +20,7 @@ import { useBatchDailyHistory } from "@/hooks/use-stock-data";
 import { useChartColors } from "@/hooks/use-chart-colors";
 import type { StockQuote } from "@/types/stock";
 
-type PriceRange = "5D" | "1M" | "6M" | "YTD" | "1A" | "5A" | "10Y";
+type PriceRange = "5D" | "1M" | "6M" | "YTD" | "1Y" | "5Y" | "10Y";
 
 interface PricePoint {
   x: string;
@@ -33,7 +33,7 @@ interface StockPriceCardProps {
   quote: StockQuote | null;
 }
 
-const RANGE_OPTIONS: PriceRange[] = ["5D", "1M", "6M", "YTD", "1A", "5A", "10Y"];
+const RANGE_OPTIONS: PriceRange[] = ["5D", "1M", "6M", "YTD", "1Y", "5Y", "10Y"];
 
 function formatDateShort(dateStr: string): string {
   const d = new Date(dateStr);
@@ -58,8 +58,8 @@ function filterDailyRange(
   }
   if (range === "1M") cutoff.setMonth(cutoff.getMonth() - 1);
   if (range === "6M") cutoff.setMonth(cutoff.getMonth() - 6);
-  if (range === "1A") cutoff.setFullYear(cutoff.getFullYear() - 1);
-  if (range === "5A") cutoff.setFullYear(cutoff.getFullYear() - 5);
+  if (range === "1Y") cutoff.setFullYear(cutoff.getFullYear() - 1);
+  if (range === "5Y") cutoff.setFullYear(cutoff.getFullYear() - 5);
   if (range === "10Y") cutoff.setFullYear(cutoff.getFullYear() - 10);
   if (range === "YTD") cutoff = new Date(latest.getFullYear(), 0, 1);
 
@@ -69,7 +69,7 @@ function filterDailyRange(
 }
 
 export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
-  const [range, setRange] = useState<PriceRange>("1A");
+  const [range, setRange] = useState<PriceRange>("1Y");
   const [isCompact, setIsCompact] = useState(true);
   const [isResizing, setIsResizing] = useState(false);
   const [chartEpoch, setChartEpoch] = useState(0);
@@ -158,8 +158,8 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-snow-peak">Stock Price</p>
-          <p className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight text-snow-peak">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Stock Price</p>
+          <p className="mt-1.5 font-mono text-[26px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-snow-peak sm:text-[30px]">
             {end != null ? formatCurrency(end) : "-"}
           </p>
           {isTrendLoading ? (
@@ -169,12 +169,17 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
             </div>
           ) : (
             <>
-              <p className={cn("mt-1 text-sm font-medium", absChange != null && absChange >= 0 ? "text-emerald-400" : "text-rose-400")}>
+              <p
+                className={cn(
+                  "mt-2 font-mono text-[13px] font-semibold tabular-nums leading-none",
+                  absChange != null && absChange >= 0 ? "text-bullish" : "text-bearish"
+                )}
+              >
                 {absChange != null && pctChange != null
                   ? `${absChange >= 0 ? "+" : ""}${formatCurrency(absChange)} (${formatPercent(pctChange, 2)}) ${range}`
                   : "-"}
               </p>
-              <p className="mt-1 text-[11px] text-mist">
+              <p className="mt-2 text-[11px] text-mist/60">
                 {latestCloseDate ? `Closed: ${formatDateShort(latestCloseDate)}` : "No close data"}
               </p>
             </>

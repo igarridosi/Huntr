@@ -83,18 +83,24 @@ export function CategorizedMetrics({
   return (
     <div className="rounded-xl border border-wolf-border/50 bg-wolf-surface overflow-hidden">
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-wolf-border/40">
-        {categories.map((cat) => (
-          <div key={cat.title} className="p-4 space-y-2.5">
-            <h4 className="text-xs font-bold text-snow-peak uppercase tracking-wider">
+        {categories.map((cat, catIndex) => (
+          <div
+            key={cat.title}
+            className="insight-enter space-y-3 p-4"
+            // Columns settle left to right as the fundamentals land.
+            style={{ "--enter-delay": `${catIndex * 40}ms` } as React.CSSProperties}
+          >
+            {/* Micro-label register: small text takes positive tracking. */}
+            <h4 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
               {cat.title}
             </h4>
-            <div className="space-y-1.5">
+            <div className="space-y-2">
               {cat.items.map((item) => (
                 <div
                   key={item.label}
                   className="flex items-center justify-between gap-2"
                 >
-                  <span className="text-[11px] text-mist truncate flex items-center gap-1">
+                  <span className="flex items-center gap-1 truncate text-[11.5px] text-mist">
                     {item.tooltip ? (
                       <Tooltip content={item.tooltip} side="top">
                         <span className="border-b border-dashed border-mist/30 cursor-help">
@@ -107,7 +113,7 @@ export function CategorizedMetrics({
                   </span>
                   <span
                     className={cn(
-                      "text-[11px] font-mono font-semibold font-tabular whitespace-nowrap flex items-center gap-1",
+                      "flex items-center gap-1 whitespace-nowrap font-mono text-[12px] font-semibold tabular-nums",
                       item.variant === "warning"
                         ? "text-golden-hour"
                         : item.variant === "positive"
@@ -135,11 +141,15 @@ export function CategorizedMetrics({
       </div>
 
       {/* Rule 4 — Data freshness footer */}
-      <div className="border-t border-wolf-border/20 px-4 py-1.5 flex items-center justify-between gap-4">
-        <span className="text-[9px] text-mist/40 font-mono">
+      <div className="relative flex items-center justify-between gap-4 px-4 py-2">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-wolf-black/20 to-transparent"
+        />
+        <span className="relative font-mono text-[9px] tracking-[0.02em] text-mist/40">
           Price data: real-time · Fundamentals: {fundamentalsPeriod ?? "latest available"} (GAAP reported)
         </span>
-        <span className="text-[9px] text-mist/40">
+        <span className="relative text-[9px] text-mist/40">
           P/E = TTM GAAP · β = 5Y Monthly vs S&P 500
         </span>
       </div>

@@ -71,10 +71,15 @@ export default function DividendsPage() {
   const frequency = "Quarterly";
 
   // ---- DPS History ----
+  // The mapper already returns these oldest-first (see filterSortMap). The old
+  // `.reverse()` flipped them to newest-first, which put 2026 at the left of
+  // every chart AND inverted the CAGR: the formula below reads index 0 as the
+  // starting year, so it was computing oldest÷newest and reporting growth as
+  // decline. Sorted explicitly rather than trusting the upstream order.
   const dpsHistory = annualCF
     .filter((cf) => cf.dividends_paid < 0)
     .slice()
-    .reverse()
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
     .map((cf) => {
       const matchingIncome = annualIncome.find(
         (is) => is.period === cf.period
@@ -138,23 +143,26 @@ export default function DividendsPage() {
       <Card>
         <CardHeader className="pb-4">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Dividend Summary</CardTitle>
-            <Badge variant="golden" className="text-xs">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+              Dividend Summary
+            </CardTitle>
+            <Badge variant="golden" className="border-0 text-[10px] tracking-[0.06em] ring-1 ring-inset ring-golden-hour/25">
               Income
             </Badge>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {summaryMetrics.map((m) => (
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {summaryMetrics.map((m, index) => (
               <div
                 key={m.label}
-                className="space-y-1 p-3 rounded-lg bg-wolf-black/40 border border-wolf-border/30"
+                className="insight-enter space-y-1.5 rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/40"
+                style={{ "--enter-delay": `${index * 30}ms` } as React.CSSProperties}
               >
-                <p className="text-[11px] text-mist uppercase tracking-wider font-medium">
+                <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">
                   {m.label}
                 </p>
-                <p className="text-sm font-mono font-bold font-tabular text-snow-peak">
+                <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
                   {m.value}
                 </p>
               </div>
@@ -163,84 +171,81 @@ export default function DividendsPage() {
         </CardContent>
       </Card>
 
-      {/* DPS History Chart */}
+      {/* Both charts share one row: stacked full-width they ran to nearly two
+          screens for four bars of data. Side by side they stay comparable at a
+          glance, which is the point of showing them together. */}
       {dpsHistory.length > 1 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <CardTitle className="text-base">
-                  Dividend Per Share History
-                </CardTitle>
-                {dpsGrowth !== null && (
-                  <Badge
-                    variant={dpsGrowth > 0 ? "bullish" : "bearish"}
-                    className="text-xs font-mono"
-                  >
-                    CAGR: {formatPercent(dpsGrowth)}
-                  </Badge>
-                )}
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card className="insight-enter">
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <CardTitle className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+                    Dividend Per Share
+                  </CardTitle>
+                  {dpsGrowth !== null && (
+                    <Badge
+                      variant={dpsGrowth > 0 ? "bullish" : "bearish"}
+                      className="shrink-0 border-0 font-mono text-[10px] tabular-nums"
+                    >
+                      CAGR {formatPercent(dpsGrowth)}
+                    </Badge>
+                  )}
+                </div>
+                <ExpandChartDialog title="Dividend Per Share History">
+                  <BarChart
+                    data={dpsHistory}
+                    dataKey="dps"
+                    xAxisKey="period"
+                    height={420}
+                    color="#FFBF69"
+                    formatter={(v) => formatCurrency(v)}
+                  />
+                </ExpandChartDialog>
               </div>
-              <ExpandChartDialog title="Dividend Per Share History">
-                <BarChart
-                  data={dpsHistory}
-                  dataKey="dps"
-                  xAxisKey="period"
-                  height={420}
-                  color="#FFBF69"
-                  formatter={(v) => formatCurrency(v)}
-                />
-              </ExpandChartDialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <BarChart
-              data={dpsHistory}
-              dataKey="dps"
-              xAxisKey="period"
-              height={260}
-              color="#FFBF69"
-              formatter={(v) => formatCurrency(v)}
-            />
-          </CardContent>
-        </Card>
-      )}
+            </CardHeader>
+            <CardContent>
+              <BarChart
+                data={dpsHistory}
+                dataKey="dps"
+                xAxisKey="period"
+                height={240}
+                color="#FFBF69"
+                formatter={(v) => formatCurrency(v)}
+              />
+            </CardContent>
+          </Card>
 
-      {/* Total Dividends Paid Chart */}
-      {dpsHistory.length > 1 && (
-        <Card>
-          <CardHeader className="pb-2">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">
-                Total Dividends Paid (Annual)
-              </CardTitle>
-              <ExpandChartDialog title="Total Dividends Paid (Annual)">
-                <BarChart
-                  data={dpsHistory}
-                  dataKey="totalPaid"
-                  xAxisKey="period"
-                  height={420}
-                  color="#FF8C42"
-                  formatter={(v) =>
-                    `$${(v / 1e9).toFixed(2)}B`
-                  }
-                />
-              </ExpandChartDialog>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <BarChart
-              data={dpsHistory}
-              dataKey="totalPaid"
-              xAxisKey="period"
-              height={220}
-              color="#FF8C42"
-              formatter={(v) =>
-                `$${(v / 1e9).toFixed(2)}B`
-              }
-            />
-          </CardContent>
-        </Card>
+          <Card className="insight-enter" style={{ "--enter-delay": "60ms" } as React.CSSProperties}>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between gap-2">
+                <CardTitle className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+                  Total Dividends Paid
+                </CardTitle>
+                <ExpandChartDialog title="Total Dividends Paid (Annual)">
+                  <BarChart
+                    data={dpsHistory}
+                    dataKey="totalPaid"
+                    xAxisKey="period"
+                    height={420}
+                    color="#FF8C42"
+                    formatter={(v) => `$${(v / 1e9).toFixed(2)}B`}
+                  />
+                </ExpandChartDialog>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <BarChart
+                data={dpsHistory}
+                dataKey="totalPaid"
+                xAxisKey="period"
+                height={240}
+                color="#FF8C42"
+                formatter={(v) => `$${(v / 1e9).toFixed(2)}B`}
+              />
+            </CardContent>
+          </Card>
+        </div>
       )}
     </div>
   );
@@ -253,7 +258,7 @@ function DividendsSkeleton() {
     <div className="space-y-6">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         {Array.from({ length: 6 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-lg" />
+          <Skeleton key={i} className="h-20 rounded-xl" />
         ))}
       </div>
       <Skeleton className="h-64 rounded-xl" />

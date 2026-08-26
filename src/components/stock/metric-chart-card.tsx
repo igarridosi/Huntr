@@ -152,10 +152,10 @@ export function MetricChartCard({
   if (!data.length) return null;
 
   return (
-    <div className="rounded-xl border border-wolf-border/50 bg-wolf-surface p-4 flex flex-col gap-2">
+    <div className="insight-enter flex flex-col gap-2 rounded-xl bg-wolf-surface p-4 ring-1 ring-inset ring-wolf-border/50">
       {/* Header: title + growth badge */}
       <div className="flex items-center gap-2">
-        <h3 className="text-sm font-semibold text-snow-peak truncate">
+        <h3 className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
           {title}
         </h3>
         {growth !== undefined && growth !== null && (

@@ -25,15 +25,6 @@ const GRADE_COLOR: Record<QualityGrade, string> = {
   F:   "text-bearish",
 };
 
-const GRADE_BORDER: Record<QualityGrade, string> = {
-  "A+": "border-l-emerald-400",
-  A:   "border-l-bullish",
-  B:   "border-l-teal-400",
-  C:   "border-l-golden-hour",
-  D:   "border-l-sunset-orange",
-  F:   "border-l-bearish",
-};
-
 const GRADE_CHIP: Record<QualityGrade, string> = {
   "A+": "bg-emerald-400/10 text-emerald-400 border-emerald-400/30",
   A:   "bg-bullish/10 text-bullish border-bullish/30",
@@ -73,17 +64,17 @@ function MetricRow({
   tooltip: string;
 }) {
   return (
-    <div className="grid grid-cols-[1fr_auto_80px] gap-3 items-center py-1.5">
-      <div className="flex items-center gap-1 min-w-0">
-        <span className="text-[11px] text-mist truncate">{label}</span>
+    <div className="grid grid-cols-[1fr_auto_80px] items-center gap-3 py-2">
+      <div className="flex min-w-0 items-center gap-1">
+        <span className="truncate text-[11.5px] text-mist">{label}</span>
         <Tooltip content={tooltip} side="right">
           <Info className="w-3 h-3 text-mist/35 hover:text-mist/70 transition-colors shrink-0 cursor-help" />
         </Tooltip>
       </div>
-      <span className="font-mono text-[11px] text-snow-peak whitespace-nowrap">{value}</span>
+      <span className="whitespace-nowrap font-mono text-[12px] font-semibold tabular-nums text-snow-peak">{value}</span>
       <div className="flex items-center gap-1.5">
         <ScoreBar score={score} h="h-1" />
-        <span className="text-[10px] font-mono text-mist/60 w-6 text-right shrink-0">
+        <span className="w-6 shrink-0 text-right font-mono text-[10px] tabular-nums text-mist/60">
           {Math.round(score)}
         </span>
       </div>
@@ -96,22 +87,29 @@ function DimensionRow({ dimension }: { dimension: QualityDimension }) {
 
   return (
     <div
-      className={cn(
-        "rounded-lg border border-wolf-border/30 border-l-2 bg-wolf-black/15 overflow-hidden transition-colors",
-        GRADE_BORDER[dimension.grade]
-      )}
+      // No accent rail: the grade chip already carries the colour, so the bar
+      // was a second, redundant encoding of the same thing.
+      className="insight-enter overflow-hidden rounded-xl bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/40 transition-colors"
     >
       {/* Header row */}
       <button
         type="button"
-        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-wolf-black/30 transition-colors text-left"
+        className={cn(
+          "flex w-full items-center gap-3 px-3 py-3 text-left",
+          // Tint only, no scale: these rows run the full card width, so
+          // shrinking them pulled their edges away from the clipped container
+          // and exposed a sliver of the shell on every press.
+          "transition-colors duration-150 ease-out",
+          "hover:bg-snow-peak/[0.04] active:bg-snow-peak/[0.08]",
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-sunset-orange/60"
+        )}
         onClick={() => setExpanded((v) => !v)}
         aria-expanded={expanded}
       >
         {/* Grade chip */}
         <span
           className={cn(
-            "shrink-0 inline-flex items-center justify-center h-5 w-7 rounded text-[10px] font-bold border",
+            "inline-flex h-6 w-8 shrink-0 items-center justify-center rounded-md border font-mono text-[11px] font-bold tabular-nums",
             GRADE_CHIP[dimension.grade]
           )}
         >
@@ -119,26 +117,26 @@ function DimensionRow({ dimension }: { dimension: QualityDimension }) {
         </span>
 
         {/* Name */}
-        <span className="text-xs font-semibold text-snow-peak shrink-0 w-28">
+        <span className="w-28 shrink-0 text-[12.5px] font-semibold tracking-[-0.01em] text-snow-peak">
           {dimension.name}
         </span>
 
         {/* Summary */}
-        <span className="flex-1 text-[10px] text-mist/70 truncate hidden sm:block">
+        <span className="hidden flex-1 truncate text-[11px] text-mist/60 sm:block">
           {dimension.summary}
         </span>
 
         {/* Score bar + number */}
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="w-20 hidden md:block">
+        <div className="flex shrink-0 items-center gap-2.5">
+          <div className="hidden w-20 md:block">
             <ScoreBar score={dimension.score} h="h-1" />
           </div>
-          <span className="text-xs font-mono text-mist/80 w-6 text-right">
+          <span className="w-7 text-right font-mono text-[13px] font-semibold tabular-nums text-snow-peak">
             {Math.round(dimension.score)}
           </span>
           {expanded
-            ? <ChevronUp  className="h-3 w-3 text-mist/50" />
-            : <ChevronDown className="h-3 w-3 text-mist/50" />}
+            ? <ChevronUp  className="h-3.5 w-3.5 text-mist/50" />
+            : <ChevronDown className="h-3.5 w-3.5 text-mist/50" />}
         </div>
       </button>
 
@@ -322,31 +320,32 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
   const sourceLabel  = result.mode === "deep" ? "AlphaVantage" : "Yahoo Finance";
 
   return (
-    <Card className="border-wolf-border/40 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80">
-      <CardContent className="p-5 space-y-4">
+    <Card className="border-wolf-border/50 bg-wolf-surface">
+      <CardContent className="space-y-4 p-5">
 
         {/* ── Header ── */}
         <div className="flex items-start gap-4">
           <div className="flex-1 min-w-0">
             {/* Title row */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="text-sm font-semibold text-snow-peak">Quality Score</h3>
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Quality Score</h3>
               <ModeBadge mode={result.mode} />
             </div>
 
             {/* Sector percentile */}
-            <p className="text-[11px] text-mist/60 mt-0.5">
+            <p className="mt-1.5 text-[12px] text-mist/70">
               Top {result.sectorPercentile}% in {result.sector} · {windowLabel} analysis
             </p>
 
             {/* Overall score bar */}
-            <div className="mt-3 space-y-1.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-widest text-mist/50">
+            <div className="mt-4 space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-[10px] uppercase tracking-[0.11em] text-mist/50">
                   Overall
                 </span>
-                <span className="text-xs font-mono font-semibold text-snow-peak">
-                  {Math.round(result.overall)} <span className="text-mist/50 font-normal">/ 100</span>
+                <span className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
+                  {Math.round(result.overall)}
+                  <span className="ml-1 text-[11px] font-normal text-mist/45">/ 100</span>
                 </span>
               </div>
               <OverallBar score={result.overall} />
@@ -400,8 +399,8 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
 
 export function QualityScorecardSkeleton() {
   return (
-    <Card className="border-wolf-border/40 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80">
-      <CardContent className="p-5 space-y-4">
+    <Card className="border-wolf-border/50 bg-wolf-surface">
+      <CardContent className="space-y-4 p-5">
         <div className="flex items-start gap-4">
           <div className="flex-1 space-y-2">
             <Skeleton shape="line" className="h-4 w-28" />

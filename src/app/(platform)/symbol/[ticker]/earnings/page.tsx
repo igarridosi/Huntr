@@ -305,12 +305,30 @@ export default function SymbolEarningsPage() {
     (row) => row.reported != null || row.revenue != null
   );
 
-  const nextEstimate = rowsDesc.find(
+  const nextEstimateRow = rowsDesc.find(
     (row) =>
       (row.estimate != null || row.revenueEstimate != null) &&
       row.reported == null &&
       row.revenue == null
   );
+
+  /**
+   * Alpha Vantage's EARNINGS endpoint only returns quarters that have already
+   * reported — checked against the live feed, all 122 rows for MSFT carry an
+   * actual and none has a future report date. So no row ever satisfies the
+   * "estimate but nothing reported" test above, and these three fields showed
+   * a dash forever.
+   *
+   * The forward consensus does exist: the pipeline already merges Yahoo's
+   * numbers into `insight.est_eps` / `est_revenue` / `next_earnings_date`. It
+   * just had no future history row to attach them to, so nothing read them.
+   */
+  const nextEstimate = nextEstimateRow ?? {
+    quarter: null,
+    estimate: data?.insight?.est_eps ?? null,
+    revenueEstimate: data?.insight?.est_revenue ?? null,
+    releaseDate: data?.insight?.next_earnings_date ?? null,
+  };
 
   const revenueRows = chartRows.map((row) => ({
     ...row,
@@ -363,36 +381,36 @@ export default function SymbolEarningsPage() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between gap-3">
-            <CardTitle className="text-base">Recent Earnings Quarters</CardTitle>
-            <Badge variant="outline" className="text-xs border-wolf-border/70 text-mist">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Recent Earnings Quarters</CardTitle>
+            <Badge variant="outline" className="border-0 bg-wolf-black/40 font-mono text-[10px] tracking-[0.06em] text-mist/70 ring-1 ring-inset ring-wolf-border/40">
               {data.insight?.source?.toUpperCase() ?? "MIXED"}
             </Badge>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-3">
-            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-mist/80">Latest Reported</p>
-              <p className="text-sm font-semibold text-snow-peak mt-1">
+            <div className="insight-enter rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/40">
+              <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">Latest Reported</p>
+              <p className="mt-1.5 font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
                 {latestReported?.quarter ?? "-"}
               </p>
             </div>
-            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-mist/80">Next EPS Estimate</p>
-              <p className="text-sm font-semibold text-snow-peak mt-1">
+            <div className="insight-enter rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/40">
+              <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">Next EPS Estimate</p>
+              <p className="mt-1.5 font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
                 {formatEps(nextEstimate?.estimate ?? null)}
               </p>
             </div>
-            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-3">
-              <p className="text-[11px] uppercase tracking-wider text-mist/80">Next Revenue Estimate</p>
-              <p className="text-sm font-semibold text-snow-peak mt-1">
+            <div className="insight-enter rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/40">
+              <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">Next Revenue Estimate</p>
+              <p className="mt-1.5 font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
                 {formatMoneyCompact(nextEstimate?.revenueEstimate ?? null)}
               </p>
             </div>
           </div>
 
-          <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-3 mt-3">
-            <p className="text-[11px] uppercase tracking-wider text-mist/80">Next Release Date</p>
-            <p className="text-sm font-semibold text-snow-peak mt-1">
+          <div className="insight-enter rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/40 mt-3">
+            <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">Next Release Date</p>
+            <p className="mt-1.5 font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
               {formatDate(nextEstimate?.releaseDate ?? null)}
             </p>
           </div>
@@ -400,10 +418,10 @@ export default function SymbolEarningsPage() {
 
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-3" onMouseLeave={onPointLeave}>
+            <div className="insight-enter rounded-xl bg-snow-peak/[0.02] p-3 ring-1 ring-inset ring-wolf-border/40" onMouseLeave={onPointLeave}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold text-snow-peak">EPS</p>
-                <Badge variant="outline" className="text-[11px] border-wolf-border/70 text-mist">Estimate vs Reported</Badge>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">EPS</p>
+                <Badge variant="outline" className="border-0 bg-wolf-black/40 text-[10px] tracking-[0.04em] text-mist/70 ring-1 ring-inset ring-wolf-border/40">Estimate vs Reported</Badge>
               </div>
               <div className="h-[380px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -509,10 +527,10 @@ export default function SymbolEarningsPage() {
               </div>
             </div>
 
-            <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-3" onMouseLeave={onPointLeave}>
+            <div className="insight-enter rounded-xl bg-snow-peak/[0.02] p-3 ring-1 ring-inset ring-wolf-border/40" onMouseLeave={onPointLeave}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-semibold text-snow-peak">Revenue</p>
-                <Badge variant="outline" className="text-[11px] border-wolf-border/70 text-mist">Reported + Next Estimate</Badge>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Revenue</p>
+                <Badge variant="outline" className="border-0 bg-wolf-black/40 text-[10px] tracking-[0.04em] text-mist/70 ring-1 ring-inset ring-wolf-border/40">Reported + Next Estimate</Badge>
               </div>
               <div className="h-[380px]">
                 <ResponsiveContainer width="100%" height="100%">
@@ -558,9 +576,9 @@ export default function SymbolEarningsPage() {
           </div>
 
           <div className="grid grid-cols-1 2xl:grid-cols-2 gap-4">
-            <div className="overflow-x-auto rounded-lg border border-wolf-border/40">
+            <div className="overflow-x-auto rounded-xl ring-1 ring-inset ring-wolf-border/40">
               <table className="w-full text-sm">
-                <thead className="bg-wolf-black/40 text-mist text-xs uppercase tracking-wider">
+                <thead className="bg-wolf-black/40 text-[10px] uppercase tracking-[0.09em] text-mist/60">
                   <tr>
                     <th className="text-left px-3 py-2">Quarter</th>
                     <th className="text-left px-3 py-2">Release Date</th>
@@ -593,9 +611,9 @@ export default function SymbolEarningsPage() {
               </table>
             </div>
 
-            <div className="overflow-x-auto rounded-lg border border-wolf-border/40">
+            <div className="overflow-x-auto rounded-xl ring-1 ring-inset ring-wolf-border/40">
               <table className="w-full text-sm">
-                <thead className="bg-wolf-black/40 text-mist text-xs uppercase tracking-wider">
+                <thead className="bg-wolf-black/40 text-[10px] uppercase tracking-[0.09em] text-mist/60">
                   <tr>
                     <th className="text-left px-3 py-2">Quarter</th>
                     <th className="text-left px-3 py-2">Release Date</th>

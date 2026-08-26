@@ -37,7 +37,7 @@ export function MetricChart({
     <Card>
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between gap-3">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">{title}</CardTitle>
           <ExpandChartDialog title={title}>
             <ChartComponent
               data={data}
