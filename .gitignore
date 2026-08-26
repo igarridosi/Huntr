@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Seeded design-canvas payload — generated from design/*.dc.html by the
+# canvas seeder and published to claude.ai. ~2.3 MB of vendored editor code.
+design/huntr-insights-ui-review.html

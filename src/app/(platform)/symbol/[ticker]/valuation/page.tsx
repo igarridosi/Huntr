@@ -8,8 +8,6 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tooltip } from "@/components/ui/tooltip";
-import { AreaChart } from "@/components/charts/area-chart";
-import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
 import { MetricChart } from "@/components/financials/metric-chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -219,13 +217,107 @@ export default function ValuationPage() {
   const epsCAGRs = calculateAllCAGRs(epsSeries);
   const fcfCAGRs = calculateAllCAGRs(fcfSeries);
 
+  // The page's conclusion, computed once so it can lead instead of trail.
+  const fairValueGap =
+    impliedFairValue && quote.price > 0
+      ? impliedFairValue.mid / quote.price - 1
+      : null;
+
   return (
     <div className="space-y-6">
+      {/* Verdict — the answer first, the evidence below.
+          The implied range used to sit at the foot of the bands card in 14px
+          text, after the chart; Market Cap, which is a size fact rather than a
+          valuation judgement, outranked it. This puts "what is it worth against
+          what it costs" where the eye lands first. */}
+      {impliedFairValue && (
+        <Card className="insight-enter">
+          <CardContent className="p-5">
+            <div className="flex flex-wrap items-end justify-between gap-6">
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+                  Implied fair value
+                </p>
+                <p className="mt-2 font-mono text-[30px] font-bold leading-none tracking-[-0.02em] tabular-nums text-golden-hour">
+                  ${impliedFairValue.mid}
+                </p>
+                <p className="mt-2.5 text-[11px] text-mist/60">
+                  Avg P/E × current EPS
+                  {impliedFairValue.low && impliedFairValue.high && (
+                    <span className="ml-1.5 font-mono tabular-nums text-mist/80">
+                      ${impliedFairValue.low} – ${impliedFairValue.high}
+                    </span>
+                  )}
+                </p>
+              </div>
+
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+                  Current price
+                </p>
+                <p className="mt-2 font-mono text-[30px] font-bold leading-none tracking-[-0.02em] tabular-nums text-snow-peak">
+                  ${quote.price.toFixed(2)}
+                </p>
+                {fairValueGap !== null && (
+                  <p
+                    className={cn(
+                      "mt-2.5 font-mono text-[13px] font-semibold tabular-nums",
+                      fairValueGap > 0 ? "text-bullish" : "text-bearish"
+                    )}
+                  >
+                    {fairValueGap > 0 ? "+" : ""}
+                    {formatPercent(fairValueGap, 1)}
+                    <span className="ml-1.5 font-sans text-[11px] font-normal text-mist/60">
+                      {fairValueGap > 0 ? "upside to base case" : "above base case"}
+                    </span>
+                  </p>
+                )}
+              </div>
+
+              {pePercentile !== null && (
+                <div className="ml-auto">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+                    vs own history
+                  </p>
+                  <p
+                    className={cn(
+                      "mt-2 text-[15px] font-semibold",
+                      pePercentile < 35
+                        ? "text-bullish"
+                        : pePercentile > 65
+                          ? "text-bearish"
+                          : "text-golden-hour"
+                    )}
+                  >
+                    {pePercentile < 35
+                      ? "Historically cheap"
+                      : pePercentile > 65
+                        ? "Historically expensive"
+                        : "Near average"}
+                  </p>
+                  <p className="mt-2 font-mono text-[11px] tabular-nums text-mist/60">
+                    P{pePercentile} over {historicalPE.length}Y
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <p className="mt-4 text-[11px] leading-relaxed text-mist/45">
+              A single-method estimate from this company&apos;s own P/E history. It is a
+              reference point, not a price target — cross-check it against the DCF and
+              the quality score before acting on it.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Valuation Metrics Grid */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-base">Valuation Multiples</CardTitle>
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+              Valuation Multiples
+            </CardTitle>
             {/* Rule 4 — data freshness */}
             <span className="text-[10px] text-mist/50 font-mono">
               Fundamentals: {latestPeriod} (GAAP) · Price: real-time
@@ -244,35 +336,56 @@ export default function ValuationPage() {
           )}
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            {metrics.map((m) => (
-              <div
-                key={m.label}
-                className={cn(
-                  "space-y-1 p-3 rounded-lg border",
-                  m.note
-                    ? "bg-golden-hour/5 border-golden-hour/25"
-                    : "bg-wolf-black/40 border-wolf-border/30"
-                )}
-              >
-                <p className={cn(
-                  "text-[11px] uppercase tracking-wider font-medium",
-                  m.note ? "text-golden-hour/80" : "text-mist"
-                )}>
-                  {m.label}
-                </p>
-                <p className={cn(
-                  "text-sm font-mono font-bold font-tabular",
-                  m.note ? "text-golden-hour" : "text-snow-peak"
-                )}>
-                  {m.value}
-                </p>
-                {m.note && (
-                  <p className="text-[9px] text-golden-hour/70 leading-tight">{m.note}</p>
-                )}
+          {/* Split deliberately: the first four answer "what is being paid per
+              unit of business", the last four "what the business earns and how
+              big it is". They were one undifferentiated grid, which gave Market
+              Cap the same weight as P/E. */}
+          {[
+            { heading: "Multiples", items: metrics.slice(0, 4) },
+            { heading: "Returns & size", items: metrics.slice(4) },
+          ].map((group, groupIndex) => (
+            <div key={group.heading} className={groupIndex > 0 ? "mt-5" : undefined}>
+              <p className="mb-2.5 text-[10px] uppercase tracking-[0.09em] text-mist/45">
+                {group.heading}
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                {group.items.map((m, index) => (
+                  <div
+                    key={m.label}
+                    className={cn(
+                      "insight-enter space-y-1.5 rounded-xl p-3 ring-1 ring-inset",
+                      m.note
+                        ? "bg-golden-hour/[0.06] ring-golden-hour/25"
+                        : "bg-snow-peak/[0.025] ring-wolf-border/40"
+                    )}
+                    style={
+                      { "--enter-delay": `${(groupIndex * 4 + index) * 25}ms` } as React.CSSProperties
+                    }
+                  >
+                    <p
+                      className={cn(
+                        "text-[10px] uppercase tracking-[0.09em]",
+                        m.note ? "text-golden-hour/80" : "text-mist/60"
+                      )}
+                    >
+                      {m.label}
+                    </p>
+                    <p
+                      className={cn(
+                        "font-mono text-[15px] font-semibold tabular-nums",
+                        m.note ? "text-golden-hour" : "text-snow-peak"
+                      )}
+                    >
+                      {m.value}
+                    </p>
+                    {m.note && (
+                      <p className="text-[9px] leading-tight text-golden-hour/70">{m.note}</p>
+                    )}
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
+            </div>
+          ))}
         </CardContent>
       </Card>
 
@@ -283,7 +396,7 @@ export default function ValuationPage() {
             <div className="flex items-start justify-between gap-4 flex-wrap">
               <div>
                 {/* Rule 1 — Explicit P/E type label */}
-                <CardTitle className="text-base">P/E (TTM, GAAP) — Historical Bands</CardTitle>
+                <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">P/E (TTM, GAAP) — Historical Bands</CardTitle>
                 <p className="text-xs text-mist mt-0.5">
                   Trailing P/E using current price ÷ annual diluted EPS per period.
                   <span className="ml-1 text-mist/60">Note: uses reported GAAP EPS — may include one-time items.</span>
@@ -324,8 +437,8 @@ export default function ValuationPage() {
                   stdDevPE ? { label: "Std Dev", value: `±${stdDevPE.toFixed(1)}x` } : null,
                 ].filter(Boolean).map((stat) => (
                   <div key={stat!.label} className="space-y-0.5">
-                    <p className="text-[10px] text-mist uppercase tracking-wider">{stat!.label}</p>
-                    <p className={cn("text-sm font-mono font-semibold", stat!.highlight ? "text-sunset-orange" : "text-snow-peak")}>
+                    <p className="text-[10px] uppercase tracking-[0.09em] text-mist/55">{stat!.label}</p>
+                    <p className={cn("font-mono text-[15px] font-semibold tabular-nums", stat!.highlight ? "text-sunset-orange" : "text-snow-peak")}>
                       {stat!.value}
                     </p>
                   </div>
@@ -359,7 +472,23 @@ export default function ValuationPage() {
                     borderRadius: 8,
                     fontSize: 11,
                   }}
-                  formatter={(v: unknown) => [`${(v as number).toFixed(1)}x`]}
+                  // The ±1σ series is a Recharts range: its value is a
+                  // [low, high] tuple, not a number. `v as number` asserted it
+                  // away and the tooltip threw on the first hover.
+                  formatter={(v: unknown, name: unknown) => {
+                    const label = typeof name === "string" ? name : "";
+
+                    if (Array.isArray(v)) {
+                      const [low, high] = v;
+                      return typeof low === "number" && typeof high === "number"
+                        ? [`${low.toFixed(1)}x – ${high.toFixed(1)}x`, "±1σ band"]
+                        : ["N/A", label];
+                    }
+
+                    return typeof v === "number"
+                      ? [`${v.toFixed(1)}x`, label]
+                      : ["N/A", label];
+                  }}
                 />
                 {/* ±1σ band */}
                 {stdDevPE && avgPE && (
@@ -425,45 +554,8 @@ export default function ValuationPage() {
               </div>
             )}
 
-            {/* Implied fair value */}
-            {impliedFairValue && (
-              <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-3">
-                <p className="text-[10px] text-mist uppercase tracking-wider mb-2">
-                  Implied Fair Value Range (Avg P/E × Current EPS)
-                </p>
-                <div className="flex items-center gap-4 flex-wrap">
-                  {impliedFairValue.low && (
-                    <div>
-                      <p className="text-[10px] text-mist">Bear (−1σ)</p>
-                      <p className="text-sm font-mono font-semibold text-snow-peak">${impliedFairValue.low}</p>
-                    </div>
-                  )}
-                  <div>
-                    <p className="text-[10px] text-mist">Base (Avg)</p>
-                    <p className="text-sm font-mono font-bold text-golden-hour">${impliedFairValue.mid}</p>
-                  </div>
-                  {impliedFairValue.high && (
-                    <div>
-                      <p className="text-[10px] text-mist">Bull (+1σ)</p>
-                      <p className="text-sm font-mono font-semibold text-snow-peak">${impliedFairValue.high}</p>
-                    </div>
-                  )}
-                  <div className="ml-auto">
-                    <p className="text-[10px] text-mist">Current Price</p>
-                    <p className={cn(
-                      "text-sm font-mono font-bold",
-                      impliedFairValue.low && quote.price < impliedFairValue.low
-                        ? "text-bullish"
-                        : impliedFairValue.high && quote.price > impliedFairValue.high
-                          ? "text-bearish"
-                          : "text-golden-hour"
-                    )}>
-                      ${quote.price.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* The implied range now leads the page, so repeating it here would
+                say the same thing twice in one scroll. */}
           </CardContent>
         </Card>
       )}

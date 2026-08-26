@@ -1,0 +1,8 @@
+# GitHub language stats count BYTES, not files. The design canvas under
+# design/ is a design artifact rather than application code, and its seeded
+# payload alone is ~2.3 MB — enough to report this repo as majority HTML and
+# bury the TypeScript it is actually written in.
+design/** linguist-documentation
+
+# Search Console ownership stubs — not code either.
+public/google*.html linguist-generated

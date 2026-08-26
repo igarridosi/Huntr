@@ -55,7 +55,8 @@ export function StockHeader({
   const dayChange = quote?.day_change ?? 0;
   const dayChangePercent = quote?.day_change_percent ?? 0;
   const changeDirection = dayChange >= 0;
-  const changeColor = changeDirection ? "text-emerald-400" : "text-[#FF4242]";
+  // Semantic tokens rather than a hardcoded hex, so light mode maps correctly.
+  const changeColor = changeDirection ? "text-bullish" : "text-bearish";
   const changeSign = changeDirection ? "+" : "";
   const earningsText = formatEarningsDate(quote?.next_earnings_date);
 
@@ -115,13 +116,15 @@ export function StockHeader({
         <div className="flex flex-wrap items-end gap-x-8 gap-y-3">
           {/* Price */}
           <div>
-            <p className="text-3xl font-bold font-mono font-tabular text-snow-peak">
+            {/* Display size, so the tracking tightens — letters read too far
+                apart as they grow. */}
+            <p className="font-mono text-[34px] font-bold tabular-nums leading-none tracking-[-0.02em] text-snow-peak">
               {formatCurrency(quote.price)}
             </p>
-            <div className="mt-1 flex items-center gap-2">
+            <div className="mt-2 flex items-center gap-2">
               <span
                 className={cn(
-                  "text-xs font-mono font-tabular font-semibold",
+                  "font-mono text-[13px] font-semibold tabular-nums leading-none",
                   changeColor
                 )}
               >
@@ -129,10 +132,13 @@ export function StockHeader({
                 {formatCurrency(dayChange, { decimals: 2 })} ({changeSign}
                 {formatPercent(dayChangePercent, 2)})
               </span>
-              <span className="text-xs text-mist">Today</span>
+              <span className="text-[11px] uppercase tracking-[0.08em] text-mist/60">Today</span>
             </div>
-            <div className="mt-0.5 text-xs text-mist">
-              Next earnings: <span className="text-snow-peak">{earningsText}</span>
+            <div className="mt-2 text-[11px] uppercase tracking-[0.08em] text-mist/50">
+              Next earnings
+              <span className="ml-1.5 font-mono text-[11px] normal-case tracking-[0.02em] text-mist/80">
+                {earningsText}
+              </span>
             </div>
           </div>
 
@@ -156,22 +162,22 @@ export function StockHeader({
           </div>
 
           {/* 52W Range */}
-          <div className="flex items-center gap-2 ml-auto">
-            <span className="text-[10px] text-mist font-mono">
+          <div className="ml-auto flex items-center gap-2">
+            <span className="font-mono text-[11px] tabular-nums text-mist/70">
               {formatCurrency(quote.fifty_two_week_low, { decimals: 0 })}
             </span>
-            <div className="relative w-20 h-1.5 bg-wolf-border rounded-full overflow-hidden">
+            <div className="relative h-1.5 w-24 overflow-hidden rounded-full bg-wolf-border/60">
               <div
                 className={cn(
-                  "absolute left-0 top-0 h-full bg-sunset-orange/60 rounded-full",
+                  "absolute left-0 top-0 h-full rounded-full bg-sunset-orange/70",
                   getRangeWidthClass(rangePercent)
                 )}
               />
             </div>
-            <span className="text-[10px] text-mist font-mono">
+            <span className="font-mono text-[11px] tabular-nums text-mist/70">
               {formatCurrency(quote.fifty_two_week_high, { decimals: 0 })}
             </span>
-            <span className="text-[10px] text-mist/50 ml-1">52W</span>
+            <span className="ml-1 text-[10px] uppercase tracking-[0.09em] text-mist/45">52W</span>
           </div>
         </div>
       ) : isLoading ? (
@@ -195,22 +201,23 @@ function MarketIndexTile({ index }: { index: MarketIndexQuote }) {
   const sign = isPositive ? "+" : "";
 
   return (
-    <div className="rounded-lg border border-wolf-border/60 bg-wolf-black/30 px-3 py-2">
+    // Raised reads lighter than the page, matching the Insights grid.
+    <div className="insight-enter rounded-xl bg-snow-peak/[0.025] px-3 py-2.5 ring-1 ring-inset ring-wolf-border/40">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wide text-mist font-medium">
+        <span className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
           {index.label}
         </span>
         <span
           className={cn(
-            "text-[11px] font-mono font-semibold",
-            isPositive ? "text-[#4DC990]" : "text-[#FF4242]"
+            "font-mono text-[11px] font-semibold tabular-nums",
+            isPositive ? "text-bullish" : "text-bearish"
           )}
         >
           {sign}
           {formatPercent(index.change_percent, 2)}
         </span>
       </div>
-      <p className="mt-1 text-sm font-mono font-tabular font-semibold text-snow-peak">
+      <p className="mt-1 font-mono text-[15px] font-semibold tabular-nums leading-none text-snow-peak">
         {formatCurrency(index.price, { decimals: 2 })}
       </p>
     </div>
@@ -241,11 +248,12 @@ function QuickStat({
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-xs text-mist">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.09em] text-mist/60">{label}</span>
       <span
-        className={`font-mono font-medium text-xs font-tabular ${
+        className={cn(
+          "font-mono text-[13px] font-semibold tabular-nums",
           highlight ? "text-sunset-orange" : "text-snow-peak"
-        }`}
+        )}
       >
         {value}
       </span>

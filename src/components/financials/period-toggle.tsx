@@ -10,7 +10,7 @@ interface PeriodToggleProps {
 
 export function PeriodToggle({ value, onChange }: PeriodToggleProps) {
   return (
-    <div className="inline-flex items-center rounded-lg bg-wolf-black/50 border border-wolf-border/50 p-0.5">
+    <div className="inline-flex items-center gap-0.5 rounded-xl bg-wolf-black/40 p-1 ring-1 ring-inset ring-wolf-border/40">
       <ToggleButton
         label="Annual"
         active={value === "annual"}
@@ -39,9 +39,11 @@ function ToggleButton({
       type="button"
       onClick={onClick}
       className={cn(
-        "min-h-9 cursor-pointer rounded-md px-3 py-2 text-xs font-medium transition-all sm:min-h-0 sm:py-1.5",
+        "min-h-9 cursor-pointer rounded-lg px-3 text-[12px] font-medium",
+        "transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.96]",
+        "motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-7",
         active
-          ? "bg-sunset-orange/15 text-sunset-orange border border-sunset-orange/20"
+          ? "bg-sunset-orange/12 text-sunset-orange"
           : "text-mist hover:text-snow-peak"
       )}
     >

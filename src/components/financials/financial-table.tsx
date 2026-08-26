@@ -52,7 +52,7 @@ export function FinancialTable<T extends FinancialPeriod>({
             {data.map((period) => (
               <TableHead
                 key={period.period}
-                className="text-right min-w-[100px] font-mono"
+                className="min-w-[100px] text-right font-mono text-[10px] uppercase tracking-[0.09em] text-mist/60"
               >
                 {formatPeriodLabel(period.period)}
               </TableHead>
@@ -77,7 +77,7 @@ export function FinancialTable<T extends FinancialPeriod>({
                 return (
                   <TableCell
                     key={period.period}
-                    className="text-right font-mono font-tabular text-sm"
+                    className="text-right font-mono text-[13px] tabular-nums"
                   >
                     {formatCell(val, row.format)}
                   </TableCell>
