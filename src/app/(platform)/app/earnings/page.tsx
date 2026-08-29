@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { cn } from "@/lib/utils";
 import {
   ArrowDown,
   ArrowUp,
@@ -921,7 +921,7 @@ export default function EarningsPage() {
   const [chartMetric, setChartMetric] = useState<ChartMetric>("eps");
 
   const { data: quotes = [], isLoading: quotesLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
-  const { data: profiles = [], isLoading: profilesLoading, isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
+  const { data: profiles = [], isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
   const { lists } = useWatchlist();
   const { user } = useSupabase();
   const { openGate } = useAuthGate();
@@ -1183,7 +1183,10 @@ export default function EarningsPage() {
     !!selectedCache &&
     selectedCache.historyLimit < FULL_HISTORY_LIMIT;
   const hasFullHistoryLoaded = (selectedCache?.historyLimit ?? 0) >= FULL_HISTORY_LIMIT;
-  const isLoading = quotesLoading || profilesLoading;
+  // Profiles only decorate a chip (name, logo) and fall back to null, so
+  // waiting on them held an otherwise-renderable calendar hostage. Quotes are
+  // what the columns are actually built from.
+  const isLoading = quotesLoading;
 
   const handleSelectTicker = async (ticker: string): Promise<void> => {
     setSelectedTicker(ticker);
@@ -1370,22 +1373,22 @@ export default function EarningsPage() {
           <div className="mt-4 grid grid-cols-3 gap-4">
             <div>
               <p className="text-[10px] uppercase tracking-wide text-mist">Mkt Cap</p>
-              <p className="text-sm font-semibold text-snow-peak">{formatMarketCap(panelMarketCap)}</p>
+              <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">{formatMarketCap(panelMarketCap)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-mist">P/E</p>
-              <p className="text-sm font-semibold text-snow-peak">{formatRatio(panelPeRatio)}</p>
+              <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">{formatRatio(panelPeRatio)}</p>
             </div>
             <div>
               <p className="text-[10px] uppercase tracking-wide text-mist">P/S</p>
-              <p className="text-sm font-semibold text-snow-peak">{formatRatio(panelPsRatio)}</p>
+              <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">{formatRatio(panelPsRatio)}</p>
             </div>
           </div>
         </div>
 
         <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
           <div className="flex items-center justify-between gap-3">
-            <p className="text-xs uppercase tracking-wide text-mist">Recent Earnings Quarters</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Recent Earnings Quarters</p>
             <div className="flex items-center gap-2">
               <Button
                 type="button"
@@ -1401,7 +1404,7 @@ export default function EarningsPage() {
                     ? "14Q loaded"
                     : "Load 14 quarters"}
               </Button>
-              <div className="inline-flex rounded-full border border-wolf-border/40 bg-wolf-black/35 p-0.5">
+              <div className="inline-flex rounded-full bg-wolf-black/40 ring-1 ring-inset ring-wolf-border/40 p-0.5">
                 <button
                   type="button"
                   className={
@@ -1428,9 +1431,9 @@ export default function EarningsPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-wolf-border/35 bg-wolf-black/50 px-3 py-2">
-            <p className="text-[11px] uppercase tracking-wide text-mist">Next estimate</p>
-            <p className="mt-1 text-sm font-semibold text-snow-peak">
+          <div className="rounded-xl bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/40 px-3 py-2">
+            <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">Next estimate</p>
+            <p className="mt-1 font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
               {chartMetric === "eps"
                 ? `EPS: ${formatEps(selectedCache?.nextEstEps ?? null)}`
                 : `Revenue: ${formatCompactMoney(selectedCache?.nextEstRevenue ?? null)}`}
@@ -1445,7 +1448,7 @@ export default function EarningsPage() {
             />
           ) : null}
 
-          <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-wolf-black/30 px-2 py-0 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
+          <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-wolf-black/30 px-2 py-0">
             {hasHistoryLoaded ? (
               <EarningsMetricChart
                 metric={chartMetric}
@@ -1533,7 +1536,7 @@ export default function EarningsPage() {
                   <ChevronRight className="h-4 w-4" />
                 </Button>
                 <div className="ml-1">
-                  <p className="text-sm font-semibold text-snow-peak">Earnings This Week</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Earnings This Week</p>
                   <p className="text-[11px] text-mist">
                     {weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                     {" - "}
@@ -1580,7 +1583,7 @@ export default function EarningsPage() {
 
             <div className="flex-1 min-h-0 overflow-hidden">
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 p-3">
-              <div className="hidden xl:grid xl:col-span-5 grid-cols-5 rounded-md border border-wolf-border/40 bg-wolf-black/35 overflow-hidden">
+              <div className="hidden xl:grid xl:col-span-5 grid-cols-5 rounded-lg bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/35 overflow-hidden">
                 {weekDays.map((day) => (
                   <div key={`calendar-${day.toISOString()}`} className="px-3 py-2 border-r border-wolf-border/35 last:border-r-0 text-center">
                     <p className="text-[10px] uppercase tracking-wide text-mist">
@@ -1601,16 +1604,16 @@ export default function EarningsPage() {
                 ))}
               </div>
 
-              {dayColumns.map(({ day, groups }) => {
+              {dayColumns.map(({ day, groups }, dayIndex) => {
                 const sections: EarningsSection[] = [
                   { key: "before-open", label: "Before Open", icon: Sun, items: groups.beforeOpen },
                   { key: "after-close", label: "After Close", icon: Moon, items: groups.afterClose },
                 ];
 
                 return (
-                  <div key={day.toISOString()} className="rounded-lg border border-wolf-border/40 bg-wolf-black/80 overflow-hidden">
+                  <div key={day.toISOString()} className="insight-enter overflow-hidden rounded-xl bg-snow-peak/[0.02] ring-1 ring-inset ring-wolf-border/40" style={{ "--enter-delay": `${dayIndex * 40}ms` } as React.CSSProperties}>
                     <div className="border-b border-wolf-border/30 px-3 py-2">
-                      <p className="xl:hidden text-xs uppercase tracking-wide text-mist">
+                      <p className="xl:hidden text-[10px] uppercase tracking-[0.09em] text-mist/60">
                         {day.toLocaleDateString("en-US", { weekday: "short" })}
                       </p>
                       <p className="xl:hidden text-sm font-semibold text-snow-peak">
@@ -1618,7 +1621,7 @@ export default function EarningsPage() {
                       </p>
                     </div>
 
-                    <div className="p-2 space-y-2 min-h-[280px] sm:min-h-[320px] xl:min-h-[380px] max-h-[58vh] xl:max-h-[520px] overflow-y-auto">
+                    <div className="scroll-quiet p-2 space-y-2 min-h-[280px] sm:min-h-[320px] xl:min-h-[380px] max-h-[58vh] xl:max-h-[520px] overflow-y-auto">
                       {(quotesError || profilesError) ? (
                         <ErrorState
                           inline
@@ -1626,18 +1629,10 @@ export default function EarningsPage() {
                           onRetry={() => { void refetchQuotes(); void refetchProfiles(); }}
                         />
                       ) : isLoading ? (
-                        <div className="rounded-xl border border-wolf-border/45 bg-wolf-black/50 p-3 shadow-[0_10px_35px_rgba(0,0,0,0.28)]">
-                          <div className="flex items-center gap-3">
-                            <Spinner size="lg" />
-                            <div>
-                              <p className="text-xs font-semibold text-snow-peak">Loading weekly earnings</p>
-                              <p className="text-[11px] text-mist/80">Syncing quotes and profiles...</p>
-                            </div>
-                          </div>
-                        </div>
+                        <EarningsColumnSkeleton dayIndex={dayIndex} />
                       ) : (
                         sections.map((section) => (
-                          <div key={section.key} className="rounded-md border border-wolf-border/40 bg-wolf-black/35 p-2.5">
+                          <div key={section.key} className="rounded-lg bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/35 p-2.5">
                             <div className="flex items-center justify-between mb-2">
                               <p className="text-[11px] font-medium text-snow-peak inline-flex items-center gap-1.5">
                                 <section.icon className="h-3.5 w-3.5 text-mist" />
@@ -1650,7 +1645,7 @@ export default function EarningsPage() {
                               <p className="text-xs text-mist/70">No reports</p>
                             ) : (
                               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-2">
-                                {section.items.map((item) => {
+                                {section.items.map((item, itemIndex) => {
                                   const isSelected = selectedTicker === item.ticker && isPanelOpen;
                                   const isInWatchlist = allWatchlistTickerSet.has(item.ticker);
 
@@ -1659,11 +1654,22 @@ export default function EarningsPage() {
                                       type="button"
                                       key={`${item.ticker}-${item.date.toISOString()}-${section.key}`}
                                       onClick={() => { void handleSelectTicker(item.ticker); }}
-                                      className={
+                                      // Chips arrive after their column, reading
+                                      // left-to-right. Capped so a long day does
+                                      // not leave its tail hanging.
+                                      style={{ "--enter-delay": `${dayIndex * 40 + Math.min(itemIndex * 30, 240)}ms` } as React.CSSProperties}
+                                      className={cn(
+                                        "insight-enter",
+                                        "flex min-h-[78px] w-full cursor-pointer justify-center gap-2 rounded-xl p-2 text-center",
+                                        "ring-1 ring-inset transition-[background-color,box-shadow,transform] duration-150 ease-out",
+                                        // Acknowledgement on pointer-down — the
+                                        // only feedback touch ever gets here.
+                                        "active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                                        "motion-reduce:transition-none motion-reduce:active:scale-100",
                                         isSelected
-                                          ? "rounded-md border border-sunset-orange/60 bg-wolf-surface/90 p-2 min-h-[78px] w-full gap-3 flex justify-center text-center"
-                                          : "rounded-md border border-wolf-border/45 bg-wolf-surface/90 p-2 min-h-[78px] w-full gap-2 flex justify-center text-center hover:border-sunset-orange/30 transition-colors"
-                                      }
+                                          ? "bg-sunset-orange/10 ring-sunset-orange/45"
+                                          : "bg-snow-peak/[0.04] ring-wolf-border/40 hover:bg-snow-peak/[0.07] hover:ring-wolf-border/70"
+                                      )}
                                       aria-label={`Open ${item.ticker} earnings quick view`}
                                     >
                                       <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
@@ -1714,11 +1720,63 @@ export default function EarningsPage() {
 
       {isPanelOpen && selectedItem ? (
         <div className="2xl:hidden fixed inset-0 z-40 backdrop-blur-[5px]">
-          <div className="absolute bg-wolf-black inset-y-0 right-0 w-full max-w-[480px] bg-midnight-rock border-l border-wolf-border/45 overflow-y-auto">
+          {/* Carried two competing background classes, and `bg-midnight-rock`
+              was never a real token — Midnight Rock is the design system's name
+              for wolf-surface, so it generated no CSS and the panel fell back to
+              the page colour. A sheet floating over content should read as a
+              nearer plane, so it takes the surface colour and a bright left edge
+              rather than being the same black as what it covers. */}
+          <div className="absolute inset-y-0 right-0 w-full max-w-[480px] overflow-y-auto bg-wolf-surface shadow-2xl shadow-wolf-black/60 ring-1 ring-inset ring-wolf-border/50">
             {renderPanelContent()}
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Placeholder for a day column while quotes are in flight.
+ *
+ * A spinner told the user "something is happening" and nothing else; the column
+ * then snapped from a 60px box to a full grid of chips. This holds the column's
+ * real silhouette instead — section header, count badge, a grid of chip-shaped
+ * ghosts — so the layout is already settled when the data lands and only the
+ * content changes. The shimmer delays cascade the same way the real chips do.
+ */
+function EarningsColumnSkeleton({ dayIndex }: { dayIndex: number }) {
+  return (
+    <div className="space-y-2" role="status" aria-label="Loading earnings for this day">
+      {[0, 1].map((sectionIndex) => (
+        <div
+          key={sectionIndex}
+          className="rounded-lg bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/35 p-2.5"
+        >
+          <div className="mb-2 flex items-center justify-between">
+            <div className="huntr-skeleton h-3 w-20 rounded-full" />
+            <div className="huntr-skeleton h-5 w-5 rounded-md" />
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-2">
+            {[0, 1].map((chipIndex) => (
+              <div
+                key={chipIndex}
+                className="flex min-h-[78px] w-full flex-col items-center justify-center gap-1.5 rounded-xl bg-snow-peak/[0.02] p-2 ring-1 ring-inset ring-wolf-border/30"
+              >
+                <div
+                  className="huntr-skeleton h-8 w-8 rounded-[6px] sm:h-10 sm:w-10"
+                  style={
+                    {
+                      "--shimmer-delay": `${dayIndex * 90 + (sectionIndex * 2 + chipIndex) * 120}ms`,
+                    } as React.CSSProperties
+                  }
+                />
+                <div className="huntr-skeleton h-2.5 w-9 rounded-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

@@ -1,14 +1,19 @@
 "use client";
 
+import type { ReactNode } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 interface SegmentedTabsProps<T extends string> {
-  items: ReadonlyArray<{ key: T; label: string }>;
+  items: ReadonlyArray<{ key: T; label: string; icon?: ReactNode }>;
   value: T;
   onChange: (key: T) => void;
   ariaLabel: string;
   className?: string;
+  /** Greys the whole control and blocks selection while its data is missing. */
+  disabled?: boolean;
+  /** Tightens padding for controls that sit inside a card rather than a page header. */
+  size?: "md" | "sm";
 }
 
 /**
@@ -27,6 +32,8 @@ export function SegmentedTabs<T extends string>({
   onChange,
   ariaLabel,
   className,
+  disabled = false,
+  size = "md",
 }: SegmentedTabsProps<T>) {
   const listRef = useRef<HTMLDivElement | null>(null);
   const [indicator, setIndicator] = useState({ x: 0, width: 0, ready: false });
@@ -81,7 +88,10 @@ export function SegmentedTabs<T extends string>({
       role="tablist"
       aria-label={ariaLabel}
       className={cn(
-        "relative inline-flex items-center gap-0.5 rounded-xl border border-wolf-border/40 bg-wolf-black/40 p-1",
+        // A well, deliberately darker than the card: the indicator is the
+        // raised thing sitting in it, and raised reads lighter.
+        "relative inline-flex items-center gap-0.5 rounded-xl bg-wolf-black/40 p-1 ring-1 ring-inset ring-wolf-border/40",
+        disabled && "cursor-not-allowed opacity-40",
         className
       )}
     >
@@ -109,18 +119,25 @@ export function SegmentedTabs<T extends string>({
             role="tab"
             aria-selected={isActive}
             data-active={isActive}
+            disabled={disabled}
             onClick={() => onChange(item.key)}
             className={cn(
-              "relative z-10 min-h-9 shrink-0 cursor-pointer whitespace-nowrap rounded-lg px-3.5 text-[13px] font-medium",
+              "relative z-10 shrink-0 cursor-pointer whitespace-nowrap rounded-lg font-medium",
+              size === "sm"
+                ? "min-h-8 px-3 text-xs"
+                : "min-h-9 px-3.5 text-[13px] sm:min-h-8",
               // Feedback lands on pointer-down, not on navigation.
               "transition-[color,transform] duration-150 ease-out active:scale-[0.97]",
               "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
               "motion-reduce:transition-none motion-reduce:active:scale-100",
-              "sm:min-h-8",
+              disabled && "cursor-not-allowed",
               isActive ? "text-sunset-orange" : "text-mist hover:text-snow-peak"
             )}
           >
-            {item.label}
+            <span className="inline-flex items-center justify-center gap-1.5">
+              {item.icon}
+              {item.label}
+            </span>
           </button>
         );
       })}

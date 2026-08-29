@@ -14,6 +14,7 @@ import {
   YAxis,
 } from "recharts";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import { cn, formatCompactNumber } from "@/lib/utils";
 import type { DCFResult } from "@/lib/calculations/dcf";
 
@@ -101,7 +102,7 @@ export function DCFFCFChart({ result, baseRevenue, baseFCF }: DCFFCFChartProps) 
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <p className="text-[11px] text-mist uppercase tracking-wider font-medium">
+        <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
           Projected Free Cash Flow
         </p>
         <ExpandChartDialog title="Projected Free Cash Flow">
@@ -132,32 +133,37 @@ function FCFBreakdownChart({
   height: number;
   horizonChanges: Array<{ label: string; change: number }>;
 }) {
+  const c = useChartColors();
   const yValues = data.flatMap((item) => [item.fcf, item.pvFcf]);
   const yDomain = getRoundedYAxisDomain(yValues);
-  const chartHeight = horizonChanges.length > 0 ? Math.max(140, height - 38) : height;
 
   return (
-    // minHeight, not height: the horizon chips wrap to two lines on a phone and
-    // a fixed box pushed them outside the card border.
+    // The chips used to sit *inside* the fixed-height box that also held a
+    // 100%-height ResponsiveContainer, so the container ate the whole box and
+    // the chips were pushed out through the bottom of the card. They are a
+    // sibling now: a flex column gives the chart whatever is left after the
+    // chips take their natural height, so the two can never total more than
+    // the box. The cap in vh keeps the expanded chart inside a short viewport
+    // rather than running off the end of the dialog.
     <div
-      className="rounded-xl border border-wolf-border/30 bg-wolf-black/20 p-2 m-2"
-      style={{ minHeight: height + height / 20 }}
+      className="m-2 flex flex-col rounded-xl bg-snow-peak/[0.02] p-2 ring-1 ring-inset ring-wolf-border/30"
+      style={{ height: `min(${height}px, 62vh)` }}
     >
-      <div style={{ height: chartHeight }}>
+      <div className="min-h-0 flex-1">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 10, right: 14, left: 8, bottom: 4 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="rgba(125, 139, 153, 0.16)" />
+          <CartesianGrid strokeDasharray="3 3" stroke={c.grid} strokeOpacity={0.35} />
           <XAxis
             dataKey="period"
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#9fb0bf", fontSize: 11 }}
+            tick={{ fill: c.tick, fontSize: 11 }}
             interval={0}
           />
           <YAxis
             axisLine={false}
             tickLine={false}
-            tick={{ fill: "#9fb0bf", fontSize: 11 }}
+            tick={{ fill: c.tick, fontSize: 11 }}
             domain={yDomain}
             tickFormatter={(v: number) => {
               const compact = formatCompactNumber(Math.abs(v));
@@ -180,10 +186,10 @@ function FCFBreakdownChart({
               return (
                 // Recharts keeps the tooltip inside the chart box, so a 210px
                 // card swallowed a phone-width chart whole.
-                <div className="min-w-[136px] rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-2.5 shadow-xl sm:min-w-[210px] sm:p-3">
+                <div className="min-w-[136px] rounded-xl bg-wolf-black/95 p-2.5 shadow-xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur-sm sm:min-w-[210px] sm:p-3">
                   <p className="text-sm font-semibold text-snow-peak mb-2">{label}</p>
 
-                  <p className="text-[11px] text-emerald-300 font-mono">
+                  <p className="text-[11px] text-bullish font-mono">
                     Free Cash Flow: {formatShortCurrency(row.fcf)}
                   </p>
                   <p className="text-[11px] text-snow-peak font-mono">
@@ -191,8 +197,8 @@ function FCFBreakdownChart({
                   </p>
                   <p className={
                     changeVsBase >= 0
-                      ? "text-[11px] text-emerald-300 font-mono"
-                      : "text-[11px] text-rose-300 font-mono"
+                      ? "text-[11px] text-bullish font-mono"
+                      : "text-[11px] text-bearish font-mono"
                   }>
                     Vs Base: {changeVsBase >= 0 ? "+" : ""}{(changeVsBase * 100).toFixed(1)}%
                   </p>
@@ -200,32 +206,52 @@ function FCFBreakdownChart({
               );
             }}
           />
-          <ReferenceLine y={0} stroke="rgba(248, 250, 252, 0.35)" strokeDasharray="2 4" />
+          <ReferenceLine y={0} stroke={c.tick} strokeOpacity={0.4} strokeDasharray="2 4" />
+          {/* Eleven bars at full saturation shouted the loudest thing on the
+              card, and what they shout is only "positive" — which the axis
+              already says. They are the projection, the assumption you fed in;
+              the orange line is the discounted answer you came for. Dropping
+              the fill to a wash puts the figure back in front of the ground.
+              A negative year keeps more weight because it is the exception and
+              genuinely wants to be noticed. */}
           <Bar dataKey="fcf" radius={[6, 6, 0, 0]}>
-            {data.map((item) => (
-              <Cell
-                key={`fcf-${item.period}`}
-                fill={item.fcf >= 0 ? "#10b981" : "#ef4444"}
-              />
-            ))}
+            {data.map((item) => {
+              const negative = item.fcf < 0;
+              return (
+                <Cell
+                  key={`fcf-${item.period}`}
+                  fill={negative ? c.bearish : c.bullish}
+                  fillOpacity={negative ? 0.42 : 0.26}
+                />
+              );
+            })}
           </Bar>
-          <Line dataKey="pvFcf" type="monotone" stroke="#f8fafc" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 4 }} />
+          <Line
+            dataKey="pvFcf"
+            type="monotone"
+            stroke={c.primary}
+            strokeWidth={2.5}
+            dot={{ r: 2 }}
+            activeDot={{ r: 4, stroke: c.dotStroke, strokeWidth: 2 }}
+          />
           </ComposedChart>
         </ResponsiveContainer>
-        {/* One row, always. Wrapping is what pushed these out of the card, so
-            they share the width evenly and shed padding instead of folding. */}
-        {horizonChanges.length > 0 ? (
-        <div className="mt-1 flex w-full flex-nowrap items-center justify-center gap-1 sm:gap-2">
+      </div>
+
+      {/* One row, always. Wrapping is what pushed these out of the card, so
+          they share the width evenly and shed padding instead of folding. */}
+      {horizonChanges.length > 0 ? (
+        <div className="mt-2 flex w-full shrink-0 flex-nowrap items-center justify-center gap-1 sm:gap-2">
           {horizonChanges.map((item) => {
             const positive = item.change >= 0;
             return (
               <span
                 key={item.label}
                 className={cn(
-                  "inline-flex min-w-0 flex-1 items-center justify-center gap-1 rounded-md border px-1 py-1 font-mono text-[10px] whitespace-nowrap sm:px-2.5 sm:text-xs",
+                  "inline-flex min-w-0 flex-1 items-center justify-center gap-1 whitespace-nowrap rounded-lg px-1 py-1 font-mono text-[10px] tabular-nums sm:px-2.5 sm:text-xs",
                   positive
-                    ? "border-emerald-400/20 bg-emerald-500/15 text-emerald-300"
-                    : "border-rose-400/20 bg-rose-500/15 text-rose-300"
+                    ? "bg-bullish/15 text-bullish ring-1 ring-inset ring-bullish/25"
+                    : "bg-bearish/15 text-bearish ring-1 ring-inset ring-bearish/25"
                 )}
               >
                 {item.label}: {item.change > 0 ? "+" : ""}{(item.change * 100).toFixed(1)}%
@@ -234,15 +260,14 @@ function FCFBreakdownChart({
           })}
         </div>
       ) : null}
-      </div>
     </div>
   );
 }
 
 function InfoTile({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-md border border-wolf-border/35 bg-midnight-rock/25 px-3 py-2">
-      <p className="text-[10px] uppercase tracking-wider text-mist font-medium">{label}</p>
+    <div className="rounded-lg bg-snow-peak/[0.025] px-3 py-2 ring-1 ring-inset ring-wolf-border/35">
+      <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">{label}</p>
       <p className="mt-0.5 text-sm font-mono font-semibold text-snow-peak">{value}</p>
     </div>
   );

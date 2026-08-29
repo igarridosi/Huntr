@@ -28,6 +28,10 @@ export interface ChartColors {
   primary: string;
   /** Neutral/muted series color — used for estimate/projection bars */
   neutral: string;
+  /** Positive series color — matches the --color-bullish token in both themes */
+  bullish: string;
+  /** Negative series color — matches the --color-bearish token in both themes */
+  bearish: string;
 }
 
 export function useChartColors(): ChartColors {
@@ -43,6 +47,12 @@ export function useChartColors(): ChartColors {
     tooltipBorder: isLight ? "#D0DBDF" : "#2A3B40",
     chartBg:       isLight ? "#F4F7F8" : "#081317",
     primary:       isLight ? "#C85D14" : "#FF8C42",
+    // Charts were hardcoding a third green (#4DC990) that matched neither the
+    // bullish token nor its light-theme variant, so a series and the figure it
+    // illustrated could disagree on colour. These mirror --color-bullish /
+    // --color-bearish in both themes.
+    bullish:       isLight ? "#097A4E" : "#34D399",
+    bearish:       isLight ? "#CC1A1A" : "#FF4242",
     neutral:       isLight ? "#8FAAB3" : "#4E6E78",
   };
 }

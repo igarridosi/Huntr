@@ -70,7 +70,7 @@ export function DCFMonteCarlo({
       </div>
 
       {/* Histogram */}
-      <div className="relative rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-4">
+      <div className="relative rounded-xl bg-snow-peak/[0.025] p-4 ring-1 ring-inset ring-wolf-border/35">
         <div className="flex items-end gap-px h-[140px]">
           {histogram.map((bucket, i) => {
             const height =
@@ -90,7 +90,7 @@ export function DCFMonteCarlo({
                     isPriceInBucket
                       ? "bg-golden-hour"
                       : isAbovePrice
-                        ? "bg-[#4DC990]/70"
+                        ? "bg-bullish/70"
                         : "bg-bearish/50",
                     "group-hover:opacity-80"
                   )}
@@ -99,7 +99,7 @@ export function DCFMonteCarlo({
                 {/* Tooltip */}
                 {/* group-active covers touch: the value shows while the finger
                     is held on the bar, since there is no hover to rely on. */}
-                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-wolf-border bg-wolf-black px-2 py-1 font-mono text-[9px] text-snow-peak opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100">
+                <div className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-wolf-black/95 px-2 py-1 font-mono text-[9px] ring-1 ring-inset ring-wolf-border/70 backdrop-blur-sm text-snow-peak opacity-0 transition-opacity group-hover:opacity-100 group-active:opacity-100">
                   {formatCurrency(bucket.mid, { decimals: 0 })} ({bucket.count})
                 </div>
               </div>
@@ -121,7 +121,7 @@ export function DCFMonteCarlo({
               className="absolute top-4 bottom-4 w-px bg-golden-hour/60 z-10"
               style={{ left: `calc(${pos}% + 16px)` }}
             >
-              <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 px-1.5 py-0.5 text-[8px] font-mono text-golden-hour bg-wolf-black/90 border border-golden-hour/30 rounded whitespace-nowrap">
+              <div className="absolute -top-0.5 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-wolf-black/90 px-1.5 py-0.5 font-mono text-[8px] text-golden-hour ring-1 ring-inset ring-golden-hour/30">
                 Price
               </div>
             </div>
@@ -130,9 +130,9 @@ export function DCFMonteCarlo({
       </div>
 
       {/* Bottom Summary */}
-      <div className="flex items-center justify-between rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3">
+      <div className="flex items-center justify-between rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
         <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-[#4DC990]" />
+          <TrendingUp className="w-4 h-4 text-bullish" />
           <span className="text-[11px] text-mist">
             Probability above current price
           </span>
@@ -146,8 +146,8 @@ export function DCFMonteCarlo({
       </div>
 
       {/* Confidence Interval */}
-      <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3 space-y-2">
-        <p className="text-[10px] text-mist uppercase tracking-wider font-medium">
+      <div className="space-y-2 rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
+        <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
           Confidence Intervals
         </p>
         <div className="space-y-1.5">
@@ -190,8 +190,8 @@ function StatBox({
   dim?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-2 text-center">
-      <p className="text-[9px] text-mist uppercase tracking-wider font-medium">
+    <div className="rounded-xl bg-snow-peak/[0.025] p-2 text-center ring-1 ring-inset ring-wolf-border/35">
+      <p className="text-[9px] font-medium uppercase tracking-[0.09em] text-mist/60">
         {label}
       </p>
       <p
@@ -231,7 +231,7 @@ function ConfidenceBar({
         {label}
       </span>
       <div className="flex-1 h-2 rounded-full bg-wolf-border/30 relative overflow-visible">
-        <div className="absolute inset-y-0 rounded-full bg-gradient-to-r from-[#4DC990]/40 to-[#4DC990]/20" style={{ left: '0%', right: '0%' }} />
+        <div className="absolute inset-y-0 rounded-full bg-gradient-to-r from-bullish/40 to-bullish/20" style={{ left: '0%', right: '0%' }} />
         {currentPos >= 0 && currentPos <= 100 && (
           <div
             className="absolute top-1/2 -translate-y-1/2 w-1.5 h-3 rounded-sm bg-golden-hour"

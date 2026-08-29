@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { ROUTES } from "@/lib/constants";
-import { formatPercent } from "@/lib/utils";
+import { enterDelay, formatPercent } from "@/lib/utils";
 import type { WatchlistEntry } from "@/types/watchlist";
 
 interface HeatmapViewProps {
@@ -46,15 +46,17 @@ export function HeatmapView({ entries, performanceData }: HeatmapViewProps) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-2 auto-rows-[84px]">
-        {enriched.map(({ entry, dayChange }) => {
+        {enriched.map(({ entry, dayChange }, tileIndex) => {
           const isPositive = dayChange >= 0;
 
         return (
           <Link
             key={entry.ticker}
             href={ROUTES.SYMBOL(entry.ticker)}
-            className="rounded-lg border border-wolf-border/35 p-3 hover:border-wolf-border/70 transition-colors"
-            style={getHeatBgStyle(dayChange)}
+            className="insight-enter rounded-lg p-3 ring-1 ring-inset ring-wolf-border/35 transition-[box-shadow,transform] duration-150 ease-out hover:ring-wolf-border/70 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
+            // The heat tint is an inline style, so the entrance delay has to
+            // ride alongside it rather than replace it.
+            style={{ ...getHeatBgStyle(dayChange), ...enterDelay(Math.min(tileIndex * 20, 200)) }}
           >
             <div className="flex items-center gap-2 mb-2">
               <TickerLogo

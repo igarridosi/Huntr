@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import { type ClassValue, clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -72,4 +73,16 @@ export function formatNumber(
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
   }).format(value);
+}
+
+/**
+ * The stagger step for an `.insight-enter` entrance, as an inline custom
+ * property.
+ *
+ * Callers cap their own delays: a list wants its tail to arrive while the head
+ * is still settling, not to queue behind it, so the step stays small and the
+ * total is bounded rather than growing with the number of items.
+ */
+export function enterDelay(ms: number): CSSProperties {
+  return { "--enter-delay": `${ms}ms` } as CSSProperties;
 }

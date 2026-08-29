@@ -14,7 +14,9 @@ import {
   Cell,
 } from "recharts";
 import { useBatchDailyHistory } from "@/hooks/use-stock-data";
+import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { useChartColors } from "@/hooks/use-chart-colors";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatPercent, cn } from "@/lib/utils";
 
@@ -30,6 +32,32 @@ type DipMode =
   | "sma50"
   | "sma100"
   | "sma200";
+
+// Declared once, outside the component: the menu measures its own rows, and a
+// fresh array every render would make it rebuild them for nothing.
+const DIP_MODE_GROUPS: ReadonlyArray<SelectMenuGroup<DipMode>> = [
+  {
+    label: "Price Change",
+    options: [
+      { value: "today", label: "Today" },
+      { value: "5d", label: "5 Days" },
+      { value: "1m", label: "1 Month" },
+      { value: "3m", label: "3 Months" },
+      { value: "6m", label: "6 Months" },
+      { value: "ytd", label: "YTD" },
+      { value: "1y", label: "1 Year" },
+    ],
+  },
+  {
+    label: "SMA Deviation",
+    options: [
+      { value: "sma10", label: "SMA 10" },
+      { value: "sma50", label: "SMA 50" },
+      { value: "sma100", label: "SMA 100" },
+      { value: "sma200", label: "SMA 200" },
+    ],
+  },
+];
 
 interface DipItem {
   ticker: string;
@@ -107,6 +135,7 @@ export function DipFinderPanel({
 }) {
   const [mode, setMode] = useState<DipMode>("sma50");
   const c = useChartColors();
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const tickers = useMemo(
     () => Array.from(new Set(items.map((item) => item.ticker.toUpperCase()).filter(Boolean))),
@@ -169,35 +198,21 @@ export function DipFinderPanel({
   }, [mode]);
 
   return (
-    <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_28px_rgba(0,0,0,0.2)]">
+    <Card className="insight-enter">
       <CardHeader className="pb-2">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <CardTitle className="text-sm flex items-center gap-2">
             <SearchAlert className="w-4 h-4 text-sunset-orange" /> {title}
           </CardTitle>
-          <select
+          <SelectMenu
+            groups={DIP_MODE_GROUPS}
             value={mode}
-            onChange={(e) => setMode(e.target.value as DipMode)}
-            className="h-8 rounded-md border border-wolf-border/50 bg-wolf-black/70 px-2.5 text-xs text-snow-peak"
-          >
-            <optgroup label="Price Change">
-              <option value="today">Today</option>
-              <option value="5d">5 Days</option>
-              <option value="1m">1 Month</option>
-              <option value="3m">3 Months</option>
-              <option value="6m">6 Months</option>
-              <option value="ytd">YTD</option>
-              <option value="1y">1 Year</option>
-            </optgroup>
-            <optgroup label="SMA Deviation">
-              <option value="sma10">SMA 10</option>
-              <option value="sma50">SMA 50</option>
-              <option value="sma100">SMA 100</option>
-              <option value="sma200">SMA 200</option>
-            </optgroup>
-          </select>
+            onChange={setMode}
+            ariaLabel="Dip baseline"
+            className="w-auto"
+          />
         </div>
-        <p className="text-xs text-mist mt-1">{subtitle}</p>
+        <p className="mt-1 text-[11px] text-mist/80">{subtitle}</p>
       </CardHeader>
       <CardContent>
         <div className="h-[320px]">
@@ -207,7 +222,15 @@ export function DipFinderPanel({
             <div className="h-full grid place-items-center text-xs text-mist">Not enough data to compute dip metrics.</div>
           ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={rows} margin={{ top: 6, right: 8, left: 0, bottom: 20 }}>
+              {/* Keyed on the baseline: changing it recomputes every bar and
+                  re-sorts the whole ranking, so letting Recharts tween one
+                  ticker's bar into another's would animate a comparison that
+                  never existed. Rebuilt instead, and the bars grow back up. */}
+              <BarChart
+                key={mode}
+                data={rows}
+                margin={{ top: 6, right: 8, left: 0, bottom: 20 }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke={c.grid} strokeOpacity={0.32} vertical={false} />
                 <XAxis
                   dataKey="ticker"
@@ -238,8 +261,20 @@ export function DipFinderPanel({
                     fontSize: 13,
                     fontWeight: "bold",
                   }}
+                  // Recharts colours the label from contentStyle but leaves each
+                  // item on its own default, which is black - invisible against
+                  // a near-black tooltip. Both now take the same colour, so the
+                  // figure reads exactly like the ticker above it.
+                  labelStyle={{ color: c.tick }}
+                  itemStyle={{ color: c.tick }}
                 />
-                <Bar dataKey="percent" radius={[4, 4, 0, 0]}>
+                <Bar
+                  dataKey="percent"
+                  radius={[4, 4, 0, 0]}
+                  isAnimationActive={!prefersReducedMotion}
+                  animationDuration={prefersReducedMotion ? 0 : 460}
+                  animationEasing="ease-out"
+                >
                   {rows.map((row) => (
                     <Cell
                       key={`dip-${row.ticker}`}
@@ -252,7 +287,9 @@ export function DipFinderPanel({
           )}
         </div>
 
-        <p className={cn("mt-2 text-[11px] text-mist/80")}>Formula: ((Current Price - Baseline) / Baseline) x 100</p>
+        <p className={cn("mt-2 text-[10px] uppercase tracking-[0.06em] text-mist/50")}>
+          Formula: ((Current Price - Baseline) / Baseline) x 100
+        </p>
       </CardContent>
     </Card>
   );

@@ -100,7 +100,7 @@ export function EPSMultipleModel({
                 <div className="flex justify-between items-center gap-3">
                     <DCFTickerInput value={queryTicker} onSelect={onTickerSelect} />
                     {canAutoFill && (
-                    <Button size="sm" onClick={onAutoFill} className="w-[10vw]">
+                    <Button size="sm" onClick={onAutoFill} className="shrink-0">
                         <Zap className="w-3.5 h-3.5 mr-1.5" />
                         Auto-Fill
                     </Button>
@@ -178,8 +178,8 @@ export function EPSMultipleModel({
               onChange={(v) => onChange({ ...inputs, targetReturn: v / 100 })}
             />
 
-            <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3">
-              <p className="text-[10px] text-mist uppercase tracking-wider font-medium mb-1.5">
+            <div className="rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
+              <p className="mb-1.5 text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
                 Formula
               </p>
               <p className="text-xs text-mist leading-relaxed">
@@ -192,46 +192,49 @@ export function EPSMultipleModel({
       </div>
 
       <div className="lg:col-span-8 space-y-6">
-        <Card>
+        <Card className="insight-enter" style={{ "--enter-delay": "0ms" } as React.CSSProperties}>
           <CardHeader className="pb-3">
             <CardTitle className="text-sm">EPS Multiple Output</CardTitle>
           </CardHeader>
           <CardContent>
+            {/* Same verdict surface as the DCF model. Two models answering the
+                same question should look identical when they agree, so the user
+                is comparing numbers and not decoding two visual languages. */}
             <div
               className={cn(
-                "relative overflow-hidden rounded-xl border p-5",
+                "relative overflow-hidden rounded-2xl p-5 ring-1 ring-inset",
                 isUndervalued
-                  ? "border-[#4DC990]/30 bg-gradient-to-br from-[#4DC990]/5 to-transparent"
-                  : "border-bearish/30 bg-gradient-to-br from-bearish/5 to-transparent"
+                  ? "bg-bullish/[0.06] ring-bullish/25"
+                  : "bg-bearish/[0.06] ring-bearish/25"
               )}
             >
-              <div className="absolute top-3 right-3">
+              <div className="absolute right-3 top-3">
                 <Badge
                   variant={isUndervalued ? "bullish" : "bearish"}
-                  className="text-xs font-mono"
+                  className="font-mono text-[10px]"
                 >
                   {isUndervalued ? "UNDERVALUED" : "OVERVALUED"}
                 </Badge>
               </div>
 
-              <p className="text-[11px] text-mist uppercase tracking-wider font-medium mb-1">
-                Intrinsic Value - {ticker || "STOCK"}
+              <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/70">
+                Intrinsic value · {ticker || "STOCK"}
               </p>
-              <p className="text-3xl font-mono font-black text-snow-peak tabular-nums tracking-tight">
+              <p className="mt-1.5 font-mono text-3xl font-semibold tabular-nums tracking-[-0.03em] text-snow-peak">
                 {formatCurrency(intrinsicValue)}
               </p>
 
-              <div className="flex items-center gap-3 mt-3">
+              <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
                 <div className="flex items-center gap-1.5">
                   {isUndervalued ? (
-                    <TrendingUp className="w-4 h-4 text-[#4DC990]" />
+                    <TrendingUp className="h-4 w-4 text-bullish" />
                   ) : (
-                    <TrendingDown className="w-4 h-4 text-bearish" />
+                    <TrendingDown className="h-4 w-4 text-bearish" />
                   )}
                   <span
                     className={cn(
-                      "text-sm font-mono font-bold",
-                      isUndervalued ? "text-[#4DC990]" : "text-bearish"
+                      "font-mono text-sm font-semibold tabular-nums",
+                      isUndervalued ? "text-bullish" : "text-bearish"
                     )}
                   >
                     {upside > 0 ? "+" : ""}
@@ -246,31 +249,31 @@ export function EPSMultipleModel({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="insight-enter" style={{ "--enter-delay": "60ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Calculation Results</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3">
-                <p className="text-[10px] text-mist uppercase tracking-wider font-medium">
+              <div className="rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
+                <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
                   Annual return from today&apos;s price
                 </p>
                 <p
                   className={cn(
-                    "text-lg font-mono font-bold mt-1",
-                    projectedAnnualReturnFromToday >= 0 ? "text-[#4DC990]" : "text-bearish"
+                    "mt-1 font-mono text-lg font-semibold tabular-nums tracking-[-0.02em]",
+                    projectedAnnualReturnFromToday >= 0 ? "text-bullish" : "text-bearish"
                   )}
                 >
                   {projectedAnnualReturnFromToday > 0 ? "+" : ""}
                   {formatPercent(projectedAnnualReturnFromToday, 2)}
                 </p>
               </div>
-              <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3">
-                <p className="text-[10px] text-mist uppercase tracking-wider font-medium">
+              <div className="rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
+                <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
                   Entry price for {formatPercent(inputs.targetReturn, 0)} return
                 </p>
-                <p className="text-lg font-mono font-bold mt-1 text-snow-peak">
+                <p className="mt-1 font-mono text-lg font-semibold tabular-nums tracking-[-0.02em] text-snow-peak">
                   {formatCurrency(entryPriceForTargetReturn)}
                 </p>
               </div>
@@ -278,7 +281,7 @@ export function EPSMultipleModel({
 
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] text-mist uppercase tracking-wider font-medium">
+                <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
                   5Y Projected Price Path
                 </p>
                 <ExpandChartDialog title="5Y Projected Price Path">
@@ -290,7 +293,7 @@ export function EPSMultipleModel({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="insight-enter" style={{ "--enter-delay": "120ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm">Simple Projection Breakdown</CardTitle>
           </CardHeader>
@@ -322,14 +325,10 @@ export function EPSMultipleModel({
           </CardContent>
         </Card>
 
-        <Card>
-          <CardContent className="py-4">
-            <div className="flex items-center gap-2 text-mist text-xs">
-              <Calculator className="w-4 h-4 text-sunset-orange" />
-              Modeled with a fixed {DEFAULT_HORIZON_YEARS}-year horizon for quick decision making.
-            </div>
-          </CardContent>
-        </Card>
+        <p className="flex items-center gap-2 px-1 text-xs text-mist/70">
+          <Calculator className="h-3.5 w-3.5 shrink-0 text-sunset-orange/70" />
+          Modeled with a fixed {DEFAULT_HORIZON_YEARS}-year horizon for quick decision making.
+        </p>
       </div>
     </div>
   );
@@ -367,13 +366,13 @@ function ProjectionLineChart({
           }
         />
         <Tooltip
-          cursor={{ stroke: "#4DC990", strokeOpacity: 0.35, strokeWidth: 1 }}
+          cursor={{ stroke: c.bullish, strokeOpacity: 0.35, strokeWidth: 1 }}
           content={({ active, payload, label }) => {
             if (!active || !payload || payload.length === 0) return null;
             const value = Number(payload[0]?.value ?? 0);
             return (
-              <div className="rounded-md border border-wolf-border bg-wolf-surface px-2.5 py-2 shadow-xl">
-                <p className="text-[10px] text-mist mb-0.5">{label}</p>
+              <div className="rounded-xl bg-wolf-surface/95 px-2.5 py-2 shadow-xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur-sm">
+                <p className="mb-0.5 text-[10px] text-mist">{label}</p>
                 <p className="text-xs font-mono text-snow-peak">
                   Projected Price: {formatCurrency(value)}
                 </p>
@@ -384,10 +383,10 @@ function ProjectionLineChart({
         <Line
           type="monotone"
           dataKey="projectedPrice"
-          stroke="#4DC990"
+          stroke={c.bullish}
           strokeWidth={2.5}
-          dot={{ r: 4, fill: "#4DC990", stroke: c.dotStroke, strokeWidth: 2 }}
-          activeDot={{ r: 5, fill: "#4DC990", stroke: c.dotStroke, strokeWidth: 2 }}
+          dot={{ r: 4, fill: c.bullish, stroke: c.dotStroke, strokeWidth: 2 }}
+          activeDot={{ r: 5, fill: c.bullish, stroke: c.dotStroke, strokeWidth: 2 }}
         />
       </LineChart>
     </ResponsiveContainer>
@@ -413,20 +412,32 @@ function SimpleInput({
   max?: number;
   suffix?: string;
 }) {
+  const safeValue = Number.isFinite(value) ? value : 0;
+  // Mirror the bounds the range input itself falls back to, so the painted
+  // track and the handle always agree. Computing only for explicitly bounded
+  // inputs left EPS and target PE with an empty track under a handle that was
+  // plainly somewhere in the middle.
+  const rangeMin = min ?? 0;
+  const rangeMax = max ?? 100;
+  const fillPercent =
+    rangeMax > rangeMin
+      ? Math.min(100, Math.max(0, ((safeValue - rangeMin) / (rangeMax - rangeMin)) * 100))
+      : 0;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
-        <Label className="text-[11px] text-mist uppercase tracking-wider font-medium">
+        <Label className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/70">
           {label}
         </Label>
-        <span className="text-xs font-mono text-snow-peak tabular-nums">
+        <span className="font-mono text-xs font-semibold tabular-nums tracking-[-0.01em] text-snow-peak">
           {value.toLocaleString(undefined, { maximumFractionDigits: 2 })}
           {suffix ? ` ${suffix}` : ""}
         </span>
       </div>
       <Input
         type="number"
-        value={Number.isFinite(value) ? value : 0}
+        value={safeValue}
         step={step}
         min={min}
         max={max}
@@ -435,24 +446,14 @@ function SimpleInput({
       />
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
-        value={Number.isFinite(value) ? value : 0}
+        value={safeValue}
         onChange={(e) => onChange(parseFloat(e.target.value || "0"))}
-        className={cn(
-          "w-full h-1.5 rounded-full appearance-none cursor-pointer",
-          "bg-wolf-border/60",
-          "[&::-webkit-slider-thumb]:appearance-none",
-          "[&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5",
-          "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-sunset-orange",
-          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-snow-peak",
-          "[&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,140,66,0.4)]",
-          "[&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5",
-          "[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-sunset-orange",
-          "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-snow-peak",
-          "[&::-moz-range-track]:bg-wolf-border/60 [&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full"
-        )}
+        style={{ "--range-fill": `${fillPercent}%` } as React.CSSProperties}
+        className="huntr-range"
       />
       <p className="text-[10px] text-mist/70">{helper}</p>
     </div>
@@ -469,8 +470,8 @@ function Metric({
   strong?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3">
-      <p className="text-[10px] text-mist uppercase tracking-wider font-medium">{label}</p>
+    <div className="rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
+      <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">{label}</p>
       <p className={cn("text-sm font-mono mt-1", strong ? "text-sunset-orange font-bold" : "text-snow-peak")}>
         {value}
       </p>

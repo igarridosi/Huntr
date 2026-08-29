@@ -88,17 +88,21 @@ export function PositionDecisionEngine({ inputs, result }: PositionDecisionEngin
     };
   }, [mc.probabilityAbovePrice, result, stressSnapshot.worstCase]);
 
+  // Four rungs of one scale, so they read as one scale: the same bullish hue
+  // twice at different strengths for Buy and Strong Buy, then the caution and
+  // the warning. Raw emerald/rose here meant the verdict badge disagreed with
+  // every chart on the page about what "good" looks like.
   const signalClass =
     decision.signal === "Strong Buy"
-      ? "text-emerald-300 bg-emerald-500/15 border-emerald-400/30"
+      ? "text-bullish bg-bullish/15 ring-bullish/30"
       : decision.signal === "Buy"
-        ? "text-emerald-200 bg-emerald-600/10 border-emerald-500/25"
+        ? "text-bullish/90 bg-bullish/10 ring-bullish/20"
         : decision.signal === "Watch"
-          ? "text-golden-hour bg-golden-hour/10 border-golden-hour/30"
-          : "text-rose-300 bg-rose-500/15 border-rose-400/30";
+          ? "text-golden-hour bg-golden-hour/10 ring-golden-hour/30"
+          : "text-bearish bg-bearish/15 ring-bearish/30";
 
   return (
-    <div className="space-y-4 rounded-xl border border-wolf-border/35 bg-gradient-to-br from-wolf-black/45 to-wolf-black/20 p-4">
+    <div className="insight-enter space-y-4 rounded-xl bg-snow-peak/[0.025] p-4 ring-1 ring-inset ring-wolf-border/35">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-wolf-border/25 pb-3">
         <div className="flex items-center gap-2">
           {decision.signal === "Avoid" ? (
@@ -108,7 +112,7 @@ export function PositionDecisionEngine({ inputs, result }: PositionDecisionEngin
           )}
           <span className="text-sm font-semibold text-snow-peak">Position Decision Engine</span>
         </div>
-        <Badge className={cn("border text-xs font-mono", signalClass)}>{decision.signal}</Badge>
+        <Badge className={cn("border-transparent font-mono text-xs ring-1 ring-inset", signalClass)}>{decision.signal}</Badge>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
@@ -142,7 +146,7 @@ export function PositionDecisionEngine({ inputs, result }: PositionDecisionEngin
         />
       </div>
 
-      <div className="rounded-lg border border-wolf-border/30 bg-midnight-rock/40 p-3 text-xs text-mist leading-relaxed">
+      <div className="rounded-xl bg-snow-peak/[0.05] p-3 text-xs leading-relaxed text-mist ring-1 ring-inset ring-wolf-border/35">
         Suggested size and entries are scenario-aware: upside, Monte Carlo hit-rate, stress-tested valuation floor, and terminal value concentration are combined into a single conviction framework.
       </div>
     </div>
@@ -161,8 +165,8 @@ function EngineMetric({
   icon?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-wolf-border/35 bg-midnight-rock/30 p-3 space-y-1">
-      <p className="text-[10px] text-mist uppercase tracking-wider font-medium">{label}</p>
+    <div className="space-y-1 rounded-xl bg-snow-peak/[0.05] p-3 ring-1 ring-inset ring-wolf-border/35">
+      <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">{label}</p>
       <div className="flex items-center gap-1.5">
         {icon ? <span className="text-mist">{icon}</span> : null}
         <p className={cn("text-sm font-mono font-bold", accent ?? "text-snow-peak")}>{value}</p>
@@ -186,13 +190,13 @@ function DecisionBox({
 }) {
   const toneClass =
     tone === "teal"
-      ? "border-white/25 bg-white/8 text-golden-hour"
+      ? "ring-bullish/30 bg-bullish/[0.07] text-bullish"
       : tone === "amber"
-        ? "border-golden-hour/30 bg-golden-hour/8 text-golden-hour"
-        : "border-rose-400/30 bg-rose-500/8 text-rose-200";
+        ? "ring-golden-hour/30 bg-golden-hour/[0.07] text-golden-hour"
+        : "ring-bearish/30 bg-bearish/[0.07] text-bearish";
 
   return (
-    <div className={cn("rounded-lg border bg-midnight-rock/30 p-3", toneClass)}>
+    <div className={cn("rounded-lg p-3 ring-1 ring-inset", toneClass)}>
       <div className="flex items-center gap-1.5 text-xs font-medium">
         <span>{icon}</span>
         <span>{title}</span>
