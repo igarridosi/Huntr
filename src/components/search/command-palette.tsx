@@ -13,7 +13,6 @@ import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { fetchStockProfile, fetchStockQuote, fetchFullStockData } from "@/app/actions/stock";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { CompactLabel } from "@/components/ui/compact-label";
-import { Skeleton } from "@/components/ui/skeleton";
 
 interface CommandPaletteProps {
   open: boolean;
@@ -142,13 +141,13 @@ export function CommandPalette({
       <div ref={paletteRef} className="relative z-50 w-full max-w-xl mx-4">
         <Command
           className={cn(
-            "rounded-xl bg-wolf-surface border border-wolf-border shadow-2xl overflow-hidden",
-            "[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-xs [&_[cmdk-group-heading]]:font-semibold [&_[cmdk-group-heading]]:text-mist/60 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-widest"
+            "popover-materialize origin-top overflow-hidden rounded-xl bg-wolf-surface shadow-2xl ring-1 ring-inset ring-wolf-border/60",
+            "[&_[cmdk-group-heading]]:px-3 [&_[cmdk-group-heading]]:py-2 [&_[cmdk-group-heading]]:text-[10px] [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-[0.09em] [&_[cmdk-group-heading]]:text-mist/50"
           )}
           shouldFilter={false}
         >
           {/* Search Input */}
-          <div className="flex items-center border-b border-wolf-border/50 px-4">
+          <div className="flex items-center border-b border-wolf-border/40 px-4">
             <Search className="w-4 h-4 shrink-0 text-mist/60" />
             <Command.Input
               ref={inputRef}
@@ -161,13 +160,13 @@ export function CommandPalette({
                 "font-medium"
               )}
             />
-            <kbd className="hidden sm:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono text-mist/40 bg-wolf-black/30 rounded border border-wolf-border/30">
+            <kbd className="hidden items-center rounded-md bg-snow-peak/[0.05] px-1.5 py-0.5 font-mono text-[10px] text-mist/50 ring-1 ring-inset ring-wolf-border/40 sm:inline-flex">
               ESC
             </kbd>
           </div>
 
           {/* Results */}
-          <Command.List className="max-h-[320px] overflow-y-auto p-2">
+          <Command.List className="scroll-quiet max-h-[320px] overflow-y-auto p-2">
             <Command.Empty className="py-6">
               <SearchEmptySkeleton isFetching={isFetching} query={query} />
             </Command.Empty>
@@ -182,10 +181,11 @@ export function CommandPalette({
                     onMouseEnter={() => prefetchTicker(entry.ticker)}
                     onFocus={() => prefetchTicker(entry.ticker)}
                     className={cn(
-                      "flex items-center gap-3 px-3 py-3 rounded-lg cursor-pointer",
-                      "text-snow-peak transition-colors duration-150",
+                      "flex cursor-pointer items-center gap-3 rounded-lg px-3 py-3",
+                      "text-snow-peak transition-[background-color,color,transform] duration-150 ease-out",
+                      "active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100",
                       "data-[selected=true]:bg-sunset-orange/10 data-[selected=true]:text-sunset-orange",
-                      "hover:bg-wolf-black/30 aria-selected:bg-sunset-orange/10"
+                      "hover:bg-snow-peak/[0.05] aria-selected:bg-sunset-orange/10"
                     )}
                   >
                     {/* Ticker logo */}
@@ -203,7 +203,7 @@ export function CommandPalette({
                         <span className="font-bold text-base font-mono tracking-tight">
                           {entry.ticker}
                         </span>
-                        <span className="shrink-0 text-[11px] text-mist/70 px-1.5 py-0.5 bg-wolf-black/30 rounded">
+                        <span className="shrink-0 rounded-md bg-snow-peak/[0.05] px-1.5 py-0.5 text-[11px] text-mist/70">
                           {entry.sector}
                         </span>
                       </div>
@@ -221,14 +221,14 @@ export function CommandPalette({
           </Command.List>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-4 py-2 border-t border-wolf-border/30 text-[10px] text-mist/40 font-mono">
+          <div className="flex items-center justify-between border-t border-wolf-border/40 px-4 py-2 font-mono text-[10px] text-mist/40">
             <span>
-              <kbd className="px-1 py-0.5 bg-wolf-black/30 rounded border border-wolf-border/30 mr-1">↑↓</kbd>
+              <kbd className="mr-1 rounded bg-snow-peak/[0.05] px-1 py-0.5 ring-1 ring-inset ring-wolf-border/40">↑↓</kbd>
               navigate
-              <kbd className="px-1 py-0.5 bg-wolf-black/30 rounded border border-wolf-border/30 mx-1">↵</kbd>
+              <kbd className="mx-1 rounded bg-snow-peak/[0.05] px-1 py-0.5 ring-1 ring-inset ring-wolf-border/40">↵</kbd>
               select
             </span>
-            <span>{results.length} result{results.length !== 1 ? "s" : ""}</span>
+            <span className="tabular-nums">{results.length} result{results.length !== 1 ? "s" : ""}</span>
           </div>
         </Command>
       </div>
@@ -237,6 +237,20 @@ export function CommandPalette({
   );
 }
 
+/**
+ * What fills the results area before the results do.
+ *
+ * The old version showed two grey bars that matched nothing, a line of text,
+ * and three dots pulsing on a 2s cycle - slow enough to read as the page
+ * having stalled rather than as work in progress. And when the results landed
+ * the box jumped from that shape to a completely different one.
+ *
+ * These placeholders are the real row: the same 48px logo, the same two lines
+ * of text at the same sizes. So the panel is already the right shape when the
+ * data arrives and only the content changes. The shimmer is the activity
+ * signal on its own, which lets the dots go - one moving thing rather than
+ * three competing ones.
+ */
 function SearchEmptySkeleton({
   isFetching,
   query,
@@ -248,7 +262,7 @@ function SearchEmptySkeleton({
 
   if (!isFetching) {
     return (
-      <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/20 px-4 py-5 text-center">
+      <div className="rounded-xl bg-snow-peak/[0.02] px-4 py-5 text-center ring-1 ring-inset ring-wolf-border/40">
         <p className="text-sm text-mist/80">
           {hasQuery
             ? "We couldn't find that stock. Try another ticker symbol or name."
@@ -259,36 +273,46 @@ function SearchEmptySkeleton({
   }
 
   return (
-    <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/20 px-4 py-4">
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 rounded-lg border border-wolf-border/30 bg-wolf-black/25 px-3 py-2.5">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <div className="flex-1">
-            <Skeleton className="h-3 w-28" />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 rounded-lg border border-wolf-border/30 bg-wolf-black/25 px-3 py-2.5">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <div className="flex-1">
-            <Skeleton className="h-3 w-24" />
-          </div>
-        </div>
-      </div>
-
-      <p className="mt-3 text-center text-[11px] text-mist/70">
-        Searching symbols...
-      </p>
-
-      <div className="mt-2.5 flex items-center justify-center gap-1.5">
-        {[0, 1, 2].map((index) => (
-          <span
-            key={index}
-            className="h-1.5 w-1.5 rounded-full bg-sunset-orange/70 animate-pulse"
-            style={{ animationDelay: `${index * 140}ms` }}
+    <div
+      className="rounded-xl bg-snow-peak/[0.02] p-2 ring-1 ring-inset ring-wolf-border/40"
+      role="status"
+      aria-label="Searching symbols"
+    >
+      {[0, 1, 2].map((index) => (
+        <div key={index} className="flex items-center gap-3 rounded-lg px-3 py-3">
+          <div
+            className="huntr-skeleton h-12 w-12 shrink-0 rounded-[8px]"
+            style={{ "--shimmer-delay": `${index * 120}ms` } as React.CSSProperties}
           />
-        ))}
-      </div>
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center gap-2">
+              <div
+                className="huntr-skeleton h-4 w-16 rounded"
+                style={{ "--shimmer-delay": `${index * 120 + 60}ms` } as React.CSSProperties}
+              />
+              <div
+                className="huntr-skeleton h-4 w-20 rounded"
+                style={{ "--shimmer-delay": `${index * 120 + 90}ms` } as React.CSSProperties}
+              />
+            </div>
+            {/* Rows shorten as they descend, so the block reads as a list
+                trailing off rather than as three identical bars. */}
+            <div
+              className="huntr-skeleton h-3.5 rounded"
+              style={
+                {
+                  width: `${70 - index * 12}%`,
+                  "--shimmer-delay": `${index * 120 + 120}ms`,
+                } as React.CSSProperties
+              }
+            />
+          </div>
+        </div>
+      ))}
+
+      <p className="pb-1 pt-2 text-center text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
+        Searching symbols
+      </p>
     </div>
   );
 }
