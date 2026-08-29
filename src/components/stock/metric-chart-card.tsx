@@ -17,6 +17,7 @@ import {
 import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
 import { useChartColors } from "@/hooks/use-chart-colors";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { Badge } from "@/components/ui/badge";
 import { cn, formatPercent } from "@/lib/utils";
 
@@ -118,21 +119,33 @@ export function MetricChartCard({
   );
   const compareQuarterlySeries = compareQuarterlyData ?? compareAnnualSeries;
 
+  // Offered ranges come from the full annual series, not the filtered one, so
+  // the buttons do not shrink as a narrower range is picked.
+  const yearRangeOptions = useMemo(
+    () => availableYearRanges(seriesSpanInYears(annualSeries)),
+    [annualSeries]
+  );
+  // The requested default can outrun the history - clamp to the widest option
+  // this stock actually has.
+  const effectiveYearRange = yearRangeOptions.includes(yearRange)
+    ? yearRange
+    : yearRangeOptions[yearRangeOptions.length - 1];
+
   const annualFiltered = useMemo(
-    () => filterSeriesByYearRange(annualSeries, yearRange),
-    [annualSeries, yearRange]
+    () => filterSeriesByYearRange(annualSeries, effectiveYearRange),
+    [annualSeries, effectiveYearRange]
   );
   const quarterlyFiltered = useMemo(
-    () => filterSeriesByYearRange(quarterlySeries, yearRange),
-    [quarterlySeries, yearRange]
+    () => filterSeriesByYearRange(quarterlySeries, effectiveYearRange),
+    [quarterlySeries, effectiveYearRange]
   );
   const compareAnnualFiltered = useMemo(
-    () => filterSeriesByYearRange(compareAnnualSeries, yearRange),
-    [compareAnnualSeries, yearRange]
+    () => filterSeriesByYearRange(compareAnnualSeries, effectiveYearRange),
+    [compareAnnualSeries, effectiveYearRange]
   );
   const compareQuarterlyFiltered = useMemo(
-    () => filterSeriesByYearRange(compareQuarterlySeries, yearRange),
-    [compareQuarterlySeries, yearRange]
+    () => filterSeriesByYearRange(compareQuarterlySeries, effectiveYearRange),
+    [compareQuarterlySeries, effectiveYearRange]
   );
 
   const dialogData = useMemo(
@@ -161,7 +174,8 @@ export function MetricChartCard({
         {growth !== undefined && growth !== null && (
           <Badge
             variant={growth >= 0 ? "bullish" : "bearish"}
-            className="text-[10px] font-mono px-1.5 py-0 leading-4 shrink-0"
+            className="shrink-0 px-1.5 py-0 font-mono text-[10px] leading-4 tabular-nums"
+            title="Change across the visible window"
           >
             {growth >= 0 ? "↑" : "↓"} {formatPercent(Math.abs(growth), 1)}
           </Badge>
@@ -171,17 +185,19 @@ export function MetricChartCard({
             title={title}
             headerRight={
               <div className="flex items-center gap-2">
-                <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
-                  {([5, 10, 15, 20] as const).map((years) => (
+                <div className="inline-flex h-8 items-center rounded-xl bg-snow-peak/[0.04] p-0.5 ring-1 ring-inset ring-wolf-border/50">
+                  {yearRangeOptions.map((years) => (
                     <button
                       key={years}
                       type="button"
                       onClick={() => setYearRange(years)}
                       className={cn(
-                        "px-2.5 py-1 text-xs font-medium rounded-lg transition-all duration-150",
-                        yearRange === years
-                          ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                          : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
+                        "rounded-lg px-2.5 py-1 text-xs font-medium tabular-nums",
+                        "transition-[background-color,color,transform] duration-150 ease-out",
+                        "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
+                        effectiveYearRange === years
+                          ? "bg-sunset-orange/15 text-sunset-orange"
+                          : "text-mist hover:bg-snow-peak/[0.06] hover:text-snow-peak"
                       )}
                     >
                       {years}Y
@@ -189,50 +205,42 @@ export function MetricChartCard({
                   ))}
                 </div>
 
-                <div className="inline-flex items-center rounded-xl bg-wolf-black/60 border border-wolf-border/60 p-0.5 h-8 shadow-sm">
-                  <button
-                    type="button"
-                    onClick={() => setDialogPeriod("annual")}
-                    className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-lg transition-all duration-150",
-                      dialogPeriod === "annual"
-                        ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                        : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
-                    )}
-                  >
-                    Annual
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDialogPeriod("quarterly")}
-                    className={cn(
-                      "px-3 py-1 text-xs font-medium rounded-lg transition-all duration-150",
-                      dialogPeriod === "quarterly"
-                        ? "bg-sunset-orange/18 text-sunset-orange border border-sunset-orange/25 shadow-sm"
-                        : "text-mist hover:text-snow-peak hover:bg-wolf-border/30"
-                    )}
-                  >
-                    Quarterly
-                  </button>
+                <div className="inline-flex h-8 items-center rounded-xl bg-snow-peak/[0.04] p-0.5 ring-1 ring-inset ring-wolf-border/50">
+                  {(["annual", "quarterly"] as const).map((period) => (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => setDialogPeriod(period)}
+                      className={cn(
+                        "rounded-lg px-3 py-1 text-xs font-medium capitalize",
+                        "transition-[background-color,color,transform] duration-150 ease-out",
+                        "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
+                        dialogPeriod === period
+                          ? "bg-sunset-orange/15 text-sunset-orange"
+                          : "text-mist hover:bg-snow-peak/[0.06] hover:text-snow-peak"
+                      )}
+                    >
+                      {period}
+                    </button>
+                  ))}
                 </div>
               </div>
             }
-            footer={shouldShowPerformanceFooter ? (
-              <div className="flex items-center justify-center gap-2 flex-wrap">
+            footer={shouldShowPerformanceFooter && performance.length > 0 ? (
+              <div className="flex flex-wrap items-center justify-center gap-2">
                 {performance.map((item) => (
-                  <Badge
+                  <span
                     key={item.label}
-                    variant={
-                      item.value === null
-                        ? "secondary"
-                        : item.value >= 0
-                          ? "bullish"
-                          : "bearish"
-                    }
-                    className="text-xs font-mono px-2 py-0.5 h-7"
+                    className={cn(
+                      "inline-flex h-7 items-center rounded-lg px-2.5 font-mono text-xs tabular-nums",
+                      "ring-1 ring-inset",
+                      item.value >= 0
+                        ? "bg-bullish/12 text-bullish ring-bullish/25"
+                        : "bg-bearish/12 text-bearish ring-bearish/25"
+                    )}
                   >
-                    {item.label}: {item.value === null ? "N/A" : formatPercent(item.value, 1)}
-                  </Badge>
+                    {item.label}: {formatPercent(item.value, 1)}
+                  </span>
                 ))}
               </div>
             ) : null}
@@ -315,6 +323,31 @@ function MetricChartRender({
   gradientId,
 }: MetricChartRenderProps) {
   const c = useChartColors();
+  const prefersReducedMotion = usePrefersReducedMotion();
+
+  // Switching range or granularity replaces the series outright. Left alone,
+  // Recharts tweens old bar to new bar by position, so flipping annual to
+  // quarterly slides 2019's bar into Q3's - two unrelated figures - and reads
+  // as the data warping rather than being replaced. Remounting on a key built
+  // from the window itself makes every switch a clean rebuild from the
+  // baseline: the bars grow back up in place, which is legible as "this is a
+  // different set of numbers". It also makes the motion interruption-proof,
+  // because a rapid second switch discards the first tree mid-flight instead
+  // of queueing behind it.
+  const seriesKey = useMemo(
+    () =>
+      [
+        data.length,
+        data[0]?.period ?? "",
+        data[data.length - 1]?.period ?? "",
+      ].join("|"),
+    [data]
+  );
+
+  // Long enough to read as growth, short enough that it never delays reading
+  // the chart. Recharts' own default is 1500ms, which feels like waiting.
+  const animationDuration = prefersReducedMotion ? 0 : 460;
+
   const yDomain = useMemo<[number, number]>(() => {
     return computeYAxisDomain({
       data,
@@ -357,6 +390,7 @@ function MetricChartRender({
     <ResponsiveContainer width="100%" height="100%">
       {type === "bar" ? (
         <RechartsBarChart
+          key={seriesKey}
           data={mergedSeries ?? data}
           margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
           barCategoryGap="8%"
@@ -403,6 +437,9 @@ function MetricChartRender({
             radius={[3, 3, 0, 0]}
             minPointSize={2}
             activeBar={{ fill: color, fillOpacity: 0.85 }}
+            isAnimationActive={!prefersReducedMotion}
+            animationDuration={animationDuration}
+            animationEasing="ease-out"
           />
           {mergedSeries ? (
             <Bar
@@ -412,11 +449,18 @@ function MetricChartRender({
               radius={[3, 3, 0, 0]}
               minPointSize={2}
               activeBar={{ fill: compareColor, fillOpacity: 0.9 }}
+              isAnimationActive={!prefersReducedMotion}
+              animationDuration={animationDuration}
+              // The paired series trails its partner by a beat, so a debt/net
+              // debt card reads as two series rather than one thick bar.
+              animationBegin={prefersReducedMotion ? 0 : 90}
+              animationEasing="ease-out"
             />
           ) : null}
         </RechartsBarChart>
       ) : (
         <RechartsAreaChart
+          key={seriesKey}
           data={data}
           margin={{ top: 4, right: 4, left: 0, bottom: 0 }}
         >
@@ -477,6 +521,9 @@ function MetricChartRender({
               stroke: c.dotStroke,
               strokeWidth: 2,
             }}
+            isAnimationActive={!prefersReducedMotion}
+            animationDuration={animationDuration}
+            animationEasing="ease-out"
           />
         </RechartsAreaChart>
       )}
@@ -533,23 +580,63 @@ function calculateChange(
   if (data.length < lookbackPoints || lookbackPoints < 2) return null;
   const start = data[data.length - lookbackPoints]?.value;
   const end = data[data.length - 1]?.value;
-  if (start === undefined || end === undefined || start <= 0) return null;
-  return (end - start) / start;
+  if (start === undefined || end === undefined || start === 0) return null;
+  // |start|, so a window that opens in the red reads as a recovery rather than
+  // an inverted collapse. A zero base is genuinely undefined and stays out.
+  return (end - start) / Math.abs(start);
 }
 
+/**
+ * Change over each lookback window the loaded series can actually answer.
+ *
+ * Every window used to be emitted whether or not there was history behind it,
+ * so a Yahoo series - four years deep at best - produced a row that was mostly
+ * "N/A", and so did any company too young to have a 10Y record no matter which
+ * provider it came from. A window with no data behind it is not a result, so
+ * it is dropped rather than rendered as an absence: what remains is exactly
+ * what this stock, on this data source, can support.
+ */
 function buildPerformanceBadges(
   data: MetricChartCardData[],
   period: ChartPeriodFilter
 ) {
-  const yearWindows = [1, 3, 5, 10, 15] as const;
+  const yearWindows = [1, 3, 5, 10, 15, 20] as const;
 
-  return yearWindows.map((years) => {
+  return yearWindows.flatMap((years) => {
     const lookbackPoints = period === "quarterly" ? years * 4 + 1 : years + 1;
-    return {
-      label: `${years}Y`,
-      value: calculateChange(data, lookbackPoints),
-    };
+    const value = calculateChange(data, lookbackPoints);
+    return value === null ? [] : [{ label: `${years}Y`, value }];
   });
+}
+
+/**
+ * How many years of history a series actually holds, from its own timestamps.
+ *
+ * Drives which range buttons are worth offering: a stock that listed four
+ * years ago has nothing to show behind a 20Y button, and neither does a
+ * provider that only returns four annual periods.
+ */
+function seriesSpanInYears(rows: MetricChartCardData[]): number {
+  const times = rows
+    .map((row) => (row.date ? new Date(row.date).getTime() : NaN))
+    .filter((time) => Number.isFinite(time));
+
+  if (times.length < 2) return rows.length;
+
+  const span = Math.max(...times) - Math.min(...times);
+  return span / (365.25 * 24 * 60 * 60 * 1000);
+}
+
+/**
+ * The range options worth showing: every step the history reaches, plus the
+ * first one that covers all of it, so there is always a way to see everything.
+ */
+function availableYearRanges(spanYears: number): YearRangeFilter[] {
+  const all: YearRangeFilter[] = [5, 10, 15, 20];
+  const shown = all.filter((years) => years < spanYears);
+  const next = all.find((years) => years >= spanYears);
+  if (next) shown.push(next);
+  return shown.length ? shown : [all[0]];
 }
 
 function computeYAxisDomain({

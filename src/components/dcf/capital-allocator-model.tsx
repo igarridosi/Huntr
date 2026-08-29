@@ -15,6 +15,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useChartColors } from "@/hooks/use-chart-colors";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
 import { TickerLogo } from "@/components/ui/ticker-logo";
@@ -73,20 +74,31 @@ function formatShortCurrency(value: number): string {
   return `${sign}$${abs.toFixed(2)}`;
 }
 
+/**
+ * Colour for one sensitivity cell, keyed to how far its implied value sits
+ * from today's price.
+ *
+ * The scale used raw emerald/rose at full saturation, which put a wall of
+ * flat colour next to charts painted in the bullish/bearish tokens — the same
+ * fact in two different colours. These are the tokens, graded by opacity so
+ * intensity carries the magnitude and hue carries only the direction. The
+ * steps match the legend swatches under the grid; change one and you must
+ * change the other or the legend starts lying.
+ */
 function getHeatmapColor(cellValue: number, currentPrice: number): string {
-  if (currentPrice <= 0 || cellValue <= 0) return "bg-wolf-black/50 text-gray-100";
+  if (currentPrice <= 0 || cellValue <= 0) return "bg-snow-peak/[0.03] text-mist";
 
   const delta = (cellValue - currentPrice) / currentPrice;
 
   if (delta > 0) {
-    if (delta > 0.3) return "bg-emerald-600 text-gray-100";
-    if (delta >= 0.1) return "bg-emerald-700 text-gray-100";
-    return "bg-emerald-900 text-gray-100";
+    if (delta > 0.3) return "bg-bullish/55 text-snow-peak";
+    if (delta >= 0.1) return "bg-bullish/32 text-snow-peak";
+    return "bg-bullish/16 text-snow-peak/90";
   }
 
   const downside = Math.abs(delta);
-  if (downside > 0.2) return "bg-rose-700 text-gray-100";
-  return "bg-rose-900 text-gray-100";
+  if (downside > 0.2) return "bg-bearish/55 text-snow-peak";
+  return "bg-bearish/24 text-snow-peak/90";
 }
 
 function getRoundedYAxisDomain(values: number[]): [number, number] {
@@ -138,6 +150,7 @@ export function CapitalAllocatorModel({
   wacc,
   onWaccChange,
 }: CapitalAllocatorModelProps) {
+  const chartColors = useChartColors();
   const projections = useMemo<CapitalProjectionPoint[]>(() => {
     if (baseRevenue <= 0) return [];
 
@@ -286,7 +299,7 @@ export function CapitalAllocatorModel({
                 <div className="flex justify-between items-center gap-3">
                   <DCFTickerInput value={queryTicker} onSelect={onTickerSelect} />
                   {canAutoFill && (
-                    <Button size="sm" onClick={onAutoFill} className="w-[10vw] min-w-[110px]">
+                    <Button size="sm" onClick={onAutoFill} className="shrink-0">
                       <Zap className="w-3.5 h-3.5 mr-1.5" />
                       Auto-Fill
                     </Button>
@@ -319,15 +332,18 @@ export function CapitalAllocatorModel({
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-2 rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-1">
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-wolf-black/40 p-1 ring-1 ring-inset ring-wolf-border/40">
                 <button
                   type="button"
                   onClick={() => onProjectionYearsChange(5)}
                   className={cn(
-                    "h-8 rounded-md text-xs font-medium border transition-colors",
+                    "h-8 cursor-pointer rounded-lg text-xs font-medium",
+                    "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                    "active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                    "motion-reduce:transition-none motion-reduce:active:scale-100",
                     projectionYears === 5
-                      ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
-                      : "text-mist border-transparent hover:text-snow-peak hover:bg-wolf-surface/70"
+                      ? "bg-sunset-orange/12 text-sunset-orange ring-1 ring-inset ring-sunset-orange/25"
+                      : "text-mist hover:bg-snow-peak/[0.05] hover:text-snow-peak"
                   )}
                 >
                   5Y
@@ -336,10 +352,13 @@ export function CapitalAllocatorModel({
                   type="button"
                   onClick={() => onProjectionYearsChange(10)}
                   className={cn(
-                    "h-8 rounded-md text-xs font-medium border transition-colors",
+                    "h-8 cursor-pointer rounded-lg text-xs font-medium",
+                    "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                    "active:scale-[0.96] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                    "motion-reduce:transition-none motion-reduce:active:scale-100",
                     projectionYears === 10
-                      ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
-                      : "text-mist border-transparent hover:text-snow-peak hover:bg-wolf-surface/70"
+                      ? "bg-sunset-orange/12 text-sunset-orange ring-1 ring-inset ring-sunset-orange/25"
+                      : "text-mist hover:bg-snow-peak/[0.05] hover:text-snow-peak"
                   )}
                 >
                   10Y
@@ -383,8 +402,8 @@ export function CapitalAllocatorModel({
                 onChange={onWaccChange}
               />
 
-              <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-3 space-y-1.5">
-                <p className="text-[10px] text-mist uppercase tracking-wider font-medium">Capital Allocation Logic</p>
+              <div className="space-y-1.5 rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
+                <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">Capital Allocation Logic</p>
                 <p className="text-xs text-mist leading-relaxed">
                   Revenue grows at {formatPercent(revenueGrowthRate, 1)}. OCF enters as positive cash, CapEx exits as negative cash, and Net FCF drives discounted intrinsic value.
                 </p>
@@ -395,7 +414,7 @@ export function CapitalAllocatorModel({
       </div>
 
       <div className="lg:col-span-8 space-y-6">
-        <Card>
+        <Card className="insight-enter" style={{ "--enter-delay": "0ms" } as React.CSSProperties}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -420,7 +439,7 @@ export function CapitalAllocatorModel({
                 label="Upside vs Price"
                 tooltip="Percentage difference between intrinsic value and the current market price."
                 value={`${upside >= 0 ? "+" : ""}${formatPercent(upside, 1)}`}
-                accent={upside >= 0 ? "text-emerald-400" : "text-rose-400"}
+                accent={upside >= 0 ? "text-bullish" : "text-bearish"}
               />
               <MetricCard
                 label="Enterprise Value"
@@ -438,7 +457,7 @@ export function CapitalAllocatorModel({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="insight-enter" style={{ "--enter-delay": "60ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-sm flex items-center gap-2">
@@ -474,18 +493,18 @@ export function CapitalAllocatorModel({
                           const row = payload[0]?.payload as { ocf: number; fcf: number; capex: number };
 
                           return (
-                            <div className="rounded-xl border border-wolf-border/60 bg-wolf-black/95 p-3 shadow-xl">
+                            <div className="rounded-xl bg-wolf-black/95 p-3 shadow-xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur-sm">
                               <p className="text-sm font-semibold text-snow-peak mb-2">{label}</p>
-                              <p className="text-[11px] text-emerald-300 font-mono">OCF: {formatShortCurrency(row.ocf)}</p>
+                              <p className="font-mono text-[11px] text-bullish">OCF: {formatShortCurrency(row.ocf)}</p>
                               <p className="text-[11px] text-snow-peak font-mono">FCF: {formatShortCurrency(row.fcf)}</p>
-                              <p className="text-[11px] text-rose-300 font-mono">CapEx: {formatShortCurrency(Math.abs(row.capex))}</p>
+                              <p className="font-mono text-[11px] text-bearish">CapEx: {formatShortCurrency(Math.abs(row.capex))}</p>
                             </div>
                           );
                         }}
                       />
                       <ReferenceLine y={0} stroke="rgba(248, 250, 252, 0.35)" strokeDasharray="2 4" />
-                      <Bar dataKey="ocf" fill="#10b981" radius={[6, 6, 0, 0]} />
-                      <Bar dataKey="capex" fill="#ef4444" radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="ocf" fill={chartColors.bullish} radius={[6, 6, 0, 0]} />
+                      <Bar dataKey="capex" fill={chartColors.bearish} radius={[6, 6, 0, 0]} />
                       <Line dataKey="fcf" type="monotone" stroke="#f8fafc" strokeWidth={3} dot={{ r: 2 }} activeDot={{ r: 4 }} />
                     </ComposedChart>
                   </ResponsiveContainer>
@@ -500,8 +519,8 @@ export function CapitalAllocatorModel({
                           key={item.label}
                           className={
                             positive
-                              ? "inline-flex items-center gap-1 rounded-md border border-emerald-400/20 bg-emerald-500/15 px-2.5 py-1 text-xs font-mono text-emerald-300"
-                              : "inline-flex items-center gap-1 rounded-md border border-rose-400/20 bg-rose-500/15 px-2.5 py-1 text-xs font-mono text-rose-300"
+                              ? "inline-flex items-center gap-1 rounded-lg bg-bullish/15 px-2.5 py-1 font-mono text-xs tabular-nums text-bullish ring-1 ring-inset ring-bullish/25"
+                              : "inline-flex items-center gap-1 rounded-lg bg-bearish/15 px-2.5 py-1 font-mono text-xs tabular-nums text-bearish ring-1 ring-inset ring-bearish/25"
                           }
                         >
                           {item.label}: {item.change > 0 ? "+" : ""}{(item.change * 100).toFixed(1)}%
@@ -511,21 +530,21 @@ export function CapitalAllocatorModel({
                   </div>
                 ) : null}
 
-                <div className="rounded-lg border border-wolf-border/35 bg-wolf-black/35 p-3">
+                <div className="rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
                   <p className="text-xs text-mist leading-relaxed">
                     As CapEx Margin increases, capital expenditures compress the Operating Cash Flow, directly impacting the Net FCF line and intrinsic valuation.
                   </p>
                 </div>
               </>
             ) : (
-              <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/40 p-8 text-center">
+              <div className="rounded-xl bg-snow-peak/[0.02] p-8 text-center ring-1 ring-inset ring-wolf-border/30">
                 <p className="text-sm text-mist">Select a ticker and click Auto-Fill to activate the interactive valuation engine.</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="insight-enter" style={{ "--enter-delay": "120ms" } as React.CSSProperties}>
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between gap-3">
               <CardTitle className="text-sm flex items-center gap-1.5">
@@ -539,7 +558,7 @@ export function CapitalAllocatorModel({
               <table className="min-w-full border-separate border-spacing-1">
                 <thead>
                   <tr>
-                    <th className="px-4 py-3 text-[10px] uppercase tracking-wider text-mist font-medium text-left">WACC \ CapEx</th>
+                    <th className="px-4 py-3 text-left text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">WACC \ CapEx</th>
                     {capexScenarios.map((scenarioCapex, colIndex) => (
                       <th key={`capex-${colIndex}`} className="px-2 py-2 text-[11px] font-mono text-mist text-center whitespace-nowrap">
                         {formatPercent(scenarioCapex, 1)}
@@ -575,9 +594,9 @@ export function CapitalAllocatorModel({
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-[11px] text-mist">
-              <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-emerald-700" /> Undervalued</span>
-              <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-rose-700" /> Overvalued</span>
-              <span className="inline-flex items-center gap-1.5"><span className="w-3 h-3 rounded border border-orange-500" /> Base Case</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-bullish/55" /> Undervalued</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-bearish/55" /> Overvalued</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-sunset-orange" /> Base Case</span>
               <span className="font-mono">Base cell: {formatCurrency(centralValue)}</span>
               <span className="font-mono">Spread: {formatCurrency(valueSpread)}</span>
             </div>
@@ -605,34 +624,32 @@ function SliderField({
   step: number;
   onChange: (value: number) => void;
 }) {
+  const fillPercent =
+    max > min
+      ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100))
+      : 0;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <p className="text-[11px] text-mist uppercase tracking-wider font-medium">{label}</p>
+          <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/70">{label}</p>
           {tooltip ? <InfoHint text={tooltip} /> : null}
         </div>
-        <p className="text-xs font-mono font-bold text-snow-peak">{formatPercent(value, 1)}</p>
+        <p className="font-mono text-xs font-semibold tabular-nums tracking-[-0.01em] text-snow-peak">
+          {formatPercent(value, 1)}
+        </p>
       </div>
       <input
         type="range"
+        aria-label={label}
         min={min}
         max={max}
         step={step}
         value={value}
         onChange={(event) => onChange(parseFloat(event.target.value))}
-        className={cn(
-          "w-full h-1.5 rounded-full appearance-none cursor-pointer",
-          "bg-wolf-border/60",
-          "[&::-webkit-slider-thumb]:appearance-none",
-          "[&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5",
-          "[&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-sunset-orange",
-          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-snow-peak",
-          "[&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5",
-          "[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-sunset-orange",
-          "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-snow-peak",
-          "[&::-moz-range-track]:bg-wolf-border/60 [&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full"
-        )}
+        style={{ "--range-fill": `${fillPercent}%` } as React.CSSProperties}
+        className="huntr-range"
       />
     </div>
   );
@@ -650,12 +667,12 @@ function MetricCard({
   accent?: string;
 }) {
   return (
-    <div className="rounded-lg border border-wolf-border/30 bg-wolf-black/35 p-3">
+    <div className="rounded-xl bg-snow-peak/[0.025] p-3 ring-1 ring-inset ring-wolf-border/35">
       <div className="flex items-center gap-1.5">
-        <p className="text-[10px] text-mist uppercase tracking-wider font-medium">{label}</p>
+        <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">{label}</p>
         {tooltip ? <InfoHint text={tooltip} /> : null}
       </div>
-      <p className={cn("text-lg font-mono font-bold mt-1", accent ?? "text-snow-peak")}>{value}</p>
+      <p className={cn("mt-1 font-mono text-lg font-semibold tabular-nums tracking-[-0.02em]", accent ?? "text-snow-peak")}>{value}</p>
     </div>
   );
 }
@@ -678,7 +695,17 @@ function InfoHint({ text }: { text: string }) {
           absolute it counted toward page scroll width even while invisible. */}
       <span
         role="tooltip"
-        className="pointer-events-none fixed inset-x-4 bottom-4 z-50 rounded-md border border-wolf-border/60 bg-wolf-black/95 px-3 py-2 text-[11px] leading-relaxed text-snow-peak opacity-0 shadow-lg transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 sm:absolute sm:inset-x-auto sm:left-1/2 sm:top-full sm:bottom-auto sm:z-30 sm:mt-2 sm:w-56 sm:-translate-x-1/2 sm:px-2 sm:py-1.5 sm:text-[10px]"
+        className={cn(
+          "pointer-events-none fixed inset-x-4 bottom-4 z-50 rounded-xl bg-wolf-black/95 px-3 py-2 text-[11px] leading-relaxed text-snow-peak shadow-xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur-sm",
+          "sm:absolute sm:inset-x-auto sm:bottom-auto sm:left-1/2 sm:top-full sm:z-30 sm:mt-2 sm:w-56 sm:-translate-x-1/2 sm:px-2 sm:py-1.5 sm:text-[10px]",
+          // Grows from the icon it explains. The docked mobile variant rises
+          // from the bottom edge it is pinned to, so both read as arriving from
+          // where they belong rather than materialising mid-air.
+          "origin-bottom translate-y-1 scale-95 opacity-0 transition-[opacity,transform] duration-150 ease-settle sm:origin-top sm:-translate-y-1",
+          "group-hover:translate-y-0 group-hover:scale-100 group-hover:opacity-100",
+          "group-focus-within:translate-y-0 group-focus-within:scale-100 group-focus-within:opacity-100",
+          "motion-reduce:translate-y-0 motion-reduce:scale-100 motion-reduce:transition-opacity"
+        )}
       >
         {text}
       </span>

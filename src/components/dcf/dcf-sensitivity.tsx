@@ -48,10 +48,9 @@ export function DCFSensitivity({ inputs }: DCFSensitivityProps) {
 
   function getCellColor(value: number): string {
     if (value <= 0) return "text-mist";
-    const ratio = maxVal > minVal ? (value - minVal) / (maxVal - minVal) : 0.5;
 
-    if (value >= currentPrice * 1.15) return "text-[#4DC990]";
-    if (value >= currentPrice) return "text-[#4DC990]/70";
+    if (value >= currentPrice * 1.15) return "text-bullish";
+    if (value >= currentPrice) return "text-bullish/70";
     if (value >= currentPrice * 0.85) return "text-golden-hour";
     return "text-bearish";
   }
@@ -59,8 +58,11 @@ export function DCFSensitivity({ inputs }: DCFSensitivityProps) {
   function getCellBg(w: number, tg: number): string {
     const isCurrentWACC = Math.abs(w - wacc) < 0.001;
     const isCurrentTG = Math.abs(tg - terminalGrowthRate) < 0.001;
-    if (isCurrentWACC && isCurrentTG) return "bg-sunset-orange/15 ring-1 ring-sunset-orange/40";
-    if (isCurrentWACC || isCurrentTG) return "bg-wolf-black/30";
+    if (isCurrentWACC && isCurrentTG)
+      return "bg-sunset-orange/15 ring-1 ring-inset ring-sunset-orange/40";
+    // The row and column you are actually on should read as lifted toward you.
+    // Darkening them pushed the live case behind every cell around it.
+    if (isCurrentWACC || isCurrentTG) return "bg-snow-peak/[0.05]";
     return "";
   }
 
@@ -69,7 +71,7 @@ export function DCFSensitivity({ inputs }: DCFSensitivityProps) {
       <table className="w-full border-collapse text-center">
         <thead>
           <tr>
-            <th className="p-2 text-[9px] text-mist uppercase tracking-wider font-medium border-b border-wolf-border/30">
+            <th className="p-2 text-[9px] font-medium uppercase tracking-[0.09em] text-mist/60 border-b border-wolf-border/30">
               WACC \ TGR
             </th>
             {tgRange.map((tg) => (

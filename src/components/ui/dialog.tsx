@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 
 // ---- Dialog Context ----
@@ -86,8 +87,18 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     }, [open, setOpen, onClose]);
 
     if (!open) return null;
+    // Rendered into <body>, not in place. A `position: fixed` box is only
+    // viewport-relative while no ancestor establishes a containing block for
+    // it, and a filling transform animation does exactly that in Chrome - so
+    // any dialog opened from inside a card carrying our `insight-enter`
+    // entrance was laying its "cover the screen" overlay over the card alone.
+    // The page behind stayed undimmed and the panel centred itself on the card
+    // instead of the window, spilling off the top and bottom with no way to
+    // scroll to what was cut off. A portal puts the dialog beyond the reach of
+    // whatever the trigger happens to be nested in.
+    if (typeof document === "undefined") return null;
 
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         {/* Overlay */}
         <div
@@ -109,7 +120,8 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
         >
           {children}
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 );

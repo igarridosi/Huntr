@@ -18,7 +18,7 @@ import {
   Search,
 } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
-import { cn } from "@/lib/utils";
+import { cn, enterDelay } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
 import { TickerLogo } from "@/components/ui/ticker-logo";
@@ -90,8 +90,8 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
       {/* Drawer */}
       <div className="fixed left-0 top-0 bottom-0 w-72 bg-wolf-surface border-r border-wolf-border/50 flex flex-col animate-in slide-in-from-left">
         {/* Header */}
-        <div className="flex items-center justify-between px-4 h-14 shrink-0 border-b border-wolf-border/50">
-          <div className="flex items-center gap-2.5">
+        <div className="flex h-14 shrink-0 items-center justify-between border-b border-wolf-border/40 px-5">
+          <div className="flex min-w-0 items-center gap-3.5">
             <div className="flex items-center justify-center rounded-lg bg-[#162225] p-1">
               <Image
                 src="/logo/HunterLogoCut-removebg.png"
@@ -102,14 +102,14 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
                 priority
               />
             </div>
-            <span className="text-base font-bold tracking-tight">HUNTR</span>
+            <span className="truncate text-base font-bold tracking-tight">HUNTR</span>
           </div>
           <button
             type="button"
             onClick={onClose}
             aria-label="Close sidebar"
             title="Close sidebar"
-            className="p-1.5 rounded-md text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-colors cursor-pointer"
+            className="cursor-pointer rounded-lg p-1.5 text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100"
           >
             <X className="w-5 h-5" aria-hidden="true" />
           </button>
@@ -123,7 +123,7 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
               onClose();
               onSearchClick?.();
             }}
-            className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm text-mist hover:text-snow-peak hover:bg-wolf-black/30 border border-wolf-border/50 transition-all cursor-pointer"
+            className="flex w-full cursor-pointer items-center gap-3 rounded-lg bg-snow-peak/[0.03] px-3 py-2.5 text-sm text-mist ring-1 ring-inset ring-wolf-border/45 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak hover:ring-wolf-border/70 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
           >
             <Search className="w-4 h-4 shrink-0" />
             <span>Search tickers...</span>
@@ -131,22 +131,37 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
         </div>
 
         {/* Nav */}
-        <nav className="flex-1 px-3 py-1 overflow-y-auto">
+        <nav className="scroll-quiet flex-1 overflow-y-auto px-3 py-1">
           <div className="space-y-1">
-          {navItems.map((item) => {
+          {navItems.map((item, itemIndex) => {
             const isActive = pathname === item.href;
             return (
               <Link
                 key={item.label}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
+                style={enterDelay(itemIndex * 25)}
                 className={cn(
-                  "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
+                  "insight-enter relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium",
+                  "transition-[background-color,color,transform] duration-150 ease-out",
+                  "active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
                   isActive
-                    ? "bg-sunset-orange/10 text-sunset-orange"
-                    : "text-mist hover:text-snow-peak hover:bg-wolf-black/30"
+                    ? "bg-snow-peak/[0.05] text-snow-peak"
+                    : "text-mist hover:bg-snow-peak/[0.04] hover:text-snow-peak"
                 )}
               >
-                <item.icon className="w-4 h-4 shrink-0" />
+                {isActive ? (
+                  <span
+                    aria-hidden="true"
+                    className="absolute inset-y-2 left-0 w-[2px] rounded-full bg-sunset-orange"
+                  />
+                ) : null}
+                <item.icon
+                  className={cn(
+                    "h-4 w-4 shrink-0 transition-colors duration-150",
+                    isActive ? "text-sunset-orange" : "text-mist/80"
+                  )}
+                />
                 {item.label}
               </Link>
             );
@@ -154,7 +169,7 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
           </div>
 
           <div className="pt-4 space-y-1">
-            <p className="px-3 text-[10px] font-semibold text-mist/50 uppercase tracking-widest mb-2">
+            <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
               Recent Searches
             </p>
             {recentSearches.length > 0 ? (
@@ -164,7 +179,7 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
                   <Link
                     key={ticker}
                     href={ROUTES.SYMBOL(ticker)}
-                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all"
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.04] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                   >
                     <TickerLogo
                       ticker={ticker}
@@ -192,7 +207,7 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
             <>
               <Link
                 href={ROUTES.APP_SETTINGS}
-                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all cursor-pointer"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.04] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                 onClick={onClose}
               >
                 <Settings className="w-4 h-4 shrink-0" />
@@ -224,7 +239,7 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
               <Link
                 href={ROUTES.LOGIN}
                 onClick={onClose}
-                className="flex items-center gap-3 w-full px-3 py-2.5 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all cursor-pointer"
+                className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.04] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
               >
                 <LogIn className="w-4 h-4 shrink-0" />
                 Log in

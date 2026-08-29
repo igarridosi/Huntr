@@ -274,13 +274,32 @@ export default function OverviewPage() {
       return filterMetricRows(source);
     };
 
-    // Helper to compute growth between first and last element
+    // Change between the first and last point of the visible window.
+    //
+    // Dividing by |start| rather than start is what makes a loss-to-profit run
+    // read as a gain instead of a collapse: EBITDA going -4B to +8B is +300%,
+    // not -300%. That was already the arithmetic here, but a `start < 0` guard
+    // suppressed the badge entirely, which is why every metric that opened its
+    // window in the red - EBITDA, free cash flow, net income, EPS - showed no
+    // figure at all. A zero base stays excluded because the ratio is undefined,
+    // not merely large.
     const growth = (arr: MetricChartCardData[]): number | null => {
-      if (arr.length < 2) return null;
-      const start = arr[0].value;
-      const end = arr[arr.length - 1].value;
-      if (start === 0 || start < 0) return null;
-      return (end - start) / Math.abs(start);
+      const end = arr[arr.length - 1]?.value;
+      if (end === undefined) return null;
+
+      // The oldest row in a window is often a placeholder the provider padded
+      // with zeros rather than a period the company actually reported at zero
+      // - Yahoo returns four annual income statements while the merged series
+      // carries five points. Anchoring on it made the ratio undefined and
+      // silently dropped the badge from revenue, EBITDA, net income and EPS.
+      // So the base is the oldest point that carries a real figure. A series
+      // with nothing but zeros still has no change worth stating.
+      const base = arr.find(
+        (row) => Number.isFinite(row.value) && row.value !== 0
+      );
+      if (!base || base === arr[arr.length - 1]) return null;
+
+      return (end - base.value) / Math.abs(base.value);
     };
 
     const revenueAnnual: MetricChartCardData[] = incomeAnnual.map((is) => ({
@@ -575,25 +594,25 @@ export default function OverviewPage() {
         data: displaySeries(grossMarginAnnual, grossMarginQuarterly),
         annualData: grossMarginAnnual,
         quarterlyData: grossMarginQuarterly,
-        growth: null as number | null,
+        growth: growth(displaySeries(grossMarginAnnual, grossMarginQuarterly)),
       },
       opMargin: {
         data: displaySeries(opMarginAnnual, opMarginQuarterly),
         annualData: opMarginAnnual,
         quarterlyData: opMarginQuarterly,
-        growth: null as number | null,
+        growth: growth(displaySeries(opMarginAnnual, opMarginQuarterly)),
       },
       roic: {
         data: displaySeries(roicAnnual, roicQuarterly),
         annualData: roicAnnual,
         quarterlyData: roicQuarterly,
-        growth: null as number | null,
+        growth: growth(displaySeries(roicAnnual, roicQuarterly)),
       },
       roe: {
         data: displaySeries(roeAnnual, roeQuarterly),
         annualData: roeAnnual,
         quarterlyData: roeQuarterly,
-        growth: null as number | null,
+        growth: growth(displaySeries(roeAnnual, roeQuarterly)),
       },
       capex: {
         data: displaySeries(capexAnnual, capexQuarterly),
@@ -605,12 +624,13 @@ export default function OverviewPage() {
         data: displaySeries(interestCoverageAnnual, interestCoverageQuarterly),
         annualData: interestCoverageAnnual,
         quarterlyData: interestCoverageQuarterly,
-        growth: null as number | null,
+        growth: growth(displaySeries(interestCoverageAnnual, interestCoverageQuarterly)),
       },
       totalDebt: {
         data: displaySeries(totalDebtAnnual, totalDebtQuarterly),
         annualData: totalDebtAnnual,
         quarterlyData: totalDebtQuarterly,
+        growth: growth(displaySeries(totalDebtAnnual, totalDebtQuarterly)),
       },
       netDebt: {
         data: displaySeries(netDebtAnnual, netDebtQuarterly),
@@ -817,6 +837,7 @@ export default function OverviewPage() {
             data={charts.grossMargin.data}
             annualData={charts.grossMargin.annualData}
             quarterlyData={charts.grossMargin.quarterlyData}
+            growth={charts.grossMargin.growth}
             type="area"
             color="#4DC990"
             formatter={pctFmt}
@@ -826,6 +847,7 @@ export default function OverviewPage() {
             data={charts.opMargin.data}
             annualData={charts.opMargin.annualData}
             quarterlyData={charts.opMargin.quarterlyData}
+            growth={charts.opMargin.growth}
             type="area"
             color="#FF8C42"
             formatter={pctFmt}
@@ -835,6 +857,7 @@ export default function OverviewPage() {
             data={charts.roic.data}
             annualData={charts.roic.annualData}
             quarterlyData={charts.roic.quarterlyData}
+            growth={charts.roic.growth}
             type="area"
             color="#3DDC97"
             formatter={pctFmt}
@@ -845,6 +868,7 @@ export default function OverviewPage() {
             data={charts.roe.data}
             annualData={charts.roe.annualData}
             quarterlyData={charts.roe.quarterlyData}
+            growth={charts.roe.growth}
             type="area"
             color="#4BC0C0"
             formatter={pctFmt}
@@ -865,6 +889,7 @@ export default function OverviewPage() {
             data={charts.interestCoverage.data}
             annualData={charts.interestCoverage.annualData}
             quarterlyData={charts.interestCoverage.quarterlyData}
+            growth={charts.interestCoverage.growth}
             type="area"
             color="#d1d5db"
             formatter={(v) => `${v.toFixed(2)}x`}

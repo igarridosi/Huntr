@@ -11,8 +11,9 @@ import type {
   DCFScenarioSet,
   WACCEstimate,
 } from "@/lib/calculations/dcf";
-import { Anchor, Info, TrendingDown, TrendingUp, type LucideIcon } from "lucide-react";
+import { Anchor, Info, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 
 interface DCFAssumptionsProps {
   inputs: DCFInputs;
@@ -59,13 +60,18 @@ function SliderInput({
     }
   })();
 
+  const fillPercent =
+    max > min
+      ? Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100))
+      : 0;
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Label
             htmlFor={inputId}
-            className="text-[11px] text-mist uppercase tracking-wider font-medium"
+            className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/70"
           >
             {label}
           </Label>
@@ -82,14 +88,22 @@ function SliderInput({
               </button>
               <span
                 role="tooltip"
-                className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded-md border border-wolf-border bg-wolf-black px-2 py-1 text-[10px] text-snow-peak opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 group-active:opacity-100"
+                className={cn(
+                  "pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-max max-w-[13rem] -translate-x-1/2 rounded-lg bg-wolf-black/95 px-2 py-1.5 text-[10px] leading-snug text-snow-peak shadow-xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur-sm",
+                  // Grows from the icon it belongs to rather than fading in
+                  // place, so the explanation is visibly tied to its trigger.
+                  // `nowrap` used to push it off the panel edge on narrow columns.
+                  "origin-bottom scale-95 opacity-0 transition-[opacity,transform] duration-150 ease-settle",
+                  "group-hover:scale-100 group-hover:opacity-100 group-focus-within:scale-100 group-focus-within:opacity-100 group-active:scale-100 group-active:opacity-100",
+                  "motion-reduce:transition-opacity motion-reduce:scale-100"
+                )}
               >
                 {tooltip}
               </span>
             </span>
           )}
         </div>
-        <span className="text-xs font-mono font-bold text-snow-peak tabular-nums">
+        <span className="font-mono text-xs font-semibold tabular-nums tracking-[-0.01em] text-snow-peak">
           {displayValue}
           {suffix && <span className="text-mist ml-0.5">{suffix}</span>}
         </span>
@@ -104,22 +118,11 @@ function SliderInput({
         step={step}
         value={value}
         onChange={(e) => onChange(parseFloat(e.target.value))}
-        className={cn(
-          "w-full h-1.5 rounded-full appearance-none cursor-pointer",
-          "bg-wolf-border/60",
-          "[&::-webkit-slider-thumb]:appearance-none",
-          "[&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5",
-          "[&::-webkit-slider-thumb]:rounded-full",
-          "[&::-webkit-slider-thumb]:bg-sunset-orange",
-          "[&::-webkit-slider-thumb]:border-2 [&::-webkit-slider-thumb]:border-snow-peak",
-          "[&::-webkit-slider-thumb]:shadow-[0_0_6px_rgba(255,140,66,0.4)]",
-          "[&::-webkit-slider-thumb]:cursor-pointer",
-          "[&::-webkit-slider-thumb]:transition-shadow",
-          "[&::-webkit-slider-thumb]:hover:shadow-[0_0_10px_rgba(255,140,66,0.6)]",
-          "[&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5",
-          "[&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-sunset-orange",
-          "[&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-snow-peak [&::-moz-range-thumb]:cursor-pointer"
-        )}
+        // How far along its own range this assumption sits. The track paints
+        // that fraction, so the control shows a proportion and not just a
+        // handle position.
+        style={{ "--range-fill": `${fillPercent}%` } as React.CSSProperties}
+        className="huntr-range"
       />
       <div className="flex justify-between text-[9px] text-mist/40 font-mono">
         <span>{format === "percent" ? formatPercent(min, 0) : min}</span>
@@ -145,43 +148,32 @@ export function DCFAssumptions({
       {/* Scenario Selector */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
-          <h3 className="text-xs font-semibold text-snow-peak uppercase tracking-wider">
+          <h3 className="text-[10px] font-semibold uppercase tracking-[0.09em] text-snow-peak">
             Scenario
           </h3>
           <span className="text-[10px] text-mist">
             One-click regime switch
           </span>
         </div>
-        <div className="grid grid-cols-3 gap-1.5 rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-1">
-          {([
-            { key: "bear", label: "Bear", Icon: TrendingDown },
-            { key: "base", label: "Base", Icon: Anchor },
-            { key: "bull", label: "Bull", Icon: TrendingUp },
-          ] as const satisfies ReadonlyArray<{ key: DCFScenarioKey; label: string; Icon: LucideIcon }>).map((item) => {
-            const isActive = activeScenario === item.key;
-            return (
-              <button
-                key={item.key}
-                type="button"
-                disabled={!scenarios}
-                onClick={() => onScenarioChange(item.key)}
-                className={cn(
-                  "h-8 rounded-md text-xs font-medium transition-all cursor-pointer",
-                  "border border-transparent",
-                  isActive
-                    ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
-                    : "text-mist hover:text-snow-peak hover:bg-wolf-surface/70",
-                  !scenarios && "opacity-40 cursor-not-allowed"
-                )}
-              >
-                <span className="inline-flex items-center justify-center gap-1.5">
-                  <item.Icon className="w-3.5 h-3.5" />
-                  {item.label}
-                </span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Was a hand-rolled grid that swapped one option's background for
+            another's. It sat directly under the page's own segmented control
+            and looked identical to it, so behaving differently — jumping where
+            the other travels — made two controls that are the same thing feel
+            like two unrelated widgets. One indicator that moves also says
+            which regime you came from. */}
+        <SegmentedTabs
+          size="sm"
+          className="grid w-full grid-cols-3"
+          ariaLabel="Valuation scenario"
+          value={activeScenario}
+          onChange={onScenarioChange}
+          disabled={!scenarios}
+          items={[
+            { key: "bear", label: "Bear", icon: <TrendingDown className="h-3.5 w-3.5" /> },
+            { key: "base", label: "Base", icon: <Anchor className="h-3.5 w-3.5" /> },
+            { key: "bull", label: "Bull", icon: <TrendingUp className="h-3.5 w-3.5" /> },
+          ] as const satisfies ReadonlyArray<{ key: DCFScenarioKey; label: string; icon: React.ReactNode }>}
+        />
         {scenarios && (
           <p className="text-[10px] text-mist/70">
             Switching scenario updates growth, margins and WACC assumptions in real time.
@@ -193,7 +185,7 @@ export function DCFAssumptions({
 
       {/* Growth Assumptions */}
       <div>
-        <h3 className="text-xs font-semibold text-snow-peak uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-snow-peak">
           <div className="w-1 h-3 rounded-full bg-sunset-orange" />
           Growth Assumptions
         </h3>
@@ -245,8 +237,8 @@ export function DCFAssumptions({
 
       {/* Margin Assumptions */}
       <div>
-        <h3 className="text-xs font-semibold text-snow-peak uppercase tracking-wider mb-3 flex items-center gap-2">
-          <div className="w-1 h-3 rounded-full bg-[#4DC990]" />
+        <h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-snow-peak">
+          <div className="h-3 w-1 rounded-full bg-bullish" />
           Margin Assumptions
         </h3>
         <div className="space-y-4">
@@ -275,7 +267,7 @@ export function DCFAssumptions({
 
       {/* Discount Rate */}
       <div>
-        <h3 className="text-xs font-semibold text-snow-peak uppercase tracking-wider mb-3 flex items-center gap-2">
+        <h3 className="mb-3 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.09em] text-snow-peak">
           <div className="w-1 h-3 rounded-full bg-golden-hour" />
           Discount Rate
         </h3>

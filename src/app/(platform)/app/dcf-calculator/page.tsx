@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
 import {
   EPSMultipleModel,
@@ -41,6 +42,13 @@ import type {
   WACCEstimate,
 } from "@/lib/calculations";
 import { formatCurrency, formatCompactNumber } from "@/lib/utils";
+import { useSettledValue } from "@/hooks/use-settled-value";
+
+const MODEL_TABS = [
+  { key: "dcf", label: "DCF Model" },
+  { key: "eps", label: "EPS Multiple" },
+  { key: "capital", label: "Capital Allocator" },
+] as const;
 
 const DEFAULT_INPUTS: DCFInputs = {
   baseRevenue: 0,
@@ -388,6 +396,23 @@ export default function DcfCalculatorPage() {
     return runDCF(inputs);
   }, [inputs]);
 
+  // Switching scenario tweens every input over 420ms, which means a new inputs
+  // object roughly 25 times in half a second. Everything downstream was
+  // recomputing at that rate - a 2,000-path Monte Carlo, the sensitivity grid,
+  // two Recharts trees - and no amount of easing looks smooth when the frame
+  // budget is spent 25 times over. So the tween now only drives what has to
+  // follow it live: the sliders and the headline figure. The heavy surfaces
+  // read a settled copy that lands once the values stop moving, which also
+  // covers dragging a slider by hand, not just the scenario switch.
+  const settledInputs = useSettledValue(inputs, 130);
+  const settledResult: DCFResult | null = useMemo(() => {
+    if (settledInputs.baseRevenue <= 0 || settledInputs.sharesOutstanding <= 0) return null;
+    return runDCF(settledInputs);
+  }, [settledInputs]);
+  // First tick after the model populates, the settled copy is still the empty
+  // default. Falling back keeps these cards from flashing blank.
+  const steadyResult = settledResult ?? result;
+
   const handleReset = useCallback(() => {
     setTicker("");
     setInputs(DEFAULT_INPUTS);
@@ -423,68 +448,52 @@ export default function DcfCalculatorPage() {
   return (
     <div className="space-y-6 w-full">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div
+        className="insight-enter flex flex-wrap items-center justify-between gap-4"
+        style={{ "--enter-delay": "0ms" } as React.CSSProperties}
+      >
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
-            <Calculator className="w-5 h-5 text-sunset-orange" />
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sunset-orange/10 ring-1 ring-inset ring-sunset-orange/20">
+            <Calculator className="h-5 w-5 text-sunset-orange" />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-snow-peak">
+            {/* Display type pulls its letters in as it grows; the label under
+                it goes the other way so it reads as a caption, not a sentence. */}
+            <h1 className="text-xl font-semibold leading-tight tracking-[-0.02em] text-snow-peak">
               DCF Calculator
             </h1>
-            <p className="text-xs text-mist mt-0.5">
+            <p className="mt-1 text-[10px] uppercase tracking-[0.09em] text-mist/60">
               Two-stage discounted cash flow intrinsic value model
             </p>
           </div>
         </div>
+
         {isPopulated && (
           <Button variant="ghost" size="sm" onClick={handleReset}>
-            <RotateCcw className="w-3.5 h-3.5 mr-1.5" />
+            <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
             Reset
           </Button>
         )}
       </div>
 
-      {/* Model Toggle */}
-      <Card>
-        <CardContent className="pt-4">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-1">
-            <button
-              type="button"
-              onClick={() => setModelType("dcf")}
-              className={`h-9 rounded-md text-sm font-medium transition-all cursor-pointer border ${
-                modelType === "dcf"
-                  ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
-                  : "text-mist border-transparent hover:text-snow-peak hover:bg-wolf-surface/70"
-              }`}
-            >
-              DCF Model (Advanced)
-            </button>
-            <button
-              type="button"
-              onClick={() => setModelType("eps")}
-              className={`h-9 rounded-md text-sm font-medium transition-all cursor-pointer border ${
-                modelType === "eps"
-                  ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
-                  : "text-mist border-transparent hover:text-snow-peak hover:bg-wolf-surface/70"
-              }`}
-            >
-              EPS Multiple Model (Simple)
-            </button>
-            <button
-              type="button"
-              onClick={() => setModelType("capital")}
-              className={`h-9 rounded-md text-sm font-medium transition-all cursor-pointer border ${
-                modelType === "capital"
-                  ? "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/30"
-                  : "text-mist border-transparent hover:text-snow-peak hover:bg-wolf-surface/70"
-              }`}
-            >
-              Capital Allocator
-            </button>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Model toggle.
+          This was three full-width bordered buttons inside their own Card — a
+          container whose only content was a control, and three competing
+          borders where one selection exists. A segmented control says the same
+          thing in one shape, and the indicator travelling between models tells
+          you which way you moved. */}
+      <div
+        className="insight-enter"
+        style={{ "--enter-delay": "40ms" } as React.CSSProperties}
+      >
+        <SegmentedTabs
+          items={MODEL_TABS}
+          value={modelType}
+          onChange={setModelType}
+          ariaLabel="Valuation model"
+          className="flex w-full sm:w-auto"
+        />
+      </div>
 
       {/* Top search bar before populate */}
       {modelType === "dcf" && !inputs.baseRevenue && (
@@ -552,17 +561,17 @@ export default function DcfCalculatorPage() {
                     </Button>
 
                     {isSavedMenuOpen && (
-                      <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-wolf-border/50 bg-midnight-rock/95 backdrop-blur p-1.5 shadow-xl">
+                      <div className="popover-materialize absolute right-0 top-full z-20 mt-2 w-72 origin-top-right rounded-xl bg-wolf-surface/95 p-1.5 shadow-2xl ring-1 ring-inset ring-wolf-border/60 backdrop-blur-xl">
                         {savedScenariosLoading ? (
                           <p className="px-2 py-2 text-xs text-mist">Loading saved scenarios...</p>
                         ) : savedScenarios.length === 0 ? (
                           <p className="px-2 py-2 text-xs text-mist">No saved scenarios yet.</p>
                         ) : (
-                          <div className="max-h-64 overflow-y-auto space-y-1">
+                          <div className="scroll-quiet max-h-64 space-y-1 overflow-y-auto">
                             {savedScenarios.map((entry) => (
                               <div
                                 key={`${entry.ticker}-${entry.updatedAt}`}
-                                className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-sunset-orange/10 transition-colors"
+                                className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-[background-color,transform] duration-150 ease-out hover:bg-sunset-orange/10 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                               >
                                 <button
                                   type="button"
@@ -605,7 +614,7 @@ export default function DcfCalculatorPage() {
             <DataHuntingLoader
               ticker={ticker}
               compact
-              className="border border-wolf-border/50"
+              className="ring-1 ring-inset ring-wolf-border/50"
               detailMessage="Loading 20 years of financial history for the DCF model..."
             />
           )}
@@ -725,17 +734,17 @@ export default function DcfCalculatorPage() {
                       </Button>
 
                       {isSavedMenuOpen && (
-                        <div className="absolute right-0 z-20 mt-2 w-72 rounded-lg border border-wolf-border/50 bg-midnight-rock/95 backdrop-blur p-1.5 shadow-xl">
+                        <div className="popover-materialize absolute right-0 top-full z-20 mt-2 w-72 origin-top-right rounded-xl bg-wolf-surface/95 p-1.5 shadow-2xl ring-1 ring-inset ring-wolf-border/60 backdrop-blur-xl">
                           {savedScenariosLoading ? (
                             <p className="px-2 py-2 text-xs text-mist">Loading saved scenarios...</p>
                           ) : savedScenarios.length === 0 ? (
                             <p className="px-2 py-2 text-xs text-mist">No saved scenarios yet.</p>
                           ) : (
-                            <div className="max-h-64 overflow-y-auto space-y-1">
+                            <div className="scroll-quiet max-h-64 space-y-1 overflow-y-auto">
                               {savedScenarios.map((entry) => (
                                 <div
                                   key={`${entry.ticker}-${entry.updatedAt}`}
-                                  className="group flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-sunset-orange/10 transition-colors"
+                                  className="group flex items-center justify-between rounded-lg px-2 py-1.5 transition-[background-color,transform] duration-150 ease-out hover:bg-sunset-orange/10 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                                 >
                                   <button
                                     type="button"
@@ -773,7 +782,7 @@ export default function DcfCalculatorPage() {
                 </div>
 
                 {saveStatus !== "idle" && isPopulated && user && (
-                  <p className={saveStatus === "saved" ? "mt-2 text-[11px] text-emerald-400" : "mt-2 text-[11px] text-rose-400"}>
+                  <p className={saveStatus === "saved" ? "mt-2 text-[11px] text-bullish" : "mt-2 text-[11px] text-bearish"}>
                     {saveStatus === "saved" ? "Scenarios saved to your account." : "Could not save scenarios. Please try again."}
                   </p>
                 )}
@@ -782,7 +791,7 @@ export default function DcfCalculatorPage() {
 
             {result && (
               <>
-                <Card>
+                <Card className="insight-enter" style={{ "--enter-delay": "0ms" } as React.CSSProperties}>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm">Valuation Output</CardTitle>
                   </CardHeader>
@@ -791,16 +800,16 @@ export default function DcfCalculatorPage() {
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="insight-enter" style={{ "--enter-delay": "50ms" } as React.CSSProperties}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Position Decision</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <PositionDecisionEngine inputs={inputs} result={result} />
+                    <PositionDecisionEngine inputs={settledInputs} result={steadyResult ?? result} />
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="insight-enter" style={{ "--enter-delay": "100ms" } as React.CSSProperties}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm">Monte Carlo Simulation</CardTitle>
@@ -810,11 +819,11 @@ export default function DcfCalculatorPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <DCFMonteCarlo inputs={inputs} iterations={2000} />
+                    <DCFMonteCarlo inputs={settledInputs} iterations={2000} />
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="insight-enter" style={{ "--enter-delay": "150ms" } as React.CSSProperties}>
                   <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                       <CardTitle className="text-sm">Sensitivity Analysis</CardTitle>
@@ -824,24 +833,24 @@ export default function DcfCalculatorPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <DCFSensitivity inputs={inputs} />
+                    <DCFSensitivity inputs={settledInputs} />
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="insight-enter" style={{ "--enter-delay": "200ms" } as React.CSSProperties}>
                   <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Cash Flow Projections</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <DCFProjectionTable result={result} />
+                    <DCFProjectionTable result={steadyResult ?? result} />
                   </CardContent>
                 </Card>
 
-                <Card>
+                <Card className="insight-enter" style={{ "--enter-delay": "240ms" } as React.CSSProperties}>
                   <CardContent className="pt-5">
                     <DCFFCFChart
-                      result={result}
-                      baseRevenue={inputs.baseRevenue}
+                      result={steadyResult ?? result}
+                      baseRevenue={settledInputs.baseRevenue}
                       baseFCF={baseFCF}
                     />
                   </CardContent>
@@ -913,17 +922,26 @@ export default function DcfCalculatorPage() {
         />
       )}
 
-      {/* Empty state — no ticker */}
+      {/* Empty state — no ticker.
+          A 200px-tall card holding one grey glyph is a lot of page for "nothing
+          here yet". The icon sits on a raised tile so it reads as a placeholder
+          for content rather than a disabled control, and the two lines carry
+          the weight instead of the whitespace. */}
       {modelType === "dcf" && inputs.baseRevenue <= 0 && !ticker && (
-        <Card>
-          <CardContent className="py-16 text-center">
-            <Calculator className="w-10 h-10 text-mist/30 mx-auto mb-3" />
-            <p className="text-sm text-mist">
-              Search for a ticker above to begin your DCF analysis
+        <Card
+          className="insight-enter"
+          style={{ "--enter-delay": "80ms" } as React.CSSProperties}
+        >
+          <CardContent className="flex flex-col items-center py-14 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-snow-peak/[0.04] ring-1 ring-inset ring-wolf-border/40">
+              <Calculator className="h-5 w-5 text-mist/70" />
+            </div>
+            <p className="mt-4 text-sm font-medium text-snow-peak">
+              Search for a ticker to begin your DCF analysis
             </p>
-            <p className="text-xs text-mist/60 mt-1">
-              Financial data will auto-populate from the company&apos;s latest
-              annual filings
+            <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-mist/70">
+              Financial data auto-populates from the company&apos;s latest annual
+              filings.
             </p>
           </CardContent>
         </Card>
@@ -931,12 +949,17 @@ export default function DcfCalculatorPage() {
 
       {/* Ticker selected but not populated */}
       {modelType === "dcf" && ticker && inputs.baseRevenue <= 0 && (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <Zap className="w-8 h-8 text-sunset-orange/40 mx-auto mb-3" />
-            <p className="text-sm text-mist">
+        <Card
+          className="insight-enter"
+          style={{ "--enter-delay": "80ms" } as React.CSSProperties}
+        >
+          <CardContent className="flex flex-col items-center py-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sunset-orange/10 ring-1 ring-inset ring-sunset-orange/20">
+              <Zap className="h-5 w-5 text-sunset-orange" />
+            </div>
+            <p className="mt-4 text-sm text-mist">
               Click{" "}
-              <span className="text-sunset-orange font-medium">
+              <span className="font-medium text-sunset-orange">
                 Auto-Populate
               </span>{" "}
               to load {ticker}&apos;s financials into the model

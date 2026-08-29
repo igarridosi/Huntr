@@ -37,6 +37,7 @@ import {
   formatCompactNumber,
   formatPercent,
   formatCurrency,
+  enterDelay,
 } from "@/lib/utils";
 
 // ─── Preset icon map ──────────────────────────────────────────────────────────
@@ -560,10 +561,15 @@ function FilterGroup({
                       isNone ? onRemove(def.id) : onSetFilter(def.id, preset.min, preset.max)
                     }
                     className={cn(
-                      "min-h-8 rounded border px-2.5 py-1.5 text-[10px] font-medium transition-all sm:min-h-0 sm:px-2 sm:py-0.5",
+                      "min-h-8 rounded-lg px-2.5 py-1.5 text-[10px] font-medium ring-1 ring-inset sm:min-h-0 sm:px-2 sm:py-0.5",
+                      // Presets are tapped repeatedly while narrowing a
+                      // screen, so each one acknowledges the press itself
+                      // rather than waiting on the table below to re-query.
+                      "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                      "active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
                       isSelected
-                        ? "bg-sunset-orange/12 text-sunset-orange border-sunset-orange/25"
-                        : "text-mist/70 border-wolf-border/30 hover:border-wolf-border/60 hover:text-snow-peak bg-transparent"
+                        ? "bg-sunset-orange/12 text-sunset-orange ring-sunset-orange/30"
+                        : "bg-transparent text-mist/70 ring-wolf-border/30 hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border/60"
                     )}
                   >
                     {preset.label}
@@ -626,7 +632,7 @@ function FilterPanel({
       {/* Quality Ratings section */}
       <div className="pt-1 border-t border-wolf-border/20">
         <div className="flex items-center gap-1.5 mb-3">
-          <span className="text-[9px] uppercase tracking-widest text-mist/50 font-semibold">
+          <span className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
             Quality Ratings
           </span>
           <Tooltip
@@ -669,7 +675,7 @@ function ActiveChips({
 
   return (
     <div className="flex flex-wrap gap-1.5">
-      {entries.map(([id, range]) => {
+      {entries.map(([id, range], chipIndex) => {
         const def = allDefs.find((d) => d.id === id);
         const scale = def?.displayScale ?? 1;
         const unit = def?.unit ?? "";
@@ -690,13 +696,17 @@ function ActiveChips({
         return (
           <span
             key={id}
-            className="inline-flex items-center gap-1 rounded border border-sunset-orange/20 bg-sunset-orange/8 px-2 py-0.5 text-[10px] font-medium text-sunset-orange"
+            // A chip appearing is the confirmation that a filter took effect,
+            // so it arrives rather than blinking into place.
+            style={enterDelay(Math.min(chipIndex * 20, 120))}
+            className="insight-enter inline-flex items-center gap-1 rounded-lg bg-sunset-orange/[0.08] px-2 py-0.5 text-[10px] font-medium text-sunset-orange ring-1 ring-inset ring-sunset-orange/25"
           >
             {def?.label}: {label}
             <button
               type="button"
+              aria-label={`Remove ${def?.label ?? id} filter`}
               onClick={() => onRemove(id)}
-              className="hover:text-bearish ml-0.5 transition-colors"
+              className="ml-0.5 rounded transition-[color,transform] duration-150 ease-out hover:text-bearish active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               <X className="h-2.5 w-2.5" />
             </button>
@@ -832,10 +842,16 @@ export default function ScreenerPage() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between gap-4 flex-wrap">
+      {/* The page builds top to bottom on arrival: title, then the filter
+          panel, then the results. Small steps, the whole cascade over inside
+          a quarter of a second. */}
+      <div
+        className="insight-enter flex flex-wrap items-center justify-between gap-4"
+        style={enterDelay(0)}
+      >
         <div>
           <h1 className="text-lg font-bold text-snow-peak">Stock Screener</h1>
-          <p className="text-[11px] text-mist mt-0.5">
+          <p className="mt-0.5 text-[11px] tabular-nums text-mist">
             {isLoading ? (
               <span className="inline-flex items-center gap-1.5">
                 <Spinner size="xs" color="mist" /> Loading stocks…
@@ -852,7 +868,7 @@ export default function ScreenerPage() {
             placeholder="Ticker or company…"
             value={search}
             onChange={(e) => handleSearch(e.target.value)}
-            className="h-10 pl-8 text-xs bg-wolf-black/40 border-wolf-border/40 focus:border-sunset-orange/50 sm:h-8"
+            className="h-10 bg-snow-peak/[0.03] pl-8 text-xs ring-1 ring-inset ring-wolf-border/45 focus:ring-sunset-orange/50 sm:h-8"
           />
           {search && (
             <button
@@ -877,10 +893,12 @@ export default function ScreenerPage() {
                 type="button"
                 onClick={() => { setPage(1); applyPreset(preset); }}
                 className={cn(
-                  "inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-medium transition-all sm:min-h-0 sm:py-1.5",
+                  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ring-1 ring-inset sm:min-h-0 sm:py-1.5",
+                  "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                  "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
                   isActive
                     ? "bg-sunset-orange/12 border-sunset-orange/30 text-sunset-orange"
-                    : "border-wolf-border/40 text-mist hover:border-wolf-border hover:text-snow-peak"
+                    : "text-mist ring-wolf-border/40 hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border"
                 )}
               >
                 {Icon && <Icon className="h-3 w-3" />}
@@ -893,7 +911,7 @@ export default function ScreenerPage() {
           <button
             type="button"
             onClick={handleClear}
-            className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-wolf-border/30 px-2.5 py-2 text-[10px] text-mist transition-colors hover:border-bearish/30 hover:text-bearish sm:min-h-0 sm:py-1.5"
+            className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2.5 py-2 text-[10px] text-mist ring-1 ring-inset ring-wolf-border/30 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-bearish/10 hover:text-bearish hover:ring-bearish/30 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-0 sm:py-1.5"
           >
             <X className="h-2.5 w-2.5" /> Clear
           </button>
@@ -923,7 +941,7 @@ export default function ScreenerPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4 items-start">
 
         {/* Filter sidebar */}
-        <Card className="p-4">
+        <Card className="insight-enter p-4" style={enterDelay(60)}>
           <FilterPanel
             activeFilters={activeFilters}
             onSetFilter={handleSetFilter}
@@ -934,7 +952,7 @@ export default function ScreenerPage() {
         </Card>
 
         {/* Table card */}
-        <Card>
+        <Card className="insight-enter" style={enterDelay(120)}>
           <CardContent className="p-0">
             {isLoading ? (
               <div className="p-4 space-y-2">
@@ -956,7 +974,7 @@ export default function ScreenerPage() {
               </div>
             ) : (
               <>
-                <div className="overflow-x-auto">
+                <div className="scroll-quiet overflow-x-auto">
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-wolf-border/30">
@@ -974,8 +992,16 @@ export default function ScreenerPage() {
                       {enrichedPageRows.map((row, i) => (
                         <tr
                           key={row.ticker}
+                          // Rows arrive in reading order, capped so a full page
+                          // never leaves its tail waiting on the head. Sorting
+                          // reuses the same keys, so re-ordering stays instant
+                          // and the cascade only plays when a new page loads.
+                          style={enterDelay(Math.min(i * 16, 180))}
                           className={cn(
-                            "border-b border-wolf-border/15 hover:bg-wolf-black/25 transition-colors",
+                            "insight-enter border-b border-wolf-border/15",
+                            // Rows lift under the pointer instead of sinking:
+                            // hovering should feel like the row comes forward.
+                            "transition-colors duration-150 ease-out hover:bg-snow-peak/[0.035]",
                             i === enrichedPageRows.length - 1 && "border-b-0"
                           )}
                         >
@@ -1008,7 +1034,7 @@ export default function ScreenerPage() {
                         type="button"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={safePage === 1}
-                        className="flex h-9 w-9 items-center justify-center rounded border border-wolf-border/40 text-mist transition-colors hover:border-wolf-border hover:text-snow-peak disabled:cursor-not-allowed disabled:opacity-30 sm:h-7 sm:w-7"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
                       </button>
@@ -1027,10 +1053,12 @@ export default function ScreenerPage() {
                             type="button"
                             onClick={() => setPage(p)}
                             className={cn(
-                              "flex h-9 w-9 items-center justify-center rounded border font-mono text-[11px] transition-all sm:h-7 sm:w-7",
+                              "flex h-9 w-9 items-center justify-center rounded-lg font-mono text-[11px] tabular-nums ring-1 ring-inset sm:h-7 sm:w-7",
+                              "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                              "active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100",
                               safePage === p
                                 ? "border-sunset-orange/40 bg-sunset-orange/10 text-sunset-orange"
-                                : "border-wolf-border/40 text-mist hover:border-wolf-border hover:text-snow-peak"
+                                : "text-mist ring-wolf-border/40 hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border"
                             )}
                           >
                             {p}
@@ -1041,7 +1069,7 @@ export default function ScreenerPage() {
                         type="button"
                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={safePage === totalPages}
-                        className="flex h-9 w-9 items-center justify-center rounded border border-wolf-border/40 text-mist transition-colors hover:border-wolf-border hover:text-snow-peak disabled:cursor-not-allowed disabled:opacity-30 sm:h-7 sm:w-7"
+                        className="flex h-9 w-9 items-center justify-center rounded-lg text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
                       >
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>

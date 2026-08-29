@@ -124,13 +124,29 @@ export async function getAllQuotes(): Promise<StockQuote[]> {
     );
 
     if (symbols.length > 0) {
-      // Batch in chunks of 50 to avoid Yahoo rate limits
+      // Chunks of 50 stay under Yahoo's per-request cap, but awaiting them one
+      // after another cost ~5s per chunk and that whole sum blocked the
+      // earnings calendar before a single ticker could render. Four in flight
+      // keeps the rate limiter happy and turns a linear wait into roughly one
+      // round-trip for a universe this size.
       const BATCH_SIZE = 50;
-      const allQuotes: StockQuote[] = [];
+      const CONCURRENCY = 4;
+      const batches: string[][] = [];
       for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-        const batch = symbols.slice(i, i + BATCH_SIZE);
-        const quotes = await yahoo.getBatchQuotes(batch);
-        allQuotes.push(...quotes);
+        batches.push(symbols.slice(i, i + BATCH_SIZE));
+      }
+
+      const allQuotes: StockQuote[] = [];
+      for (let i = 0; i < batches.length; i += CONCURRENCY) {
+        const settled = await Promise.allSettled(
+          batches
+            .slice(i, i + CONCURRENCY)
+            .map((batch) => yahoo.getBatchQuotes(batch))
+        );
+        // One throttled chunk should cost us that chunk, not the whole list.
+        for (const result of settled) {
+          if (result.status === "fulfilled") allQuotes.push(...result.value);
+        }
       }
 
       return allQuotes.filter((quote) => quote.market_cap >= MIN_MARKET_CAP);

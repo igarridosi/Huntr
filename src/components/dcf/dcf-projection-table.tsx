@@ -9,7 +9,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { formatCurrency, formatPercent, formatCompactNumber } from "@/lib/utils";
+import { formatPercent, formatCompactNumber } from "@/lib/utils";
 import type { DCFResult } from "@/lib/calculations/dcf";
 import { cn } from "@/lib/utils";
 
@@ -21,45 +21,58 @@ export function DCFProjectionTable({ result }: DCFProjectionTableProps) {
   const { projections, terminalValue, pvTerminalValue } = result;
 
   return (
-    <div className="overflow-x-auto">
+    // The card around this table runs its own entrance on a delay, so a
+    // cascade counted from mount would play out entirely behind an ancestor
+    // still at opacity 0 — motion nobody sees. Custom properties inherit, so
+    // the wrapper copies whatever delay the card was given into --enter-base
+    // and the rows count from there: the card materialises and the rows fill
+    // into it. Nothing here needs to know what that delay is.
+    <div
+      className="scroll-quiet overflow-x-auto"
+      style={{ "--enter-base": "var(--enter-delay, 0ms)" } as React.CSSProperties}
+    >
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="text-[10px] uppercase tracking-wider">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em]">
               Year
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em]">
               Phase
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider text-right">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em] text-right">
               Revenue
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider text-right">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em] text-right">
               Growth
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider text-right">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em] text-right">
               FCF Margin
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider text-right">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em] text-right">
               Free Cash Flow
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider text-right">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em] text-right">
               Discount Factor
             </TableHead>
-            <TableHead className="text-[10px] uppercase tracking-wider text-right">
+            <TableHead className="text-[10px] uppercase tracking-[0.09em] text-right">
               PV of FCF
             </TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {projections.map((p) => (
+          {projections.map((p, rowIndex) => (
             <TableRow
               key={p.year}
+              // Rows resolve top-down so the eye follows the projection the way
+              // it reads it. Capped at 200ms: past that the tail of a ten-year
+              // model is just waiting, not being led.
+              style={{ "--enter-delay": `calc(var(--enter-base) + ${Math.min(rowIndex * 25, 200)}ms)` } as React.CSSProperties}
               className={cn(
-                "transition-colors",
+                "insight-enter transition-colors",
                 p.phase === 1
                   ? "hover:bg-sunset-orange/5"
-                  : "hover:bg-[#4DC990]/5"
+                  : "hover:bg-bullish/5"
               )}
             >
               <TableCell className="font-mono text-xs font-medium text-snow-peak">
@@ -79,7 +92,7 @@ export function DCFProjectionTable({ result }: DCFProjectionTableProps) {
               <TableCell className="text-right font-mono text-xs tabular-nums">
                 <span
                   className={cn(
-                    p.revenueGrowth >= 0 ? "text-[#4DC990]" : "text-bearish"
+                    p.revenueGrowth >= 0 ? "text-bullish" : "text-bearish"
                   )}
                 >
                   {formatPercent(p.revenueGrowth, 1)}
@@ -100,7 +113,14 @@ export function DCFProjectionTable({ result }: DCFProjectionTableProps) {
             </TableRow>
           ))}
           {/* Terminal Value Row */}
-          <TableRow className="border-t-2 border-sunset-orange/20 bg-sunset-orange/5">
+          {/* The terminal value is a different kind of number — a formula, not
+              a projected year — so it earns a real break in the table rather
+              than another striped row. It lands last, after the years it sums
+              up. */}
+          <TableRow
+            style={{ "--enter-delay": `calc(var(--enter-base) + ${Math.min(projections.length * 25, 200) + 40}ms)` } as React.CSSProperties}
+            className="insight-enter border-t border-sunset-orange/25 bg-sunset-orange/5"
+          >
             <TableCell className="font-mono text-xs font-bold text-sunset-orange">
               TV
             </TableCell>

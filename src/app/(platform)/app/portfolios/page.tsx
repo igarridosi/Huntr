@@ -52,6 +52,8 @@ import {
   Cell,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -73,7 +75,7 @@ import { RebalanceAdvisor } from "@/components/portfolio/rebalance-advisor";
 import { usePortfolio } from "@/hooks/use-portfolio";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { useBatchDailyHistory, useBatchPeriodPerformance, useSearch } from "@/hooks/use-stock-data";
-import { formatCurrency, formatPercent, cn } from "@/lib/utils";
+import { formatCurrency, formatPercent, cn, enterDelay } from "@/lib/utils";
 import { useChartColors } from "@/hooks/use-chart-colors";
 import { useSupabase } from "@/providers/supabase-provider";
 import { ROUTES } from "@/lib/constants";
@@ -104,6 +106,17 @@ type SortDir = "asc" | "desc";
 
 type ViewMode = "table" | "cards";
 type PerformanceRange = "1W" | "1M" | "YTD" | "1Y" | "ALL";
+
+// Declared once rather than inline: the segmented control measures its own
+// options, and handing it a fresh array every render makes it re-measure for
+// nothing.
+const RANGE_ITEMS = [
+  { key: "1W" as const, label: "1W" },
+  { key: "1M" as const, label: "1M" },
+  { key: "YTD" as const, label: "YTD" },
+  { key: "1Y" as const, label: "1Y" },
+  { key: "ALL" as const, label: "ALL" },
+];
 type ContentView = "positions" | "transactions" | "watchlist" | "dipfinder";
 type QuickFilter =
   | "all"
@@ -203,7 +216,7 @@ function AddPositionPanel({
               onFocus={() => setShowSearch(true)}
               className={cn(
                 "w-full h-9 pl-9 pr-4 rounded-lg text-sm font-mono",
-                "bg-wolf-black/60 border border-wolf-border/50",
+                "bg-snow-peak/[0.06] ring-1 ring-inset ring-wolf-border/50",
                 "text-snow-peak placeholder:text-mist/60",
                 "focus:outline-none focus:ring-1 focus:ring-sunset-orange/50 focus:border-sunset-orange/40",
                 "transition-all"
@@ -213,7 +226,7 @@ function AddPositionPanel({
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-mist animate-spin" />
             )}
             {showSearch && results.length > 0 && !ticker && (
-              <div className="absolute z-50 mt-1 w-full rounded-lg border border-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden max-h-48 overflow-y-auto">
+              <div className="scroll-quiet absolute z-50 mt-1 max-h-48 w-full overflow-hidden overflow-y-auto rounded-lg bg-wolf-surface shadow-xl ring-1 ring-inset ring-wolf-border/50">
                 {results.map((r) => (
                   <button
                     key={r.ticker}
@@ -411,7 +424,7 @@ function EditPositionDialog({
               />
             </div>
 
-            <div className="rounded-md border border-wolf-border/40 bg-wolf-black/40 p-3">
+            <div className="rounded-md ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.04] p-3">
               <p className="text-[10px] uppercase tracking-wide text-mist mb-1">Preview</p>
               <div className="grid grid-cols-3 gap-2 text-[11px]">
                 <div>
@@ -589,7 +602,7 @@ function ImportCsvDialog({
               "rounded-xl border-2 border-dashed p-8 text-center transition-colors",
               isDragActive
                 ? "border-sunset-orange bg-sunset-orange/10"
-                : "border-wolf-border/60 bg-wolf-black/30"
+                : "border-wolf-border/60 bg-snow-peak/[0.03]"
             )}
             onDragOver={(e) => {
               e.preventDefault();
@@ -622,7 +635,7 @@ function ImportCsvDialog({
             </Button>
           </div>
 
-          <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/40 p-4 space-y-2">
+          <div className="rounded-lg ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.04] p-4 space-y-2">
             <p className="text-xs font-semibold text-snow-peak">Supported CSV structures</p>
             <p className="text-[11px] text-mist">
               1. Huntr export format: <span className="font-mono">Ticker,Shares,Avg Cost,Added At,Notes</span>
@@ -666,6 +679,10 @@ function PortfolioEvolutionChart({
 }) {
   const [range, setRange] = useState<PerformanceRange>("1M");
   const [compareBenchmark, setCompareBenchmark] = useState(true);
+  const prefersReducedMotion = usePrefersReducedMotion();
+  // Long enough to read as a sweep, short enough never to delay reading the
+  // line. Recharts' own default of 1500ms feels like waiting for the chart.
+  const chartAnimationDuration = prefersReducedMotion ? 0 : 520;
   const c = useChartColors();
 
   const tickers = useMemo(
@@ -1006,7 +1023,7 @@ function PortfolioEvolutionChart({
       const tooltipDate = (payload[0] as { payload?: { tooltipDate?: string } })?.payload?.tooltipDate ?? String(label ?? "");
 
       return (
-        <div className="min-w-[152px] rounded-md border border-wolf-border/60 bg-wolf-black/95 px-2.5 py-2 shadow-lg">
+        <div className="min-w-[152px] rounded-md ring-1 ring-inset ring-wolf-border/60 bg-wolf-black/95 px-2.5 py-2 shadow-lg">
           <p className="text-[10px] text-mist mb-1">{tooltipDate}</p>
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2 text-[11px]">
@@ -1039,13 +1056,13 @@ function PortfolioEvolutionChart({
           </CardTitle>
 
           <div className="flex items-center justify-center gap-2 lg:justify-self-center">
-            <div className="rounded-md border border-wolf-border/50 bg-wolf-black/50 px-2.5 py-1">
+            <div className="rounded-md ring-1 ring-inset ring-wolf-border/50 bg-snow-peak/[0.05] px-2.5 py-1">
               <p className="text-[10px] text-mist leading-none">Portfolio</p>
               <p className={cn("text-xs font-mono font-semibold mt-1", periodReturns.portfolio >= 0 ? "text-sunset-orange" : "text-bearish")}>
                 {periodReturns.portfolio >= 0 ? "+" : ""}{formatPct(periodReturns.portfolio)}
               </p>
             </div>
-            <div className="rounded-md border border-wolf-border/50 bg-wolf-black/50 px-2.5 py-1">
+            <div className="rounded-md ring-1 ring-inset ring-wolf-border/50 bg-snow-peak/[0.05] px-2.5 py-1">
               <p className="text-[10px] text-mist leading-none">S&P 500</p>
               <p className={cn("text-xs font-mono font-semibold mt-1", periodReturns.benchmark >= 0 ? "text-slate-300" : "text-bearish")}>
                 {periodReturns.benchmark >= 0 ? "+" : ""}{formatPct(periodReturns.benchmark)}
@@ -1054,29 +1071,24 @@ function PortfolioEvolutionChart({
           </div>
 
           <div className="flex items-center gap-2 lg:justify-self-end">
-            <div className="flex rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5">
-              {(["1W", "1M", "YTD", "1Y", "ALL"] as PerformanceRange[]).map((w) => (
-                <button
-                  key={w}
-                  type="button"
-                  onClick={() => setRange(w)}
-                  className={cn(
-                    "px-2 py-1 text-[11px] rounded-sm transition-colors",
-                    range === w ? "bg-sunset-orange/20 text-sunset-orange" : "text-mist hover:text-snow-peak"
-                  )}
-                >
-                  {w}
-                </button>
-              ))}
-            </div>
+            <SegmentedTabs
+              items={RANGE_ITEMS}
+              value={range}
+              onChange={setRange}
+              ariaLabel="Performance range"
+              size="sm"
+            />
             <button
               type="button"
               onClick={() => setCompareBenchmark((v) => !v)}
+              aria-pressed={compareBenchmark}
               className={cn(
-                "px-2 py-1 text-[11px] rounded-md border transition-colors",
+                "rounded-lg px-2 py-1 text-[11px] ring-1 ring-inset",
+                "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                "active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
                 compareBenchmark
-                  ? "border-sunset-orange/40 text-sunset-orange bg-sunset-orange/10"
-                  : "border-wolf-border/40 text-mist"
+                  ? "bg-sunset-orange/12 text-sunset-orange ring-sunset-orange/40"
+                  : "text-mist ring-wolf-border/40 hover:bg-snow-peak/[0.06] hover:text-snow-peak"
               )}
             >
               Benchmark (S&P 500)
@@ -1088,12 +1100,22 @@ function PortfolioEvolutionChart({
         {isLoading ? (
           <Skeleton className="h-64 w-full" />
         ) : chartData.length === 0 ? (
-          <div className="h-64 w-full rounded-md border border-wolf-border/30 bg-wolf-black/30 flex items-center justify-center text-sm text-mist">
+          <div className="h-64 w-full rounded-md ring-1 ring-inset ring-wolf-border/30 bg-snow-peak/[0.03] flex items-center justify-center text-sm text-mist">
             No historical data available for this range.
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={260}>
-            <AreaChart data={chartData} margin={{ top: 10, right: 12, left: 0, bottom: 0 }}>
+            {/* Keyed on the range alone. Changing the window replaces the whole
+                series, and letting Recharts tween one path into another with a
+                different point count makes the line writhe rather than redraw -
+                so the chart is rebuilt and sweeps in cleanly instead. The
+                benchmark toggle is deliberately not part of the key: adding a
+                second line should not make the first one redraw. */}
+            <AreaChart
+              key={range}
+              data={chartData}
+              margin={{ top: 10, right: 12, left: 0, bottom: 0 }}
+            >
               <defs>
                 <linearGradient id="portfolioArea" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#FF8C42" stopOpacity={0.4} />
@@ -1135,6 +1157,9 @@ function PortfolioEvolutionChart({
                 fill="url(#portfolioArea)"
                 dot={false}
                 activeDot={{ r: 3.5, stroke: "#FF8C42", strokeWidth: 2, fill: c.dotStroke }}
+                isAnimationActive={!prefersReducedMotion}
+                animationDuration={chartAnimationDuration}
+                animationEasing="ease-out"
               />
               {compareBenchmark && (
                 <Area
@@ -1145,6 +1170,12 @@ function PortfolioEvolutionChart({
                   fill="transparent"
                   dot={false}
                   activeDot={{ r: 3, stroke: "#7A8FA8", strokeWidth: 2, fill: c.dotStroke }}
+                  isAnimationActive={!prefersReducedMotion}
+                  animationDuration={chartAnimationDuration}
+                  // The comparison trails the portfolio by a beat so the two
+                  // read as separate lines rather than one thick stroke.
+                  animationBegin={prefersReducedMotion ? 0 : 110}
+                  animationEasing="ease-out"
                 />
               )}
             </AreaChart>
@@ -1194,10 +1225,10 @@ function RowQuickActions({
         <MoreVertical className="w-3.5 h-3.5" />
       </button>
       {open && (
-        <div className="absolute right-0 z-40 mt-1 w-44 rounded-md border border-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
+        <div className="absolute right-0 z-40 mt-1 w-44 rounded-md ring-1 ring-inset ring-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
           <button
             type="button"
-            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-wolf-black/40 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-snow-peak/[0.04] flex items-center gap-2"
             onClick={() => {
               setOpen(false);
               onAddTransaction(position);
@@ -1207,14 +1238,14 @@ function RowQuickActions({
           </button>
           <Link
             href={`/symbol/${position.ticker}`}
-            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-wolf-black/40 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-snow-peak/[0.04] flex items-center gap-2"
             onClick={() => setOpen(false)}
           >
             <ExternalLink className="w-3.5 h-3.5 text-mist" /> View Details
           </Link>
           <button
             type="button"
-            className="w-full px-3 py-2 text-left text-xs text-bearish hover:bg-wolf-black/40 flex items-center gap-2"
+            className="w-full px-3 py-2 text-left text-xs text-bearish hover:bg-snow-peak/[0.04] flex items-center gap-2"
             onClick={() => {
               setOpen(false);
               onDelete(position.ticker);
@@ -1280,7 +1311,7 @@ function AddTransactionDialog({
               <p className="text-sm font-semibold text-snow-peak font-mono">{position.ticker}</p>
             </div>
 
-            <div className="flex rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5 w-fit">
+            <div className="flex rounded-md ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.04] p-0.5 w-fit">
               <button
                 type="button"
                 onClick={() => setSide("buy")}
@@ -1433,7 +1464,7 @@ function TransactionActivityFeed({
       {/* ── View toggle ── */}
       {sortedTransactions.length > 0 && (
         <div className="flex justify-end">
-          <div className="flex rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5 gap-0.5">
+          <div className="flex rounded-md ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.04] p-0.5 gap-0.5">
             <button
               type="button"
               onClick={() => setViewMode("large")}
@@ -1469,7 +1500,7 @@ function TransactionActivityFeed({
       {/* ── Transaction list ── */}
       <div className={cn("space-y-2", viewMode === "compact" && "space-y-1")}>
         {sortedTransactions.length === 0 ? (
-          <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
+          <div className="rounded-lg ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.03] p-6 text-center text-sm text-mist">
             No transactions recorded yet.
           </div>
         ) : (
@@ -1495,10 +1526,10 @@ function TransactionActivityFeed({
               return (
                 <div
                   key={tx.id}
-                  className="rounded-xl border border-wolf-border/50 bg-gradient-to-r from-wolf-surface/95 to-wolf-black/80 p-2"
+                  className="rounded-xl bg-snow-peak/[0.03] p-2 ring-1 ring-inset ring-wolf-border/50"
                 >
                   <div className="grid grid-cols-1 gap-2 md:grid-cols-[1fr_210px]">
-                    <div className="rounded-xl bg-wolf-black/30 px-5 py-4">
+                    <div className="rounded-xl bg-snow-peak/[0.03] px-5 py-4">
                       <div className={cn("text-[28px] leading-tight font-bold tracking-tight", sideColor)}>
                         <span className="text-[26px]">{sideLabel}</span>
                         <span className="mx-2 inline-flex align-middle">
@@ -1513,13 +1544,13 @@ function TransactionActivityFeed({
                           {formatPercent(operationPct, 2)} {operationPnL >= 0 ? "gain" : "loss"}
                         </p>
                       ) : null}
-                      <p className="mt-3 inline-flex items-center rounded-full bg-wolf-black/65 px-3 py-1 text-xs text-mist">
+                      <p className="mt-3 inline-flex items-center rounded-full bg-snow-peak/[0.06] px-3 py-1 text-xs text-mist">
                         {tx.side === "buy" ? <PlusCircle className="mr-1.5 h-3 w-3" /> : <MinusCircle className="mr-1.5 h-3 w-3" />}
                         {tx.side === "buy" ? "position up" : "position down"} by {formatPercent(Math.abs(afterWeight - beforeWeight), 2)}
                       </p>
                     </div>
 
-                    <div className="rounded-xl bg-wolf-black/35 px-4 py-3 flex flex-col justify-center">
+                    <div className="rounded-xl bg-snow-peak/[0.035] px-4 py-3 flex flex-col justify-center">
                       <div className="flex items-center gap-1.5 text-mist/80 text-xs mb-2">
                         <History className="h-4 w-4" />
                         <span>{formatDate(tx.executed_at)}</span>
@@ -1540,7 +1571,7 @@ function TransactionActivityFeed({
             return (
               <div
                 key={tx.id}
-                className="flex items-center gap-3 rounded-lg border border-wolf-border/35 bg-wolf-black/30 px-3 py-2 hover:bg-wolf-black/50 transition-colors"
+                className="flex items-center gap-3 rounded-lg ring-1 ring-inset ring-wolf-border/35 bg-snow-peak/[0.03] px-3 py-2 hover:bg-snow-peak/[0.05] transition-colors"
               >
                 {/* Side badge */}
                 <span
@@ -1613,6 +1644,7 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
       value: formatCurrency(summary.total_market_value, { compact: true }),
       icon: DollarSign,
       color: "text-sunset-orange",
+      glow: "bg-sunset-orange",
     },
     {
       label: "Total Return",
@@ -1620,6 +1652,7 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
       sub: formatPercent(summary.total_gain_loss_percent),
       icon: summary.total_return_gain_loss >= 0 ? TrendingUp : TrendingDown,
       color: summary.total_return_gain_loss >= 0 ? "text-bullish" : "text-bearish",
+      glow: summary.total_return_gain_loss >= 0 ? "bg-bullish" : "bg-bearish",
     },
     {
       label: "Today",
@@ -1627,24 +1660,38 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
       sub: formatPercent(summary.total_day_gain_loss_percent),
       icon: Activity,
       color: summary.total_day_gain_loss >= 0 ? "text-bullish" : "text-bearish",
+      glow: summary.total_day_gain_loss >= 0 ? "bg-bullish" : "bg-bearish",
     },
     {
       label: "Cost Basis",
       value: formatCurrency(summary.total_cost_basis, { compact: true }),
       icon: Target,
       color: "text-golden-hour",
+      glow: "bg-golden-hour",
     },
   ];
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-      {kpis.map((kpi) => (
+      {kpis.map((kpi, kpiIndex) => (
         <Card
           key={kpi.label}
-          className="overflow-hidden border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.25)]"
+          className="insight-enter overflow-hidden"
+          style={enterDelay(kpiIndex * 40)}
         >
           <CardContent className="relative p-4">
-            <div className="pointer-events-none absolute -top-8 -right-8 h-20 w-20 rounded-full bg-sunset-orange/10 blur-2xl" />
+            {/* Every tile carried the same orange bloom in its corner, which
+                made four different figures look like four of the same thing.
+                The tile now borrows the metric's own colour, so the row reads
+                as green when the book is up and red when it is down before a
+                single number is parsed. */}
+            <div
+              className={cn(
+                "pointer-events-none absolute -right-8 -top-8 h-20 w-20 rounded-full blur-2xl",
+                kpi.glow,
+                "opacity-[0.12]"
+              )}
+            />
             {isLoading ? (
               <div className="space-y-2">
                 <Skeleton className="h-3 w-20" />
@@ -1653,16 +1700,28 @@ function SummaryKPIs({ summary, isLoading }: { summary: PortfolioSummary; isLoad
             ) : (
               <>
                 <div className="mb-2 flex items-center gap-2">
-                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-wolf-border/40 bg-wolf-black/35">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.035]">
                     <kpi.icon className={cn("w-3.5 h-3.5", kpi.color)} />
                   </span>
-                  <p className="text-[11px] uppercase tracking-wide text-mist/85">{kpi.label}</p>
+                  <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
+                    {kpi.label}
+                  </p>
                 </div>
-                <p className={cn("text-xl font-bold font-mono tracking-tight", kpi.color)}>
+                {/* Tabular figures so the four tiles stay aligned as prices
+                    tick, and tighter tracking because at this size the default
+                    spacing reads as gaps between digits. */}
+                <p
+                  className={cn(
+                    "font-mono text-xl font-semibold tabular-nums tracking-[-0.02em]",
+                    kpi.color
+                  )}
+                >
                   {kpi.value}
                 </p>
                 {kpi.sub && (
-                  <p className={cn("text-xs font-mono mt-1", kpi.color)}>{kpi.sub}</p>
+                  <p className={cn("mt-1 font-mono text-xs tabular-nums", kpi.color)}>
+                    {kpi.sub}
+                  </p>
                 )}
               </>
             )}
@@ -1802,7 +1861,7 @@ function AllocationBreakdown({
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
       {/* Sector Allocation */}
-      <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <PieChart className="w-4 h-4 text-sunset-orange" /> Sector Allocation
@@ -1819,7 +1878,7 @@ function AllocationBreakdown({
             <>
               <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4 items-center mt-4">
                 <div className="relative mx-auto h-52 w-52">
-                  <div className="h-full w-full rounded-full bg-wolf-black/25 shadow-[0_14px_26px_rgba(0,0,0,0.28)]">
+                  <div className="h-full w-full rounded-full bg-snow-peak/[0.025]">
                     <RechartsPieChart width={208} height={208}>
                       <Pie
                         data={donutData}
@@ -1857,7 +1916,7 @@ function AllocationBreakdown({
                       <select
                         value={perfMode}
                         onChange={(e) => setPerfMode(e.target.value as "today" | "all")}
-                        className="appearance-none rounded-md border border-wolf-border/50 bg-wolf-black/80 px-2.5 py-1 pr-7 text-sm text-snow-peak"
+                        className="appearance-none rounded-md ring-1 ring-inset ring-wolf-border/50 bg-wolf-black/80 px-2.5 py-1 pr-7 text-sm text-snow-peak"
                       >
                         <option value="today">Today</option>
                         <option value="all">All Time</option>
@@ -1872,7 +1931,7 @@ function AllocationBreakdown({
                     const perf = sectorPerformance[sector];
                     const pct = perfMode === "today" ? perf?.todayPct ?? 0 : perf?.allPct ?? 0;
                     return (
-                      <div key={sector} className="flex items-center justify-between rounded-md border border-wolf-border/30 bg-wolf-black/25 px-2 py-1.5">
+                      <div key={sector} className="flex items-center justify-between rounded-md ring-1 ring-inset ring-wolf-border/30 bg-snow-peak/[0.025] px-2 py-1.5">
                         <div className="flex items-center gap-2">
                           <span className={cn("w-2.5 h-2.5 rounded-sm", getSectorColorClass(sector))} />
                           <p className="text-xs text-snow-peak">{sector}</p>
@@ -1895,7 +1954,7 @@ function AllocationBreakdown({
       </Card>
 
       {/* Top Holdings */}
-      <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+      <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <BarChart3 className="w-4 h-4 text-sunset-orange" /> Top Holdings
@@ -1910,7 +1969,7 @@ function AllocationBreakdown({
             <p className="text-xs text-mist/70">No positions</p>
           ) : (
             topHoldings.map((pos) => (
-              <div key={pos.ticker} className="flex items-center gap-3 rounded-lg border border-wolf-border/30 bg-wolf-black/20 px-2.5 py-2">
+              <div key={pos.ticker} className="flex items-center gap-3 rounded-lg ring-1 ring-inset ring-wolf-border/30 bg-snow-peak/[0.02] px-2.5 py-2">
                 <TickerLogo
                   ticker={pos.ticker}
                   src={pos.profile?.logo_url}
@@ -1989,7 +2048,7 @@ function PortfolioMetrics({
   ];
 
   return (
-    <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+    <Card>
       <CardHeader className="pb-2">
         <CardTitle className="text-sm flex items-center gap-2">
           <Info className="w-4 h-4 text-sunset-orange" /> Portfolio Metrics
@@ -1998,7 +2057,7 @@ function PortfolioMetrics({
       <CardContent>
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {metrics.map((m) => (
-            <div key={m.label} className="rounded-lg border border-wolf-border/35 bg-wolf-black/20 px-3 py-2.5">
+            <div key={m.label} className="rounded-lg ring-1 ring-inset ring-wolf-border/35 bg-snow-peak/[0.02] px-3 py-2.5">
               {isLoading ? (
                 <Skeleton className="h-8 w-full" />
               ) : (
@@ -2014,7 +2073,7 @@ function PortfolioMetrics({
                     {"riskTooltip" in m && m.riskTooltip && concentrationRisk !== "Low" && (
                       <div className="relative group/risk">
                         <Info className="w-3 h-3 text-mist/60 cursor-help" />
-                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2 rounded-lg bg-wolf-black border border-wolf-border/50 shadow-xl opacity-0 pointer-events-none group-hover/risk:opacity-100 group-hover/risk:pointer-events-auto transition-opacity z-50">
+                        <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 px-3 py-2 rounded-lg bg-wolf-black ring-1 ring-inset ring-wolf-border/50 shadow-xl opacity-0 pointer-events-none group-hover/risk:opacity-100 group-hover/risk:pointer-events-auto transition-opacity z-50">
                           <p className="text-[11px] text-mist leading-relaxed">
                             {topHolding?.ticker ?? "Top position"} represents <span className="text-snow-peak font-medium">{((topHolding?.weight ?? 0) * 100).toFixed(1)}%</span> of your portfolio. {topSector?.name ?? "Top sector"} is <span className="text-snow-peak font-medium">{((topSector?.weight ?? 0) * 100).toFixed(1)}%</span> of allocation.
                           </p>
@@ -2084,10 +2143,18 @@ function PositionTable({
     });
   }, [groupBySector, positions]);
 
-  const renderRow = (pos: EnrichedPosition) => (
+  const renderRow = (pos: EnrichedPosition, rowIndex: number) => (
     <tr
       key={pos.ticker}
-      className="border-b border-wolf-border/20 hover:bg-wolf-surface/50 transition-colors group"
+      // Rows arrive in reading order, capped so a long book never leaves its
+      // tail waiting. Filtering and sorting change the set under the same
+      // keys, so React reuses the rows and the cascade only plays when rows
+      // genuinely appear - re-sorting stays instant, which is the point.
+      style={enterDelay(Math.min(rowIndex * 18, 180))}
+      className={cn(
+        "insight-enter group border-b border-wolf-border/20",
+        "transition-colors duration-150 ease-out hover:bg-snow-peak/[0.03]"
+      )}
     >
       <td className="py-2.5 px-2">
         <Link href={`/symbol/${pos.ticker}`} className="flex items-center gap-2 min-w-0">
@@ -2137,7 +2204,7 @@ function PositionTable({
   );
 
   return (
-    <div className="overflow-x-auto min-h-[260px]">
+    <div className="scroll-quiet min-h-[260px] overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-wolf-border/30">
@@ -2180,7 +2247,7 @@ function PositionTable({
             </tr>
           ) : groupBySector && grouped ? (
             grouped.flatMap(([sector, rows]) => [
-              <tr key={`sector-${sector}`} className="bg-wolf-surface/80 border-t-2 border-b border-wolf-border/40">
+              <tr key={`sector-${sector}`} className="border-b border-t-2 border-wolf-border/40 bg-snow-peak/[0.04]">
                 <td colSpan={columns.length + 1} className="px-3 py-2.5 text-[11px] font-bold text-sunset-orange uppercase tracking-wider">
                   <span className="inline-flex items-center gap-2">
                     <span className="w-1.5 h-1.5 rounded-full bg-sunset-orange/70" />
@@ -2189,10 +2256,10 @@ function PositionTable({
                   </span>
                 </td>
               </tr>,
-              ...rows.map((pos) => renderRow(pos)),
+              ...rows.map((pos, rowIndex) => renderRow(pos, rowIndex)),
             ])
           ) : (
-            positions.map((pos) => renderRow(pos))
+            positions.map((pos, rowIndex) => renderRow(pos, rowIndex))
           )}
         </tbody>
       </table>
@@ -2243,8 +2310,14 @@ function PositionCards({
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {positions.map((pos) => (
-        <Card key={pos.ticker} className="group relative overflow-hidden">
+      {positions.map((pos, cardIndex) => (
+        <Card
+          key={pos.ticker}
+          // Same cascade as the table, a touch slower per card because there
+          // are fewer of them and each carries more to read.
+          style={enterDelay(Math.min(cardIndex * 30, 210))}
+          className="insight-enter group relative overflow-hidden"
+        >
           <CardContent className="p-4">
             <div className="flex items-start justify-between mb-3">
               <Link href={`/symbol/${pos.ticker}`} className="flex items-center gap-2.5">
@@ -2363,14 +2436,14 @@ function WatchlistScoutView({
 
   if (entries.length === 0) {
     return (
-      <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-6 text-center text-sm text-mist">
+      <div className="rounded-lg ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.03] p-6 text-center text-sm text-mist">
         No watchlist candidates outside your current portfolio.
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto">
+    <div className="scroll-quiet overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
           <tr className="border-b border-wolf-border/30">
@@ -2531,7 +2604,7 @@ function PortfolioSelector({
         onClick={() => setOpen(!open)}
         className={cn(
           "flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-medium",
-          "bg-wolf-surface border border-wolf-border/40 text-snow-peak",
+          "bg-wolf-surface ring-1 ring-inset ring-wolf-border/40 text-snow-peak",
           "hover:border-sunset-orange/40 transition-colors"
         )}
       >
@@ -2542,14 +2615,14 @@ function PortfolioSelector({
       </button>
 
       {open && (
-        <div className="absolute right-0 origin-top-right z-50 mt-1 w-72 rounded-lg border border-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
-          <div className="max-h-48 overflow-y-auto">
+        <div className="absolute right-0 origin-top-right z-50 mt-1 w-72 rounded-lg ring-1 ring-inset ring-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
+          <div className="scroll-quiet max-h-48 overflow-y-auto">
             {portfolios.map((p) => (
               <div
                 key={p.id}
                 className={cn(
                   "flex items-center justify-between px-3 py-2 cursor-pointer transition-colors",
-                  p.id === activeId ? "bg-sunset-orange/10" : "hover:bg-wolf-black/40"
+                  p.id === activeId ? "bg-sunset-orange/10" : "hover:bg-snow-peak/[0.04]"
                 )}
               >
                 {renamingId === p.id ? (
@@ -2562,7 +2635,7 @@ function PortfolioSelector({
                     }}
                   >
                     <input
-                      className="flex-1 text-xs bg-wolf-black/60 border border-wolf-border/50 rounded px-2 py-1 text-snow-peak focus:outline-none"
+                      className="flex-1 text-xs bg-snow-peak/[0.06] ring-1 ring-inset ring-wolf-border/50 rounded px-2 py-1 text-snow-peak focus:outline-none"
                       value={renameValue}
                       onChange={(e) => setRenameValue(e.target.value)}
                       autoFocus
@@ -2620,7 +2693,7 @@ function PortfolioSelector({
                 placeholder="New portfolio name..."
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                className="flex-1 text-xs bg-wolf-black/60 border border-wolf-border/50 rounded-md px-2 py-1.5 text-snow-peak placeholder:text-mist/50 focus:outline-none focus:border-sunset-orange/40"
+                className="flex-1 text-xs bg-snow-peak/[0.06] ring-1 ring-inset ring-wolf-border/50 rounded-md px-2 py-1.5 text-snow-peak placeholder:text-mist/50 focus:outline-none focus:border-sunset-orange/40"
               />
               <Button type="submit" size="sm" className="h-7 text-[11px] px-2" disabled={!newName.trim()}>
                 <Plus className="w-3 h-3" />
@@ -2644,6 +2717,30 @@ function PortfolioSelector({
 
 type AnalyticsTab = "risk" | "correlation" | "whatif" | "rebalance";
 
+/**
+ * One analytics panel, kept in the tree whether or not it is the one showing.
+ *
+ * `hidden` rather than a conditional render: the panel keeps its state and its
+ * warmed queries, so coming back is instant instead of a rebuild. Charts
+ * inside measure themselves through a ResizeObserver, which fires again when
+ * the panel returns to the layout, so they pick their size back up on their
+ * own. The fade is short and opacity-only - the content is already laid out,
+ * and this only has to say "something replaced what was here".
+ */
+function AnalyticsPanel({
+  active,
+  children,
+}: {
+  active: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div hidden={!active} className={active ? "insight-enter" : undefined}>
+      {children}
+    </div>
+  );
+}
+
 function AdvancedAnalyticsSection({
   positions,
   summary,
@@ -2657,64 +2754,78 @@ function AdvancedAnalyticsSection({
 }) {
   const [tab, setTab] = useState<AnalyticsTab>("risk");
 
-  const tabs: Array<{
-    id: AnalyticsTab;
-    label: string;
-    icon: React.ComponentType<{ className?: string }>;
-  }> = [
-    { id: "risk", label: "Risk & Return", icon: Shield },
-    { id: "correlation", label: "Correlation", icon: BarChart3 },
-    { id: "whatif", label: "What-If", icon: Activity },
-    { id: "rebalance", label: "Rebalance", icon: ArrowUpDown },
+  // Every one of these panels holds work the user did: draft trades in
+  // What-If, target weights in Rebalance, a chosen window in Correlation.
+  // Unmounting on each switch threw all of it away, so glancing at another
+  // tab and coming back meant starting over - and it paid for the panel's
+  // whole first render again on the way back. Panels are kept alive once
+  // visited and hidden with CSS instead, so a switch is a repaint rather than
+  // a rebuild. Nothing is mounted before it is first asked for, so the initial
+  // load still only pays for one.
+  const [visited, setVisited] = useState<ReadonlySet<AnalyticsTab>>(
+    () => new Set<AnalyticsTab>(["risk"])
+  );
+
+  useEffect(() => {
+    setVisited((previous) => {
+      if (previous.has(tab)) return previous;
+      const next = new Set(previous);
+      next.add(tab);
+      return next;
+    });
+  }, [tab]);
+
+  const tabs = [
+    { key: "risk" as const, label: "Risk & Return", icon: <Shield className="h-3 w-3" /> },
+    { key: "correlation" as const, label: "Correlation", icon: <BarChart3 className="h-3 w-3" /> },
+    { key: "whatif" as const, label: "What-If", icon: <Activity className="h-3 w-3" /> },
+    { key: "rebalance" as const, label: "Rebalance", icon: <ArrowUpDown className="h-3 w-3" /> },
   ];
 
   return (
-    <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">
+    <Card>
       <CardHeader className="pb-2">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
           <CardTitle className="text-sm flex items-center gap-2">
             <Activity className="w-4 h-4 text-sunset-orange" />
             Advanced Analytics
           </CardTitle>
-          <div className="flex flex-wrap rounded-md border border-wolf-border/40 bg-wolf-black/40 p-0.5">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => setTab(t.id)}
-                className={cn(
-                  "px-2.5 py-1 text-[11px] rounded-sm transition-colors flex items-center gap-1.5",
-                  tab === t.id
-                    ? "bg-sunset-orange/20 text-sunset-orange"
-                    : "text-mist hover:text-snow-peak"
-                )}
-              >
-                <t.icon className="w-3 h-3" />
-                {t.label}
-              </button>
-            ))}
-          </div>
+          <SegmentedTabs
+            items={tabs}
+            value={tab}
+            onChange={setTab}
+            ariaLabel="Advanced analytics view"
+            size="sm"
+          />
         </div>
       </CardHeader>
       <CardContent className="pt-2">
-        {tab === "risk" ? (
-          <RiskMetricsPanel
-            positions={positions}
-            transactionHistory={transactionHistory}
-            isLoading={isLoading}
-          />
+        {visited.has("risk") ? (
+          <AnalyticsPanel active={tab === "risk"}>
+            <RiskMetricsPanel
+              positions={positions}
+              transactionHistory={transactionHistory}
+              isLoading={isLoading}
+            />
+          </AnalyticsPanel>
         ) : null}
-        {tab === "correlation" ? (
-          <CorrelationHeatmap positions={positions} />
+        {visited.has("correlation") ? (
+          <AnalyticsPanel active={tab === "correlation"}>
+            <CorrelationHeatmap positions={positions} />
+          </AnalyticsPanel>
         ) : null}
-        {tab === "whatif" ? (
-          <WhatIfSimulator positions={positions} summary={summary} />
+        {visited.has("whatif") ? (
+          <AnalyticsPanel active={tab === "whatif"}>
+            <WhatIfSimulator positions={positions} summary={summary} />
+          </AnalyticsPanel>
         ) : null}
-        {tab === "rebalance" ? (
-          <RebalanceAdvisor
-            positions={positions}
-            totalMarketValue={summary.total_market_value}
-          />
+        {visited.has("rebalance") ? (
+          <AnalyticsPanel active={tab === "rebalance"}>
+            <RebalanceAdvisor
+              positions={positions}
+              totalMarketValue={summary.total_market_value}
+            />
+          </AnalyticsPanel>
         ) : null}
       </CardContent>
     </Card>
@@ -2740,17 +2851,17 @@ function QuickFilterChip({
 }) {
   const inactiveToneClass =
     tone === "bullish"
-      ? "text-bullish/80 border-bullish/25 hover:bg-bullish/10"
+      ? "text-bullish/80 ring-bullish/25 hover:bg-bullish/10"
       : tone === "bearish"
-        ? "text-bearish/80 border-bearish/25 hover:bg-bearish/10"
-        : "text-mist border-wolf-border/40 hover:text-snow-peak hover:bg-wolf-black/40";
+        ? "text-bearish/80 ring-bearish/25 hover:bg-bearish/10"
+        : "text-mist ring-wolf-border/40 hover:text-snow-peak hover:bg-snow-peak/[0.06]";
 
   const activeToneClass =
     tone === "bullish"
-      ? "bg-bullish/15 text-bullish border-bullish/40"
+      ? "bg-bullish/15 text-bullish ring-bullish/40"
       : tone === "bearish"
-        ? "bg-bearish/15 text-bearish border-bearish/40"
-        : "bg-sunset-orange/15 text-sunset-orange border-sunset-orange/40";
+        ? "bg-bearish/15 text-bearish ring-bearish/40"
+        : "bg-sunset-orange/15 text-sunset-orange ring-sunset-orange/40";
 
   return (
     <button
@@ -2758,16 +2869,21 @@ function QuickFilterChip({
       onClick={onClick}
       disabled={count === 0 && !active}
       className={cn(
-        "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] border transition-colors",
+        "inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] ring-1 ring-inset",
+        // Filtering is the most-repeated action on this page, so the chip
+        // acknowledges the press itself rather than waiting for the table
+        // below to finish re-sorting.
+        "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+        "active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
         active ? activeToneClass : inactiveToneClass,
-        count === 0 && !active && "opacity-40 cursor-not-allowed"
+        count === 0 && !active && "cursor-not-allowed opacity-40"
       )}
     >
       <span>{label}</span>
       <span
         className={cn(
           "px-1 py-px rounded-sm text-[10px] font-mono",
-          active ? "bg-wolf-black/30" : "bg-wolf-black/40 text-mist"
+          active ? "bg-snow-peak/[0.03]" : "bg-snow-peak/[0.04] text-mist"
         )}
       >
         {count}
@@ -3252,29 +3368,42 @@ export default function PortfoliosPage() {
       </div>
 
       {/* ── KPI Summary ── */}
-      <PortfolioEvolutionChart
-        positions={portfolio.positions}
-        transactionHistory={portfolio.transactionHistory}
-      />
+      {/* The page builds top to bottom on arrival. The steps are small and the
+          whole cascade is over inside a third of a second - long enough to
+          read as an order of importance, short enough that nobody waits on
+          it. Each section owns its delay so the sequence survives one of them
+          being hidden. */}
+      <div className="insight-enter" style={enterDelay(0)}>
+        <PortfolioEvolutionChart
+          positions={portfolio.positions}
+          transactionHistory={portfolio.transactionHistory}
+        />
+      </div>
 
-      <SummaryKPIs summary={portfolio.summary} isLoading={portfolio.isLoading} />
+      <div className="insight-enter" style={enterDelay(50)}>
+        <SummaryKPIs summary={portfolio.summary} isLoading={portfolio.isLoading} />
+      </div>
 
       {/* ── Allocation & Top Holdings ── */}
-      <AllocationBreakdown
-        positions={portfolio.positions}
-        summary={portfolio.summary}
-        isLoading={portfolio.isLoading}
-      />
+      <div className="insight-enter" style={enterDelay(100)}>
+        <AllocationBreakdown
+          positions={portfolio.positions}
+          summary={portfolio.summary}
+          isLoading={portfolio.isLoading}
+        />
+      </div>
 
       {/* ── Portfolio Metrics ── */}
-      <PortfolioMetrics
-        summary={portfolio.summary}
-        positions={portfolio.positions}
-        isLoading={portfolio.isLoading}
-      />
+      <div className="insight-enter" style={enterDelay(150)}>
+        <PortfolioMetrics
+          summary={portfolio.summary}
+          positions={portfolio.positions}
+          isLoading={portfolio.isLoading}
+        />
+      </div>
 
       {/* ── Positions ── */}
-      <Card>
+      <Card className="insight-enter" style={enterDelay(200)}>
         <CardContent className="p-0">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-wolf-border/30 px-3 sm:px-4 py-3">
             <p className="text-sm font-semibold text-snow-peak">
@@ -3286,7 +3415,7 @@ export default function PortfoliosPage() {
                     ? `Dip Finder (${dipFinderItems.length})`
                   : `Positions (${portfolio.positions.length})`}
             </p>
-            <div className="flex items-center gap-2 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+            <div className="scroll-quiet flex w-full items-center gap-2 overflow-x-auto pb-1 sm:w-auto sm:pb-0">
               {contentView === "transactions" ? (
                 <Button
                   variant="ghost"
@@ -3326,7 +3455,7 @@ export default function PortfoliosPage() {
                       <select
                         value={activeListId}
                         onChange={(e) => setActiveList(e.target.value)}
-                        className="appearance-none h-8 min-w-[150px] rounded-md border border-wolf-border/45 bg-wolf-black/45 pl-2 pr-7 text-xs text-snow-peak"
+                        className="appearance-none h-8 min-w-[150px] rounded-md ring-1 ring-inset ring-wolf-border/45 bg-snow-peak/[0.045] pl-2 pr-7 text-xs text-snow-peak"
                         aria-label="Select watchlist"
                       >
                         {lists.map((list) => (
@@ -3351,7 +3480,7 @@ export default function PortfoliosPage() {
               ) : (
                 <>
                   {/* 1. Table/Cards */}
-                  <div className="flex bg-wolf-black/40 rounded-md border border-wolf-border/40 p-0.5">
+                  <div className="flex bg-snow-peak/[0.04] rounded-md ring-1 ring-inset ring-wolf-border/40 p-0.5">
                     <button
                       type="button"
                       onClick={() => {
@@ -3528,7 +3657,7 @@ export default function PortfoliosPage() {
             ) : contentView === "watchlist" ? (
               <div className="space-y-4">
                 {isScoutInboxOpen ? (
-                  <div className="rounded-xl border border-sunset-orange/35 bg-gradient-to-br from-sunset-orange/18 via-sunset-orange/8 to-wolf-black/15 px-4 py-3 shadow-[0_14px_26px_rgba(0,0,0,0.22)]">
+                  <div className="rounded-xl border border-sunset-orange/35 bg-gradient-to-br from-sunset-orange/18 via-sunset-orange/8 to-wolf-black/15 px-4 py-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-xs font-semibold text-sunset-orange">
                         <BellRing className="h-3.5 w-3.5" />
@@ -3539,7 +3668,7 @@ export default function PortfoliosPage() {
                           type="button"
                           size="sm"
                           variant="outline"
-                          className="h-7 px-2 text-[10px] border-sunset-orange/40 bg-wolf-black/30 text-sunset-orange hover:text-sunset-orange"
+                          className="h-7 px-2 text-[10px] border-sunset-orange/40 bg-snow-peak/[0.03] text-sunset-orange hover:text-sunset-orange"
                           onClick={() =>
                             setDismissedScoutInboxIds((prev) => [
                               ...new Set([...prev, ...visibleScoutInbox.map((item) => item.id)]),
@@ -3553,7 +3682,7 @@ export default function PortfoliosPage() {
                     <div className="space-y-1.5">
                       {visibleScoutInbox.length > 0 ? (
                         visibleScoutInbox.slice(0, 6).map((item) => (
-                          <div key={item.id} className="rounded-md border border-sunset-orange/25 bg-wolf-black/30 px-2.5 py-2">
+                          <div key={item.id} className="rounded-md border border-sunset-orange/25 bg-snow-peak/[0.03] px-2.5 py-2">
                             <div className="flex items-center gap-2.5">
                               <TickerLogo
                                 ticker={item.ticker}
@@ -3619,12 +3748,14 @@ export default function PortfoliosPage() {
 
       {/* ── Advanced Analytics ── */}
       {portfolio.positions.length > 0 ? (
-        <AdvancedAnalyticsSection
-          positions={portfolio.positions}
-          summary={portfolio.summary}
-          transactionHistory={portfolio.transactionHistory}
-          isLoading={portfolio.isLoading}
-        />
+        <div className="insight-enter" style={enterDelay(250)}>
+          <AdvancedAnalyticsSection
+            positions={portfolio.positions}
+            summary={portfolio.summary}
+            transactionHistory={portfolio.transactionHistory}
+            isLoading={portfolio.isLoading}
+          />
+        </div>
       ) : null}
 
       <EditPositionDialog
@@ -3739,10 +3870,10 @@ export default function PortfoliosPage() {
               <p className="text-xs text-mist mt-0.5">Edit or remove each alert individually</p>
             </div>
 
-            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+            <div className="scroll-quiet max-h-[320px] space-y-2 overflow-y-auto pr-1">
               {alertDrafts.length > 0 ? (
                 alertDrafts.map((draft, idx) => (
-                  <div key={draft.id ?? `new-${idx}`} className="rounded-lg border border-wolf-border/40 bg-wolf-black/35 px-3 py-2.5">
+                  <div key={draft.id ?? `new-${idx}`} className="rounded-lg ring-1 ring-inset ring-wolf-border/40 bg-snow-peak/[0.035] px-3 py-2.5">
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
                         <Button

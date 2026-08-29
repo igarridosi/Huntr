@@ -29,14 +29,14 @@ export function ExpandChartDialog({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
-        className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-wolf-border/60 bg-wolf-black/30 text-mist transition-colors hover:bg-wolf-border/30 hover:text-snow-peak sm:h-7 sm:w-7"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-snow-peak/[0.04] text-mist ring-1 ring-inset ring-wolf-border/45 transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.08] hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
         aria-label={`Expand ${title} chart`}
         title="Expand chart"
       >
         <Maximize2 className="h-3.5 w-3.5" />
       </DialogTrigger>
-      <DialogContent className="max-w-6xl w-[95vw] p-0 overflow-hidden">
-        <DialogHeader className="px-5 py-3 border-b border-wolf-border/50">
+      <DialogContent className="w-[95vw] max-w-6xl overflow-hidden p-0">
+        <DialogHeader className="border-b border-wolf-border/40 px-5 py-3">
           <div className="flex items-center justify-between gap-4">
             <DialogTitle className="text-sm md:text-base">{title}</DialogTitle>
             <div className="flex items-center gap-2">
@@ -55,7 +55,7 @@ export function ExpandChartDialog({
         </DialogHeader>
         <div className="p-4 md:p-6">{children}</div>
         {footer ? (
-          <div className="px-5 py-3 border-t border-wolf-border/50 bg-wolf-black/20">
+          <div className="border-t border-wolf-border/40 bg-snow-peak/[0.02] px-5 py-3">
             {footer}
           </div>
         ) : null}

@@ -32,6 +32,7 @@ import {
   formatCurrency,
   formatCompactNumber,
   formatPercent,
+  enterDelay,
 } from "@/lib/utils";
 import type { PriceAlert, WatchlistEntry, WatchlistView } from "@/types/watchlist";
 import { TAG_COLORS } from "@/types/watchlist";
@@ -172,9 +173,10 @@ export const WatchlistTable = memo(function WatchlistTable({
         </TableRow>
       </TableHeader>
       <TableBody>
-        {entries.map((entry) => (
+        {entries.map((entry, rowIndex) => (
           <WatchlistRow
             key={entry.ticker}
+            rowIndex={rowIndex}
             entry={entry}
             view={view}
             performanceData={performanceData}
@@ -195,6 +197,7 @@ export const WatchlistTable = memo(function WatchlistTable({
 WatchlistTable.displayName = "WatchlistTable";
 
 function WatchlistRow({
+  rowIndex,
   entry,
   view,
   performanceData,
@@ -207,6 +210,7 @@ function WatchlistRow({
   onRemove,
   isRemoving,
 }: {
+  rowIndex: number;
   entry: WatchlistEntry;
   view: WatchlistView;
   performanceData: Record<string, Record<string, number>>;
@@ -297,7 +301,13 @@ function WatchlistRow({
   })();
 
   return (
-    <TableRow className="group">
+    <TableRow
+      // Rows arrive in reading order, capped so a long list never leaves its
+      // tail waiting. Switching list or view reuses the same ticker keys where
+      // they overlap, so only genuinely new rows animate.
+      style={enterDelay(Math.min(rowIndex * 18, 180))}
+      className="insight-enter group"
+    >
       <TableCell>
         <div className="flex items-center justify-between gap-2">
           <Link
@@ -320,7 +330,7 @@ function WatchlistRow({
             <button
               type="button"
               onClick={() => onConfigureAlert?.(ticker, quote.price, entry.target_price)}
-              className="shrink-0 rounded-md border border-wolf-border/40 p-1 text-mist transition-colors hover:text-sunset-orange cursor-pointer"
+              className="shrink-0 cursor-pointer rounded-lg p-1 text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-sunset-orange active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100"
               title={activeAlertCount > 0 ? `Alerts (${activeAlertCount})` : "Create price alert"}
               aria-label={`Configure alerts for ${ticker}`}
             >

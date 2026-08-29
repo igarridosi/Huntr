@@ -198,21 +198,34 @@ function isSubstantialRow(
   return row[requiredField] != null && typeof row[requiredField] === "number";
 }
 
+/**
+ * Whether an income-statement period is worth keeping.
+ *
+ * Yahoo's oldest periods often carry only a peripheral line - an interest
+ * expense, an EPS figure - with no top or bottom line behind them. Accepting a
+ * row on the strength of any one of eight fields let those through, and since
+ * `tsn` reports a missing number as 0, they arrived downstream looking like a
+ * year in which the company earned nothing: a phantom zero bar at the left of
+ * every chart, an axis dragged into negative territory to accommodate it, and
+ * a growth base of zero that made the percentage undefined.
+ *
+ * A period only counts if it carries at least one headline figure. Revenue,
+ * operating income, net income and EBITDA are what the charts are drawn from;
+ * interest expense and EPS are not enough on their own to call it a reported
+ * year.
+ */
 function isSubstantialIncomeRow(row: Record<string, unknown>): boolean {
-  const candidateFields = [
+  const headlineFields = [
     "totalRevenue",
     "operatingRevenue",
     "operatingIncome",
     "netIncome",
     "EBITDA",
-    "interestExpense",
-    "basicEPS",
-    "dilutedEPS",
   ];
 
-  return candidateFields.some((field) => {
+  return headlineFields.some((field) => {
     const value = row[field];
-    return typeof value === "number" && Number.isFinite(value);
+    return typeof value === "number" && Number.isFinite(value) && value !== 0;
   });
 }
 

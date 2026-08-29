@@ -36,6 +36,7 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
 import { ErrorState } from "@/components/ui/error-state";
 import type { PriceAlert, WatchlistView } from "@/types/watchlist";
+import { cn, enterDelay } from "@/lib/utils";
 
 const VIEW_OPTIONS: Array<{
   key: WatchlistView;
@@ -410,9 +411,13 @@ export default function WatchlistsPage() {
         )}
       </div>
 
-      <div className="flex items-center gap-2 overflow-x-auto pb-1">
-        {lists.map((list) => (
-          <div key={list.id} className="relative group flex items-center">
+      <div className="scroll-quiet flex items-center gap-2 overflow-x-auto pb-1">
+        {lists.map((list, listIndex) => (
+          <div
+            key={list.id}
+            className="insight-enter group relative flex items-center"
+            style={enterDelay(Math.min(listIndex * 25, 150))}
+          >
             {editingListId === list.id ? (
               <div className="flex items-center gap-1">
                 <Input
@@ -433,15 +438,25 @@ export default function WatchlistsPage() {
               <button
                 type="button"
                 onClick={() => setActiveList(list.id)}
-                className={`flex items-center gap-2 px-3 py-1.5 text-xs rounded-lg border transition-colors whitespace-nowrap cursor-pointer ${
+                className={cn(
+                  "flex cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-3 py-1.5 text-xs ring-1 ring-inset",
+                  "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+                  "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
                   activeListId === list.id
-                    ? "bg-sunset-orange/10 text-sunset-orange border-sunset-orange/30"
-                    : "bg-wolf-black/30 text-mist border-wolf-border/40 hover:text-snow-peak"
-                }`}
+                    ? "bg-sunset-orange/12 text-sunset-orange ring-sunset-orange/30"
+                    : "bg-snow-peak/[0.03] text-mist ring-wolf-border/40 hover:bg-snow-peak/[0.06] hover:text-snow-peak"
+                )}
               >
-                <span className={`w-2 h-2 rounded-full shrink-0 ${activeListId === list.id ? "bg-sunset-orange" : "bg-mist/60"}`} />
+                <span
+                  className={cn(
+                    "h-2 w-2 shrink-0 rounded-full",
+                    activeListId === list.id ? "bg-sunset-orange" : "bg-mist/60"
+                  )}
+                />
                 {list.name}
-                <span className="text-[10px] text-mist/60 font-mono">{list.items.length}</span>
+                <span className="font-mono text-[10px] tabular-nums text-mist/60">
+                  {list.items.length}
+                </span>
               </button>
             )}
 
@@ -484,7 +499,7 @@ export default function WatchlistsPage() {
 
       <Card>
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-b border-wolf-border/30">
-          <div className="flex items-center gap-1 rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-1">
+          <div className="flex items-center gap-1 rounded-lg bg-snow-peak/[0.04] p-1 ring-1 ring-inset ring-wolf-border/40">
             {VIEW_OPTIONS.map((option) => (
               <button
                 key={option.key}
@@ -493,11 +508,14 @@ export default function WatchlistsPage() {
                   setView(option.key);
                   setHeatmapMode(false);
                 }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors cursor-pointer ${
+                className={cn(
+                  "flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-medium",
+                  "transition-[background-color,color,transform] duration-150 ease-out",
+                  "active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
                   view === option.key && !heatmapMode
                     ? "bg-sunset-orange/15 text-sunset-orange"
-                    : "text-mist hover:text-snow-peak"
-                }`}
+                    : "text-mist hover:bg-snow-peak/[0.06] hover:text-snow-peak"
+                )}
               >
                 <option.icon className="h-3.5 w-3.5" />
                 <span className="hidden sm:inline">{option.label}</span>
@@ -584,7 +602,7 @@ export default function WatchlistsPage() {
           ) : null}
 
           {isInboxOpen ? (
-            <div className="mx-6 mt-4 mb-6 rounded-xl border border-sunset-orange/35 bg-gradient-to-br from-sunset-orange/18 via-sunset-orange/8 to-wolf-black/15 px-4 py-3 shadow-[0_14px_26px_rgba(0,0,0,0.22)]">
+            <div className="insight-enter mx-6 mb-6 mt-4 rounded-xl bg-sunset-orange/[0.10] px-4 py-3 ring-1 ring-inset ring-sunset-orange/35">
               <div className="mb-2 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 text-xs font-semibold text-sunset-orange">
                   <BellRing className="h-3.5 w-3.5" />
@@ -595,7 +613,7 @@ export default function WatchlistsPage() {
                     type="button"
                     size="sm"
                     variant="outline"
-                    className="h-7 px-2 text-[10px] border-sunset-orange/40 bg-wolf-black/30 text-sunset-orange hover:text-sunset-orange"
+                    className="h-7 bg-snow-peak/[0.04] px-2 text-[10px] text-sunset-orange ring-1 ring-inset ring-sunset-orange/40 hover:text-sunset-orange"
                     onClick={() =>
                       setDismissedInboxIds((prev) => [
                         ...new Set([...prev, ...visibleInbox.map((item) => item.id)]),
@@ -609,7 +627,7 @@ export default function WatchlistsPage() {
               <div className="space-y-1.5">
                 {visibleInbox.length > 0 ? (
                   visibleInbox.slice(0, 6).map((item) => (
-                    <div key={item.id} className="rounded-md border border-sunset-orange/25 bg-wolf-black/30 px-2.5 py-2">
+                    <div key={item.id} className="rounded-lg bg-snow-peak/[0.03] px-2.5 py-2 ring-1 ring-inset ring-sunset-orange/25">
                       <div className="flex items-center gap-2.5">
                         <TickerLogo
                           ticker={item.ticker}
@@ -773,10 +791,10 @@ export default function WatchlistsPage() {
               <p className="text-xs text-mist mt-0.5">Edit or remove each alert individually</p>
             </div>
 
-            <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1">
+            <div className="scroll-quiet max-h-[320px] space-y-2 overflow-y-auto pr-1">
               {alertDrafts.length > 0 ? (
                 alertDrafts.map((draft, idx) => (
-                  <div key={draft.id ?? `new-${idx}`} className="rounded-lg border border-wolf-border/40 bg-wolf-black/35 px-3 py-2.5">
+                  <div key={draft.id ?? `new-${idx}`} className="rounded-lg bg-snow-peak/[0.035] px-3 py-2.5 ring-1 ring-inset ring-wolf-border/40">
                     <div className="flex items-center gap-2">
                       <div className="flex gap-1">
                         <Button

@@ -19,7 +19,7 @@ import {
   UserPlus,
   X,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, enterDelay } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { Separator } from "@/components/ui/separator";
 import { TickerLogo } from "@/components/ui/ticker-logo";
@@ -123,28 +123,39 @@ export function Sidebar({
 
       <aside
         className={cn(
-          "hidden lg:flex flex-col w-64 h-screen bg-wolf-surface border-r border-wolf-border/50 fixed left-0 top-0",
+          "fixed left-0 top-0 hidden h-screen w-64 flex-col bg-wolf-surface lg:flex",
+          // A hairline edge rather than a border: the panel is already a
+          // different surface from the page, so the divider only has to mark
+          // where one ends.
+          "after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-wolf-border/40 after:content-['']",
           overlay ? "z-50 shadow-2xl" : "z-40"
         )}
       >
       {/* ---- Logo / Brand ---- */}
-      <div className="flex items-center gap-3 px-4 h-14 shrink-0 border-b border-wolf-border/50">
+      {/* The height matches the topbar so the two dividers line up across the
+          page, which means the room this block needs has to come from the
+          sides rather than from growing downwards. The wordmark was competing
+          with a 44px logo and a close button inside 256px, so the tagline wrapped
+          onto a second line and pushed the whole group out of a 56px header -
+          which is what made it look crowded. A smaller mark, a wider gutter and
+          a tagline that truncates instead of wrapping give it back its air. */}
+      <div className="flex h-14 shrink-0 items-center gap-3.5 border-b border-wolf-border/40 px-5">
         {/* Fixed dark container keeps the white wolf visible in both themes */}
-        <div className="flex items-center justify-center shrink-0 rounded-md bg-[#162225] p-1">
+        <div className="flex shrink-0 items-center justify-center rounded-lg bg-[#162225] p-1">
           <Image
             src="/logo/HunterLogoCut-removebg.png"
             alt="Huntr"
-            width={44}
-            height={33}
-            className="h-auto w-11 object-contain"
+            width={38}
+            height={29}
+            className="h-auto w-[38px] object-contain"
             priority
           />
         </div>
-        <div className="min-w-0">
-          <h1 className="text-base font-bold text-snow-peak tracking-tight leading-tight">
+        <div className="min-w-0 flex-1">
+          <h1 className="text-base font-bold leading-tight tracking-tight text-snow-peak">
             HUNTR
           </h1>
-          <p className="text-[10px] text-mist/60 font-mono uppercase tracking-widest">
+          <p className="truncate font-mono text-[9px] uppercase leading-tight tracking-[0.14em] text-mist/50">
             Wolf of Value St.
           </p>
         </div>
@@ -153,7 +164,7 @@ export function Sidebar({
             type="button"
             onClick={onClose}
             aria-label="Close sidebar"
-            className="ml-auto p-1.5 rounded-md text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-colors"
+            className="-mr-1.5 ml-auto shrink-0 rounded-lg p-1.5 text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100"
           >
             <X className="w-4 h-4" />
           </button>
@@ -166,26 +177,27 @@ export function Sidebar({
           type="button"
           onClick={onSearchClick}
           className={cn(
-            "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm",
-            "text-mist hover:text-snow-peak hover:bg-wolf-black/50",
-            "border border-wolf-border/50 transition-all duration-200",
-            "cursor-pointer"
+            "flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm",
+            "bg-snow-peak/[0.03] text-mist ring-1 ring-inset ring-wolf-border/45",
+            "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+            "hover:bg-snow-peak/[0.06] hover:text-snow-peak hover:ring-wolf-border/70",
+            "active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
           )}
         >
           <Search className="w-4 h-4 shrink-0" />
           <span className="flex-1 text-left">Search tickers...</span>
-          <kbd className="hidden sm:inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-mono text-mist/60 bg-wolf-black/50 rounded border border-wolf-border/50">
+          <kbd className="hidden items-center gap-1 rounded-md bg-snow-peak/[0.05] px-1.5 py-0.5 font-mono text-[10px] text-mist/60 ring-1 ring-inset ring-wolf-border/40 sm:inline-flex">
             ⌘K
           </kbd>
         </button>
       </div>
 
       {/* ---- Main Navigation ---- */}
-      <nav className="flex-1 px-3 py-2 space-y-1 overflow-y-auto">
-        <p className="px-3 text-[10px] font-semibold text-mist/50 uppercase tracking-widest mb-2">
+      <nav className="scroll-quiet flex-1 space-y-1 overflow-y-auto px-3 py-2">
+        <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
           Platform
         </p>
-        {mainNav.map((item) => {
+        {mainNav.map((item, itemIndex) => {
           const isActive = item.matchExact
             ? pathname === item.href
             : pathname.startsWith(item.href);
@@ -194,21 +206,42 @@ export function Sidebar({
             <Link
               key={item.label}
               href={item.href}
+              aria-current={isActive ? "page" : undefined}
+              style={enterDelay(itemIndex * 25)}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200",
+                "insight-enter relative flex items-center gap-3 rounded-lg py-2 pl-3 pr-3 text-sm font-medium",
+                // Only the properties that actually change. `transition-all`
+                // was also watching layout properties for no reason.
+                "transition-[background-color,color,transform] duration-150 ease-out",
+                "active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100",
+                // The selected item was a filled orange slab - the loudest
+                // thing on screen, for something that is only telling you where
+                // you already are. A quiet raised surface plus a marker on the
+                // rail says the same thing without competing with the content.
                 isActive
-                  ? "bg-sunset-orange/10 text-sunset-orange"
-                  : "text-mist hover:text-snow-peak hover:bg-wolf-black/30"
+                  ? "bg-snow-peak/[0.05] text-snow-peak"
+                  : "text-mist hover:bg-snow-peak/[0.04] hover:text-snow-peak"
               )}
             >
-              <item.icon className="w-4 h-4 shrink-0" />
+              {isActive ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute inset-y-1.5 left-0 w-[2px] rounded-full bg-sunset-orange"
+                />
+              ) : null}
+              <item.icon
+                className={cn(
+                  "h-4 w-4 shrink-0 transition-colors duration-150",
+                  isActive ? "text-sunset-orange" : "text-mist/80"
+                )}
+              />
               {item.label}
             </Link>
           );
         })}
 
         <div className="pt-4 space-y-1">
-          <p className="px-3 text-[10px] font-semibold text-mist/50 uppercase tracking-widest mb-2">
+          <p className="mb-2 px-3 text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
             Recent Searches
           </p>
           <div className="space-y-0.5">
@@ -218,8 +251,10 @@ export function Sidebar({
                   key={ticker}
                   href={ROUTES.SYMBOL(ticker)}
                   className={cn(
-                    "group flex items-center gap-2.5 px-3 py-1.5 rounded-md transition-all duration-200",
-                    "text-mist hover:text-snow-peak hover:bg-wolf-black/30"
+                    "group flex items-center gap-2.5 rounded-lg px-3 py-1.5 text-mist",
+                    "transition-[background-color,color,transform] duration-150 ease-out",
+                    "hover:bg-snow-peak/[0.04] hover:text-snow-peak",
+                    "active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                   )}
                 >
                   <TickerLogo
@@ -243,12 +278,12 @@ export function Sidebar({
 
       {/* ---- Bottom Section ---- */}
       <div className="px-3 py-3 space-y-1 shrink-0">
-        <Separator className="opacity-50 mb-3" />
+        <Separator className="mb-3 opacity-40" />
         {user ? (
           <>
             <Link
               href={ROUTES.APP_SETTINGS}
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all duration-200 cursor-pointer"
+              className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.04] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               <Settings className="w-4 h-4 shrink-0" />
               Settings
@@ -259,7 +294,7 @@ export function Sidebar({
                 await supabase.auth.signOut();
                 router.push(ROUTES.LOGIN);
               }}
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-mist hover:text-bearish hover:bg-bearish/10 transition-all duration-200 cursor-pointer"
+              className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-bearish/10 hover:text-bearish active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               <LogOut className="w-4 h-4 shrink-0" />
               Sign Out
@@ -269,14 +304,14 @@ export function Sidebar({
           <>
             <Link
               href={ROUTES.SIGNUP}
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-wolf-black bg-sunset-orange hover:bg-sunset-orange/90 transition-all duration-200 cursor-pointer"
+              className="flex w-full cursor-pointer items-center gap-3 rounded-lg bg-sunset-orange px-3 py-2 text-sm font-medium text-wolf-black transition-[background-color,transform] duration-150 ease-out hover:bg-sunset-orange/90 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               <UserPlus className="w-4 h-4 shrink-0" />
               Create free account
             </Link>
             <Link
               href={ROUTES.LOGIN}
-              className="flex items-center gap-3 w-full px-3 py-2 rounded-lg text-sm font-medium text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all duration-200 cursor-pointer"
+              className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.04] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               <LogIn className="w-4 h-4 shrink-0" />
               Log in
