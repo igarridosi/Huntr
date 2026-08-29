@@ -50,14 +50,44 @@ import {
 
 const yahooFinance = new YahooFinance({ suppressNotices: ["yahooSurvey"] });
 
-type YahooHistoricalClient = {
-  historical: (
+type YahooChartClient = {
+  chart: (
     symbol: string,
     options: { period1: string; period2: string; interval: string }
-  ) => Promise<unknown>;
+  ) => Promise<{ quotes?: unknown } | unknown>;
 };
 
-const yahooHistoricalClient = yahooFinance as unknown as YahooHistoricalClient;
+const yahooChartClient = yahooFinance as unknown as YahooChartClient;
+
+/**
+ * Daily/interval price rows for a symbol.
+ *
+ * This used to call the library's `historical()`, which stopped returning
+ * anything at all: Yahoo now sends a null close on the most recent bar (the
+ * session that has not settled yet), and `historical()` treats a partially
+ * null result as corrupt and throws rather than handing back the rows it does
+ * have. Every caller here wraps the call in a try/catch that falls back to an
+ * empty series, so the failure surfaced as charts quietly reporting "no
+ * historical data" instead of as an error.
+ *
+ * `chart()` returns the same rows and leaves the judgement to us, which is the
+ * right split - a null close on today's incomplete bar is normal, not a reason
+ * to discard five years of history. Rows without a usable close are dropped
+ * here so every caller downstream sees the shape `historical()` used to give.
+ */
+async function fetchPriceRows(
+  symbol: string,
+  options: { period1: string; period2: string; interval: string }
+): Promise<Array<Record<string, unknown>>> {
+  const response = await yahooChartClient.chart(symbol, options);
+  const quotes = (response as { quotes?: unknown })?.quotes;
+  if (!Array.isArray(quotes)) return [];
+
+  return (quotes as Array<Record<string, unknown>>).filter((row) => {
+    const close = row?.close;
+    return typeof close === "number" && Number.isFinite(close) && close > 0;
+  });
+}
 
 const SUPPRESSED_YAHOO_MESSAGES = [
   "Could not determine entry type",
@@ -1302,7 +1332,7 @@ async function getTickerWindowPerformance(
       pct = computeIntradayPercentFromQuoteRow(row);
     } else {
       const rows = await withSuppressedYahooWarnings(async () =>
-        yahooHistoricalClient.historical(key, {
+        fetchPriceRows(key, {
           period1: getWindowStartDate(window),
           period2: new Date().toISOString().slice(0, 10),
           interval: "1d",
@@ -1398,7 +1428,7 @@ async function getTickerDailyHistory(
 
   try {
     const rowsUnknown = await withSuppressedYahooWarnings(async () =>
-      yahooHistoricalClient.historical(key, {
+      fetchPriceRows(key, {
         period1: getWindowStartDate(window),
         period2: new Date().toISOString().slice(0, 10),
         interval: "1d",
@@ -1485,7 +1515,7 @@ async function getTickerIntradayTrend(ticker: string): Promise<number[]> {
     const start = new Date(now.getTime() - 24 * 60 * 60 * 1000);
 
     const rows = await withSuppressedYahooWarnings(async () =>
-      yahooHistoricalClient.historical(key, {
+      fetchPriceRows(key, {
         period1: start.toISOString().slice(0, 10),
         period2: now.toISOString().slice(0, 10),
         interval: "5m",
@@ -1640,7 +1670,7 @@ async function getSpx5YMonthlyPrices(): Promise<Array<{ ym: string; close: numbe
   period1.setMonth(period1.getMonth() - 63); // 63 months → 60 return pairs + buffer
 
   const rowsUnknown = await withSuppressedYahooWarnings(() =>
-    yahooHistoricalClient.historical("^GSPC", {
+    fetchPriceRows("^GSPC", {
       period1: period1.toISOString().slice(0, 10),
       period2: now.toISOString().slice(0, 10),
       interval: "1mo",
@@ -1682,7 +1712,7 @@ async function computeBeta5YMonthly(
   period1.setMonth(period1.getMonth() - 63);
 
   const rowsUnknown = await withSuppressedYahooWarnings(() =>
-    yahooHistoricalClient.historical(key, {
+    fetchPriceRows(key, {
       period1: period1.toISOString().slice(0, 10),
       period2: now.toISOString().slice(0, 10),
       interval: "1mo",

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
   BriefcaseBusiness,
@@ -1200,62 +1201,143 @@ function RowQuickActions({
   onDelete: (ticker: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    function onDocClick(event: MouseEvent) {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
+  const place = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    // Fixed coordinates taken from the trigger. The menu is roughly 150px
+    // tall, so near the bottom of the window it opens upwards instead of
+    // running off the edge.
+    const MENU_HEIGHT = 150;
+    const openUpwards = rect.bottom + MENU_HEIGHT > window.innerHeight;
+    setAnchor({
+      top: openUpwards ? rect.top - MENU_HEIGHT - 6 : rect.bottom + 6,
+      right: window.innerWidth - rect.right,
+    });
   }, []);
 
+  const toggle = () => {
+    // Measured on the click that opens it: an effect that sets state on mount
+    // costs an extra render pass, and the position is knowable the moment the
+    // trigger is pressed.
+    if (!open) place();
+    setOpen((previous) => !previous);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node;
+      if (menuRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        triggerRef.current?.focus();
+      }
+    };
+    // The row scrolls with the table and the page; a menu pinned to the
+    // viewport has to follow its trigger or it detaches from the row it
+    // belongs to.
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("scroll", place, true);
+    window.addEventListener("resize", place);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("scroll", place, true);
+      window.removeEventListener("resize", place);
+    };
+  }, [open, place]);
+
+  const itemClass = cn(
+    "flex w-full items-center gap-2.5 rounded-lg px-3 py-2.5 text-left text-[13px]",
+    "transition-[background-color,color,transform] duration-150 ease-out",
+    "active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100"
+  );
+
   return (
-    <div ref={menuRef} className="relative inline-block text-left">
+    <>
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="text-mist hover:text-snow-peak transition-colors"
-        title={`Actions for ${position.ticker}`}
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        // No `title`: the native tooltip rendered on top of the open menu and
+        // covered the first item. The accessible name still carries the label.
         aria-label={`Actions for ${position.ticker}`}
+        className={cn(
+          "inline-flex h-9 w-9 items-center justify-center rounded-lg",
+          "text-mist ring-1 ring-inset ring-transparent",
+          "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+          "hover:bg-snow-peak/[0.06] hover:text-snow-peak hover:ring-wolf-border/50",
+          "active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100",
+          "focus-visible:outline-none focus-visible:ring-sunset-orange/60",
+          open && "bg-snow-peak/[0.08] text-snow-peak ring-wolf-border/60"
+        )}
       >
-        <MoreVertical className="w-3.5 h-3.5" />
+        <MoreVertical className="h-4 w-4" />
       </button>
-      {open && (
-        <div className="absolute right-0 z-40 mt-1 w-44 rounded-md ring-1 ring-inset ring-wolf-border/50 bg-wolf-surface shadow-xl overflow-hidden">
-          <button
-            type="button"
-            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-snow-peak/[0.04] flex items-center gap-2"
-            onClick={() => {
-              setOpen(false);
-              onAddTransaction(position);
-            }}
-          >
-            <PlusCircle className="w-3.5 h-3.5 text-sunset-orange" /> Add Transaction (Buy/Sell)
-          </button>
-          <Link
-            href={`/symbol/${position.ticker}`}
-            className="w-full px-3 py-2 text-left text-xs text-snow-peak hover:bg-snow-peak/[0.04] flex items-center gap-2"
-            onClick={() => setOpen(false)}
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-mist" /> View Details
-          </Link>
-          <button
-            type="button"
-            className="w-full px-3 py-2 text-left text-xs text-bearish hover:bg-snow-peak/[0.04] flex items-center gap-2"
-            onClick={() => {
-              setOpen(false);
-              onDelete(position.ticker);
-            }}
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Delete Position
-          </button>
-        </div>
-      )}
-    </div>
+
+      {/* Portalled to the body. Inside the table this menu was a child of a
+          container with `overflow-x-auto`, which clipped it - the source of the
+          "sometimes it works, sometimes it doesn't" behaviour. */}
+      {open && anchor && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              ref={menuRef}
+              role="menu"
+              style={{ top: anchor.top, right: anchor.right }}
+              className={cn(
+                "popover-materialize fixed z-[80] w-56 origin-top-right rounded-xl p-1.5",
+                "bg-wolf-surface/95 shadow-2xl ring-1 ring-inset ring-wolf-border/60 backdrop-blur-xl"
+              )}
+            >
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(itemClass, "text-snow-peak hover:bg-snow-peak/[0.06]")}
+                onClick={() => {
+                  setOpen(false);
+                  onAddTransaction(position);
+                }}
+              >
+                <PlusCircle className="h-4 w-4 shrink-0 text-sunset-orange" />
+                Add transaction
+              </button>
+              <Link
+                href={`/symbol/${position.ticker}`}
+                role="menuitem"
+                className={cn(itemClass, "text-snow-peak hover:bg-snow-peak/[0.06]")}
+                onClick={() => setOpen(false)}
+              >
+                <ExternalLink className="h-4 w-4 shrink-0 text-mist" />
+                View details
+              </Link>
+              <button
+                type="button"
+                role="menuitem"
+                className={cn(itemClass, "text-bearish hover:bg-bearish/10")}
+                onClick={() => {
+                  setOpen(false);
+                  onDelete(position.ticker);
+                }}
+              >
+                <Trash2 className="h-4 w-4 shrink-0" />
+                Delete position
+              </button>
+            </div>,
+            document.body
+          )
+        : null}
+    </>
   );
 }
 
@@ -2192,7 +2274,10 @@ function PositionTable({
         </span>
       </td>
       <td className="py-2.5 px-2 text-center">
-        <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* Revealed on hover, but `focus-within` keeps it visible while the
+            menu is open or the trigger is focused - it used to fade out from
+            under an open menu the moment the pointer left the row. */}
+        <div className="opacity-0 transition-opacity duration-150 focus-within:opacity-100 group-hover:opacity-100">
           <RowQuickActions
             position={pos}
             onAddTransaction={onAddTransaction}
@@ -2727,6 +2812,36 @@ type AnalyticsTab = "risk" | "correlation" | "whatif" | "rebalance";
  * own. The fade is short and opacity-only - the content is already laid out,
  * and this only has to say "something replaced what was here".
  */
+/**
+ * What each check-up view is for, in plain language.
+ *
+ * `question` is what the view answers; `reading` is how to interpret it,
+ * including which direction is good - a number with no sense of "higher is
+ * better" is not information a beginner can act on.
+ */
+const ANALYTICS_GUIDE: Record<AnalyticsTab, { question: string; reading: string }> = {
+  risk: {
+    question: "How rough has the ride been, and was the return worth it?",
+    reading:
+      "Volatility is how much the value swings month to month. Max drawdown is the deepest fall from a peak - the worst stretch you would have had to sit through. Sharpe puts the two together: it asks how much return you were paid per unit of that discomfort, so higher is better.",
+  },
+  correlation: {
+    question: "Do your holdings move as one, or independently?",
+    reading:
+      "Each square scores how closely two positions move together, from +1 (in lockstep) to -1 (opposite). Owning ten names that all score near +1 is closer to one large bet than to a diversified portfolio - the cooler the grid, the more genuinely spread your risk is.",
+  },
+  whatif: {
+    question: "What would a trade do to this portfolio before you place it?",
+    reading:
+      "Draft a buy or a sell and see the result on your position sizes and sector mix. Nothing here touches the real portfolio - it is a sketchpad for checking whether a trade concentrates you further or actually balances things out.",
+  },
+  rebalance: {
+    question: "Where has the portfolio drifted from what you intended?",
+    reading:
+      "Winners quietly grow into a larger share of the portfolio than you chose, and losers shrink. This compares where each position sits now against its target weight and lists the trades that would close the gap.",
+  },
+};
+
 function AnalyticsPanel({
   active,
   children,
@@ -2766,14 +2881,48 @@ function AdvancedAnalyticsSection({
     () => new Set<AnalyticsTab>(["risk"])
   );
 
-  useEffect(() => {
-    setVisited((previous) => {
-      if (previous.has(tab)) return previous;
-      const next = new Set(previous);
-      next.add(tab);
-      return next;
-    });
+  // Switching tabs used to yank the page upwards. The panels are very
+  // different heights, so moving from a tall one to a short one shrank the
+  // whole document; the browser then clamped the scroll position to the new,
+  // shorter page and the view slid up on its own. Nothing was scrolling - the
+  // ground was moving.
+  //
+  // So the content box never shrinks below the tallest panel seen: the
+  // document keeps its length across a switch and the scroll position has no
+  // reason to move. It buys stability with some empty space under the shorter
+  // panels, which is the better trade for a control the user clicks between
+  // repeatedly while reading.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [reservedHeight, setReservedHeight] = useState(0);
+
+  useLayoutEffect(() => {
+    const node = contentRef.current;
+    if (!node) return;
+
+    const sync = () => {
+      const height = node.offsetHeight;
+      setReservedHeight((previous) => (height > previous ? height : previous));
+    };
+
+    sync();
+    // Panels grow as their data arrives, so one measurement at switch time is
+    // not enough to know how tall this card really gets.
+    const observer = new ResizeObserver(sync);
+    observer.observe(node);
+    return () => observer.disconnect();
   }, [tab]);
+
+  // Recorded on the switch itself rather than in an effect watching `tab`:
+  // the two always change together, so an effect only adds a second render.
+  const selectTab = (next: AnalyticsTab) => {
+    setTab(next);
+    setVisited((previous) => {
+      if (previous.has(next)) return previous;
+      const updated = new Set(previous);
+      updated.add(next);
+      return updated;
+    });
+  };
 
   const tabs = [
     { key: "risk" as const, label: "Risk & Return", icon: <Shield className="h-3 w-3" /> },
@@ -2782,24 +2931,45 @@ function AdvancedAnalyticsSection({
     { key: "rebalance" as const, label: "Rebalance", icon: <ArrowUpDown className="h-3 w-3" /> },
   ];
 
+  const guide = ANALYTICS_GUIDE[tab];
+
   return (
     <Card>
       <CardHeader className="pb-2">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-          <CardTitle className="text-sm flex items-center gap-2">
-            <Activity className="w-4 h-4 text-sunset-orange" />
-            Advanced Analytics
-          </CardTitle>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Activity className="h-4 w-4 text-sunset-orange" />
+              Portfolio Check-Up
+            </CardTitle>
+            <p className="mt-0.5 text-[11px] text-mist/80">
+              Four ways to see whether this portfolio is built the way you think it is.
+            </p>
+          </div>
           <SegmentedTabs
             items={tabs}
             value={tab}
-            onChange={setTab}
-            ariaLabel="Advanced analytics view"
+            onChange={selectTab}
+            ariaLabel="Portfolio check-up view"
             size="sm"
           />
         </div>
+
+        {/* The tab labels are the industry's words, and they stay - renaming
+            them would leave an experienced user hunting for the view they
+            know. What was missing is the sentence underneath: what question
+            this view answers, and how to read the answer. That is the part a
+            first-time investor cannot infer from the word "Correlation". */}
+        <div className="mt-3 rounded-lg bg-snow-peak/[0.025] px-3 py-2.5 ring-1 ring-inset ring-wolf-border/35">
+          <p className="text-xs font-medium text-snow-peak">{guide.question}</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-mist/85">{guide.reading}</p>
+        </div>
       </CardHeader>
-      <CardContent className="pt-2">
+      <CardContent
+        ref={contentRef}
+        className="pt-2"
+        style={reservedHeight > 0 ? { minHeight: reservedHeight } : undefined}
+      >
         {visited.has("risk") ? (
           <AnalyticsPanel active={tab === "risk"}>
             <RiskMetricsPanel

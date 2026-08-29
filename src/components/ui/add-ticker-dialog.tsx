@@ -35,6 +35,32 @@ import { cn } from "@/lib/utils";
 
 type Step = "input" | "preview" | "success";
 
+
+/**
+ * The in-button busy indicator, while a symbol is being looked up.
+ *
+ * A spinning ring says "waiting" in the most generic way an interface can. The
+ * same bars the rest of the app loads with say "a chart is being fetched",
+ * which is what is actually happening. They animate on scaleY from the base,
+ * so the work stays on the compositor and never relayouts the button, and the
+ * staggered starts make the group read as one movement rather than three
+ * things blinking. Reduced motion is handled by the shared keyframes, which
+ * drop the scaling and keep only the change in opacity.
+ */
+function LookupBars() {
+  return (
+    <span aria-hidden="true" className="flex h-4 items-end gap-[3px]">
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="huntr-bar w-[3px] rounded-sm bg-wolf-black/70"
+          style={{ height: "100%", animationDelay: `${index * 160}ms` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 export function AddTickerDialog() {
   const queryClient = useQueryClient();
   const { user } = useSupabase();
@@ -147,11 +173,15 @@ export function AddTickerDialog() {
       title="Add ticker to Huntr"
       aria-label="Add ticker to Huntr"
       className={cn(
-        "flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm transition-all duration-200 sm:h-auto sm:py-1.5",
-        "border border-wolf-border/50 cursor-pointer",
+        "flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm sm:h-auto sm:py-1.5",
+        "cursor-pointer ring-1 ring-inset ring-wolf-border/50",
+        "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
+        "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
+        // The border became a ring in this pass, so the leftover
+        // `border-*` colours here were styling an edge that no longer exists.
         open
-          ? "bg-sunset-orange/10 border-sunset-orange/40 text-sunset-orange"
-          : "bg-wolf-surface/50 text-mist hover:text-snow-peak hover:bg-wolf-surface hover:border-wolf-border"
+          ? "bg-sunset-orange/12 text-sunset-orange ring-sunset-orange/40"
+          : "bg-snow-peak/[0.03] text-mist hover:bg-snow-peak/[0.06] hover:text-snow-peak hover:ring-wolf-border"
       )}
     >
       <Plus className="w-4 h-4 shrink-0" />
@@ -170,7 +200,7 @@ export function AddTickerDialog() {
       />
 
       {/* Panel */}
-      <div className="relative z-[101] w-full max-w-md rounded-xl bg-wolf-surface border border-wolf-border/70 shadow-2xl animate-in fade-in-0 zoom-in-95 duration-150">
+      <div className="popover-materialize relative z-[101] w-full max-w-md origin-center rounded-xl bg-wolf-surface shadow-2xl ring-1 ring-inset ring-wolf-border/60">
 
           {/* Header */}
           <div className="flex items-start justify-between px-6 pt-5 pb-4 border-b border-wolf-border/40">
@@ -186,7 +216,7 @@ export function AddTickerDialog() {
               type="button"
               onClick={handleClose}
               aria-label="Close"
-              className="mt-0.5 p-1.5 rounded-md text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-colors shrink-0"
+              className="mt-0.5 shrink-0 rounded-lg p-1.5 text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100"
             >
               <X className="w-4 h-4" />
             </button>
@@ -200,7 +230,7 @@ export function AddTickerDialog() {
                 <div className="space-y-2">
                   <label
                     htmlFor="ticker-input"
-                    className="block text-xs font-medium text-mist uppercase tracking-wider"
+                    className="block text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60"
                   >
                     Ticker Symbol
                   </label>
@@ -219,11 +249,12 @@ export function AddTickerDialog() {
                     spellCheck={false}
                     autoComplete="off"
                     className={cn(
-                      "w-full px-4 py-3 rounded-lg text-base font-mono font-semibold",
-                      "bg-wolf-black/50 border text-snow-peak placeholder:text-mist/35 placeholder:font-sans placeholder:font-normal placeholder:text-sm",
-                      "focus:outline-none focus:ring-2 focus:ring-sunset-orange/50 focus:border-sunset-orange/50",
-                      "transition-colors",
-                      error ? "border-bearish/60" : "border-wolf-border/60"
+                      "w-full rounded-lg px-4 py-3 font-mono text-base font-semibold tracking-wide",
+                      "bg-snow-peak/[0.04] text-snow-peak ring-1 ring-inset",
+                      "placeholder:font-sans placeholder:text-sm placeholder:font-normal placeholder:text-mist/35",
+                      "transition-[background-color,box-shadow] duration-150 ease-out",
+                      "focus:outline-none focus:bg-snow-peak/[0.06] focus:ring-2 focus:ring-sunset-orange/55",
+                      error ? "ring-bearish/60" : "ring-wolf-border/50"
                     )}
                   />
                   {error ? (
@@ -243,15 +274,17 @@ export function AddTickerDialog() {
                   onClick={handleLookup}
                   disabled={!symbol.trim() || lookupLoading}
                   className={cn(
-                    "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold",
-                    "bg-sunset-orange text-white transition-all duration-200",
+                    "flex w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-semibold",
+                    "bg-sunset-orange text-wolf-black",
+                    "transition-[background-color,transform,opacity] duration-150 ease-out",
                     "hover:bg-sunset-orange/90 active:scale-[0.98]",
-                    "disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
+                    "motion-reduce:transition-none motion-reduce:active:scale-100",
+                    "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100"
                   )}
                 >
                   {lookupLoading ? (
                     <>
-                      <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      <LookupBars />
                       Looking up…
                     </>
                   ) : (
@@ -268,7 +301,7 @@ export function AddTickerDialog() {
             {step === "preview" && profile && (
               <div className="space-y-4">
                 {/* Company card */}
-                <div className="rounded-lg border border-wolf-border/50 bg-wolf-black/30 p-4 space-y-3">
+                <div className="space-y-3 rounded-xl bg-snow-peak/[0.03] p-4 ring-1 ring-inset ring-wolf-border/45">
                   {/* Logo + name row */}
                   <div className="flex items-center gap-3">
                     <TickerLogo
@@ -337,7 +370,7 @@ export function AddTickerDialog() {
                   <button
                     type="button"
                     onClick={() => { setStep("input"); setError(null); }}
-                    className="flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-sm font-medium text-mist border border-wolf-border/50 hover:text-snow-peak hover:bg-wolf-black/30 transition-all"
+                    className="flex items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-medium text-mist ring-1 ring-inset ring-wolf-border/50 transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                   >
                     <ArrowLeft className="w-3.5 h-3.5" />
                     Back
@@ -348,7 +381,7 @@ export function AddTickerDialog() {
                     disabled={addLoading}
                     className={cn(
                       "flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-semibold",
-                      "bg-sunset-orange text-white transition-all duration-200",
+                      "bg-sunset-orange text-wolf-black transition-[background-color,transform,opacity] duration-150 ease-out",
                       "hover:bg-sunset-orange/90 active:scale-[0.98]",
                       "disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100"
                     )}
@@ -391,14 +424,14 @@ export function AddTickerDialog() {
                   <button
                     type="button"
                     onClick={() => { reset(); }}
-                    className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium border border-wolf-border/50 text-mist hover:text-snow-peak hover:bg-wolf-black/30 transition-all"
+                    className="flex-1 rounded-lg px-4 py-2.5 text-sm font-medium text-mist ring-1 ring-inset ring-wolf-border/50 transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                   >
                     Add another
                   </button>
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="flex-1 px-4 py-2.5 rounded-lg text-sm font-semibold bg-sunset-orange/10 text-sunset-orange border border-sunset-orange/30 hover:bg-sunset-orange/20 transition-all"
+                    className="flex-1 rounded-lg bg-sunset-orange/12 px-4 py-2.5 text-sm font-semibold text-sunset-orange ring-1 ring-inset ring-sunset-orange/30 transition-[background-color,transform] duration-150 ease-out hover:bg-sunset-orange/20 active:scale-[0.98] motion-reduce:transition-none motion-reduce:active:scale-100"
                   >
                     Done
                   </button>
