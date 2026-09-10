@@ -4,26 +4,115 @@ import { useEffect, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatCompactNumber } from "@/lib/utils";
 import type { DCFResult } from "@/lib/calculations/dcf";
+import {
+  impliedExitMultiple,
+  readTerminalWeight,
+} from "@/lib/calculations/dcf-transparency";
+import type { ValuationGuard } from "@/lib/calculations/dcf-currency";
+import type { SourcedDCFFields } from "@/lib/calculations/dcf-inputs-source";
+import { AlertTriangle } from "lucide-react";
 import { TrendingUp, TrendingDown, Shield, Target, Building2, Banknote } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DCFResultsProps {
   result: DCFResult;
   ticker: string;
+  /** Needed for the implied exit multiple, which the result alone does not carry. */
+  wacc: number;
+  terminalGrowthRate: number;
+  /**
+   * The balance-sheet figures behind the valuation. Passed so the checks that
+   * invalidate the headline number can sit next to it rather than inside a
+   * panel someone has to open: a share count that does not reconcile makes
+   * every per-share figure here wrong, and a stale balance sheet makes the
+   * bridge describe a company that no longer exists.
+   */
+  fields?: SourcedDCFFields | null;
+  /**
+   * Whether the figure may be shown at all.
+   *
+   * Passed in rather than computed here because the same verdict has to
+   * suppress the decision engine and travel into the export: a valuation the
+   * interface refuses to show must not reappear as a signal two panels down.
+   */
+  guard?: ValuationGuard;
 }
 
-export function DCFResults({ result, ticker }: DCFResultsProps) {
+/**
+ * One title per reason. A two-branch conditional silently mislabelled the
+ * third reason as the last one, which put "Result outside the plausible range"
+ * above a message about missing debt.
+ */
+const BLOCK_TITLES: Record<NonNullable<ValuationGuard["reason"]>, string> = {
+  "currency-mismatch": "Currency mismatch — no valuation shown",
+  "unresolved-balance-sheet": "Missing balance-sheet data — no valuation shown",
+  "implausible-upside": "Result outside the plausible range",
+};
+
+export function DCFResults({
+  result,
+  ticker,
+  wacc,
+  terminalGrowthRate,
+  fields,
+  guard,
+}: DCFResultsProps) {
   const isUndervalued = result.upside > 0;
   const valueTrend = useValueTrend(result.intrinsicValuePerShare);
   const terminalWeight =
     result.enterpriseValue > 0 ? result.pvTerminalValue / result.enterpriseValue : 0;
+  const terminalReading = readTerminalWeight(
+    result.pvTerminalValue,
+    result.enterpriseValue
+  );
+  const exitMultiple = impliedExitMultiple(wacc, terminalGrowthRate);
 
   return (
-    <div className="space-y-4">
+    <div className="@container space-y-4">
+      {/* ── Checks that invalidate the figure below ──
+          These were buried in an expandable panel, which is the wrong place
+          for something that makes the headline wrong. If the share count does
+          not reconcile with the market cap, every per-share figure on this
+          card is off by the same proportion. */}
+      {/* ── When the model may not answer ──
+          Shown instead of the headline, not beside it. A number this size is
+          read before any caption under it, so printing "+566%" next to a
+          caveat still delivers the +566%: Honda produced exactly that, with a
+          Strong Buy and a suggested 8-10% position, off a yen revenue base
+          compared to a dollar ADR price. The figure has to be absent. */}
+      {guard && !guard.usable ? (
+        <div className="rounded-2xl bg-bearish/[0.07] p-5 ring-1 ring-inset ring-bearish/30">
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-bearish" />
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-bearish">
+                {BLOCK_TITLES[guard.reason ?? "implausible-upside"]}
+              </p>
+              <p className="text-[11px] leading-relaxed text-mist/85">
+                {guard.message}
+              </p>
+              {guard.currencyMismatch ? (
+                <div className="space-y-0.5 font-mono text-[11px] tabular-nums">
+                  <div className="flex justify-between gap-4">
+                    <span className="text-mist">Statements</span>
+                    <span className="text-snow-peak">{guard.financialCurrency}</span>
+                  </div>
+                  <div className="flex justify-between gap-4">
+                    <span className="text-mist">Share price</span>
+                    <span className="text-snow-peak">{guard.priceCurrency}</span>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {/* The single answer the page exists to give. It is the only surface here
           carrying colour, so the verdict is legible before any number is read;
           everything below is the arithmetic behind it. */}
       <div
+        hidden={!!guard && !guard.usable}
         className={cn(
           "insight-enter relative overflow-hidden rounded-2xl p-5 ring-1 ring-inset",
           isUndervalued
@@ -40,6 +129,9 @@ export function DCFResults({ result, ticker }: DCFResultsProps) {
 
         <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/70">
           Intrinsic value · {ticker}
+          {/* The unit, stated. Every figure on this card is in it, and until
+              now nothing on screen said which one it was. */}
+          {guard?.currency ? ` · ${guard.currency}` : ""}
         </p>
         {/* Tracking tightens as the number grows — at 30px the default spacing
             reads as gaps between digits rather than one figure. */}
@@ -72,14 +164,28 @@ export function DCFResults({ result, ticker }: DCFResultsProps) {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-2.5">
-        <MetricTile
-          icon={<Shield className="h-3.5 w-3.5" />}
-          label="Margin of Safety"
-          value={formatPercent(result.marginOfSafety, 1)}
-          variant={result.marginOfSafety > 0 ? "bullish" : "bearish"}
-          delay={40}
-        />
+      {/* The figures below are two kinds. Enterprise value, equity value and
+          the bridge are arithmetic on the statements alone, so they stay
+          readable in the reporting currency and are what makes a bad result
+          diagnosable. Margin of safety is the price comparison again wearing a
+          different label, so it goes with the headline: it read 99.6% on the
+          yen-against-dollars run, which is the same false claim restated. */}
+      {guard && !guard.usable && guard.currency ? (
+        <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
+          Figures below in {guard.currency}, from the statements
+        </p>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-2.5 @sm:grid-cols-2">
+        {!guard || guard.usable ? (
+          <MetricTile
+            icon={<Shield className="h-3.5 w-3.5" />}
+            label="Margin of Safety"
+            value={formatPercent(result.marginOfSafety, 1)}
+            variant={result.marginOfSafety > 0 ? "bullish" : "bearish"}
+            delay={40}
+          />
+        ) : null}
         <MetricTile
           icon={<Building2 className="h-3.5 w-3.5" />}
           label="Enterprise Value"
@@ -104,6 +210,26 @@ export function DCFResults({ result, ticker }: DCFResultsProps) {
         <div className="space-y-2">
           <BridgeRow label="PV of Projected FCFs" value={result.sumPVFCF} />
           <BridgeRow label="PV of Terminal Value" value={result.pvTerminalValue} />
+          {/* Gordon Growth states the terminal value as a spread between two
+              rates, which is abstract enough that an indefensible assumption
+              does not look like one. Restated as a multiple it can be held
+              against multiples you have actually seen. */}
+          {exitMultiple !== null ? (
+            <div className="flex items-baseline justify-between gap-3 pl-3">
+              <span className="text-[10px] text-mist/60">
+                Implied exit multiple on FCF
+              </span>
+              <span
+                className={cn(
+                  "font-mono text-[11px] tabular-nums",
+                  exitMultiple > 20 ? "text-golden-hour" : "text-mist"
+                )}
+                title="1 / (WACC − terminal growth). Above about 20x, the spread is doing more work than the cash flows."
+              >
+                {exitMultiple.toFixed(1)}x
+              </span>
+            </div>
+          ) : null}
           <Divider />
           <BridgeRow label="Enterprise Value" value={result.enterpriseValue} bold />
           <BridgeRow label="Less: Net Debt" value={-result.netDebt} />
@@ -134,6 +260,22 @@ export function DCFResults({ result, ticker }: DCFResultsProps) {
           <span>FCFs</span>
           <span>Terminal</span>
         </div>
+        {/* The bar was a number without a threshold, which is a decoration.
+            What it measures - how much of the answer is a perpetuity rather
+            than projected cash - is one of the few honest readings of how much
+            the model is guessing. */}
+        <p
+          className={cn(
+            "mt-2 text-[10px] leading-relaxed",
+            terminalReading.band === "healthy"
+              ? "text-bullish/80"
+              : terminalReading.band === "elevated"
+                ? "text-golden-hour/80"
+                : "text-bearish/85"
+          )}
+        >
+          {terminalReading.message}
+        </p>
       </Panel>
     </div>
   );

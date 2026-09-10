@@ -741,11 +741,59 @@ export async function getBatchCachedScreenerMetrics(
  * @param cacheKey - Namespace key
  * @param data     - JSON-serializable data to cache
  */
+/**
+ * Whether a payload is worth remembering.
+ *
+ * The distinction the cache has to make is not "did we get an object" but "did
+ * we get an answer". An upstream failure very often produces a structurally
+ * valid, entirely empty result - six empty arrays, an object with no keys -
+ * and a cache that accepts it turns a transient outage into a lasting one:
+ * the empty answer is served as fresh for the whole TTL, and fixing the fetch
+ * changes nothing because nothing is fetching any more. That happened once
+ * with the financials and cost a day; this is the guard that makes it
+ * structural rather than something each call site has to remember.
+ *
+ * Nested emptiness counts: an object whose every value is an empty array holds
+ * no more information than an empty object does.
+ */
+export function isCacheablePayload(data: unknown): boolean {
+  if (data === null || data === undefined) return false;
+  if (typeof data === "number") return Number.isFinite(data);
+  if (typeof data === "string") return data.length > 0;
+  if (Array.isArray(data)) return data.length > 0;
+
+  if (typeof data === "object") {
+    const values = Object.values(data as Record<string, unknown>);
+    if (values.length === 0) return false;
+    // One level deep is enough to catch the shape that caused the outage
+    // without rejecting a legitimately sparse record.
+    return values.some((value) =>
+      value === null || value === undefined
+        ? false
+        : Array.isArray(value) || (typeof value === "object" && value !== null)
+          ? isCacheablePayload(value)
+          : true
+    );
+  }
+
+  return true;
+}
+
 export async function setCachedData(
   ticker: string,
   cacheKey: string,
   data: unknown
 ): Promise<void> {
+  if (!isCacheablePayload(data)) {
+    // Deliberately quiet at warn level rather than silent: an empty result is
+    // a normal outcome for a company that does not report something, and the
+    // caller has already decided how to present it.
+    console.warn(
+      `[Cache] Refused to cache empty payload for ${ticker.toUpperCase()}:${cacheKey}`
+    );
+    return;
+  }
+
   try {
     const normalizedTicker = ticker.toUpperCase();
     const lastUpdated = new Date().toISOString();

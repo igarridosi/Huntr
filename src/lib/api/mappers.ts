@@ -140,6 +140,8 @@ export function mapToStockQuote(
   return {
     ticker: ticker.toUpperCase(),
     price: currentPrice,
+    currency: price?.currency ?? undefined,
+    financial_currency: financial?.financialCurrency ?? undefined,
     current_volume:
       (price?.regularMarketVolume as number | undefined) ??
       n(detail?.volume),

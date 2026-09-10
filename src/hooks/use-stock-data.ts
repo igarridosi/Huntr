@@ -34,6 +34,8 @@ import {
   fetchAllCachedScreenerMetrics,
 } from "@/app/actions/stock";
 import type { ScreenerMetrics } from "@/lib/api/cache";
+import { fetchSECFundamentals } from "@/app/actions/stock";
+import type { SECFundamentals } from "@/lib/api/sec-edgar";
 
 // ---------- Stock Profile ----------
 
@@ -62,6 +64,23 @@ export function useStockQuote(ticker: string) {
     queryFn: () => fetchStockQuote(ticker),
     staleTime: STALE_TIMES.QUOTE,
     enabled: !!ticker,
+  });
+}
+
+/**
+ * Balance-sheet figures from the filings themselves.
+ *
+ * Cached for a day: these move quarterly, and the SEC asks callers not to
+ * hammer it. Returning null is a normal outcome - a foreign issuer or a ticker
+ * with no CIK - and the caller falls back to Yahoo.
+ */
+export function useSECFundamentals(ticker: string, enabled: boolean = true) {
+  return useQuery<SECFundamentals | null>({
+    queryKey: ["sec", "fundamentals", ticker.toUpperCase()],
+    queryFn: () => fetchSECFundamentals(ticker),
+    staleTime: 24 * 60 * 60 * 1000,
+    retry: 1,
+    enabled: enabled && !!ticker,
   });
 }
 

@@ -104,6 +104,12 @@ export interface YahooDefaultKeyStatistics {
 // ─────────────────────────────────────────────────────────
 
 export interface YahooFinancialData {
+  /**
+   * The currency the statements are reported in, which is not always the
+   * currency the shares trade in. For an ADR they routinely differ: Honda
+   * reports in JPY and its ADR trades in USD.
+   */
+  financialCurrency: string | null;
   currentPrice: number | null;
   targetHighPrice: number | null;
   targetLowPrice: number | null;
