@@ -14,6 +14,20 @@ interface DCFTickerInputProps {
 export function DCFTickerInput({ value, onSelect }: DCFTickerInputProps) {
   const [query, setQuery] = useState(value);
   const [open, setOpen] = useState(false);
+
+  /**
+   * Follow the ticker when it is changed from outside the field.
+   *
+   * `useState(value)` only reads its argument once, so loading a saved
+   * scenario switched the whole page to another company while the box still
+   * showed whatever had last been typed - the search said META over Netflix's
+   * numbers. Typing still owns the field; this only runs when the selected
+   * ticker itself moves.
+   */
+  useEffect(() => {
+    setQuery(value);
+  }, [value]);
+
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 

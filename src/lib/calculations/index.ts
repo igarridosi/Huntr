@@ -22,6 +22,32 @@ export {
   generateDCFScenarios,
 } from "./dcf";
 export {
+  DEFAULT_MC_WEIGHTS,
+  DEFAULT_GROWTH_MARGIN_CORRELATION,
+} from "./dcf";
+export type {
+  FCFMarginMode,
+  MonteCarloCoherence,
+  MonteCarloOptions,
+  MonteCarloScenarioInputs,
+  MonteCarloWeights,
+} from "./dcf";
+export {
+  DEFAULT_CONVICTION_WEIGHTS,
+  buildConvictionBreakdown,
+  buildSimulationBundle,
+  buildTradingZones,
+  resolveStressCase,
+} from "./dcf-decision";
+export type {
+  ConvictionBreakdown,
+  ConvictionFactor,
+  ConvictionWeights,
+  DCFSimulationBundle,
+  StressCase,
+  TradingZones,
+} from "./dcf-decision";
+export {
   calculateQualityScore,
   gradeFromScore,
 } from "./quality-score";

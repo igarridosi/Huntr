@@ -19,6 +19,16 @@ export interface StockProfile {
 export interface StockQuote {
   ticker: string;
   price: number;
+  /**
+   * The currency `price` and `market_cap` are quoted in.
+   *
+   * Carried explicitly because a valuation compares a per-share figure derived
+   * from the statements against this price, and that comparison is only valid
+   * when the two are in the same unit.
+   */
+  currency?: string;
+  /** The currency the financial statements are reported in. */
+  financial_currency?: string;
   current_volume?: number;
   dividend_rate?: number;
   dividend_date?: string | null;

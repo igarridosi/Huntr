@@ -257,6 +257,23 @@ export async function getBatchEarningsInsights(
 // Financials
 // ─────────────────────────────────────────────────────────
 
+/**
+ * Whether a cached financials object actually carries statements.
+ *
+ * The distinction that matters: an empty set of statements has the right shape
+ * and answers nothing. Treating the two as the same is what let a single bad
+ * write persist for the life of the cache entry.
+ */
+function hasStatements(
+  value: CompanyFinancials | null | undefined
+): value is CompanyFinancials {
+  return (
+    !!value &&
+    Array.isArray(value.income_statement?.annual) &&
+    value.income_statement.annual.length > 0
+  );
+}
+
 export async function getCompanyFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
@@ -269,7 +286,12 @@ export async function getCompanyFinancials(
       7 * 24 * 60 * 60 * 1000
     );
 
-    if (alphaCached.status !== "miss" && alphaCached.data) {
+    // Truthy is not the same as usable. A cache entry holding statements with
+    // no rows is a perfectly valid object, and returning it here skipped every
+    // check downstream - so one bad write kept a ticker permanently unable to
+    // populate, and repairing the fetch changed nothing because this path
+    // never reached it.
+    if (alphaCached.status !== "miss" && hasStatements(alphaCached.data)) {
       return alphaCached.data;
     }
 
@@ -296,11 +318,11 @@ export async function getFullStockData(ticker: string) {
       ),
     ]);
 
-    const hasAlphaFinancials = alphaCached.status !== "miss" && !!alphaCached.data;
-    const financials =
-      alphaCached.status !== "miss" && alphaCached.data
-        ? alphaCached.data
-        : await yahoo.getFinancials(key, { preferAlphaVantage: false });
+    const hasAlphaFinancials =
+      alphaCached.status !== "miss" && hasStatements(alphaCached.data);
+    const financials = hasAlphaFinancials
+      ? alphaCached.data
+      : await yahoo.getFinancials(key, { preferAlphaVantage: false });
 
     return {
       profile,

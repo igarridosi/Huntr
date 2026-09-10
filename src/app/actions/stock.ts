@@ -15,6 +15,8 @@ import { getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleS
 import { getCachedDataState, setCachedData, withSingleFlight, getBatchCachedScreenerMetrics } from "@/lib/api/cache";
 import type { ScreenerMetrics } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
+import { getSECFundamentals } from "@/lib/api/sec-edgar";
+import type { SECFundamentals } from "@/lib/api/sec-edgar";
 
 const TICKER_RE = /^[A-Z0-9.\-^]{1,12}$/;
 // 500 covers large portfolios/watchlists for authenticated users.
@@ -102,6 +104,19 @@ export async function fetchCompanyFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
   return dataService.getCompanyFinancials(sanitizeTicker(ticker));
+}
+
+/**
+ * Balance-sheet figures straight from the filings.
+ *
+ * Kept separate from the rest of the fundamentals because it has a different
+ * failure mode: a foreign issuer or a ticker with no CIK simply returns null,
+ * and the caller falls back to Yahoo rather than the page breaking.
+ */
+export async function fetchSECFundamentals(
+  ticker: string
+): Promise<SECFundamentals | null> {
+  return getSECFundamentals(sanitizeTicker(ticker));
 }
 
 export async function fetchAlphaFinancials(

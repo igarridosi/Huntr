@@ -41,6 +41,7 @@ import {
   getCachedData,
   getCachedDataState,
   setCachedData,
+  isCacheablePayload,
   withSingleFlight,
 } from "./cache";
 
@@ -201,8 +202,18 @@ interface SwrResourceOptions<T> {
   onRefreshError?: (error: unknown) => void;
 }
 
+/**
+ * The default usability test: content, not just presence.
+ *
+ * It used to be `!= null`, which meant an empty array or an empty object
+ * counted as a good answer and got cached. That is how a broken fetch became
+ * a permanent one for `financials`, and the same default still governed
+ * `profile`, `quote` and `indices`. Checking content by default means a
+ * resource has to opt in to accepting emptiness rather than opt out of
+ * caching it.
+ */
 function hasValue<T>(value: T | null | undefined): value is T {
-  return value !== null && value !== undefined;
+  return isCacheablePayload(value);
 }
 
 async function resolveWithSWR<T>(options: SwrResourceOptions<T>): Promise<T | null> {
@@ -304,29 +315,32 @@ async function fetchTimeSeriesModule(
   }
 }
 
+/**
+ * Every statement, in one call per period type.
+ *
+ * This used to ask for "financials", "balance-sheet" and "cash-flow"
+ * separately. The library rejects all three - `option module invalid` - so
+ * every request threw, each was caught and turned into an empty array, and the
+ * financials resolved to null. Nothing surfaced: the Auto-Populate button
+ * simply vanished and the model never filled, because `canPopulate` requires
+ * financials that were never going to arrive.
+ *
+ * `all` is the accepted value and returns the three statements' fields
+ * together, which the mappers already pick apart by field name. So the same
+ * rows are handed to each statement and each takes what it recognises.
+ */
 async function fetchAllFinancialTimeSeries(
   ticker: string
 ): Promise<TimeSeriesFinancialsCache> {
-  const [
-    incomeAnnual,
-    incomeQuarterly,
-    balanceAnnual,
-    balanceQuarterly,
-    cashflowAnnual,
-    cashflowQuarterly,
-  ] = await Promise.all([
-    fetchTimeSeriesModule(ticker, "financials", "annual"),
-    fetchTimeSeriesModule(ticker, "financials", "quarterly"),
-    fetchTimeSeriesModule(ticker, "balance-sheet", "annual"),
-    fetchTimeSeriesModule(ticker, "balance-sheet", "quarterly"),
-    fetchTimeSeriesModule(ticker, "cash-flow", "annual"),
-    fetchTimeSeriesModule(ticker, "cash-flow", "quarterly"),
+  const [annual, quarterly] = await Promise.all([
+    fetchTimeSeriesModule(ticker, "all", "annual"),
+    fetchTimeSeriesModule(ticker, "all", "quarterly"),
   ]);
 
   return {
-    income: { annual: incomeAnnual, quarterly: incomeQuarterly },
-    balance: { annual: balanceAnnual, quarterly: balanceQuarterly },
-    cashflow: { annual: cashflowAnnual, quarterly: cashflowQuarterly },
+    income: { annual, quarterly },
+    balance: { annual, quarterly },
+    cashflow: { annual, quarterly },
   };
 }
 
@@ -398,6 +412,8 @@ export async function getFinancials(
   const preferAlphaVantage = options?.preferAlphaVantage ?? true;
   const alphaVantageApiKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
 
+  // Same reasoning as below: an empty set of statements is a valid shape and a
+  // useless answer, and caching it locks the ticker out until the TTL expires.
   const isFinancialsShape = (
     value: CompanyFinancials | null
   ): value is CompanyFinancials => {
@@ -405,10 +421,24 @@ export async function getFinancials(
       value !== null &&
       Array.isArray(value.income_statement?.annual) &&
       Array.isArray(value.balance_sheet?.annual) &&
-      Array.isArray(value.cash_flow?.annual)
+      Array.isArray(value.cash_flow?.annual) &&
+      value.income_statement.annual.length > 0
     );
   };
 
+  /**
+   * Shape *and* substance.
+   *
+   * This used to check only that the six arrays existed. An upstream failure
+   * produces six empty arrays, which is a perfectly valid shape - so the empty
+   * result passed the check, got written to the cache, and was then served as
+   * fresh for the whole TTL. That is how a transient outage became a permanent
+   * one: the fix to the fetch landed and changed nothing, because nothing was
+   * fetching any more.
+   *
+   * Requiring at least one annual row means an empty result can never cache
+   * itself, and a repaired fetch takes effect on the next request.
+   */
   const isTimeSeriesShape = (
     value: TimeSeriesFinancialsCache | null
   ): value is TimeSeriesFinancialsCache => {
@@ -419,7 +449,10 @@ export async function getFinancials(
       Array.isArray(value.balance?.annual) &&
       Array.isArray(value.balance?.quarterly) &&
       Array.isArray(value.cashflow?.annual) &&
-      Array.isArray(value.cashflow?.quarterly)
+      Array.isArray(value.cashflow?.quarterly) &&
+      value.income.annual.length > 0 &&
+      value.balance.annual.length > 0 &&
+      value.cashflow.annual.length > 0
     );
   };
 

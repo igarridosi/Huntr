@@ -524,3 +524,18 @@ select optgroup {
     50%      { opacity: 1; }
   }
 }
+
+/*
+ * A panel bounded by the screen rather than by its own content.
+ *
+ * The height comes from JS because CSS cannot see it: a sticky element's
+ * distance from the top of the viewport changes as the page scrolls, so no
+ * single calc() is right both before and after it sticks. The variable is set
+ * by `useFitToViewport`; without it the rule is inert and the panel simply
+ * takes its natural height, which is the correct fallback.
+ */
+@media (min-width: 1024px) {
+  .fit-to-viewport {
+    max-height: var(--fit-height, none);
+  }
+}
