@@ -214,6 +214,20 @@ export function RebalanceAdvisor({
     URL.revokeObjectURL(url);
   }, [trades]);
 
+  // ── Plain-language summary ───────────────────────────────
+  // Plain values, not a hook: this sat below an early return, which is a
+  // hook-order violation, and it is a handful of string operations the React
+  // Compiler memoises on its own once the component compiles.
+  const summaryLine = (() => {
+    if (trades.length === 0) return null;
+    const biggestBuy  = buys[0];
+    const biggestSell = sells[0];
+    const parts: string[] = [];
+    if (biggestBuy)  parts.push(`buying ${biggestBuy.ticker} (+${formatCurrency(biggestBuy.amount, { compact: true })})`);
+    if (biggestSell) parts.push(`selling ${biggestSell.ticker} (−${formatCurrency(biggestSell.amount, { compact: true })})`);
+    return parts.join(" and ");
+  })();
+
   if (positions.length === 0) {
     return (
       <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80">
@@ -229,16 +243,6 @@ export function RebalanceAdvisor({
     );
   }
 
-  // ── Plain-language summary ───────────────────────────────
-  const summaryLine = useMemo(() => {
-    if (trades.length === 0) return null;
-    const biggestBuy  = buys[0];
-    const biggestSell = sells[0];
-    const parts: string[] = [];
-    if (biggestBuy)  parts.push(`buying ${biggestBuy.ticker} (+${formatCurrency(biggestBuy.amount, { compact: true })})`);
-    if (biggestSell) parts.push(`selling ${biggestSell.ticker} (−${formatCurrency(biggestSell.amount, { compact: true })})`);
-    return parts.join(" and ");
-  }, [trades, buys, sells]);
 
   return (
     <Card className="border-wolf-border/50 bg-gradient-to-br from-wolf-surface/95 via-wolf-surface/85 to-wolf-black/80 shadow-[0_10px_30px_rgba(0,0,0,0.22)]">

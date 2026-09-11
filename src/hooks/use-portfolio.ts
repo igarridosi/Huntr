@@ -942,7 +942,10 @@ export function usePortfolio() {
         replacedPortfolio: false,
       };
     },
-    [activePortfolioId, updateStore]
+    // `activePortfolio` is read inside (realised P&L and positions), so it
+    // has to be a dependency - without it an import could merge against a
+    // stale snapshot of the portfolio.
+    [activePortfolio, activePortfolioId, updateStore]
   );
 
   return {
