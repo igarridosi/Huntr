@@ -31,6 +31,7 @@
     "yahoo-finance2": "^3.13.0"
   },
   "devDependencies": {
+    "@next/bundle-analyzer": "^16.3.4",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

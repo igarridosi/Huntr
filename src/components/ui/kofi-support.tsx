@@ -15,6 +15,20 @@ declare global {
 const KOFI_SCRIPT_ID = "kofi-widget-script";
 const KOFI_SCRIPT_SRC = "https://storage.ko-fi.com/cdn/widget/Widget_2.js";
 
+const KOFI_FONT_LINK = /<link[^>]*fonts\.googleapis\.com[^>]*>/i;
+
+/**
+ * The widget markup carries its own Google Fonts stylesheet, so a page with
+ * three buttons ends up with three identical <link>s. Keep the first one the
+ * document already has and drop the copies.
+ */
+function stripDuplicateFontLink(html: string): string {
+  const alreadyLoaded = document.querySelector(
+    'link[rel="stylesheet"][href*="fonts.googleapis.com"]'
+  );
+  return alreadyLoaded ? html.replace(KOFI_FONT_LINK, "") : html;
+}
+
 interface KoFiSupportProps {
   text?: string;
   className?: string;
@@ -33,7 +47,7 @@ export function KoFiSupport({
       if (!window.kofiwidget2 || !hostRef.current) return;
 
       window.kofiwidget2.init(text, color, "E1E21WMFA8");
-      hostRef.current.innerHTML = window.kofiwidget2.getHTML();
+      hostRef.current.innerHTML = stripDuplicateFontLink(window.kofiwidget2.getHTML());
     };
 
     if (window.kofiwidget2) {

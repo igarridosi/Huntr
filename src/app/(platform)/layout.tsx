@@ -1,13 +1,20 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
 import { MobileSidebar } from "@/components/layout/mobile-sidebar";
-import { CommandPalette } from "@/components/search/command-palette";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
+
+// cmdk only matters once the palette opens, and it renders nothing while
+// closed, so the chunk loads after hydration instead of with the page.
+const CommandPalette = dynamic(
+  () => import("@/components/search/command-palette").then((m) => m.CommandPalette),
+  { ssr: false }
+);
 
 export default function PlatformLayout({
   children,

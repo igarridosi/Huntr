@@ -14,17 +14,13 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
-import {
-  EPSMultipleModel,
-  type EPSMultipleInputs,
-} from "@/components/dcf/eps-multiple-model";
-import { CapitalAllocatorModel } from "@/components/dcf/capital-allocator-model";
+import dynamic from "next/dynamic";
+import type { EPSMultipleInputs } from "@/components/dcf/eps-multiple-model";
 import { DCFAssumptions } from "@/components/dcf/dcf-assumptions";
 import { DCFResults } from "@/components/dcf/dcf-results";
 import { DCFProjectionTable } from "@/components/dcf/dcf-projection-table";
 import { DCFSensitivity } from "@/components/dcf/dcf-sensitivity";
-import { DCFMonteCarlo } from "@/components/dcf/dcf-monte-carlo";
-import { DCFFCFChart } from "@/components/dcf/dcf-fcf-chart";
+import { Skeleton } from "@/components/ui/skeleton";
 import { PositionDecisionEngine } from "@/components/dcf/position-decision-engine";
 import {
   useStockQuote,
@@ -79,6 +75,26 @@ import {
 } from "@/lib/calculations/dcf-anchors";
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
+
+// None of these four is on screen before a ticker is loaded, and three of
+// them pull Recharts in. Loading them after hydration keeps that chunk off
+// the route's first load.
+const DCFMonteCarlo = dynamic(
+  () => import("@/components/dcf/dcf-monte-carlo").then((m) => m.DCFMonteCarlo),
+  { ssr: false, loading: () => <Skeleton className="h-64 w-full" /> }
+);
+const DCFFCFChart = dynamic(
+  () => import("@/components/dcf/dcf-fcf-chart").then((m) => m.DCFFCFChart),
+  { ssr: false, loading: () => <Skeleton className="h-56 w-full" /> }
+);
+const EPSMultipleModel = dynamic(
+  () => import("@/components/dcf/eps-multiple-model").then((m) => m.EPSMultipleModel),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
+);
+const CapitalAllocatorModel = dynamic(
+  () => import("@/components/dcf/capital-allocator-model").then((m) => m.CapitalAllocatorModel),
+  { ssr: false, loading: () => <Skeleton className="h-96 w-full" /> }
+);
 
 const MODEL_TABS = [
   { key: "dcf", label: "DCF Model" },

@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -7,8 +8,14 @@ import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion
 import { Search, ArrowRight, Radio, FileText, BarChart3 } from "lucide-react";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { KoFiSupport } from "@/components/ui/kofi-support";
-import { CommandPalette } from "@/components/search/command-palette";
 import { ROUTES } from "@/lib/constants";
+
+// cmdk only matters once the palette opens, and it renders nothing while
+// closed, so the chunk loads after hydration instead of with the page.
+const CommandPalette = dynamic(
+  () => import("@/components/search/command-palette").then((m) => m.CommandPalette),
+  { ssr: false }
+);
 
 /** Point in the intro where the wordmark starts surfacing. */
 const WORD_START = 0.08;

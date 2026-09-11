@@ -31,6 +31,8 @@ interface StockHeaderProps {
   profile: StockProfile | null | undefined;
   quote: StockQuote | null | undefined;
   marketIndices?: MarketIndexQuote[];
+  /** Reserve the index tiles' space while they are still on their way. */
+  marketIndicesLoading?: boolean;
   isLoading: boolean;
 }
 
@@ -38,10 +40,16 @@ export function StockHeader({
   profile,
   quote,
   marketIndices,
+  marketIndicesLoading = false,
   isLoading,
 }: StockHeaderProps) {
   if (!profile) {
-    return <StockHeaderSkeleton />;
+    return (
+      <StockHeaderSkeleton
+        marketIndices={marketIndices}
+        marketIndicesLoading={marketIndicesLoading}
+      />
+    );
   }
 
   // 52W range position
@@ -62,13 +70,7 @@ export function StockHeader({
 
   return (
     <div className="space-y-4">
-      {marketIndices && marketIndices.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-          {marketIndices.map((index) => (
-            <MarketIndexTile key={index.symbol} index={index} />
-          ))}
-        </div>
-      )}
+      <MarketIndicesRow indices={marketIndices} loading={marketIndicesLoading} />
 
       {/* Top Row: Logo + Name + Watchlist */}
       <div className="flex items-start justify-between gap-3 sm:gap-4">
@@ -181,19 +183,29 @@ export function StockHeader({
           </div>
         </div>
       ) : isLoading ? (
-        <div className="flex flex-wrap items-end gap-4">
-          <div>
-            <p className="text-3xl font-bold font-mono font-tabular text-snow-peak/90 animate-pulse">
-              Fetching live price...
-            </p>
-            <div className="mt-1 text-xs text-mist">
-              Profile ready. Pulling quote and key metrics.
-            </div>
-          </div>
-        </div>
+        <PriceRowSkeleton />
       ) : null}
     </div>
   );
+}
+
+function MarketIndicesRow({
+  indices,
+  loading,
+}: {
+  indices: MarketIndexQuote[] | undefined;
+  loading: boolean;
+}) {
+  if (indices && indices.length > 0) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+        {indices.map((index) => (
+          <MarketIndexTile key={index.symbol} index={index} />
+        ))}
+      </div>
+    );
+  }
+  return loading ? <MarketIndexTilesSkeleton /> : null;
 }
 
 function MarketIndexTile({ index }: { index: MarketIndexQuote }) {
@@ -261,18 +273,85 @@ function QuickStat({
   );
 }
 
-// ---- Skeleton ----
-function StockHeaderSkeleton() {
+// ---- Skeletons ----
+// Each one keeps the wrapper classes of the block it stands in for, so the
+// header is the same height before and after the data lands. The line
+// heights are the rendered heights of the text they replace.
+
+function MarketIndexTilesSkeleton() {
+  return (
+    <div aria-hidden className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+      {Array.from({ length: 3 }).map((_, i) => (
+        <div
+          key={i}
+          className="rounded-xl bg-snow-peak/[0.025] px-3 py-2.5 ring-1 ring-inset ring-wolf-border/40"
+        >
+          <div className="flex h-[15px] items-center justify-between gap-2">
+            <Skeleton shape="line" className="h-2.5 w-14" />
+            <Skeleton shape="line" className="h-2.5 w-10" />
+          </div>
+          <Skeleton shape="line" className="mt-1 h-[15px] w-20" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PriceRowSkeleton() {
+  return (
+    <div aria-hidden className="flex flex-wrap items-end gap-x-8 gap-y-3">
+      <div>
+        <Skeleton shape="line" className="h-[34px] w-36" />
+        <Skeleton shape="line" className="mt-2 h-[13px] w-40" />
+        <Skeleton shape="line" className="mt-2 h-5 w-44" />
+      </div>
+      {/* Each stat renders 18px tall; on a phone they wrap onto two rows. */}
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} shape="line" className="h-[18px] w-20" />
+        ))}
+      </div>
+      <div className="ml-auto flex h-4 items-center gap-2">
+        <Skeleton shape="line" className="h-4 w-8" />
+        <Skeleton shape="line" className="h-1.5 w-24 rounded-full" />
+        <Skeleton shape="line" className="h-4 w-8" />
+        <Skeleton shape="line" className="ml-1 h-3 w-7" />
+      </div>
+    </div>
+  );
+}
+
+function StockHeaderSkeleton({
+  marketIndices,
+  marketIndicesLoading,
+}: {
+  marketIndices: MarketIndexQuote[] | undefined;
+  marketIndicesLoading: boolean;
+}) {
   return (
     <div className="space-y-4">
-      <div className="flex items-center gap-4">
-        <Skeleton className="w-12 h-12 rounded-xl" />
-        <div className="space-y-2">
-          <Skeleton className="h-6 w-48" />
-          <Skeleton className="h-4 w-32" />
+      {/* Real tiles when they are already cached, so the profile skeleton
+          and the loaded header share the same top edge. */}
+      <MarketIndicesRow indices={marketIndices} loading={marketIndicesLoading} />
+      <div aria-hidden className="flex items-start justify-between gap-3 sm:gap-4">
+        <div className="flex min-w-0 items-center gap-3 sm:gap-4">
+          <Skeleton className="h-11 w-11 shrink-0 rounded-[8px] sm:h-[60px] sm:w-[60px]" />
+          <div className="min-w-0">
+            <div className="flex h-7 items-center gap-2 sm:h-8 sm:gap-2.5">
+              <Skeleton shape="line" className="h-5 w-40 sm:h-6 sm:w-56" />
+              <Skeleton shape="badge" className="h-5 w-16" />
+            </div>
+            {/* Sector · industry wraps to a second line on a phone. */}
+            <div className="mt-1 flex h-8 items-center gap-2 sm:h-4">
+              <Skeleton shape="line" className="h-3.5 w-12" />
+              <Skeleton shape="line" className="h-3 w-24" />
+              <Skeleton shape="line" className="h-3 w-28" />
+            </div>
+          </div>
         </div>
+        <Skeleton className="h-9 w-20 shrink-0 rounded-md sm:h-8" />
       </div>
-      <Skeleton className="h-10 w-36" />
+      <PriceRowSkeleton />
     </div>
   );
 }

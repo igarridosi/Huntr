@@ -22,7 +22,7 @@ export default function TickerClientLayout({
 
   const { data: profile, isLoading: profileLoading } = useStockProfile(ticker);
   const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker);
-  const { data: marketIndices } = useMarketIndices();
+  const { data: marketIndices, isLoading: marketIndicesLoading } = useMarketIndices();
 
   useEffect(() => {
     if (!ticker) return;
@@ -46,6 +46,7 @@ export default function TickerClientLayout({
         profile={profile}
         quote={quote}
         marketIndices={marketIndices}
+        marketIndicesLoading={marketIndicesLoading}
         isLoading={profileLoading || quoteLoading}
       />
 
