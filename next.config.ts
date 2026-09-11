@@ -61,8 +61,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   // A self-contained server under .next/standalone, with only the node_modules
-  // it actually needs. It is what the Dockerfile copies; Vercel ignores it.
-  output: "standalone",
+  // it actually needs. It is what the Dockerfile copies.
+  //
+  // Not on Vercel. Contrary to the usual advice, Vercel does not ignore this
+  // setting on Next 16: its build step reads `.next/next-server.js.nft.json`,
+  // a trace file the standalone output does not emit, and the deployment
+  // fails with ENOENT. Vercel sets VERCEL=1 in every build, so the switch is
+  // keyed on that.
+  output: process.env.VERCEL ? undefined : "standalone",
   reactCompiler: true,
   async headers() {
     return [
