@@ -70,6 +70,8 @@ export function Topbar({
       <button
         type="button"
         onClick={onSearchClick}
+        // The visible label is hidden below `sm`, so the button has no name on a phone.
+        aria-label="Search tickers"
         className={cn(
           "ml-2 flex h-10 items-center gap-2 rounded-lg px-3 text-sm sm:h-auto sm:py-1.5",
           "text-mist hover:text-snow-peak",

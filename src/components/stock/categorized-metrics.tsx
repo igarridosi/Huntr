@@ -92,9 +92,9 @@ export function CategorizedMetrics({
             style={{ "--enter-delay": `${catIndex * 40}ms` } as React.CSSProperties}
           >
             {/* Micro-label register: small text takes positive tracking. */}
-            <h4 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
               {cat.title}
-            </h4>
+            </h2>
             <div className="space-y-2">
               {cat.items.map((item) => (
                 <div

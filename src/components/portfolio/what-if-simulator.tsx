@@ -334,6 +334,7 @@ export function WhatIfSimulator({
               onClick={handleAddDraft}
               disabled={!addingTicker || !addingShares}
               className="h-9 text-xs"
+              aria-label="Add draft trade"
             >
               <Plus className="w-3.5 h-3.5" />
             </Button>

@@ -168,9 +168,9 @@ export function MetricChartCard({
     <div className="insight-enter flex flex-col gap-2 rounded-xl bg-wolf-surface p-4 ring-1 ring-inset ring-wolf-border/50">
       {/* Header: title + growth badge */}
       <div className="flex items-center gap-2">
-        <h3 className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+        <h2 className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
           {title}
-        </h3>
+        </h2>
         {growth !== undefined && growth !== null && (
           <Badge
             variant={growth >= 0 ? "bullish" : "bearish"}

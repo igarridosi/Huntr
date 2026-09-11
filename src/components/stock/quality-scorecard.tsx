@@ -328,7 +328,7 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
           <div className="flex-1 min-w-0">
             {/* Title row */}
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Quality Score</h3>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Quality Score</h2>
               <ModeBadge mode={result.mode} />
             </div>
 
