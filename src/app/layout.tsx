@@ -54,8 +54,8 @@ export const metadata: Metadata = {
     images: [
       {
         url: "/logo/HunterLogo.png",
-        width: 1200,
-        height: 1200,
+        width: 1632,
+        height: 640,
         alt: "Huntr logo",
       },
     ],
@@ -70,15 +70,6 @@ export const metadata: Metadata = {
   robots: {
     index: true,
     follow: true,
-  },
-  icons: {
-    icon: [
-      { url: "/logo/HunterLogoCut.png", type: "image/png" },
-    ],
-    shortcut: ["/logo/HunterLogoCut.png"],
-    apple: [
-      { url: "/logo/HunterLogoCut.png" },
-    ],
   },
 };
 
@@ -95,7 +86,7 @@ export default function RootLayout({
         "@id": "https://huntrvalue.me/#organization",
         "name": "Huntr",
         "url": "https://huntrvalue.me/",
-        "logo": "https://huntrvalue.me/logo/HunterLogoCut.png",
+        "logo": "https://huntrvalue.me/icon.png",
         "sameAs": [
           "https://twitter.com/huntrvalue",
           "https://linkedin.com/company/huntrvalue"
@@ -113,11 +104,6 @@ export default function RootLayout({
           "@id": "https://huntrvalue.me/#organization"
         },
         "description": "Tactical financial analysis platform offering fundamental metrics, multi-chart overviews, and smart watchlists for demanding value investors.",
-        "aggregateRating": {
-          "@type": "AggregateRating",
-          "ratingValue": "4.9",
-          "ratingCount": "128"
-        },
         "offers": {
           "@type": "Offer",
           "price": "0.00",
