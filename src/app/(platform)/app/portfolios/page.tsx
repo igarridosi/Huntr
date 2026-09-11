@@ -1357,13 +1357,18 @@ function AddTransactionDialog({
   const [price, setPrice] = useState("");
   const [transactionDate, setTransactionDate] = useState(() => new Date().toISOString().slice(0, 10));
 
-  useEffect(() => {
-    if (!position) return;
-    setShares("");
-    setPrice((position.quote?.price ?? position.avg_cost).toString());
-    setTransactionDate(new Date().toISOString().slice(0, 10));
-    setSide("buy");
-  }, [position]);
+  // A different position means a fresh form, prefilled with its price. Done
+  // during render so the previous position's numbers are never shown first.
+  const [seenPosition, setSeenPosition] = useState(position);
+  if (seenPosition !== position) {
+    setSeenPosition(position);
+    if (position) {
+      setShares("");
+      setPrice((position.quote?.price ?? position.avg_cost).toString());
+      setTransactionDate(new Date().toISOString().slice(0, 10));
+      setSide("buy");
+    }
+  }
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -2185,7 +2190,6 @@ function PositionTable({
   onRemove,
   groupBySector,
   sortKey,
-  sortDir,
   onSort,
 }: {
   positions: EnrichedPosition[];
@@ -3349,15 +3353,17 @@ export default function PortfoliosPage() {
     return [...alertNotifications, ...targetNotifications];
   }, [alerts, watchlistCandidates]);
 
-  useEffect(() => {
-    if (watchlistLoading) return;
-    setDismissedScoutInboxIds((prev) => {
-      const next = prev.filter((id) => scoutInbox.some((item) => item.id === id));
-      // Return the exact same reference when nothing changed — prevents re-render loop
-      // caused by scoutInbox getting a new array reference on each render cycle.
-      return next.length === prev.length ? prev : next;
-    });
-  }, [watchlistLoading, scoutInbox]);
+  // Dismissals for notifications that no longer exist are dropped, so one
+  // that fires again later is shown again. Pruned while rendering; the length
+  // check is what stops it re-rendering when nothing changed.
+  if (!watchlistLoading) {
+    const pruned = dismissedScoutInboxIds.filter((id) =>
+      scoutInbox.some((item) => item.id === id)
+    );
+    if (pruned.length !== dismissedScoutInboxIds.length) {
+      setDismissedScoutInboxIds(pruned);
+    }
+  }
 
   useEffect(() => {
     if (typeof window === "undefined") return;

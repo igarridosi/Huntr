@@ -549,7 +549,7 @@ async function fetchFreshEarningsDetail(ticker: string, historyLimit?: number): 
                     } as AlphaEarningsCacheRow);
                   }
                 }
-              } catch (err) {
+              } catch {
                 // ignore yfinance failures - alpha is authoritative
               }
             }

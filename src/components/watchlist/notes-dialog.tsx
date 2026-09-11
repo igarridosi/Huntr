@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Plus, Target, X } from "lucide-react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -37,10 +37,15 @@ export function NotesDialog({
   const [notesValue, setNotesValue] = useState(initialNotes);
   const [targetValue, setTargetValue] = useState(targetPrice?.toString() ?? "");
 
-  useEffect(() => {
+  // A new ticker, or fresh notes for the same one, replaces the draft. Done
+  // during render so the dialog never shows the previous row's text first.
+  const draftKey = JSON.stringify([ticker, initialNotes, targetPrice ?? null]);
+  const [seenDraftKey, setSeenDraftKey] = useState(draftKey);
+  if (seenDraftKey !== draftKey) {
+    setSeenDraftKey(draftKey);
     setNotesValue(initialNotes);
     setTargetValue(targetPrice?.toString() ?? "");
-  }, [initialNotes, targetPrice, ticker]);
+  }
 
   const handleSave = () => {
     onSaveNotes(notesValue);

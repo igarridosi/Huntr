@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency, formatPercent, formatCompactNumber } from "@/lib/utils";
 import type { DCFResult } from "@/lib/calculations/dcf";
@@ -54,7 +54,6 @@ export function DCFResults({
   ticker,
   wacc,
   terminalGrowthRate,
-  fields,
   guard,
 }: DCFResultsProps) {
   const isUndervalued = result.upside > 0;
@@ -333,29 +332,32 @@ function Divider() {
  * and releases once, at the end.
  */
 function useValueTrend(value: number): "up" | "down" | null {
-  const previous = useRef(value);
+  const [previous, setPrevious] = useState(value);
   const [trend, setTrend] = useState<"up" | "down" | null>(null);
-  const releaseRef = useRef<number | null>(null);
+  // Bumped on every move, so the release timer below restarts even when the
+  // direction did not change - a value climbing for 400ms holds one accent
+  // for the whole climb and releases once at the end.
+  const [moveCount, setMoveCount] = useState(0);
 
-  useEffect(() => {
-    const delta = value - previous.current;
-    previous.current = value;
-
+  // The direction is a function of this value and the last one, so it is
+  // decided while rendering, with the previous value kept in state.
+  if (value !== previous) {
+    setPrevious(value);
+    const delta = value - previous;
     // Sub-cent drift is rounding, not a move.
-    if (Math.abs(delta) < 0.005) return;
+    if (Math.abs(delta) >= 0.005) {
+      setTrend(delta > 0 ? "up" : "down");
+      setMoveCount((count) => count + 1);
+    }
+  }
 
-    setTrend(delta > 0 ? "up" : "down");
-
-    if (releaseRef.current !== null) window.clearTimeout(releaseRef.current);
-    releaseRef.current = window.setTimeout(() => setTrend(null), 260);
-  }, [value]);
-
-  useEffect(
-    () => () => {
-      if (releaseRef.current !== null) window.clearTimeout(releaseRef.current);
-    },
-    []
-  );
+  // Releasing the accent is time-based, which is what effects are for. The
+  // state update happens inside the timer callback, not in the effect body.
+  useEffect(() => {
+    if (trend === null) return;
+    const handle = window.setTimeout(() => setTrend(null), 260);
+    return () => window.clearTimeout(handle);
+  }, [trend, moveCount]);
 
   return trend;
 }

@@ -1,5 +1,4 @@
 import {
-  Calculator,
   BarChart3,
   Sigma,
   ShieldCheck,

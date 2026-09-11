@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Check, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -49,12 +49,18 @@ export function AddToWatchlist({
     [lists, ticker]
   );
 
-  useEffect(() => {
-    if (!open) return;
-    setSelectedLists(
-      listsWithMembership.filter((list) => list.isSelected).map((list) => list.id)
-    );
-  }, [open, listsWithMembership]);
+  // Opening the dialog starts from the current membership. Tracked as a
+  // transition on `open` during render rather than in an effect, so the first
+  // painted frame already has the right boxes ticked.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (open) {
+      setSelectedLists(
+        listsWithMembership.filter((list) => list.isSelected).map((list) => list.id)
+      );
+    }
+  }
 
   const toggleListSelection = (listId: string) => {
     setSelectedLists((prev) =>

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
   Lightbulb,
@@ -25,7 +25,7 @@ import { Separator } from "@/components/ui/separator";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { KoFiSupport } from "@/components/ui/kofi-support";
 import { useAllProfiles } from "@/hooks/use-stock-data";
-import { getRecentSearches } from "@/lib/recent-searches";
+import { useRecentSearches } from "@/lib/recent-searches";
 import { useSupabase } from "@/providers/supabase-provider";
 
 interface SidebarProps {
@@ -91,11 +91,7 @@ export function Sidebar({
   const router = useRouter();
   const { supabase, user } = useSupabase();
   const { data: profiles = [] } = useAllProfiles();
-  const [recentSearches, setRecentSearches] = useState<string[]>([]);
-
-  useEffect(() => {
-    setRecentSearches(getRecentSearches());
-  }, []);
+  const recentSearches = useRecentSearches();
 
   const profileMap = useMemo(
     () => Object.fromEntries(profiles.map((profile) => [profile.ticker, profile])),

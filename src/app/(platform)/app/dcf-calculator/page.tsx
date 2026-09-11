@@ -235,14 +235,14 @@ export default function DcfCalculatorPage() {
    * ServiceNow replaced its 9.0% growth and 11.5% WACC with Base's 7.3% and
    * 10.5% - a scenario silently overwritten by looking at it.
    */
-  const isAnimatingRef = useRef(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   const animateInputsTo = useCallback((target: DCFInputs, duration = 380) => {
     if (animationRef.current !== null) {
       cancelAnimationFrame(animationRef.current);
     }
 
-    isAnimatingRef.current = true;
+    setIsAnimating(true);
 
     const startValues = { ...inputs };
     const startTime = performance.now();
@@ -270,7 +270,7 @@ export default function DcfCalculatorPage() {
       } else {
         setInputs(target);
         animationRef.current = null;
-        isAnimatingRef.current = false;
+        setIsAnimating(false);
       }
     };
 
@@ -407,25 +407,30 @@ export default function DcfCalculatorPage() {
    * Idempotent by construction: re-applying the same figures is a no-op, and
    * the signature stops it running at all when nothing moved.
    */
-  const appliedFactsRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!isPopulated || !sourcedFields) return;
-
-    const signature = JSON.stringify([
-      ticker,
-      sourcedFields.netDebt.financialDebt,
-      sourcedFields.netDebt.operatingLeases,
-      sourcedFields.netDebt.cash,
-      sourcedFields.netDebt.includesLeases,
-      sourcedFields.sharesOutstanding.value,
-    ]);
-    if (appliedFactsRef.current === signature) return;
-    appliedFactsRef.current = signature;
-
+  const [appliedSignature, setAppliedSignature] = useState<string | null>(null);
+  const factsSignature =
+    isPopulated && sourcedFields
+      ? JSON.stringify([
+          ticker,
+          sourcedFields.netDebt.financialDebt,
+          sourcedFields.netDebt.operatingLeases,
+          sourcedFields.netDebt.cash,
+          sourcedFields.netDebt.includesLeases,
+          sourcedFields.sharesOutstanding.value,
+        ])
+      : null;
+  // Applied while rendering rather than in an effect. The React Compiler
+  // rejects synchronous setState in an effect body, and it has a point: an
+  // effect would let one frame paint with the panel and the engine disagreeing
+  // before correcting itself. Adjusting during render re-renders immediately
+  // and that frame never reaches the screen. The signature in state is what
+  // makes it converge - the second pass finds them equal and does nothing.
+  if (factsSignature !== null && factsSignature !== appliedSignature && sourcedFields) {
+    setAppliedSignature(factsSignature);
     applyAccountingTreatment((previous) =>
       applySourcedBalanceSheet(previous, sourcedFields)
     );
-  }, [isPopulated, sourcedFields, ticker, applyAccountingTreatment]);
+  }
 
   // One source of truth for the balance sheet.
   //
@@ -715,15 +720,15 @@ export default function DcfCalculatorPage() {
     );
   }, [scenarios, animateInputsTo, quote?.price, inputs.currentPrice]);
 
-  useEffect(() => {
-    if (!scenarios || !isPopulated) return;
-    // Never during a switch: what is on screen belongs to the scenario being
-    // left, not the one being entered.
-    if (isAnimatingRef.current) return;
-
-    const current = scenarios[activeScenario];
-    if (!current) return;
-
+  /**
+   * The live inputs written back into the active scenario, during render.
+   *
+   * Never during a switch: what is on screen then belongs to the scenario
+   * being left, not the one being entered.
+   */
+  const activeScenarioInputs =
+    scenarios && isPopulated && !isAnimating ? scenarios[activeScenario]?.inputs : null;
+  {
     /**
      * Zeroed for the *comparison* only.
      *
@@ -742,22 +747,24 @@ export default function DcfCalculatorPage() {
     });
 
     const same =
-      JSON.stringify(forComparison(current.inputs)) ===
-      JSON.stringify(forComparison(inputs));
-    if (same) return;
+      activeScenarioInputs === null ||
+      JSON.stringify(forComparison(activeScenarioInputs)) ===
+        JSON.stringify(forComparison(inputs));
 
-    setScenarios((prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        [activeScenario]: {
-          // Stored as they are, price included.
-          ...prev[activeScenario],
-          inputs,
-        },
-      };
-    });
-  }, [activeScenario, inputs, isPopulated, scenarios]);
+    if (!same) {
+      setScenarios((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          [activeScenario]: {
+            // Stored as they are, price included.
+            ...prev[activeScenario],
+            inputs,
+          },
+        };
+      });
+    }
+  }
 
   const handleTickerSelect = useCallback((t: string) => {
     if (animationRef.current !== null) {
@@ -773,7 +780,7 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
-    appliedFactsRef.current = null;
+    setAppliedSignature(null);
     setScenarios(null);
     setWaccEstimate(null);
     setActiveScenario("base");
@@ -807,7 +814,7 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
-    appliedFactsRef.current = null;
+    setAppliedSignature(null);
     setScenarios(payload.scenarios);
     setActiveScenario(payload.activeScenario);
     setWaccEstimate(payload.waccEstimate);
@@ -833,19 +840,11 @@ export default function DcfCalculatorPage() {
     setCapexMargin(baselineCapex);
   }, [animateInputsTo, quote?.price]);
 
-  useEffect(() => {
-    // Keep DCF comparison anchored to live market price instead of stored snapshots.
-    if (!ticker || quote?.price == null || quote.price <= 0) return;
-
-    setInputs((prev) =>
-      prev.currentPrice === quote.price
-        ? prev
-        : {
-            ...prev,
-            currentPrice: quote.price,
-          }
-    );
-  }, [quote?.price, ticker]);
+  // The comparison price is always the live quote, never a stored snapshot.
+  // Adjusted during render: the value is a pure function of the quote.
+  if (ticker && quote?.price != null && quote.price > 0 && inputs.currentPrice !== quote.price) {
+    setInputs((prev) => ({ ...prev, currentPrice: quote.price }));
+  }
 
   const handleSaveScenarios = useCallback(async () => {
     if (!ticker || !scenarios) return;
@@ -1106,7 +1105,7 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
-    appliedFactsRef.current = null;
+    setAppliedSignature(null);
     setEpsInputs(DEFAULT_EPS_INPUTS);
     setCapitalProjectionYears(10);
     setCapitalRevenueGrowth(0.1);

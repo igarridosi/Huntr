@@ -293,7 +293,6 @@ export function RiskMetricsPanel({
       tooltipContext:
         "How sensitive your portfolio is to S&P 500 moves. 1.0 = moves exactly with the market. 1.5 = 50% more reactive. 0.5 = half as reactive. High beta = more upside AND more downside.",
     },
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [metrics, benchmarkMetrics, hasData, hasBenchmark]);
 
   // ── Plain-language summary ────────────────────────────────
@@ -906,53 +905,6 @@ interface SvgViewBox {
   height?: number;
 }
 
-/**
- * Amber badge label for the 0% "at peak" reference line.
- * Placed at the right edge of the chart, clearly distinct from
- * the grey SPY dashed line.
- */
-function AtPeakLabel({ viewBox }: { viewBox?: SvgViewBox }) {
-  const { x = 0, y = 0, width = 0 } = viewBox ?? {};
-  const text = "← at peak (0%)";
-  const charW = 5.4;
-  const padX = 6;
-  const padY = 3;
-  const textW = text.length * charW;
-  const rectW = textW + padX * 2;
-  const rectH = 15;
-  // Pin to right edge of chart area
-  const rx = x + width - rectW - 8;
-  const ry = y - rectH - 2;
-
-  return (
-    <g>
-      {/* Background pill */}
-      <rect
-        x={rx}
-        y={ry}
-        width={rectW}
-        height={rectH}
-        rx={4}
-        fill="#0d0d18"
-        fillOpacity={0.92}
-        stroke="#F59E0B"
-        strokeWidth={1}
-        strokeOpacity={0.7}
-      />
-      {/* Amber text */}
-      <text
-        x={rx + padX}
-        y={ry + rectH - padY}
-        fill="#F59E0B"
-        fontSize={9}
-        fontFamily="ui-monospace, monospace"
-        fontWeight="600"
-      >
-        {text}
-      </text>
-    </g>
-  );
-}
 
 /**
  * Badge label for ReferenceDot annotations (portfolio trough, SPY trough).

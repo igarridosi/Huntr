@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { cn } from "@/lib/utils";
 
 const DEFAULT_FALLBACK_SRC = "https://www.allinvestview.com/favicon.ico";
@@ -39,12 +39,22 @@ export function TickerLogo({
   const [showInitials, setShowInitials] = useState(false);
   const [attemptedSymbolLookup, setAttemptedSymbolLookup] = useState(false);
 
-  useEffect(() => {
+  /*
+   * Reset when the candidate list changes - during render, not in an effect.
+   *
+   * An effect would paint the old logo for one frame and then correct it. The
+   * documented alternative is to keep the previous prop in state and adjust
+   * while rendering: React discards the in-progress render and retries with
+   * the new state immediately, so the stale frame never reaches the screen.
+   */
+  const [seenCandidates, setSeenCandidates] = useState(candidates);
+  if (seenCandidates !== candidates) {
+    setSeenCandidates(candidates);
     setSourceIndex(0);
     setCurrentSrc(candidates[0] ?? fallbackSrc);
     setShowInitials(false);
     setAttemptedSymbolLookup(false);
-  }, [candidates, fallbackSrc]);
+  }
 
   const resolveLogoFromSymbol = useCallback(async (): Promise<string | null> => {
     try {

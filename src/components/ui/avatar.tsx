@@ -29,9 +29,12 @@ Avatar.displayName = "Avatar";
 const AvatarImage = React.forwardRef<
   HTMLImageElement,
   React.ImgHTMLAttributes<HTMLImageElement>
->(({ className, ...props }, ref) => (
+>(({ className, alt = "", ...props }, ref) => (
+  // Decorative by default: an avatar next to a name adds nothing a screen
+  // reader should announce twice. Callers pass a real `alt` when it matters.
   <img
     ref={ref}
+    alt={alt}
     className={cn("aspect-square h-full w-full object-cover", className)}
     {...props}
   />

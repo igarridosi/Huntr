@@ -230,7 +230,6 @@ function buildCategories(
 
   // Rule 2 — Revenue growth YoY (requires previous period data; use quote field)
   const revenueGrowthYoY = quote.revenue_growth ?? null;
-  const earningsGrowthYoY = quote.earnings_growth ?? null;
 
   const categories: MetricCategory[] = [
     {

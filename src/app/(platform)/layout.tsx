@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Topbar } from "@/components/layout/topbar";
@@ -40,9 +40,13 @@ export default function PlatformLayout({
     setMobileMenuOpen(false);
   }, []);
 
-  useEffect(() => {
+  // Navigating closes the overlay. A route change is a prop change from the
+  // router's point of view, so it is handled like one: during render.
+  const [seenPathname, setSeenPathname] = useState(pathname);
+  if (seenPathname !== pathname) {
+    setSeenPathname(pathname);
     setDesktopMenuOpen(false);
-  }, [pathname]);
+  }
 
   return (
     <div className="min-h-screen bg-wolf-black">

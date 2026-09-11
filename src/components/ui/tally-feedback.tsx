@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { Bug, Lightbulb } from "lucide-react";
+import { Bug } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 declare global {

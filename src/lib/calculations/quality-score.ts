@@ -467,7 +467,6 @@ function scoreProfitability(
 
   // ROIC vs WACC spread (the "moat" indicator)
   const roicWaccSpread = roic !== null ? roic - wacc : null;
-  const isValueCreator = roicWaccSpread !== null && roicWaccSpread > 0;
 
   // Sector-relative scores
   const grossScore = grossMargin !== null ? spScore(grossMargin, bm.grossMargin) : 50;
@@ -533,12 +532,6 @@ function scoreProfitability(
   );
 
   const trendLabel = marginTrendScore >= 65 ? "Improving" : marginTrendScore >= 45 ? "Stable" : "Declining";
-  const roicVsWaccLabel = isValueCreator
-    ? `ROIC +${pct(roicWaccSpread)} above WACC`
-    : roicWaccSpread !== null
-      ? `ROIC ${pct(roicWaccSpread)} below WACC`
-      : "N/A";
-
   return {
     key: "profitability", name: "Profitability",
     score, grade: gradeFromScore(score),
@@ -613,10 +606,8 @@ function scoreGrowth(
   const fcfCAGR = tryWindow(fcfSeries);
 
   // Deep mode extras: 10Y CAGR durability + consistency score
-  let revCAGR10: number | null = null;
   let consistencyScore = 50;
   if (mode === "deep" && income.length >= 8) {
-    revCAGR10 = calculateCAGR(revSeries, 10) ?? calculateCAGR(revSeries, 5);
     const positiveGrowthYears = income.slice(1).filter((is, idx) => is.revenue > income[idx]!.revenue).length;
     const growthRate = positiveGrowthYears / (income.length - 1);
     consistencyScore = lerp(0, 100, growthRate); // % of years with positive revenue growth
@@ -884,7 +875,6 @@ function scoreCapitalAllocation(
   mode: QualityMode
 ): QualityDimension {
   const latestCF  = cashflow.at(-1);
-  const latestInc = income.at(-1);
 
   // Share count trend (always from oldest to newest in the trimmed window)
   const shareSeries = balance.map(b => b.shares_outstanding).filter(v => v > 0);

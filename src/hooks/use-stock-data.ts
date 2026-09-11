@@ -31,7 +31,6 @@ import {
   fetchTranscriptPeriods,
   fetchTranscriptDocument,
   fetchScreenerMetrics,
-  fetchAllCachedScreenerMetrics,
 } from "@/app/actions/stock";
 import type { ScreenerMetrics } from "@/lib/api/cache";
 import { fetchSECFundamentals } from "@/app/actions/stock";
