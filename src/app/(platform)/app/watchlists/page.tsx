@@ -436,7 +436,12 @@ export default function WatchlistsPage() {
                   className="h-8 w-32 text-xs"
                   autoFocus
                 />
-                <Button variant="ghost" size="icon-sm" onClick={() => handleRenameList(list.id)}>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => handleRenameList(list.id)}
+                  aria-label="Save list name"
+                >
                   <Plus className="h-3 w-3 rotate-45" />
                 </Button>
               </div>

@@ -2747,6 +2747,7 @@ function PortfolioSelector({
                     className="text-mist/60 hover:text-snow-peak transition-colors"
                     onClick={(e) => { e.stopPropagation(); setRenamingId(p.id); setRenameValue(p.name); }}
                     title="Rename"
+                    aria-label={`Rename ${p.name}`}
                   >
                     <Pencil className="w-3 h-3" />
                   </button>
@@ -2756,6 +2757,7 @@ function PortfolioSelector({
                       className="text-mist/60 hover:text-bearish transition-colors"
                       onClick={(e) => { e.stopPropagation(); onDelete(p.id); }}
                       title="Delete"
+                      aria-label={`Delete ${p.name}`}
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
@@ -2784,7 +2786,13 @@ function PortfolioSelector({
                 onChange={(e) => setNewName(e.target.value)}
                 className="flex-1 text-xs bg-snow-peak/[0.06] ring-1 ring-inset ring-wolf-border/50 rounded-md px-2 py-1.5 text-snow-peak placeholder:text-mist/50 focus:outline-none focus:border-sunset-orange/40"
               />
-              <Button type="submit" size="sm" className="h-7 text-[11px] px-2" disabled={!newName.trim()}>
+              <Button
+                type="submit"
+                size="sm"
+                className="h-7 text-[11px] px-2"
+                disabled={!newName.trim()}
+                aria-label="Create portfolio"
+              >
                 <Plus className="w-3 h-3" />
               </Button>
             </form>

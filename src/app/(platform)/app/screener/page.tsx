@@ -540,6 +540,7 @@ function FilterGroup({
                 <button
                   type="button"
                   onClick={() => onRemove(def.id)}
+                  aria-label={`Remove ${def.label} filter`}
                   className="text-mist/50 hover:text-bearish transition-colors"
                 >
                   <X className="h-3 w-3" />
@@ -873,6 +874,7 @@ export default function ScreenerPage() {
             <button
               type="button"
               onClick={() => handleSearch("")}
+              aria-label="Clear search"
               className="absolute right-2.5 top-1/2 -translate-y-1/2 text-mist/50 hover:text-snow-peak"
             >
               <X className="h-3 w-3" />
@@ -1033,6 +1035,7 @@ export default function ScreenerPage() {
                         type="button"
                         onClick={() => setPage((p) => Math.max(1, p - 1))}
                         disabled={safePage === 1}
+                        aria-label="Previous page"
                         className="flex h-9 w-9 items-center justify-center rounded-lg text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
@@ -1068,6 +1071,7 @@ export default function ScreenerPage() {
                         type="button"
                         onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
                         disabled={safePage === totalPages}
+                        aria-label="Next page"
                         className="flex h-9 w-9 items-center justify-center rounded-lg text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
                       >
                         <ChevronRight className="h-3.5 w-3.5" />

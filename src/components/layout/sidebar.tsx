@@ -148,9 +148,10 @@ export function Sidebar({
           />
         </div>
         <div className="min-w-0 flex-1">
-          <h1 className="text-base font-bold leading-tight tracking-tight text-snow-peak">
+          {/* A wordmark, not a heading: the page's h1 is its own title. */}
+          <span className="block text-base font-bold leading-tight tracking-tight text-snow-peak">
             HUNTR
-          </h1>
+          </span>
           <p className="truncate font-mono text-[9px] uppercase leading-tight tracking-[0.14em] text-mist/50">
             Wolf of Value St.
           </p>
