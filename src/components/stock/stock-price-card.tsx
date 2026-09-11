@@ -158,7 +158,7 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
     >
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Stock Price</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Stock Price</p>
           <p className="mt-1.5 font-mono text-[26px] font-semibold tabular-nums leading-none tracking-[-0.02em] text-snow-peak sm:text-[30px]">
             {end != null ? formatCurrency(end) : "-"}
           </p>
@@ -179,7 +179,7 @@ export function StockPriceCard({ ticker, quote }: StockPriceCardProps) {
                   ? `${absChange >= 0 ? "+" : ""}${formatCurrency(absChange)} (${formatPercent(pctChange, 2)}) ${range}`
                   : "-"}
               </p>
-              <p className="mt-2 text-[11px] text-mist/60">
+              <p className="mt-2 text-[11px] text-mist/85">
                 {latestCloseDate ? `Closed: ${formatDateShort(latestCloseDate)}` : "No close data"}
               </p>
             </>

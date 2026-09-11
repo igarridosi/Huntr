@@ -168,13 +168,18 @@ export function MetricChartCard({
     <div className="insight-enter flex flex-col gap-2 rounded-xl bg-wolf-surface p-4 ring-1 ring-inset ring-wolf-border/50">
       {/* Header: title + growth badge */}
       <div className="flex items-center gap-2">
-        <h2 className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+        <h2 className="truncate text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">
           {title}
         </h2>
         {growth !== undefined && growth !== null && (
           <Badge
             variant={growth >= 0 ? "bullish" : "bearish"}
-            className="shrink-0 px-1.5 py-0 font-mono text-[10px] leading-4 tabular-nums"
+            // A lighter tint than the Badge default: bearish red on the /15 wash
+            // sits at 4.1:1, on /5 it clears 4.5:1.
+            className={cn(
+              "shrink-0 px-1.5 py-0 font-mono text-[10px] leading-4 tabular-nums",
+              growth < 0 && "bg-bearish/5"
+            )}
             title="Change across the visible window"
           >
             {growth >= 0 ? "↑" : "↓"} {formatPercent(Math.abs(growth), 1)}
@@ -236,7 +241,7 @@ export function MetricChartCard({
                       "ring-1 ring-inset",
                       item.value >= 0
                         ? "bg-bullish/12 text-bullish ring-bullish/25"
-                        : "bg-bearish/12 text-bearish ring-bearish/25"
+                        : "bg-bearish/5 text-bearish ring-bearish/25"
                     )}
                   >
                     {item.label}: {formatPercent(item.value, 1)}

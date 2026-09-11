@@ -68,13 +68,13 @@ function MetricRow({
       <div className="flex min-w-0 items-center gap-1">
         <span className="truncate text-[11.5px] text-mist">{label}</span>
         <Tooltip content={tooltip} side="right">
-          <Info className="w-3 h-3 text-mist/35 hover:text-mist/70 transition-colors shrink-0 cursor-help" />
+          <Info className="w-3 h-3 text-mist/85 hover:text-mist transition-colors shrink-0 cursor-help" />
         </Tooltip>
       </div>
       <span className="whitespace-nowrap font-mono text-[12px] font-semibold tabular-nums text-snow-peak">{value}</span>
       <div className="flex items-center gap-1.5">
         <ScoreBar score={score} h="h-1" />
-        <span className="w-6 shrink-0 text-right font-mono text-[10px] tabular-nums text-mist/60">
+        <span className="w-6 shrink-0 text-right font-mono text-[10px] tabular-nums text-mist/85">
           {Math.round(score)}
         </span>
       </div>
@@ -122,7 +122,7 @@ function DimensionRow({ dimension }: { dimension: QualityDimension }) {
         </span>
 
         {/* Summary */}
-        <span className="hidden flex-1 truncate text-[11px] text-mist/60 sm:block">
+        <span className="hidden flex-1 truncate text-[11px] text-mist/85 sm:block">
           {dimension.summary}
         </span>
 
@@ -135,8 +135,8 @@ function DimensionRow({ dimension }: { dimension: QualityDimension }) {
             {Math.round(dimension.score)}
           </span>
           {expanded
-            ? <ChevronUp  className="h-3.5 w-3.5 text-mist/50" />
-            : <ChevronDown className="h-3.5 w-3.5 text-mist/50" />}
+            ? <ChevronUp  className="h-3.5 w-3.5 text-mist/85" />
+            : <ChevronDown className="h-3.5 w-3.5 text-mist/85" />}
         </div>
       </button>
 
@@ -266,7 +266,7 @@ function ModeBadge({ mode }: { mode: QualityMode }) {
           "inline-flex items-center text-[9px] font-semibold rounded border px-1.5 py-0.5 cursor-help",
           mode === "deep"
             ? "bg-teal-400/10 text-teal-400 border-teal-400/30"
-            : "bg-wolf-border/20 text-mist/60 border-wolf-border/30"
+            : "bg-wolf-border/20 text-mist border-wolf-border/30"
         )}
       >
         {mode === "deep" ? "10Y Analysis" : "4Y Analysis"}
@@ -291,7 +291,7 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
             <p className="font-semibold">{result.headline}</p>
             <p className="text-mist text-[10px]">Score: {Math.round(result.overall)}/100</p>
             {result.dimensions.map((d) => (
-              <p key={d.key} className="text-[10px] text-mist/80">
+              <p key={d.key} className="text-[10px] text-mist/85">
                 {d.name}: {d.grade}
               </p>
             ))}
@@ -328,29 +328,29 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
           <div className="flex-1 min-w-0">
             {/* Title row */}
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Quality Score</h2>
+              <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Quality Score</h2>
               <ModeBadge mode={result.mode} />
             </div>
 
             {/* Sector percentile */}
-            <p className="mt-1.5 text-[12px] text-mist/70">
+            <p className="mt-1.5 text-[12px] text-mist/85">
               Top {result.sectorPercentile}% in {result.sector} · {windowLabel} analysis
             </p>
 
             {/* Overall score bar */}
             <div className="mt-4 space-y-2">
               <div className="flex items-baseline justify-between">
-                <span className="text-[10px] uppercase tracking-[0.11em] text-mist/50">
+                <span className="text-[10px] uppercase tracking-[0.11em] text-mist/85">
                   Overall
                 </span>
                 <span className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
                   {Math.round(result.overall)}
-                  <span className="ml-1 text-[11px] font-normal text-mist/45">/ 100</span>
+                  <span className="ml-1 text-[11px] font-normal text-mist/85">/ 100</span>
                 </span>
               </div>
               <OverallBar score={result.overall} />
               {/* Zone labels */}
-              <div className="flex justify-between text-[8px] text-mist/30 px-0.5">
+              <div className="flex justify-between text-[8px] text-mist/85 px-0.5">
                 <span>F</span>
                 <span>D</span>
                 <span>C</span>
@@ -381,8 +381,8 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
 
         {/* ── Footer ── */}
         <div className="flex items-start gap-1.5 pt-1 border-t border-wolf-border/15">
-          <Info className="w-3 h-3 text-mist/30 mt-0.5 shrink-0" />
-          <p className="text-[9px] text-mist/35 leading-relaxed">
+          <Info className="w-3 h-3 text-mist/85 mt-0.5 shrink-0" />
+          <p className="text-[9px] text-mist/85 leading-relaxed">
             Sector-relative percentile scoring vs {result.sector} peers.
             {windowLabel} window · ROIC vs WACC spread · FCF/NI earnings quality.
             Source: {sourceLabel}.

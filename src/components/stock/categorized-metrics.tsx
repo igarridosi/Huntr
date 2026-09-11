@@ -92,7 +92,7 @@ export function CategorizedMetrics({
             style={{ "--enter-delay": `${catIndex * 40}ms` } as React.CSSProperties}
           >
             {/* Micro-label register: small text takes positive tracking. */}
-            <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">
               {cat.title}
             </h2>
             <div className="space-y-2">
@@ -147,10 +147,10 @@ export function CategorizedMetrics({
           aria-hidden
           className="pointer-events-none absolute inset-x-0 top-0 h-4 bg-gradient-to-b from-wolf-black/20 to-transparent"
         />
-        <span className="relative font-mono text-[9px] tracking-[0.02em] text-mist/40">
+        <span className="relative font-mono text-[9px] tracking-[0.02em] text-mist/85">
           Price data: real-time · Fundamentals: {fundamentalsPeriod ?? "latest available"} (GAAP reported)
         </span>
-        <span className="relative text-[9px] text-mist/40">
+        <span className="relative text-[9px] text-mist/85">
           P/E = TTM GAAP · β = 5Y Monthly vs S&P 500
         </span>
       </div>

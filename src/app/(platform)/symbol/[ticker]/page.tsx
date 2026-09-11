@@ -976,7 +976,7 @@ export default function OverviewPage() {
       {profile?.description && (
         <Card className="insight-enter">
           <CardHeader className="pb-3">
-            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
+            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">
               About {profile.name}
             </CardTitle>
           </CardHeader>

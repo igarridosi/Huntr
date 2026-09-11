@@ -134,11 +134,11 @@ export function StockHeader({
                 {formatCurrency(dayChange, { decimals: 2 })} ({changeSign}
                 {formatPercent(dayChangePercent, 2)})
               </span>
-              <span className="text-[11px] uppercase tracking-[0.08em] text-mist/60">Today</span>
+              <span className="text-[11px] uppercase tracking-[0.08em] text-mist/85">Today</span>
             </div>
-            <div className="mt-2 text-[11px] uppercase tracking-[0.08em] text-mist/50">
+            <div className="mt-2 text-[11px] uppercase tracking-[0.08em] text-mist/85">
               Next earnings
-              <span className="ml-1.5 font-mono text-[11px] normal-case tracking-[0.02em] text-mist/80">
+              <span className="ml-1.5 font-mono text-[11px] normal-case tracking-[0.02em] text-mist/85">
                 {earningsText}
               </span>
             </div>
@@ -165,7 +165,7 @@ export function StockHeader({
 
           {/* 52W Range */}
           <div className="ml-auto flex items-center gap-2">
-            <span className="font-mono text-[11px] tabular-nums text-mist/70">
+            <span className="font-mono text-[11px] tabular-nums text-mist/85">
               {formatCurrency(quote.fifty_two_week_low, { decimals: 0 })}
             </span>
             <div className="relative h-1.5 w-24 overflow-hidden rounded-full bg-wolf-border/60">
@@ -176,10 +176,10 @@ export function StockHeader({
                 )}
               />
             </div>
-            <span className="font-mono text-[11px] tabular-nums text-mist/70">
+            <span className="font-mono text-[11px] tabular-nums text-mist/85">
               {formatCurrency(quote.fifty_two_week_high, { decimals: 0 })}
             </span>
-            <span className="ml-1 text-[10px] uppercase tracking-[0.09em] text-mist/45">52W</span>
+            <span className="ml-1 text-[10px] uppercase tracking-[0.09em] text-mist/85">52W</span>
           </div>
         </div>
       ) : isLoading ? (
@@ -216,7 +216,7 @@ function MarketIndexTile({ index }: { index: MarketIndexQuote }) {
     // Raised reads lighter than the page, matching the Insights grid.
     <div className="insight-enter rounded-xl bg-snow-peak/[0.025] px-3 py-2.5 ring-1 ring-inset ring-wolf-border/40">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
+        <span className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/85">
           {index.label}
         </span>
         <span
@@ -265,7 +265,7 @@ function QuickStat({
 }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className="text-[10px] uppercase tracking-[0.09em] text-mist/60">{label}</span>
+      <span className="text-[10px] uppercase tracking-[0.09em] text-mist/85">{label}</span>
       <span
         className={cn(
           "font-mono text-[13px] font-semibold tabular-nums",
