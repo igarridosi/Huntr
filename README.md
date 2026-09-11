@@ -2,138 +2,82 @@
 
 [![CI](https://github.com/igarridosi/Huntr/actions/workflows/ci.yml/badge.svg)](https://github.com/igarridosi/Huntr/actions/workflows/ci.yml)
 
-**Live Demo:** [huntrvalue.me](https://huntrvalue.me/)
+Live at [huntrvalue.me](https://huntrvalue.me/).
 
-Huntr is an institutional-grade financial web terminal designed to streamline fundamental analysis and advanced portfolio management for value investors. Built as a fast, visual, and modern alternative to legacy financial software and complex spreadsheets.
+Huntr works out what a company is actually worth and tells you whether today's price is cheap or expensive. It is built for people who invest in individual companies and want to check the numbers themselves instead of trusting a headline multiple.
 
-## Platform Gallery
-
-<table border="0">
-  <!-- 1. Stock Chart -->
+<table>
   <tr>
-    <td colspan="2">
-      <p align="center"><b>Main Stock Chart & Analysis</b></p>
-      <img src="public/screenshots/stock_chart.png" width="100%" />
-    </td>
+    <td width="50%"><img src="public/screenshots/dcf.png" alt="DCF calculator with three scenarios and a diagnostics panel" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/stock_chart.png" alt="Ticker page with price chart and key metrics" width="100%"></td>
   </tr>
-  <!-- 2. Insights -->
   <tr>
-    <td colspan="2">
-      <p align="center"><b>Market Insights & Trends</b></p>
-      <img src="public/screenshots/insights.png" width="100%" />
-    </td>
-  </tr>
-  <!-- 3. Opportunity Radar -->
-  <tr>
-    <td colspan="2">
-      <p align="center"><b>Opportunity Radar (Unusual Volume & Buybacks)</b></p>
-      <img src="public/screenshots/oportunity_radar.png" width="100%" />
-    </td>
-  </tr>
-  <!-- 4. Watchlist -->
-  <tr>
-    <td colspan="2">
-      <p align="center"><b>Dynamic Watchlists & Market Heatmaps</b></p>
-      <img src="public/screenshots/watchlist.png" width="100%" />
-    </td>
-  </tr>
-  <!-- 5. Earnings Calendar -->
-  <tr>
-    <td colspan="2">
-      <p align="center"><b>Weekly Earnings Calendar</b></p>
-      <img src="public/screenshots/earnings_calendar.png" width="100%" />
-    </td>
-  </tr>
-  <!-- 6. DCF -->
-  <tr>
-    <td colspan="2">
-      <p align="center"><b>Advanced DCF Calculator (Intrinsic Value)</b></p>
-      <img src="public/screenshots/dcf.png" width="100%" />
-    </td>
-  </tr>
-  <!-- 7. Monte Carlo -->
-  <tr>
-    <td colspan="2">
-      <p align="center"><b>Monte Carlo Simulation & Probability Distribution</b></p>
-      <img src="public/screenshots/monte_carlo.png" width="100%" />
-    </td>
-  </tr>
-  <!-- 8. Portfolio -->
-  <tr>
-    <td colspan="2">
-      <p align="center"><b>Portfolio Performance & Risk Metrics</b></p>
-      <img src="public/screenshots/porfolio.png" width="100%" />
-    </td>
+    <td width="50%"><img src="public/screenshots/oportunity_radar.png" alt="Opportunity radar listing market signals" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/porfolio.png" alt="Portfolio tracker with time-weighted return against the S&P 500" width="100%"></td>
   </tr>
 </table>
 
-## Key Features
+## What's inside
 
-Huntr consolidates multiple financial workflows into a single, dark-themed, highly responsive interface:
+- DCF calculator with bear, base and bull scenarios, a Monte Carlo simulation over them, and a reverse DCF that solves for what the market price already assumes.
+- A diagnostics panel that refuses to show a valuation when the data cannot support one: mismatched currencies, a share count that does not reconcile with the market cap, a debt figure that was never found.
+- Ticker pages with financial statements, dividends, earnings history and call transcripts.
+- Opportunity radar: unusual volume, buybacks, 52-week breakouts, yield leaders.
+- Screener over 800+ tickers with a quality score computed weekly.
+- Portfolio tracker with realised and unrealised P&L, time-weighted return against the S&P 500, and a rebalance advisor.
+- Watchlists with price alerts, target prices and notes.
+- JSON export of a full valuation, built so the three scenarios can be handed to an AI model for a second opinion.
 
-*   **Advanced DCF Calculator:** Project intrinsic value using dynamic free cash flow models. Features real-time sliders for WACC, terminal growth, and FCF margin assumptions.
-*   **Opportunity Radar:** Market-wide scanning for actionable signals, including unusual volume, massive share buybacks, 52-week high breakouts, and income (yield) leaders.
-*   **Earnings Hub:** A complete visual history of company earnings. Uses complex scatter and bar charts to plot the last 16 quarters of EPS and Revenue (Estimate vs. Actual) for instant historical context.
-*   **Professional Portfolio Tracker:** Tracks Realized and Unrealized P&L. Calculates weighted portfolio metrics such as Beta, P/E ratio, and estimated dividend income. Includes a Time-Weighted Return (TWR) performance chart benchmarked against the S&P 500.
-*   **Dynamic Watchlists:** Multi-tab asset tracking covering performance, fundamental ratios, dividend sustainability, and market-cap weighted heatmaps.
-*   **Earnings Transcripts:** Long-form, distraction-free reading experience for earnings calls with speaker diarization (Management vs. Analysts).
+## Stack
 
-## Tech Stack
+Next.js 16 (App Router, Server Actions), TypeScript strict, Supabase (Postgres, Auth, Row Level Security), TanStack Query, Recharts, Tailwind v4, Vitest. Deployed on Vercel with two weekly cron jobs. Market data comes from Yahoo Finance through `yahoo-finance2`, from SEC EDGAR for balance-sheet figures, and from Alpha Vantage where a key is configured.
 
-This project is built with modern web technologies, focusing on performance and complex data visualization.
+## Testing
 
-**Frontend:**
-*   Framework: React / Next.js
-*   Styling: Tailwind CSS
-*   Data Visualization: Recharts (Custom composed charts for financial data)
+```bash
+npm test
+```
 
-**Backend & Infrastructure:**
-*   Database & Authentication: Supabase (PostgreSQL)
-*   Transactional Emails: Resend (Custom SMTP)
-*   Hosting & CI/CD: Vercel
+306 tests across 16 files, running in about two seconds with no network access. They cover the DCF engine, the Monte Carlo sampler, the reverse DCF solver, net-debt integrity across scenarios, SEC EDGAR extraction (debt cascades, restricted cash, share-count selection), currency and data-quality guards, scenario coherence, and the cache guards that stop an empty response from being stored.
 
-**Financial Data Providers:**
-*   Alpha Vantage
-*   Yahoo Finance API
-*   Financial Modeling Prep (FMP)
+The financial logic lives in `src/lib/calculations` as pure functions that take numbers and return numbers. Nothing in there fetches, renders or touches a database, which is why every test runs against literal inputs and why the export invariants (the same net debt, share count and price in all three scenarios) can be asserted on the actual file a user downloads.
 
-## Getting Started
+## Architecture and decisions
 
-To run this project locally, you will need Node.js installed on your machine and active API keys for the financial data providers.
+- Market data goes through Server Actions rather than public API routes. Every call is a Server Action (`src/app/actions/stock.ts`). The `yahoo-finance2` client and the API keys never leave the server, ticker inputs are validated against a strict pattern before use, and there is no public endpoint to scrape or abuse. The only route handlers are the two cron jobs, and those require a bearer secret.
+- Data is cached in Supabase and refreshed by weekly crons instead of fetched live. Yahoo throttles, Alpha Vantage has a daily quota, and the screener needs financials for 800+ companies at once. So data is fetched lazily with a 24-hour TTL into a `stock_cache` table, and a Sunday cron pre-warms the whole universe an hour before the quality-score cron reads it. A request never waits on a provider unless the cache has nothing.
+- Row Level Security is what makes the public anon key safe. That key ships to the browser, as it must. What makes that safe is that every user-owned table (`watchlists`, `user_portfolio_state`, `user_dcf_scenarios`, and the rest under `supabase/migrations`) carries policies keyed on `auth.uid()`, so a client can only ever read and write its own rows.
+- Guests can use almost everything; only writes ask for an account. Browsing tickers, charts and the DCF calculator needs no account; only `/app/settings` is protected at the middleware. Saving a watchlist, a portfolio or a scenario opens a sign-up prompt that says what the account is for. People can try the product before deciding whether to trust it with their data.
+- Yahoo is the primary source, with Alpha Vantage and SEC EDGAR as enrichment. Yahoo covers quotes, profiles and statements for every ticker without a key. Alpha Vantage's statements are treated as authoritative when they are already cached, and are never fetched inside a request. SEC EDGAR is read directly for the figures that decide a valuation: debt, cash, share count, leases, with the cover-page count checked against the market cap.
+- The valuation blocks rather than warns when its inputs cannot support it. A wrong unit or a missing figure produces a plausible number, and a plausible number gets acted on. So the model blocks: a JPY balance sheet against a USD price shows no valuation, a debt figure that resolved to nothing holds the calculation until it is entered or confirmed as zero, and an upside past +300% is treated as a broken input rather than an opportunity.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/igarridosi/Huntr.git
-   cd Huntr
-   ```
+## Running it locally
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   # or yarn install
-   ```
+```bash
+cp .env.example .env
+npm ci
+npm run dev
+```
 
-3. **Environment Variables:**
-   Create a `.env.local` file in the root directory and add your API keys and Supabase credentials. Example:
-   ```env
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   ALPHA_VANTAGE_API_KEY=your_alpha_vantage_key
-   FMP_API_KEY=your_fmp_api_key
-   RESEND_API_KEY=your_resend_api_key
-   ```
+`.env.example` lists every variable the code reads and says which ones are required. With only the two Supabase values set, the app runs and the data views fall back to their empty states.
 
-4. **Run the development server:**
-   ```bash
-   npm run dev
-   # or yarn dev
-   ```
-   Open[http://localhost:3000](http://localhost:3000) with your browser to see the result.
+With Docker:
 
-## Feedback & Feature Requests
+```bash
+cp .env.example .env
+docker compose up --build
+```
 
-Huntr is currently in Private Beta. If you have access and want to report a bug or request a new financial metric, please use our [Feedback Form](https://tally.so/r/your-form-id) inside the application.
+The compose file targets a hosted Supabase project; there is no local database to stand up.
+
+## Status
+
+Public beta with guest access. Bugs and requests go through the [feedback form](https://tally.so/r/XxEBqz), also reachable from inside the app.
 
 ## License
 
-All rights reserved. Copyright (c) 2026 igarridosi.
+MIT. See [LICENSE](LICENSE).
+
+---
+
+This project is developed with help from AI coding agents; their instructions live in [`docs/ai/`](docs/ai/).
