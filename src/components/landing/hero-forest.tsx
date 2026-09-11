@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -7,8 +8,14 @@ import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion
 import { Search, ArrowRight, Radio, FileText, BarChart3 } from "lucide-react";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { KoFiSupport } from "@/components/ui/kofi-support";
-import { CommandPalette } from "@/components/search/command-palette";
 import { ROUTES } from "@/lib/constants";
+
+// cmdk only matters once the palette opens, and it renders nothing while
+// closed, so the chunk loads after hydration instead of with the page.
+const CommandPalette = dynamic(
+  () => import("@/components/search/command-palette").then((m) => m.CommandPalette),
+  { ssr: false }
+);
 
 /** Point in the intro where the wordmark starts surfacing. */
 const WORD_START = 0.08;
@@ -260,13 +267,12 @@ export function HeroForest() {
           className="relative z-10 flex flex-1 items-center justify-center px-4 pt-14 pb-40 sm:px-6"
           style={{ y: copyY, opacity: copyOpacity, pointerEvents: copyPointer }}
         >
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.7, ease: "easeOut" }}
-          className="flex w-full max-w-2xl flex-col items-center text-center"
-        >
-          <h1 className="text-4xl font-bold leading-[1.06] tracking-tight text-snow-peak drop-shadow-[0_2px_24px_rgba(11,20,22,0.85)] sm:text-6xl lg:text-7xl">
+        {/* CSS entrances, not framer: the headline is the page's LCP and must
+            not wait for hydration to become visible. It only rises — a fade
+            from zero would keep it out of the LCP until the fade began — and
+            the copy under it carries the fade. */}
+        <div className="flex w-full max-w-2xl flex-col items-center text-center">
+          <h1 className="hero-headline-enter text-4xl font-bold leading-[1.06] tracking-tight text-snow-peak drop-shadow-[0_2px_24px_rgba(11,20,22,0.85)] sm:text-6xl lg:text-7xl">
             Stop Searching
             <br />
             Start{" "}
@@ -275,7 +281,7 @@ export function HeroForest() {
             </span>
           </h1>
 
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-mist drop-shadow-[0_1px_12px_rgba(11,20,22,0.9)]">
+          <p className="hero-copy-enter mt-5 max-w-xl text-base leading-relaxed text-mist drop-shadow-[0_1px_12px_rgba(11,20,22,0.9)]">
             <b className="text-lg font-extrabold tracking-tight text-snow-peak">HUNTR</b>{" "}
             simplifies fundamental analysis for the modern value investor.
           </p>
@@ -283,7 +289,7 @@ export function HeroForest() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="mt-8 flex w-full max-w-xl cursor-pointer items-center gap-2 rounded-xl border border-wolf-border/60 bg-wolf-black/55 p-2 shadow-xl shadow-wolf-black/40 backdrop-blur-md transition-colors hover:border-sunset-orange/50"
+            className="hero-copy-enter mt-8 flex w-full max-w-xl cursor-pointer items-center gap-2 rounded-xl border border-wolf-border/60 bg-wolf-black/55 p-2 shadow-xl shadow-wolf-black/40 backdrop-blur-md transition-colors hover:border-sunset-orange/50"
           >
             <div className="flex flex-1 items-center gap-2 px-2">
               <Search className="h-4 w-4 text-mist" />
@@ -295,7 +301,7 @@ export function HeroForest() {
             </span>
           </button>
 
-          <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
+          <div className="hero-copy-enter mt-7 flex flex-wrap items-center justify-center gap-2">
             {[
               { icon: BarChart3, label: "Yahoo Finance" },
               { icon: Radio, label: "Real-time Data" },
@@ -313,12 +319,12 @@ export function HeroForest() {
 
           {/* Mobile only — desktop gets this in the nav next to "Start Free"
               instead, where the trust badges have less room to spare. */}
-          <div className="mt-3 flex justify-center sm:hidden">
+          <div className="hero-copy-enter mt-3 flex justify-center sm:hidden">
             <KoFiSupport text="Support Huntr on Ko-fi" />
           </div>
 
             <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} redirectTo={ROUTES.SIGNUP} />
-          </motion.div>
+          </div>
         </motion.div>
 
         {/* Ticker tape — the gaps stay click-through, the chips themselves don't */}

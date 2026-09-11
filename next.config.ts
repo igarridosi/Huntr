@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import bundleAnalyzer from "@next/bundle-analyzer";
 
 const securityHeaders = [
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
@@ -80,4 +81,8 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// `ANALYZE=true npm run build` writes an interactive treemap per bundle to
+// .next/analyze/. Off by default; it is a diagnostic, not part of the build.
+const withBundleAnalyzer = bundleAnalyzer({ enabled: process.env.ANALYZE === "true" });
+
+export default withBundleAnalyzer(nextConfig);

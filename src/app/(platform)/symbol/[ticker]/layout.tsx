@@ -10,6 +10,8 @@ async function getTickerData(ticker: string) {
   ]);
 
   return {
+    profile,
+    quote,
     ticker,
     name: profile?.name || `${ticker} Corp`,
     price: quote?.price || 0,
@@ -123,7 +125,13 @@ export default async function TickerLayout({
         dangerouslySetInnerHTML={{ __html: JSON.stringify(financialQuoteSchema) }}
       />
       
-      <TickerClientLayout>
+      {/* The profile and quote were fetched above anyway; handing them to
+          the client seeds React Query so the header renders on the server
+          and the price (the page's LCP) is in the first HTML. */}
+      <TickerClientLayout
+        initialProfile={quoteData.profile}
+        initialQuote={quoteData.quote}
+      >
         {children}
       </TickerClientLayout>
     </>

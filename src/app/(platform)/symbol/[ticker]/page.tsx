@@ -8,12 +8,13 @@ import {
   useStockProfile,
   useStockQuote,
 } from "@/hooks/use-stock-data";
-import { CategorizedMetrics } from "@/components/stock/categorized-metrics";
+import dynamic from "next/dynamic";
 import {
-  MetricChartCard,
-  type MetricChartCardData,
-} from "@/components/stock/metric-chart-card";
-import { StockPriceCard } from "@/components/stock/stock-price-card";
+  CategorizedMetrics,
+  CategorizedMetricsSkeleton,
+} from "@/components/stock/categorized-metrics";
+import type { MetricChartCardData } from "@/components/stock/metric-chart-card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,37 @@ import { useAuthGate } from "@/providers/auth-gate-provider";
 import { cn, formatCurrency, formatPercent } from "@/lib/utils";
 import type { PeriodType } from "@/types/financials";
 import type { CompanyFinancials } from "@/types/financials";
+
+// Recharts is the single heaviest chunk on this route (~380 KB) and neither
+// card is in the first mobile viewport, so both load after hydration. The
+// placeholders keep the cards' footprint so the grid does not reflow when
+// the chunk lands.
+const MetricChartCard = dynamic(
+  () => import("@/components/stock/metric-chart-card").then((m) => m.MetricChartCard),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col gap-2 rounded-xl bg-wolf-surface p-4 ring-1 ring-inset ring-wolf-border/50">
+        <Skeleton className="h-7 w-40" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    ),
+  }
+);
+
+const StockPriceCard = dynamic(
+  () => import("@/components/stock/stock-price-card").then((m) => m.StockPriceCard),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex flex-col gap-2.5 rounded-xl border border-wolf-border/50 bg-wolf-surface p-3 sm:p-4">
+        <Skeleton className="h-12 w-40" />
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="mt-1.5 h-40 w-full sm:h-44" />
+      </div>
+    ),
+  }
+);
 
 function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
   return rows
@@ -665,7 +697,7 @@ export default function OverviewPage() {
       />
 
       {/* Categorized Metrics Bar — Rule 4: pass fundamentals period for data freshness footer */}
-      {quote && (
+      {quote ? (
         <CategorizedMetrics
           quote={quote}
           income={latestIncome}
@@ -673,6 +705,8 @@ export default function OverviewPage() {
           cashFlow={latestCashFlow}
           fundamentalsPeriod={latestIncome?.period ?? latestBalance?.period ?? undefined}
         />
+      ) : (
+        <CategorizedMetricsSkeleton />
       )}
 
       {/* Charts Grid — 5 columns × 2 rows */}

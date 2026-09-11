@@ -169,13 +169,15 @@ export default function RootLayout({
           <SupabaseProvider>
             <QueryProvider>
               <AuthGateProvider>
-                {/* Google Analytics */}
+                {/* Google Analytics. lazyOnload defers the 170 KB gtag bundle
+                    until the page is idle, so it no longer competes with
+                    hydration on a throttled connection. Page views still fire:
+                    gtag('config') queues them until the script arrives. */}
                 <Script
-                  async
                   src="https://www.googletagmanager.com/gtag/js?id=G-ZKVECX6NY1"
-                  strategy="afterInteractive"
+                  strategy="lazyOnload"
                 />
-                <Script id="gtag-init" strategy="afterInteractive">
+                <Script id="gtag-init" strategy="lazyOnload">
                   {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-ZKVECX6NY1');`}
                 </Script>
                 {children}

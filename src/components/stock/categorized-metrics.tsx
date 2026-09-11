@@ -19,6 +19,7 @@ import {
   calculateNetMargin,
 } from "@/lib/calculations";
 import { Tooltip } from "@/components/ui/tooltip";
+import { Skeleton } from "@/components/ui/skeleton";
 import { AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -152,6 +153,45 @@ export function CategorizedMetrics({
         <span className="relative text-[9px] text-mist/40">
           P/E = TTM GAAP · β = 5Y Monthly vs S&P 500
         </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+
+/**
+ * Same grid, same padding, same number of rows per column as the real block,
+ * so the space is reserved before the quote arrives and nothing below moves
+ * when it does. Row counts must track `buildCategories`.
+ */
+const SKELETON_ROWS = [6, 3, 3, 3, 3] as const;
+
+export function CategorizedMetricsSkeleton() {
+  return (
+    <div
+      aria-hidden
+      className="rounded-xl border border-wolf-border/50 bg-wolf-surface overflow-hidden"
+    >
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 divide-y lg:divide-y-0 lg:divide-x divide-wolf-border/40">
+        {SKELETON_ROWS.map((rows, index) => (
+          <div key={index} className="space-y-3 p-4">
+            {/* h4 at 10px renders 15px tall; the rows 17px, matching the 12px mono value. */}
+            <Skeleton shape="line" className="h-[15px] w-16" />
+            <div className="space-y-2">
+              {Array.from({ length: rows }).map((_, row) => (
+                <div key={row} className="flex h-[17px] items-center justify-between gap-2">
+                  <Skeleton shape="line" className="h-3 w-20" />
+                  <Skeleton shape="line" className="h-3 w-10" />
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex items-center justify-between gap-4 px-4 py-2">
+        <Skeleton shape="line" className="h-[13px] w-56" />
+        <Skeleton shape="line" className="h-[13px] w-40" />
       </div>
     </div>
   );

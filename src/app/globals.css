@@ -302,6 +302,30 @@ select optgroup {
   animation-delay: var(--enter-delay, 0ms);
 }
 
+/* Landing hero copy. This used to be a framer-motion `initial`/`animate`
+ * pair, which meant the headline sat at opacity 0 until the JS bundle had
+ * hydrated — on a throttled phone that was the whole LCP. As a CSS
+ * animation it starts on first paint and needs nothing downloaded. */
+@keyframes hero-copy-enter {
+  from { opacity: 0; transform: translate3d(0, 24px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The headline never leaves opacity 1: an element is not an LCP candidate
+ * until it is visible, and a fade from zero pushed its paint past the JS. */
+@keyframes hero-headline-enter {
+  from { transform: translate3d(0, 24px, 0); }
+  to   { transform: none; }
+}
+
+.hero-copy-enter {
+  animation: hero-copy-enter 700ms ease-out both;
+}
+
+.hero-headline-enter {
+  animation: hero-headline-enter 700ms ease-out both;
+}
+
 /* Loading bars that build like a chart rather than blink like a placeholder.
  * scaleY from the base is the transform equivalent of a bar growing, so it
  * stays on the compositor — animating `height` would relayout every frame. */
@@ -492,6 +516,14 @@ select optgroup {
   .insight-enter {
     animation: insight-row-fade 160ms ease both;
     animation-delay: 0ms;
+  }
+
+  .hero-copy-enter {
+    animation: insight-row-fade 160ms ease both;
+  }
+
+  .hero-headline-enter {
+    animation: none;
   }
 
   /* The bars keep breathing in opacity — a loading indicator that stops moving
