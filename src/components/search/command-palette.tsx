@@ -41,14 +41,18 @@ export function CommandPalette({
   // Search results from hook
   const { data: results = [], isFetching } = useSearch(query, 20);
 
-  // Reset query on close
+  // Clearing the query is state, so it happens during render on the close
+  // transition. Focusing the input is a DOM side effect, so that stays below.
+  const [wasOpen, setWasOpen] = useState(open);
+  if (wasOpen !== open) {
+    setWasOpen(open);
+    if (!open) setQuery("");
+  }
+
   useEffect(() => {
-    if (!open) {
-      setQuery("");
-    } else {
-      // Focus input when opened
-      setTimeout(() => inputRef.current?.focus(), 50);
-    }
+    if (!open) return;
+    const handle = setTimeout(() => inputRef.current?.focus(), 50);
+    return () => clearTimeout(handle);
   }, [open]);
 
   // Prefetch stock data on hover/keyboard navigation

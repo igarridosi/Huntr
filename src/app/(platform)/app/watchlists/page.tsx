@@ -243,10 +243,16 @@ export default function WatchlistsPage() {
     return [...alertNotifications, ...targetNotifications];
   }, [alerts, entries]);
 
-  useEffect(() => {
-    if (isLoading) return;
-    setDismissedInboxIds((prev) => prev.filter((id) => notificationInbox.some((item) => item.id === id)));
-  }, [isLoading, notificationInbox]);
+  // Dismissals for notifications that no longer exist are dropped, so an
+  // alert that fires again later is shown again. Done while rendering: the
+  // pruned list is a pure function of the two inputs, so there is nothing to
+  // wait for, and an effect would just paint once with the stale list first.
+  if (!isLoading) {
+    const pruned = dismissedInboxIds.filter((id) =>
+      notificationInbox.some((item) => item.id === id)
+    );
+    if (pruned.length !== dismissedInboxIds.length) setDismissedInboxIds(pruned);
+  }
 
   const visibleInbox = useMemo(
     () => notificationInbox.filter((item) => !dismissedInboxIds.includes(item.id)),

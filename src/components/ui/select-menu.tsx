@@ -119,7 +119,12 @@ export function SelectMenu<T extends string>({
     }
   };
 
-  let runningIndex = -1;
+  // Where each group starts in the flat option list. Counting with a mutable
+  // index inside the JSX map is exactly the kind of render-time mutation the
+  // React Compiler refuses to compile, and the offsets are trivially derived.
+  const groupOffsets = groups.map((_, groupIndex) =>
+    groups.slice(0, groupIndex).reduce((sum, group) => sum + group.options.length, 0)
+  );
 
   return (
     <div
@@ -168,15 +173,15 @@ export function SelectMenu<T extends string>({
             "overflow-y-auto rounded-xl bg-wolf-surface/95 p-2 shadow-2xl ring-1 ring-inset ring-wolf-border/60 backdrop-blur-xl"
           )}
         >
-          {groups.map((group) => (
+          {groups.map((group, groupIndex) => (
             <div key={group.label} className="mb-1 last:mb-0">
               <p className="px-3 py-2 text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
                 {group.label}
               </p>
-              {group.options.map((option) => {
-                runningIndex += 1;
+              {group.options.map((option, optionIndex) => {
+                const flatIndex = groupOffsets[groupIndex] + optionIndex;
                 const isSelected = option.value === value;
-                const isActive = runningIndex === activeIndex;
+                const isActive = flatIndex === activeIndex;
 
                 return (
                   <button
