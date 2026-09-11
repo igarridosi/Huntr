@@ -60,6 +60,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // A self-contained server under .next/standalone, with only the node_modules
+  // it actually needs. It is what the Dockerfile copies; Vercel ignores it.
+  output: "standalone",
   reactCompiler: true,
   async headers() {
     return [
