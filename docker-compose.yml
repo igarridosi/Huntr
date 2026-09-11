@@ -1,0 +1,26 @@
+# Local run against a remote Supabase project.
+#
+# There is deliberately no local Supabase here: the app talks to a hosted
+# project (Postgres + Auth + RLS), and standing one up locally is a separate
+# exercise with its own tooling. Point `.env` at any Supabase project - the
+# free tier is enough - and the app runs; without real keys the landing page
+# still renders and the data views degrade to their empty states.
+#
+#   cp .env.example .env   # fill in NEXT_PUBLIC_SUPABASE_URL / _ANON_KEY at least
+#   docker compose up --build
+#   open http://localhost:3000
+
+services:
+  web:
+    build:
+      context: .
+      # NEXT_PUBLIC_* are baked into the client bundle at build time, so they
+      # are passed as build args from the same .env the container reads.
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://example.supabase.co}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-dummy}
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    env_file: .env
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
