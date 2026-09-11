@@ -215,7 +215,7 @@ export function HeroForest() {
         {/* Scene */}
         <motion.div className="absolute inset-0" style={{ scale: sceneScale, y: sceneY }}>
           <Image
-            src="/logo/huntr_header.png"
+            src="/logo/huntr_header.webp"
             alt=""
             aria-hidden
             fill

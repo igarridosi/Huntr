@@ -22,7 +22,7 @@ export function AuthShell({ title, subtitle, children, footer }: AuthShellProps)
       {/* Backdrop */}
       <div aria-hidden className="pointer-events-none fixed inset-0 overflow-hidden">
         <Image
-          src="/logo/huntr_header.png"
+          src="/logo/huntr_header.webp"
           alt=""
           fill
           priority
