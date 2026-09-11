@@ -1,5 +1,7 @@
 # Huntr
 
+[![CI](https://github.com/igarridosi/Huntr/actions/workflows/ci.yml/badge.svg)](https://github.com/igarridosi/Huntr/actions/workflows/ci.yml)
+
 **Live Demo:** [huntrvalue.me](https://huntrvalue.me/)
 
 Huntr is an institutional-grade financial web terminal designed to streamline fundamental analysis and advanced portfolio management for value investors. Built as a fast, visual, and modern alternative to legacy financial software and complex spreadsheets.
