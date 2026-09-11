@@ -1,8 +1,10 @@
 # HUNTR — ARCHITECTURE.md
-# Fuente de Verdad Inmutable v1.0
+
+> Documento vivo — última revisión: 2026-09-11.
+> Describe el diseño del sistema; cuando el código y este documento discrepen, manda el código.
 
 > **"The Wolf of Value Street"** — Plataforma SaaS de análisis financiero con estética táctica.
-> Clon funcional de Qualtrim con identidad visual propia.
+> Inspirado en terminales como Qualtrim/Koyfin, con motor de valoración y diseño propios.
 
 ---
 
@@ -12,7 +14,7 @@
 
 | Capa            | Tecnología                         | Versión / Nota                              |
 | --------------- | ---------------------------------- | ------------------------------------------- |
-| Framework       | Next.js                            | 15 (App Router, Server Components)          |
+| Framework       | Next.js                            | 16 (App Router, Server Components, Server Actions) |
 | Language        | TypeScript                         | Strict mode (`strict: true`)                |
 | Styling         | Tailwind CSS                       | v4+ con tokens semánticos Wolf Palette      |
 | UI Components   | Shadcn/UI                          | Base components, customizados al tema       |
@@ -561,10 +563,13 @@ huntr/
 │   │   └── 001_initial_schema.sql    # The SQL from section 2.1
 │   └── config.toml                   # Supabase local config
 │
-├── .env.local.example                # Template: NEXT_PUBLIC_SUPABASE_URL, ANON_KEY
+├── .env.example                      # Every variable the code reads, with what each is for
 ├── .github/
-│   └── copilot-instructions.md
-├── CONTEXT.md
+│   ├── workflows/ci.yml              # lint · typecheck · test · build
+│   └── copilot-instructions.md       # Read by GitHub Copilot
+├── docs/ai/
+│   └── CONTEXT.md                    # Context handed to AI coding agents
+├── Dockerfile / docker-compose.yml   # Reproducible local run against a hosted Supabase
 ├── DESIGN_SYSTEM.md
 ├── ARCHITECTURE.md                   # ← This file (Source of Truth)
 ├── tailwind.config.ts
@@ -638,7 +643,7 @@ huntr/
 | #   | Task                                           | Output                                         |
 | --- | ---------------------------------------------- | ---------------------------------------------- |
 | 3.1 | Crear `[ticker]/layout.tsx` — Stock header + tabs | Ticker hero (nombre, precio, cambio) + tab nav |
-| 3.2 | **Overview tab** (`page.tsx`): Key metrics grid, mini price chart, company description | Vista resumen como Qualtrim |
+| 3.2 | **Overview tab** (`page.tsx`): Key metrics grid, mini price chart, company description | Vista resumen |
 | 3.3 | **Financials tab**: Income Statement table con Annual/Quarterly toggle | Tabla responsive con `font-mono tabular-nums` |
 | 3.4 | Financials tab: Balance Sheet + Cash Flow sub-tabs o accordion | Los 3 estados financieros navegables          |
 | 3.5 | Financials tab: Metric trend charts (Revenue, Net Income, FCF) | Recharts con gradiente naranja               |

@@ -5,7 +5,7 @@ Tu objetivo es la excelencia técnica, la seguridad y la escalabilidad.
 
 ## 1. MENTALIDAD MCP (Model Context Protocol) & CONTEXTO
 - **No adivines:** Tu conocimiento de entrenamiento tiene fecha de corte.
-- **Consulta Externa:** Antes de usar librerías específicas (Next.js, Supabase, Tailwind, etc.), verifica si existe un archivo `CONTEXT.md`, `docs.md` o `llms.txt` en la raíz.
+- **Consulta Externa:** Antes de usar librerías específicas (Next.js, Supabase, Tailwind, etc.), verifica si existe un archivo `docs/ai/CONTEXT.md`, `docs.md` o `llms.txt`.
 - **Simulación de MCP:** Si necesitas datos de una API o Base de Datos, no inventes el esquema. Pídeme explícitamente: "Ejecuta un script para obtener el esquema de la DB" o "Pégame la respuesta JSON de tal endpoint". Trata esa información como tu fuente de verdad.
 
 ## 2. SKILLS OPERATIVAS (Tus Herramientas Virtuales)
