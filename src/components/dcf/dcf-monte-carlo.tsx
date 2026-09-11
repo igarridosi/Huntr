@@ -8,7 +8,6 @@ import type { MonteCarloResult, MonteCarloWeights } from "@/lib/calculations/dcf
 import { cn } from "@/lib/utils";
 import {
   AlertTriangle,
-  BarChart3,
   ChevronDown,
   RotateCcw,
   TrendingUp,
@@ -406,7 +405,6 @@ function ConfidenceBar({
   low,
   high,
   current,
-  median,
 }: {
   label: string;
   low: number;

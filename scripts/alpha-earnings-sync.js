@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 const dotenv = require("dotenv");
 const { createClient } = require("@supabase/supabase-js");
 

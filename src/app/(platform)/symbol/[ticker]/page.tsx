@@ -17,7 +17,6 @@ import { StockPriceCard } from "@/components/stock/stock-price-card";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { Check, LineChart } from "lucide-react";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";

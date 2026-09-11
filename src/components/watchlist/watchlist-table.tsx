@@ -206,7 +206,6 @@ function WatchlistRow({
   primaryAlert,
   onConfigureAlert,
   onOpenAlertsDialog,
-  onSetTargetPrice,
   onRemove,
   isRemoving,
 }: {

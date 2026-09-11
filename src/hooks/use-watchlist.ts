@@ -107,11 +107,6 @@ function getStore(): WatchlistStore {
   }
 }
 
-function saveStore(store: WatchlistStore) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY_V2, JSON.stringify(store));
-}
-
 // ---- Alerts Storage ----
 
 function getAlerts(): PriceAlert[] {
@@ -122,11 +117,6 @@ function getAlerts(): PriceAlert[] {
   } catch {
     return [];
   }
-}
-
-function saveAlerts(alerts: PriceAlert[]) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(ALERTS_KEY, JSON.stringify(alerts));
 }
 
 type CloudWatchlistState = {
