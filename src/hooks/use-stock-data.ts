@@ -38,12 +38,22 @@ import type { SECFundamentals } from "@/lib/api/sec-edgar";
 
 // ---------- Stock Profile ----------
 
-export function useStockProfile(ticker: string) {
+/**
+ * `initialData` lets a server component that already fetched the record
+ * (the ticker layout does, for its metadata) seed the cache, so the first
+ * paint carries the data instead of a skeleton. `undefined` means "nothing
+ * to seed"; a `null` result is a real answer and is kept as such.
+ */
+export function useStockProfile(
+  ticker: string,
+  options: { initialData?: StockProfile | null } = {}
+) {
   return useQuery<StockProfile | null>({
     queryKey: QUERY_KEYS.STOCK_PROFILE(ticker),
     queryFn: () => fetchStockProfile(ticker),
     staleTime: STALE_TIMES.STATIC,
     enabled: !!ticker,
+    initialData: options.initialData,
   });
 }
 
@@ -57,12 +67,16 @@ export function useAllProfiles() {
 
 // ---------- Stock Quote ----------
 
-export function useStockQuote(ticker: string) {
+export function useStockQuote(
+  ticker: string,
+  options: { initialData?: StockQuote | null } = {}
+) {
   return useQuery<StockQuote | null>({
     queryKey: QUERY_KEYS.STOCK_QUOTE(ticker),
     queryFn: () => fetchStockQuote(ticker),
     staleTime: STALE_TIMES.QUOTE,
     enabled: !!ticker,
+    initialData: options.initialData,
   });
 }
 

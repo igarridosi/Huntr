@@ -11,17 +11,28 @@ import { StockHeader } from "@/components/stock/stock-header";
 import { StockTabs } from "@/components/stock/stock-tabs";
 import { addRecentSearch } from "@/lib/recent-searches";
 import { formatCurrency, formatPercent } from "@/lib/utils";
+import type { StockProfile, StockQuote } from "@/types/stock";
 
 export default function TickerClientLayout({
   children,
+  initialProfile,
+  initialQuote,
 }: {
   children: React.ReactNode;
+  initialProfile: StockProfile | null;
+  initialQuote: StockQuote | null;
 }) {
   const params = useParams<{ ticker: string }>();
   const ticker = (params.ticker ?? "").toUpperCase();
 
-  const { data: profile, isLoading: profileLoading } = useStockProfile(ticker);
-  const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker);
+  // A null from the server means the lookup failed there; leave the cache
+  // empty so the client tries once itself rather than treating it as final.
+  const { data: profile, isLoading: profileLoading } = useStockProfile(ticker, {
+    initialData: initialProfile ?? undefined,
+  });
+  const { data: quote, isLoading: quoteLoading } = useStockQuote(ticker, {
+    initialData: initialQuote ?? undefined,
+  });
   const { data: marketIndices, isLoading: marketIndicesLoading } = useMarketIndices();
 
   useEffect(() => {

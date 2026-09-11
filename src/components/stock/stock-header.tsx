@@ -241,10 +241,15 @@ function formatEarningsDate(raw: string | null | undefined): string {
   const parsed = new Date(raw);
   if (Number.isNaN(parsed.getTime())) return "N/A";
 
+  // The value is a YYYY-MM-DD calendar date, parsed as UTC midnight. Format
+  // it in UTC too, or a viewer west of Greenwich sees the day before — and
+  // now that the header renders on the server, they would also get a
+  // hydration mismatch against the UTC-rendered HTML.
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "numeric",
     year: "numeric",
+    timeZone: "UTC",
   }).format(parsed);
 }
 
