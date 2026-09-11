@@ -8,12 +8,20 @@ Huntr works out what a company is actually worth and tells you whether today's p
 
 <table>
   <tr>
-    <td width="50%"><img src="public/screenshots/dcf.png" alt="DCF calculator with three scenarios and a diagnostics panel" width="100%"></td>
-    <td width="50%"><img src="public/screenshots/stock_chart.png" alt="Ticker page with price chart and key metrics" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/landing_page.webp" alt="Landing page with the search box and a tape of trending tickers" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/stock_info.webp" alt="Ticker page for Adobe: price, key metrics grouped by valuation, quality, margins, balance and dividend" width="100%"></td>
   </tr>
   <tr>
-    <td width="50%"><img src="public/screenshots/oportunity_radar.png" alt="Opportunity radar listing market signals" width="100%"></td>
-    <td width="50%"><img src="public/screenshots/porfolio.png" alt="Portfolio tracker with time-weighted return against the S&P 500" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/stock_chart.webp" alt="Fifteen financial charts for one company over ten years: revenue, EBITDA, free cash flow, margins, ROIC, debt" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/dcf_calculator_ui.webp" alt="DCF calculator for Microsoft with bear, base and bull scenarios and the valuation output" width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="public/screenshots/stock_radar.webp" alt="Opportunity radar: top gainers and losers, unusual volume, buyback leaders, 52-week highs, income leaders" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/earnings_calendar.webp" alt="Weekly earnings calendar with a side panel showing Alphabet's recent quarters and EPS surprises" width="100%"></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="public/screenshots/insights_view.webp" alt="Insights page listing S&P 500 companies with price, daily change and market cap" width="100%"></td>
+    <td width="50%"><img src="public/screenshots/portfolio_view.webp" alt="Portfolio tracker with performance against the S&P 500, sector allocation and top holdings" width="100%"></td>
   </tr>
 </table>
 
