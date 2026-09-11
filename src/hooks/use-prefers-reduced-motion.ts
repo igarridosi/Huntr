@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
 
 const QUERY = "(prefers-reduced-motion: reduce)";
 
@@ -9,21 +9,21 @@ const QUERY = "(prefers-reduced-motion: reduce)";
  *
  * CSS handles this on its own through a media query, but animation that lives
  * in JavaScript - a charting library's own tweens, for instance - has to ask.
- * Starts at `false` so the server and the first client render agree, then
- * corrects itself on mount and stays subscribed, because the preference can be
- * toggled while the page is open.
+ * A media query is an external store, so this reads it with
+ * `useSyncExternalStore`: the server snapshot is `false` so hydration agrees,
+ * and the subscription keeps it current because the preference can be toggled
+ * while the page is open.
  */
+function subscribe(onChange: () => void) {
+  const query = window.matchMedia(QUERY);
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
 export function usePrefersReducedMotion(): boolean {
-  const [prefersReduced, setPrefersReduced] = useState(false);
-
-  useEffect(() => {
-    const query = window.matchMedia(QUERY);
-    setPrefersReduced(query.matches);
-
-    const onChange = (event: MediaQueryListEvent) => setPrefersReduced(event.matches);
-    query.addEventListener("change", onChange);
-    return () => query.removeEventListener("change", onChange);
-  }, []);
-
-  return prefersReduced;
+  return useSyncExternalStore(
+    subscribe,
+    () => window.matchMedia(QUERY).matches,
+    () => false
+  );
 }
