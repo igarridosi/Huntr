@@ -1,28 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
-import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
 import { cn } from "@/lib/utils";
 import {
   MAX_SERIES,
   MAX_TICKERS,
   METRICS,
-  METRIC_GROUPS,
   SERIES_PALETTE,
   createSeries,
-  metricsInGroup,
   paletteColor,
   seriesInk,
   seriesLabel,
   type ChartSeries,
   type ChartSpec,
-  type MetricId,
-  type SeriesAxis,
-  type SeriesShape,
   type SeriesTransform,
 } from "@/lib/chart-builder";
 
@@ -33,14 +26,6 @@ interface SeriesPanelProps {
   onChange: (next: ChartSpec, coalesce?: string) => void;
 }
 
-const TRANSFORM_LABELS: Record<SeriesTransform, string> = {
-  raw: "As reported",
-  per_share: "Per share",
-  ttm: "Trailing 12 months",
-  yoy: "Year-over-year %",
-  indexed: "Indexed to start %",
-};
-
 /** Chip-sized versions for the row header. */
 const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
   raw: "",
@@ -50,25 +35,13 @@ const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
   indexed: "Indexed",
 };
 
-const SHAPES: ReadonlyArray<{ key: SeriesShape; label: string }> = [
-  { key: "bar", label: "Bar" },
-  { key: "line", label: "Line" },
-  { key: "area", label: "Area" },
-];
-const AXES: ReadonlyArray<{ key: SeriesAxis; label: string }> = [
-  { key: "left", label: "Left" },
-  { key: "right", label: "Right" },
-];
-
-const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GROUPS.map((group) => ({
-  label: group,
-  options: metricsInGroup(group).map((m) => ({ value: m.id, label: m.label })),
-}));
-
 /**
- * The list of series with an inspector that opens in place. One row open
- * at a time; the legend's selection and this panel's selection are the
- * same state, so clicking either brings the other along.
+ * The list of series with an inspector that opens in place. What is
+ * per-series here is only what cannot be global: the company and its
+ * colour. Metric, transform and shape are set for the whole chart in the
+ * design panel; templates still compose mixed charts (bars + a price line).
+ * One row open at a time; the legend's selection and this panel's
+ * selection are the same state, so clicking either brings the other along.
  */
 export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPanelProps) {
   const [limitNote, setLimitNote] = useState<string | null>(null);
@@ -115,11 +88,6 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
     onChange({ ...spec, series: [...spec.series, next] });
     onSelect(next.id);
   };
-
-  const transformOptions = useMemo<ReadonlyArray<SelectMenuGroup<SeriesTransform>>>(
-    () => [{ label: "Transform", options: (Object.keys(TRANSFORM_LABELS) as SeriesTransform[]).map((k) => ({ value: k, label: TRANSFORM_LABELS[k] })) }],
-    []
-  );
 
   return (
     <section aria-label="Series" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
@@ -188,44 +156,6 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
                         <DCFTickerInput value={s.ticker} onSelect={(ticker) => setTicker(s.id, ticker)} />
                         {limitNote && selectedId === s.id && <p className="mt-1 text-[11px] text-golden-hour">{limitNote}</p>}
                       </Field>
-                      <Field label="Metric">
-                        <SelectMenu<MetricId>
-                          groups={METRIC_GROUP_OPTIONS}
-                          value={s.metric}
-                          onChange={(metric) => patch(s.id, { metric })}
-                          ariaLabel="Metric"
-                        />
-                      </Field>
-                      <Field label="Transform">
-                        <SelectMenu<SeriesTransform>
-                          groups={transformOptions}
-                          value={s.transform}
-                          onChange={(transform) =>
-                            patch(s.id, { transform, ...(transform === "indexed" && s.shape === "bar" ? { shape: "line" as const } : {}) })
-                          }
-                          ariaLabel="Transform"
-                        />
-                      </Field>
-                      <div className="grid grid-cols-1 gap-3">
-                        <Field label="Shape">
-                          <SegmentedTabs<SeriesShape>
-                            items={SHAPES}
-                            value={s.shape}
-                            onChange={(shape) => patch(s.id, { shape })}
-                            ariaLabel="Shape"
-                            size="sm"
-                          />
-                        </Field>
-                        <Field label="Axis">
-                          <SegmentedTabs<SeriesAxis>
-                            items={AXES}
-                            value={s.axis}
-                            onChange={(axis) => patch(s.id, { axis })}
-                            ariaLabel="Axis"
-                            size="sm"
-                          />
-                        </Field>
-                      </div>
                       <Field label="Color">
                         <div className="flex flex-wrap items-center gap-1.5">
                           {SERIES_PALETTE.map((c) => (

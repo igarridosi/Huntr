@@ -54,7 +54,7 @@ export interface ChartSeries {
 }
 
 export type Granularity = "annual" | "quarterly";
-export type CanvasTheme = "wolf" | "snow" | "parchment";
+export type CanvasTheme = "wolf" | "navy" | "snow" | "parchment";
 export type AspectRatio = "16:9" | "4:3" | "1:1";
 export type ValueLabels = "none" | "last" | "ends" | "all";
 export type LegendPosition = "top" | "bottom" | "hidden";
@@ -425,7 +425,7 @@ function oneOf<T extends string | number>(v: unknown, allowed: readonly T[]): T 
 /** Keeps only known style fields with valid values; the rest fall back to defaults. */
 function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   const out: Partial<ChartStyle> = {};
-  const theme = oneOf<CanvasTheme>(raw.theme, ["wolf", "snow", "parchment"]);
+  const theme = oneOf<CanvasTheme>(raw.theme, ["wolf", "navy", "snow", "parchment"]);
   const aspect = oneOf<AspectRatio>(raw.aspect, ["16:9", "4:3", "1:1"]);
   const legend = oneOf<LegendPosition>(raw.legend, ["top", "bottom", "hidden"]);
   const valueLabels = oneOf<ValueLabels>(raw.valueLabels, ["none", "last", "ends", "all"]);

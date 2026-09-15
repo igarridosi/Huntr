@@ -19,7 +19,6 @@ import {
   type ChartStyle,
   type LegendPosition,
   type MetricId,
-  type PeriodAlignment,
   type SeriesShape,
   type SeriesTransform,
   type StatementKind,
@@ -100,6 +99,10 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
     { key: "area", label: "Area" },
   ];
 
+  const shapes = new Set(spec.series.map((s) => s.shape));
+  const hasBars = shapes.has("bar");
+  const hasLines = shapes.has("line") || shapes.has("area");
+  const hasRightAxis = spec.series.some((s) => s.axis === "right");
   const tickers = Array.from(new Set(spec.series.map((s) => s.ticker)));
   const missingDeep = tickers.filter((t) => !dataSource.deepTickers.includes(t));
   const allDeep = tickers.length > 0 && missingDeep.length === 0;
@@ -135,18 +138,6 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
-        <Row label="Periods" hint="Common hides quarters that not every company has filed yet.">
-          <SegmentedTabs<PeriodAlignment>
-            items={[
-              { key: "common", label: "Common" },
-              { key: "all", label: "All" },
-            ]}
-            value={spec.align}
-            onChange={(align) => onChange({ ...spec, align })}
-            ariaLabel="Period alignment"
-            size="sm"
-          />
-        </Row>
         <div className="flex flex-col gap-1.5">
           <Button
             variant={allDeep ? "ghost" : "secondary"}
@@ -171,7 +162,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
       </Group>
 
       <Group title="Canvas">
-        <div className="flex gap-1.5" role="radiogroup" aria-label="Canvas theme">
+        <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Canvas theme">
           {(Object.keys(CANVAS_THEMES) as CanvasTheme[]).map((key) => {
             const t = CANVAS_THEMES[key];
             const active = spec.style.theme === key;
@@ -184,7 +175,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
                 aria-label={`${t.name} theme`}
                 onClick={() => style({ theme: key })}
                 className={cn(
-                  "relative h-10 flex-1 overflow-hidden rounded-lg border-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                  "relative h-11 overflow-hidden rounded-lg border-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
                   active ? "border-sunset-orange" : "border-transparent ring-1 ring-inset ring-wolf-border/60"
                 )}
                 style={{ background: t.bg }}
@@ -249,10 +240,14 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
         </Row>
       </Group>
 
-      <Group title="Bars & lines">
-        <Row label="Stacked">
-          <Switch checked={spec.style.stacked} onChange={(stacked) => style({ stacked })} label="Stack bars" />
-        </Row>
+      {(hasBars || hasLines) && (
+      <Group title={hasBars && hasLines ? "Bars & lines" : hasBars ? "Bars" : "Lines"}>
+        {hasBars && spec.series.filter((s) => s.shape === "bar").length > 1 && (
+          <Row label="Stacked">
+            <Switch checked={spec.style.stacked} onChange={(stacked) => style({ stacked })} label="Stack bars" />
+          </Row>
+        )}
+        {hasBars && (
         <Row label="Bar radius">
           <SegmentedTabs<"0" | "2" | "4">
             items={[
@@ -266,6 +261,8 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
+        )}
+        {hasLines && (
         <Row label="Line width">
           <SegmentedTabs<"1.5" | "2" | "2.5">
             items={[
@@ -279,15 +276,19 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
+        )}
       </Group>
+      )}
 
-      <Group title="Axes">
-        <Row label="Left">
+      <Group title={hasRightAxis ? "Axes" : "Axis"}>
+        <Row label={hasRightAxis ? "Left" : "Format"}>
           <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yLeftFormat} onChange={(yLeftFormat) => style({ yLeftFormat })} ariaLabel="Left axis format" />
         </Row>
-        <Row label="Right">
-          <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yRightFormat} onChange={(yRightFormat) => style({ yRightFormat })} ariaLabel="Right axis format" />
-        </Row>
+        {hasRightAxis && (
+          <Row label="Right">
+            <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yRightFormat} onChange={(yRightFormat) => style({ yRightFormat })} ariaLabel="Right axis format" />
+          </Row>
+        )}
       </Group>
     </section>
   );

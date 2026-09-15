@@ -301,7 +301,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 })}
             </defs>
 
-            {spec.style.grid && <CartesianGrid stroke={theme.grid} strokeOpacity={0.9} vertical={timeMode} />}
+            {spec.style.grid && <CartesianGrid stroke={theme.grid} strokeOpacity={1} vertical horizontal />}
 
             {timeMode ? (
               <XAxis dataKey="x" type="number" scale="time" domain={timeDomain} axisLine={false} tickLine={false} tick={tick} dy={8} minTickGap={40} tickFormatter={xTickFormatter} />
@@ -309,13 +309,15 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
               <XAxis dataKey="x" type="category" axisLine={false} tickLine={false} tick={tick} dy={8} interval="preserveStartEnd" minTickGap={28} tickFormatter={xTickFormatter} />
             )}
 
-            <YAxis yAxisId="left" orientation="left" domain={Y_DOMAIN} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(leftUnit, v)} />
+            <YAxis yAxisId="left" orientation="left" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(leftUnit, v)} />
             {hasRight && (
-              <YAxis yAxisId="right" orientation="right" domain={Y_DOMAIN} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(rightUnit, v)} />
+              <YAxis yAxisId="right" orientation="right" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(rightUnit, v)} />
             )}
 
+            {/* No cursor line: the hovered bar brightens and the point on a
+                line grows, which is all the pointer needs. */}
             <Tooltip
-              cursor={{ stroke: theme.grid, strokeOpacity: 0.8 }}
+              cursor={false}
               content={<ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
             />
 
@@ -362,7 +364,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 if (timeMode) return <Bar key={s.id} {...common} fill="none" isAnimationActive={false} />;
                 const r = spec.style.barRadius;
                 return (
-                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: ink, fillOpacity: 0.85 }} />
+                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: ink, stroke: theme.title, strokeWidth: 1, strokeOpacity: 0.45 }} />
                 );
               }
               if (s.shape === "area") {
