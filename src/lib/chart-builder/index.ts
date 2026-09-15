@@ -7,3 +7,4 @@ export * from "./url";
 export * from "./format";
 export * from "./export";
 export * from "./data";
+export * from "./link";

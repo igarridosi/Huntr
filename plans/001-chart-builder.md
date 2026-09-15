@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Estado | Fases 0–1 mergeadas (#17, #18); fase 2 en PR (`feat/chart-builder-2`); fases 3–4 TODO |
+| Estado | Fases 0–2 mergeadas (#17, #18, #19, #20; #21 pendiente); fase 3 en PR (`feat/chart-builder-3`); fase 4 TODO |
 | Escrito contra | `b54ba8a` (main, 2026-09-15) |
 | Esfuerzo | L (4 fases entregables por separado; MVP = fases 0–1) |
 | Riesgo de la implementación | Medio — todo es código nuevo y aislado; el único punto de contacto con lo existente es el sidebar, una migración y (fase 3) un botón en `ExpandChartDialog` |
