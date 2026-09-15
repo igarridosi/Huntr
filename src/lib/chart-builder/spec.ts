@@ -13,7 +13,8 @@ import { METRICS, isMetricId, type MetricId } from "./metrics";
 export const CHART_SPEC_VERSION = 1 as const;
 
 export const MAX_SERIES = 8;
-export const MAX_TICKERS = 6;
+/** Four companies: enough for a comparison, few enough to keep Alpha Vantage calls in check. */
+export const MAX_TICKERS = 4;
 export const MAX_TITLE_LENGTH = 120;
 
 /**
@@ -147,7 +148,7 @@ export function createSpec(partial: SpecInit = {}): ChartSpec {
     v: CHART_SPEC_VERSION,
     title: partial.title ?? "Untitled chart",
     ...(partial.subtitle !== undefined ? { subtitle: partial.subtitle } : {}),
-    granularity: partial.granularity ?? "annual",
+    granularity: partial.granularity ?? "quarterly",
     align: partial.align ?? "common",
     range: partial.range ?? { from: null, to: null },
     series: partial.series ?? [],
@@ -393,7 +394,7 @@ export function migrateSpec(input: unknown): MigrationResult {
   const spec = createSpec({
     title: input.title,
     subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
-    granularity: input.granularity === "quarterly" ? "quarterly" : "annual",
+    granularity: input.granularity === "annual" ? "annual" : "quarterly",
     align: input.align === "all" ? "all" : "common",
     range: {
       from: typeof range.from === "string" ? range.from : null,

@@ -5,6 +5,7 @@
 
 import type { CompanyFinancials } from "@/types/financials";
 import { METRICS, type StatementKind } from "./metrics";
+import { bundlePeriods } from "./resolve";
 import type { ChartSpec } from "./spec";
 
 const ORDER: readonly StatementKind[] = ["income", "balance", "cashflow"];
@@ -60,4 +61,33 @@ export function mergeFinancials(
     balance_sheet: has("balance") ? overlay.balance_sheet : base.balance_sheet,
     cash_flow: has("cashflow") ? overlay.cash_flow : base.cash_flow,
   };
+}
+
+/**
+ * Period-end dates the chart could show, before any range is applied:
+ * the union over the statement tickers, sorted. Price-only charts have
+ * none (their axis is daily).
+ */
+export function availableDates(spec: ChartSpec, financials: Record<string, CompanyFinancials | null | undefined>): string[] {
+  const dates = new Set<string>();
+  const tickers = new Set(spec.series.filter((s) => METRICS[s.metric].source !== "price").map((s) => s.ticker));
+  for (const t of tickers) {
+    const fin = financials[t];
+    if (!fin) continue;
+    for (const b of bundlePeriods(fin, spec.granularity)) dates.add(b.date);
+  }
+  return [...dates].sort();
+}
+
+/**
+ * The window shown when the user has not picked one: the last `years`
+ * years of what is available, ending at the latest period. Alpha Vantage
+ * history defaults to ten years; Yahoo's few periods to five (its most).
+ */
+export function defaultRange(dates: readonly string[], years: number): { from: string | null; to: string | null } {
+  if (dates.length === 0) return { from: null, to: null };
+  const last = dates[dates.length - 1];
+  const cutoff = `${Number(last.slice(0, 4)) - years}${last.slice(4)}`;
+  const from = dates.find((d) => d > cutoff) ?? dates[0];
+  return { from, to: null };
 }
