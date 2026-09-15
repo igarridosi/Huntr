@@ -23,6 +23,10 @@ Huntr works out what a company is actually worth and tells you whether today's p
     <td width="50%"><img src="public/screenshots/insights_view.webp" alt="Insights page listing S&P 500 companies with price, daily change and market cap" width="100%"></td>
     <td width="50%"><img src="public/screenshots/portfolio_view.webp" alt="Portfolio tracker with performance against the S&P 500, sector allocation and top holdings" width="100%"></td>
   </tr>
+  <tr>
+    <td width="50%"><img src="public/screenshots/chart_builder.webp" alt="Chart Builder comparing ten years of quarterly revenue for Apple, Microsoft and Alphabet, with the series and design panels" width="100%"></td>
+    <td width="50%"></td>
+  </tr>
 </table>
 
 ## What's inside
@@ -30,6 +34,7 @@ Huntr works out what a company is actually worth and tells you whether today's p
 - DCF calculator with bear, base and bull scenarios, a Monte Carlo simulation over them, and a reverse DCF that solves for what the market price already assumes.
 - A diagnostics panel that refuses to show a valuation when the data cannot support one: mismatched currencies, a share count that does not reconcile with the market cap, a debt figure that was never found.
 - Ticker pages with financial statements, dividends, earnings history and call transcripts.
+- Chart Builder: compare up to four companies on any of 49 metrics — or contrast two metrics of one company on two axes — with periods aligned by calendar quarter, a period slider, three canvas themes, a shareable link and PNG export.
 - Opportunity radar: unusual volume, buybacks, 52-week breakouts, yield leaders.
 - Screener over 800+ tickers with a quality score computed weekly.
 - Portfolio tracker with realised and unrealised P&L, time-weighted return against the S&P 500, and a rebalance advisor.
