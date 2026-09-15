@@ -6,3 +6,4 @@ export * from "./templates";
 export * from "./url";
 export * from "./format";
 export * from "./export";
+export * from "./data";
