@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   applyTransform,
+  bucketEnd,
+  bucketStart,
   assignAxes,
   bundlePeriods,
   indexValues,
@@ -27,6 +29,16 @@ describe("toCalendarBucket", () => {
 
   it("rejects dates that are not ISO", () => {
     expect(toCalendarBucket("June 2024", "annual")).toBeNull();
+  });
+});
+
+describe("bucketStart / bucketEnd", () => {
+  it("span the calendar quarter or year of a period end", () => {
+    expect(bucketStart("2024-09-28", "quarterly")).toBe("2024-07-01");
+    expect(bucketEnd("2024-09-28", "quarterly")).toBe("2024-09-30");
+    expect(bucketEnd("2024-02-10", "quarterly")).toBe("2024-03-31");
+    expect(bucketStart("2024-06-30", "annual")).toBe("2024-01-01");
+    expect(bucketEnd("2024-06-30", "annual")).toBe("2024-12-31");
   });
 });
 
@@ -316,6 +328,20 @@ describe("resolveChart — time mode", () => {
     expect(bar.p).toBeNull();
     expect(chart.points[0]).toMatchObject({ x: Date.parse("2024-01-01"), p: 10, f: null });
     expect(chart.axes).toEqual({ left: "price", right: "per_share" });
+  });
+
+  it("widens the price window to whole buckets so the line covers the first bar's quarter", () => {
+    const a = fin("A", { quarterly: [{ date: "2024-06-30", fcf: 20, shares: 10 }, { date: "2024-09-30", fcf: 30, shares: 10 }] });
+    const px = prices("2024-03-01", 250, (i) => 10 + i); // Mar → Nov 2024
+    const spec = createSpec({
+      granularity: "quarterly",
+      range: { from: "2024-06-30", to: "2024-09-30" },
+      series: [createSeries({ id: "f", ticker: "A", metric: "free_cash_flow", transform: "per_share", axis: "right" }), createSeries({ id: "p", ticker: "A", metric: "price", shape: "line" })],
+    });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: { A: px } });
+    const priceXs = chart.points.filter((p) => p.p !== null).map((p) => p.x);
+    expect(new Date(Math.min(...priceXs)).toISOString().slice(0, 10)).toBe("2024-04-01");
+    expect(new Date(Math.max(...priceXs)).toISOString().slice(0, 10)).toBe("2024-09-30");
   });
 
   it("indexes prices from the first close inside the range", () => {

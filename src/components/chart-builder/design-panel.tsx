@@ -126,7 +126,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             ariaLabel="Transform for every series"
           />
         </Row>
-        <Row label="Shape">
+        <Row label="Shape" stack={shape === MIXED}>
           <SegmentedTabs<SeriesShape | typeof MIXED>
             items={shapeItems}
             value={shape}
@@ -230,7 +230,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
-        <Row label="Values">
+        <Row label="Values" stack>
           <SegmentedTabs<ValueLabels>
             items={[
               { key: "none", label: "None" },
@@ -305,7 +305,18 @@ function Group({ title, first = false, children }: { title: string; first?: bool
   );
 }
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** Label left, control right; `stack` puts the control on its own line for wide controls. */
+function Row({ label, hint, stack = false, children }: { label: string; hint?: string; stack?: boolean; children: React.ReactNode }) {
+  if (stack) {
+    return (
+      <div className="flex flex-col gap-1.5 px-1">
+        <span className="text-xs text-mist/85" title={hint}>
+          {label}
+        </span>
+        <div className="flex min-w-0 [&>*]:min-w-0">{children}</div>
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-2 px-1">
       <span className="text-xs text-mist/85" title={hint}>

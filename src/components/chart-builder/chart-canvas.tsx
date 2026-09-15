@@ -64,6 +64,24 @@ interface TimeBar {
 }
 
 const Y_AXIS_WIDTH = 64;
+
+/** Rounds up to 1 / 2 / 2.5 / 5 × 10ⁿ so the top tick is a clean number. */
+function niceCeil(v: number): number {
+  if (!Number.isFinite(v) || v <= 0) return v;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+
+/**
+ * Both axes start at zero (unless the data goes negative) and end a step
+ * above the data, so a line on one axis and bars on the other read at
+ * the same proportion and nothing touches the top edge.
+ */
+const Y_DOMAIN: [(min: number) => number, (max: number) => number] = [
+  (min) => (min < 0 ? -niceCeil(Math.abs(min) * 1.1) : 0),
+  (max) => (max > 0 ? niceCeil(max * 1.08) : 0),
+];
 /** Share of a bucket a bar (or a group of bars) occupies on the time axis. */
 const TIME_BAR_FILL = 0.72;
 const QUARTER_MS = 91 * 86_400_000;
@@ -268,7 +286,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     <div ref={wrapRef} style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
-          <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="14%" barGap={2}>
+          <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1}>
             <defs>
               {visible
                 .filter((s) => s.shape === "area")
@@ -291,9 +309,9 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
               <XAxis dataKey="x" type="category" axisLine={false} tickLine={false} tick={tick} dy={8} interval="preserveStartEnd" minTickGap={28} tickFormatter={xTickFormatter} />
             )}
 
-            <YAxis yAxisId="left" orientation="left" axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(leftUnit, v)} />
+            <YAxis yAxisId="left" orientation="left" domain={Y_DOMAIN} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(leftUnit, v)} />
             {hasRight && (
-              <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(rightUnit, v)} />
+              <YAxis yAxisId="right" orientation="right" domain={Y_DOMAIN} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(rightUnit, v)} />
             )}
 
             <Tooltip

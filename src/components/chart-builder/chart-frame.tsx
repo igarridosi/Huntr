@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { forwardRef, useEffect, useRef, useState } from "react";
+import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CANVAS_THEMES, type AspectRatio, type ChartSpec } from "@/lib/chart-builder";
@@ -20,6 +21,13 @@ interface ChartFrameProps {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onChange: (next: ChartSpec, coalesce?: string) => void;
+  /**
+   * Fill the height the parent gives (a desktop workspace that must fit the
+   * viewport) instead of growing with the width. The plot then takes the
+   * larger size that still respects the aspect ratio.
+   */
+  fill?: boolean;
+  className?: string;
 }
 
 const RATIO: Record<AspectRatio, number> = { "16:9": 9 / 16, "4:3": 3 / 4, "1:1": 1 };
@@ -28,24 +36,36 @@ const RATIO: Record<AspectRatio, number> = { "16:9": 9 / 16, "4:3": 3 / 4, "1:1"
  * The exportable object: title, legend, plot and watermark on the canvas
  * theme's background, independent of the app's light/dark chrome.
  */
-export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function ChartFrame({ spec, data, selectedId, onSelect, onChange }, ref) {
+export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function ChartFrame(
+  { spec, data, selectedId, onSelect, onChange, fill = false, className },
+  ref
+) {
   const theme = CANVAS_THEMES[spec.style.theme];
   const plotRef = useRef<HTMLDivElement>(null);
-  const [plotWidth, setPlotWidth] = useState(0);
+  const [plotBox, setPlotBox] = useState({ w: 0, h: 0 });
   const [hoverId, setHoverId] = useState<string | null>(null);
 
   useEffect(() => {
     const el = plotRef.current;
     if (!el) return;
     const ro = new ResizeObserver((entries) => {
-      const w = entries[0]?.contentRect.width ?? 0;
-      setPlotWidth((prev) => (Math.abs(prev - w) < 1 ? prev : w));
+      const r = entries[0]?.contentRect;
+      const w = r?.width ?? 0;
+      const h = r?.height ?? 0;
+      setPlotBox((prev) => (Math.abs(prev.w - w) < 1 && Math.abs(prev.h - h) < 1 ? prev : { w, h }));
     });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  const height = Math.round(Math.min(640, Math.max(220, plotWidth * RATIO[spec.style.aspect])));
+  const ratio = RATIO[spec.style.aspect];
+  const plotWidth = plotBox.w;
+  // Width-driven when the frame grows with the page; box-driven when it
+  // has to fit the viewport, where the plot takes whichever of width and
+  // height is the tighter constraint at this aspect.
+  const byWidth = Math.round(Math.min(640, Math.max(220, plotWidth * ratio)));
+  const height = fill && plotBox.h > 120 ? Math.round(Math.min(plotWidth * ratio, plotBox.h)) : byWidth;
+  const width = Math.round(Math.min(plotWidth, height / ratio));
   const showSkeleton = data.isLoading && data.chart.points.length === 0;
 
   const toggle = (id: string) =>
@@ -58,7 +78,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
   return (
     <div
       ref={ref}
-      className="flex flex-col rounded-2xl px-4 pb-4 pt-5 ring-1 ring-inset transition-colors duration-200 sm:px-6"
+      className={cn("flex flex-col rounded-2xl px-4 pb-4 pt-5 ring-1 ring-inset transition-colors duration-200 sm:px-6", fill && "min-h-0", className)}
       style={{ background: theme.bg, ["--tw-ring-color" as string]: theme.ring }}
     >
       <ChartTitle
@@ -79,15 +99,15 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
         onHover={setHoverId}
       />
 
-      <div
-        ref={plotRef}
-        className="mx-auto mt-2 w-full"
-        style={{ maxWidth: spec.style.aspect === "1:1" ? 640 : spec.style.aspect === "4:3" ? 860 : undefined, height }}
-      >
-        {plotWidth > 0 && (showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />)}
+      <div ref={plotRef} className={cn("mt-2 flex w-full justify-center", fill ? "min-h-0 flex-1 items-center" : "items-start")} style={fill ? undefined : { height }}>
+        {plotWidth > 0 && (
+          <div style={{ width, height }}>
+            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />}
+          </div>
+        )}
       </div>
 
-      <div className="mt-3 flex items-end justify-between gap-4">
+      <div className="mt-3 flex shrink-0 items-end justify-between gap-4">
         <ul className="flex min-w-0 flex-col gap-0.5 text-[11px]" style={{ color: theme.tick }} aria-live="polite">
           {data.chart.warnings.slice(0, 3).map((w, i) => (
             <li key={i} className="flex items-center gap-1.5">
