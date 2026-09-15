@@ -11,6 +11,7 @@ import {
   CalendarClock,
   MessageSquareText,
   Calculator,
+  ChartColumnStacked,
   BriefcaseBusiness,
   SlidersHorizontal,
   Settings,
@@ -73,6 +74,11 @@ const mainNav: NavItem[] = [
     label: "DCF Calculator",
     href: ROUTES.APP_DCF_CALCULATOR,
     icon: Calculator,
+  },
+  {
+    label: "Chart Builder",
+    href: ROUTES.APP_CHART_BUILDER,
+    icon: ChartColumnStacked,
   },
   {
     label: "Portfolios",
