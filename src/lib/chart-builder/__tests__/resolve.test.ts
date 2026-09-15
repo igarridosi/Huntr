@@ -170,18 +170,35 @@ describe("resolveChart — category mode", () => {
     expect(col(chart, "g")).toEqual([300, 350]);
   });
 
-  it("fills the union of buckets with nulls where a series has no data", () => {
-    const a = fin("A", { annual: [{ date: "2022-12-31", revenue: 1 }, { date: "2023-12-31", revenue: 2 }] });
-    const b = fin("B", { annual: [{ date: "2023-12-31", revenue: 5 }, { date: "2024-12-31", revenue: 6 }] });
-    const spec = createSpec({
-      series: [createSeries({ id: "a", ticker: "A", metric: "revenue" }), createSeries({ id: "b", ticker: "B", metric: "revenue" })],
-    });
-    const chart = resolveChart(spec, { financials: { A: a, B: b }, prices: {} });
+  const staggered = () => ({
+    A: fin("A", { annual: [{ date: "2022-12-31", revenue: 1 }, { date: "2023-12-31", revenue: 2 }] }),
+    B: fin("B", { annual: [{ date: "2023-12-31", revenue: 5 }, { date: "2024-12-31", revenue: 6 }] }),
+  });
+  const twoSeries = [createSeries({ id: "a", ticker: "A", metric: "revenue" }), createSeries({ id: "b", ticker: "B", metric: "revenue" })];
+
+  it("with align=all fills the union of buckets with nulls where a series has no data", () => {
+    const chart = resolveChart(createSpec({ align: "all", series: twoSeries }), { financials: staggered(), prices: {} });
     expect(chart.xLabels).toEqual(["2022", "2023", "2024"]);
     expect(col(chart, "a")).toEqual([1, 2, null]);
     expect(col(chart, "b")).toEqual([null, 5, 6]);
     expect(chart.series[0].last).toEqual({ x: 1, value: 2 });
     expect(chart.series[1].first).toEqual({ x: 1, value: 5 });
+  });
+
+  it("with align=common (the default) keeps only the periods every series reports", () => {
+    const chart = resolveChart(createSpec({ series: twoSeries }), { financials: staggered(), prices: {} });
+    expect(chart.xLabels).toEqual(["2023"]);
+    expect(col(chart, "a")).toEqual([2]);
+    expect(col(chart, "b")).toEqual([5]);
+    expect(chart.series[0].first).toEqual({ x: 0, value: 2 });
+  });
+
+  it("align=common ignores a series with no data at all instead of emptying the chart", () => {
+    const chart = resolveChart(
+      createSpec({ series: [...twoSeries, createSeries({ id: "z", ticker: "ZZZ", metric: "revenue" })] }),
+      { financials: { ...staggered(), ZZZ: null }, prices: {} }
+    );
+    expect(chart.xLabels).toEqual(["2023"]);
   });
 
   it("applies the range by period end and indexes inside it", () => {

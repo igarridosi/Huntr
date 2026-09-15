@@ -125,6 +125,13 @@ describe("migrateSpec", () => {
     }
   });
 
+  it("defaults align to common and keeps an explicit all", () => {
+    const r = migrateSpec({ v: 1, title: "T", series: [] });
+    expect(r.ok && r.spec.align).toBe("common");
+    const r2 = migrateSpec({ v: 1, title: "T", series: [], align: "all" });
+    expect(r2.ok && r2.spec.align).toBe("all");
+  });
+
   it("lifts a version-less object and reports where it came from", () => {
     const r = migrateSpec({ title: "old", series: [{ ticker: "aapl", metric: "revenue" }] });
     expect(r.ok && r.migratedFrom).toBe(0);

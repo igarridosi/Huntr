@@ -81,11 +81,20 @@ export interface ChartRange {
   to: string | null;
 }
 
+/**
+ * Which periods make it onto the axis when companies report over different
+ * windows. `common` keeps only the periods every statement series has, so a
+ * quarter one company has filed and the rest have not does not become a
+ * lone column; `all` shows the union and leaves the gaps visible.
+ */
+export type PeriodAlignment = "common" | "all";
+
 export interface ChartSpec {
   v: typeof CHART_SPEC_VERSION;
   title: string;
   subtitle?: string;
   granularity: Granularity;
+  align: PeriodAlignment;
   range: ChartRange;
   series: ChartSeries[];
   style: ChartStyle;
@@ -139,6 +148,7 @@ export function createSpec(partial: SpecInit = {}): ChartSpec {
     title: partial.title ?? "Untitled chart",
     ...(partial.subtitle !== undefined ? { subtitle: partial.subtitle } : {}),
     granularity: partial.granularity ?? "annual",
+    align: partial.align ?? "common",
     range: partial.range ?? { from: null, to: null },
     series: partial.series ?? [],
     style: { ...DEFAULT_STYLE, ...(partial.style ?? {}) },
@@ -384,6 +394,7 @@ export function migrateSpec(input: unknown): MigrationResult {
     title: input.title,
     subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
     granularity: input.granularity === "quarterly" ? "quarterly" : "annual",
+    align: input.align === "all" ? "all" : "common",
     range: {
       from: typeof range.from === "string" ? range.from : null,
       to: typeof range.to === "string" ? range.to : null,

@@ -473,9 +473,26 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
   );
   warnings.push(...axisWarnings);
 
-  // Align on the union of x values.
+  // Align on the union of x values — or, in `common` mode, only on the
+  // buckets every statement series with data reports, so one company's
+  // extra quarter does not stand alone.
   const xs = new Set<number>();
   for (const s of all) for (const p of s.points) xs.add(p.x);
+  if (spec.align === "common") {
+    const statementSeries = all.filter(
+      (s) => METRICS[s.series.metric].source !== "price" && s.points.some((p) => p.value !== null)
+    );
+    if (statementSeries.length > 1) {
+      const bucketXs = new Set<number>();
+      for (const s of statementSeries) for (const p of s.points) bucketXs.add(p.x);
+      for (const x of bucketXs) {
+        if (!statementSeries.every((s) => s.points.some((p) => p.x === x && p.value !== null))) {
+          xs.delete(x);
+          for (const s of statementSeries) s.points = s.points.filter((p) => p.x !== x);
+        }
+      }
+    }
+  }
   const sortedX = [...xs].sort((a, b) => a - b);
   const indexOfX = new Map(sortedX.map((x, i) => [x, i] as const));
 
