@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Estado | Fase 0 en PR (`feat/chart-builder-0`); fases 1–4 TODO |
+| Estado | Fase 0 mergeada (#17); fase 1 en PR (`feat/chart-builder-1`); fases 2–4 TODO |
 | Escrito contra | `b54ba8a` (main, 2026-09-15) |
 | Esfuerzo | L (4 fases entregables por separado; MVP = fases 0–1) |
 | Riesgo de la implementación | Medio — todo es código nuevo y aislado; el único punto de contacto con lo existente es el sidebar, una migración y (fase 3) un botón en `ExpandChartDialog` |
@@ -498,7 +498,7 @@ Salida: ~600 líneas de lógica pura. No hay nada visible todavía; es la fase q
 ## 9. Cuándo parar y preguntar
 
 - Si `fetchCompanyFinancials` devuelve `quarterly` vacío para los tickers de prueba (fallback Yahoo sin trimestrales): parar y decidir con el usuario si el builder oculta "Quarterly" para ese ticker o muestra el aviso; no inventar datos.
-- Si Recharts 3.7 no centra las barras en un `XAxis scale="time"` con el `barSize` calculado (comportamiento distinto al de 2.x): probar `<Bar xAxisId="bars">` con un segundo eje X oculto de tipo categoría alineado por dominio; si tampoco, parar y reportar antes de cambiar de librería.
+- ~~Si Recharts 3.7 no centra las barras en un `XAxis scale="time"`~~ **Resuelto en fase 1**: Recharts 3.7 deriva el ancho de banda del hueco mínimo entre filas (un día con cierres diarios) y `Bar` no acepta `data` propio, así que en modo tiempo las barras se pintan como `ReferenceArea` en coordenadas de datos (centro del bucket ± 36 % del span) y las pastillas de valor como `ReferenceDot` con `label`. Ver `chart-canvas.tsx`.
 - Si la incrustación de fuentes en el SVG exportado falla en Chrome **y** Safari: aplicar el fallback de § 4.7 y anotarlo en el PR; no añadir `html2canvas` ni similares.
 - Si el chunk de la ruta supera 1000 KB tras aplicar `dynamic`: revisar qué arrastra la página (probablemente `framer-motion` por la hoja móvil → cargar `mobile-sheet.tsx` también con `dynamic` y solo bajo 1024 px) antes de tocar nada más.
 - Si `@radix-ui`/`cmdk` parecen necesarios para algún menú: no; `SelectMenu` y `Dialog` propios cubren todo.
