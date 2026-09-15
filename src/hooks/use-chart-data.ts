@@ -6,7 +6,9 @@ import { fetchAlphaStatements, fetchCompanyFinancials } from "@/app/actions/stoc
 import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import {
   METRICS,
+  availableDates,
   coversStatements,
+  defaultRange,
   mergeFinancials,
   resolveChart,
   statementsFor,
@@ -42,6 +44,10 @@ export interface ChartData {
   statements: StatementKind[];
   /** Tickers whose statements come from the deep (Alpha Vantage) overlay. */
   deepTickers: string[];
+  /** Period-end dates the chart could show, before the range is applied. */
+  dates: string[];
+  /** The range in effect: the spec's, or the default window when unset. */
+  range: { from: string | null; to: string | null };
   /** Tickers whose statements or prices are still on their way. */
   pendingTickers: string[];
   /** True until every needed query has settled at least once. */
@@ -116,6 +122,17 @@ export function useChartData(spec: ChartSpec): ChartData {
     return Array.from(pending);
   }, [statementTickers, quick.pending, deepTickers, priceTickers, prices.isPending]);
 
+  const dates = useMemo(() => availableDates(spec, financials), [spec, financials]);
+
+  // No range chosen → the last ten years with deep history, five with
+  // Yahoo's quick data (all it carries). Not written to the spec, so a
+  // shared link keeps meaning "whatever is available".
+  const range = useMemo(() => {
+    if (spec.range.from !== null || spec.range.to !== null) return spec.range;
+    const allDeep = statementTickers.length > 0 && statementTickers.every((t) => deepTickers.includes(t));
+    return defaultRange(dates, allDeep ? 10 : 5);
+  }, [spec.range, dates, statementTickers, deepTickers]);
+
   const chart = useMemo(() => {
     const inputs: ResolveInputs = {
       // A ticker still loading is left out entirely so the resolver does not
@@ -123,9 +140,9 @@ export function useChartData(spec: ChartSpec): ChartData {
       financials: Object.fromEntries(Object.entries(financials).filter(([t]) => !pendingTickers.includes(t))),
       prices: prices.data ?? {},
     };
-    const visible: ChartSpec = { ...spec, series: spec.series.filter((s) => !pendingTickers.includes(s.ticker)) };
+    const visible: ChartSpec = { ...spec, range, series: spec.series.filter((s) => !pendingTickers.includes(s.ticker)) };
     return resolveChart(visible, inputs);
-  }, [spec, financials, prices.data, pendingTickers]);
+  }, [spec, range, financials, prices.data, pendingTickers]);
 
-  return { chart, financials, tickers, statements, deepTickers, pendingTickers, isLoading: pendingTickers.length > 0 };
+  return { chart, financials, tickers, statements, deepTickers, dates, range, pendingTickers, isLoading: pendingTickers.length > 0 };
 }

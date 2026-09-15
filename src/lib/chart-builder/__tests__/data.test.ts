@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { coversStatements, mergeFinancials, statementsFor } from "../data";
+import { availableDates, coversStatements, defaultRange, mergeFinancials, statementsFor } from "../data";
 import { METRICS, METRIC_IDS } from "../metrics";
 import { createSeries, createSpec } from "../spec";
-import { fin } from "./fixtures";
+import { fin, quarterEnds } from "./fixtures";
 
 describe("statementsFor", () => {
   it("asks only for what the metrics read, in a stable order", () => {
@@ -51,5 +51,23 @@ describe("mergeFinancials / coversStatements", () => {
     expect(coversStatements(deepIncome, ["income", "cashflow"])).toBe(false);
     expect(coversStatements(null, ["income"])).toBe(false);
     expect(coversStatements(deepIncome, [])).toBe(true);
+  });
+});
+
+describe("availableDates / defaultRange", () => {
+  const dates = quarterEnds(2010, 2025); // 64 quarters, oldest first
+
+  it("collects the union of period ends across statement tickers, sorted", () => {
+    const a = fin("A", { quarterly: dates.slice(0, 4).map((date) => ({ date, revenue: 1 })) });
+    const b = fin("B", { quarterly: dates.slice(2, 6).map((date) => ({ date, revenue: 1 })) });
+    const spec = createSpec({ series: [createSeries({ ticker: "A", metric: "revenue" }), createSeries({ ticker: "B", metric: "revenue" })] });
+    expect(availableDates(spec, { A: a, B: b })).toEqual(dates.slice(0, 6));
+  });
+
+  it("defaults to the last N years ending at the latest period", () => {
+    expect(defaultRange(dates, 10)).toEqual({ from: "2016-03-31", to: null });
+    expect(defaultRange(dates, 5)).toEqual({ from: "2021-03-31", to: null });
+    expect(defaultRange(dates.slice(-3), 5)).toEqual({ from: dates[dates.length - 3], to: null });
+    expect(defaultRange([], 5)).toEqual({ from: null, to: null });
   });
 });

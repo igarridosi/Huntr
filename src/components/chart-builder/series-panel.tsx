@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
@@ -9,6 +9,7 @@ import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
 import { cn } from "@/lib/utils";
 import {
   MAX_SERIES,
+  MAX_TICKERS,
   METRICS,
   METRIC_GROUPS,
   SERIES_PALETTE,
@@ -61,8 +62,21 @@ const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GR
  * same state, so clicking either brings the other along.
  */
 export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPanelProps) {
+  const [limitNote, setLimitNote] = useState<string | null>(null);
   const patch = (id: string, changes: Partial<ChartSeries>, coalesce?: string) =>
     onChange({ ...spec, series: spec.series.map((s) => (s.id === id ? { ...s, ...changes } : s)) }, coalesce);
+
+  const tickerCount = new Set(spec.series.map((s) => s.ticker)).size;
+  /** A new company only gets on when there is room for a fifth data source not to be needed. */
+  const setTicker = (id: string, ticker: string) => {
+    const others = new Set(spec.series.filter((s) => s.id !== id).map((s) => s.ticker));
+    if (!others.has(ticker) && others.size >= MAX_TICKERS) {
+      setLimitNote(`Up to ${MAX_TICKERS} companies per chart. Remove one to add ${ticker}.`);
+      return;
+    }
+    setLimitNote(null);
+    patch(id, { ticker });
+  };
 
   const move = (id: string, dir: -1 | 1) => {
     const i = spec.series.findIndex((s) => s.id === id);
@@ -102,8 +116,8 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
     <section aria-label="Series" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
       <div className="mb-2 flex items-center justify-between px-1">
         <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Series</h2>
-        <span className="font-mono text-[10px] tabular-nums text-mist/85">
-          {spec.series.length} / {MAX_SERIES}
+        <span className="font-mono text-[10px] tabular-nums text-mist/85" title={`${tickerCount} of ${MAX_TICKERS} companies · ${spec.series.length} of ${MAX_SERIES} series`}>
+          {tickerCount} / {MAX_TICKERS} co · {spec.series.length} / {MAX_SERIES}
         </span>
       </div>
 
@@ -162,7 +176,8 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
                   {open && (
                     <div className="flex flex-col gap-3 px-2.5 pb-3 pt-1">
                       <Field label="Ticker">
-                        <DCFTickerInput value={s.ticker} onSelect={(ticker) => patch(s.id, { ticker })} />
+                        <DCFTickerInput value={s.ticker} onSelect={(ticker) => setTicker(s.id, ticker)} />
+                        {limitNote && selectedId === s.id && <p className="mt-1 text-[11px] text-golden-hour">{limitNote}</p>}
                       </Field>
                       <Field label="Metric">
                         <SelectMenu<MetricId>

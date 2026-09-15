@@ -173,22 +173,24 @@ describe("url", () => {
 });
 
 describe("templates", () => {
-  it("every template builds a valid spec with fallback tickers", () => {
+  it("every template builds a valid spec over the tickers it is given and never invents one", () => {
+    const given = ["AAPL", "MSFT", "GOOGL", "AMZN"];
     for (const t of TEMPLATES) {
-      const spec = t.build([]);
+      const spec = t.build(given);
       expect(validateSpec(spec)).toEqual([]);
       expect(spec.series.length).toBeGreaterThan(0);
-      expect(new Set(spec.series.map((s) => s.ticker)).size).toBe(t.tickers);
+      expect(new Set(spec.series.map((s) => s.ticker)).size).toBe(Math.min(t.tickers, given.length));
+      expect(t.build([]).series).toEqual([]);
     }
   });
 
-  it("uses the tickers it is given, in order", () => {
+  it("uses only the tickers it is given, in order", () => {
     const spec = TEMPLATES.find((t) => t.id === "revenue-race")!.build(["NVDA", "AMD"]);
-    expect(spec.series.map((s) => s.ticker)).toEqual(["NVDA", "AMD", "AAPL", "MSFT"]);
+    expect(spec.series.map((s) => s.ticker)).toEqual(["NVDA", "AMD"]);
   });
 
   it("keeps line and area as distinct shapes", () => {
-    const shapes = new Set(TEMPLATES.flatMap((t) => t.build([]).series.map((s) => s.shape)));
+    const shapes = new Set(TEMPLATES.flatMap((t) => t.build(["AAPL", "MSFT"]).series.map((s) => s.shape)));
     expect(shapes.has("line")).toBe(true);
     expect(shapes.has("area")).toBe(true);
     expect("areaFill" in DEFAULT_STYLE).toBe(false);

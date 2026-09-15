@@ -156,7 +156,7 @@ export interface ChartSpec {
 
 Reglas del modelo (se validan en `validateSpec(spec): SpecIssue[]`, función pura con tests):
 
-- Máximo 8 series y 6 tickers distintos (límite de peticiones y de legibilidad).
+- Máximo 8 series y **4 tickers** distintos (cada empresa es una fuente de datos que consultar; cuatro basta para comparar y mantiene a raya las llamadas a Alpha Vantage).
 - `ttm` solo con `granularity: "quarterly"` y métricas de tipo `flow`.
 - `per_share` solo con métricas de estados (no con `price`).
 - `indexed` fuerza `shape: "line"` y ese eje pasa a `percent`.
@@ -352,7 +352,7 @@ Escritorio (≥ 1024 px):
 
 Móvil (< 1024 px): cabecera compacta, lienzo a ancho completo arriba (1:1 o 4:3 forzado en pantalla; el `aspect` del spec se respeta solo al exportar), y una **hoja inferior** con `SegmentedTabs` `Series | Design` que se arrastra entre dos puntos (peek 96 px / 70 % alto). Implementarla con framer-motion `drag="y"`, `dragConstraints`, y en `onDragEnd` decidir por `velocity.y` y proyección (`current + (v/1000)·0.998/(1−0.998)`), spring `bounce: 0.15` **solo** en esa hoja (viene de un gesto con momento), `bounce: 0` en todo lo demás.
 
-Estado vacío (primera visita): el lienzo muestra las 5 plantillas como tarjetas grandes con una miniatura SVG estática de cada una (no gráficos reales, para que cargue instantáneo) y un buscador "Start from a ticker…". Plantillas (`src/lib/chart-builder/templates.ts`, cada una un `ChartSpec` completo):
+Estado vacío (primera visita): **solo un buscador** ("Add a company to start"). Ninguna empresa entra en el gráfico — y ninguna fuente se consulta — hasta que el usuario la nombra; las plantillas reordenan las empresas que ya están en el gráfico y nunca añaden una. Debajo del lienzo, en lugar de dos inputs de mes, un **deslizador de periodos** con un punto por trimestre/año disponible y dos asas (estilo Fiscal.ai); sin rango elegido se muestran los **últimos 10 años** cuando todas las empresas tienen historial Alpha Vantage y los **últimos 5** con datos Yahoo (su máximo), sin escribirlo en el spec para que un enlace compartido siga significando "lo que haya". Vista trimestral por defecto. Plantillas (`src/lib/chart-builder/templates.ts`, cada una un `ChartSpec` completo):
 
 | id | Título | Series | Estilo |
 |---|---|---|---|

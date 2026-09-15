@@ -1,9 +1,9 @@
 /**
  * Chart Builder — starting points.
  *
- * Each template is a complete `ChartSpec` factory. Tickers are parameters so
- * the gallery can seed them from the user's watchlist; the fallbacks below
- * are the large caps most likely to be warm in the cache.
+ * Each template is a complete `ChartSpec` factory over the tickers already
+ * on the chart. Nothing is seeded on its own: a company only reaches a
+ * chart — and a data source only gets called — when the user adds it.
  */
 
 import { createSeries, createSpec, type ChartSpec } from "./spec";
@@ -21,20 +21,14 @@ export interface ChartTemplate {
   id: TemplateId;
   name: string;
   description: string;
-  /** How many tickers the template consumes. */
+  /** How many tickers the template uses at most. */
   tickers: number;
   build: (tickers: string[]) => ChartSpec;
 }
 
-export const DEFAULT_TEMPLATE_TICKERS = ["AAPL", "MSFT", "GOOGL", "AMZN"] as const;
-
+/** Up to `n` of the given tickers; never invents one. */
 function pick(tickers: string[], n: number): string[] {
-  const out = tickers.slice(0, n);
-  for (const fallback of DEFAULT_TEMPLATE_TICKERS) {
-    if (out.length >= n) break;
-    if (!out.includes(fallback)) out.push(fallback);
-  }
-  return out;
+  return Array.from(new Set(tickers.map((t) => t.toUpperCase()))).slice(0, n);
 }
 
 export const TEMPLATES: readonly ChartTemplate[] = [
@@ -81,6 +75,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
     tickers: 1,
     build: (tickers) => {
       const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — FCF/share vs. price`,
         subtitle: "Quarterly free cash flow per share against the daily close",
@@ -100,6 +95,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
     tickers: 1,
     build: (tickers) => {
       const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — Margins`,
         subtitle: "Annual, as a percentage of revenue",
@@ -120,6 +116,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
     tickers: 1,
     build: (tickers) => {
       const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — Capital returned to shareholders`,
         subtitle: "Annual dividends and buybacks against free cash flow",
@@ -140,6 +137,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
     tickers: 1,
     build: (tickers) => {
       const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — P/E vs. revenue growth`,
         subtitle: "Trailing twelve months, quarterly",

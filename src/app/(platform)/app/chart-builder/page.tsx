@@ -3,9 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
 import { ChartColumnStacked, Download, LayoutTemplate, Link2, Redo2, Undo2 } from "lucide-react";
-import { fetchDefaultWatchlistTickers } from "@/app/actions/stock";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartControls } from "@/components/chart-builder/chart-controls";
@@ -13,14 +11,14 @@ import { ChartFrame } from "@/components/chart-builder/chart-frame";
 import { DesignPanel } from "@/components/chart-builder/design-panel";
 import { ExportDialog } from "@/components/chart-builder/export-dialog";
 import { SeriesPanel } from "@/components/chart-builder/series-panel";
+import { StartPrompt } from "@/components/chart-builder/start-prompt";
 import { TemplateGallery } from "@/components/chart-builder/template-gallery";
 import { useChartData } from "@/hooks/use-chart-data";
 import { useChartHistory } from "@/hooks/use-chart-history";
 import { useDeepFinancials, type DeepLoadOutcome } from "@/hooks/use-deep-financials";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { STALE_TIMES } from "@/lib/constants";
-import { SPEC_QUERY_PARAM, createSpec, decodeSpec, encodeSpec, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
+import { SPEC_QUERY_PARAM, createSeries, createSpec, decodeSpec, encodeSpec, paletteColor, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
 import ChartBuilderLoading from "./loading";
 
 // framer-motion only rides along on phones.
@@ -76,12 +74,6 @@ function ChartBuilder() {
   );
   const deep = useDeepFinancials(onDeepDone);
 
-  const watchlist = useQuery({
-    queryKey: ["watchlist", "default-tickers"],
-    queryFn: fetchDefaultWatchlistTickers,
-    staleTime: STALE_TIMES.WATCHLIST,
-  });
-
   // Mirror the spec into ?c= without touching the router, debounced so a
   // scrubbed colour does not write forty history-free URL updates.
   const urlTimer = useRef<number | null>(null);
@@ -103,13 +95,30 @@ function ChartBuilder() {
 
   const onChange = useCallback((next: ChartSpec, coalesce?: string) => update(next, coalesce), [update]);
 
+  // Templates reshape the companies already on the chart; they never add one.
   const pickTemplate = useCallback(
     (t: ChartTemplate) => {
-      reset(t.build(watchlist.data ?? []));
+      const next = t.build(data.tickers);
+      if (next.series.length === 0) return;
+      reset(next);
       setSelectedId(null);
       setShowTemplates(false);
     },
-    [reset, watchlist.data]
+    [reset, data.tickers]
+  );
+
+  const startWith = useCallback(
+    (ticker: string) => {
+      const t = ticker.toUpperCase();
+      reset(
+        createSpec({
+          title: `${t} — Revenue`,
+          subtitle: "Quarterly revenue",
+          series: [createSeries({ ticker: t, metric: "revenue", shape: "bar", color: paletteColor(0) })],
+        })
+      );
+    },
+    [reset]
   );
 
   const share = useCallback(async () => {
@@ -182,14 +191,14 @@ function ChartBuilder() {
       </header>
 
       {empty ? (
-        <TemplateGallery onPick={pickTemplate} />
+        <StartPrompt onPick={startWith} />
       ) : (
         <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)_264px]">
           {isDesktop && <div>{seriesPanel}</div>}
           <div className="flex min-w-0 flex-col gap-3">
             <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} />
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-              <ChartControls spec={spec} onChange={onChange} />
+              <ChartControls spec={spec} dates={data.dates} range={data.range} onChange={onChange} />
             </div>
             {showTemplates && (
               <div className="rounded-2xl bg-wolf-surface/60 p-3 ring-1 ring-inset ring-wolf-border/50">
