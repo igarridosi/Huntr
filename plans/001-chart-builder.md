@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Estado | Fases 0–2 mergeadas (#17, #18, #19, #20; #21 pendiente); fase 3 en PR (`feat/chart-builder-3`); fase 4 TODO |
+| Estado | Fases 0–3 mergeadas (#17–#22); fase 4 en PR (`feat/chart-builder`, rama única de trabajo a partir de ahora) |
 | Escrito contra | `b54ba8a` (main, 2026-09-15) |
 | Esfuerzo | L (4 fases entregables por separado; MVP = fases 0–1) |
 | Riesgo de la implementación | Medio — todo es código nuevo y aislado; el único punto de contacto con lo existente es el sidebar, una migración y (fase 3) un botón en `ExpandChartDialog` |
@@ -428,7 +428,7 @@ Modificados:
 
 Referencia visual: `plans/chart-builder-mockup.html` (mockup interactivo de la anatomía, los tres temas y los controles; abrirlo en el navegador).
 
-Cada fase es un PR propio sobre una rama `feat/chart-builder-N`. Antes de cada commit: `npm run lint && npx tsc --noEmit && npm test` en verde (306 tests actuales + los nuevos; si un test existente falla, se revierte el cambio, no el test). Conventional Commits (`feat(chart-builder): …`).
+Cada entrega es un PR desde la **misma** rama de trabajo `feat/chart-builder` (recreada desde `main` tras cada merge; proyecto de una sola persona, sin ramas por fase). Antes de cada commit: `npm run lint && npx tsc --noEmit && npm test` en verde (306 tests actuales + los nuevos; si un test existente falla, se revierte el cambio, no el test). Conventional Commits (`feat(chart-builder): …`).
 
 ### Fase 0 — Modelo y resolver (sin UI)
 
