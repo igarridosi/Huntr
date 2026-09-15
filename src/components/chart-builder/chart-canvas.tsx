@@ -139,7 +139,15 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
 
   const timeMode = chart.xMode === "time";
-  const visible = useMemo(() => chart.series.filter((s) => !s.hidden), [chart.series]);
+  // Hidden series are not painted; a price series is never a bar, whatever
+  // a hand-made URL says — that would be one rectangle per trading day.
+  const visible = useMemo(
+    () =>
+      chart.series
+        .filter((s) => !s.hidden)
+        .map((s) => (s.shape === "bar" && METRICS[s.metric].source === "price" ? { ...s, shape: "line" as const } : s)),
+    [chart.series]
+  );
   const hasRight = visible.some((s) => s.axis === "right");
   const leftUnit = chart.axes.left;
   const rightUnit = chart.axes.right;

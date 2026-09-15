@@ -182,6 +182,7 @@ export type SpecIssueCode =
   | "ttm_needs_flow"
   | "per_share_needs_currency"
   | "indexed_needs_line"
+  | "price_needs_line"
   | "title_too_long"
   | "bad_range"
   | "range_inverted"
@@ -296,6 +297,17 @@ export function validateSpec(spec: ChartSpec): SpecIssue[] {
         message: "Indexed series are drawn as lines.",
       });
     }
+
+    // A daily price as bars would be thousands of one-day rectangles on a
+    // time axis — unreadable, and heavy enough to stall the page.
+    if (def.source === "price" && s.shape === "bar") {
+      issues.push({
+        code: "price_needs_line",
+        seriesId: s.id,
+        severity: "warning",
+        message: "Prices are drawn as lines.",
+      });
+    }
   }
 
   const { from, to } = spec.range;
@@ -341,7 +353,7 @@ export function normalizeSpec(spec: ChartSpec): ChartSpec {
         if (transform === "per_share" && !(def.source === "statements" && def.unit === "currency")) {
           transform = "raw";
         }
-        const shape: SeriesShape = transform === "indexed" && s.shape === "bar" ? "line" : s.shape;
+        const shape: SeriesShape = s.shape === "bar" && (transform === "indexed" || def.source === "price") ? "line" : s.shape;
         return { ...s, ticker: normalizeTicker(s.ticker), transform, shape };
       }),
   };

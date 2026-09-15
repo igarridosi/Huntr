@@ -66,13 +66,19 @@ describe("validateSpec", () => {
 
   it("rejects per_share on prices, ratios and market metrics", () => {
     for (const metric of ["price", "gross_margin", "pe_ttm"] as const) {
-      const spec = createSpec({ series: [createSeries({ ticker: "A", metric, transform: "per_share" })] });
+      const spec = createSpec({ series: [createSeries({ ticker: "A", metric, transform: "per_share", shape: "line" })] });
       expect(codes(spec)).toEqual(["per_share_needs_currency"]);
     }
   });
 
+  it("never lets a price series be a bar", () => {
+    const spec = createSpec({ series: [createSeries({ ticker: "A", metric: "price", shape: "bar" })] });
+    expect(codes(spec)).toEqual(["price_needs_line"]);
+    expect(normalizeSpec(spec).series[0].shape).toBe("line");
+  });
+
   it("wants indexed series drawn as lines", () => {
-    const spec = createSpec({ series: [createSeries({ ticker: "A", metric: "price", transform: "indexed", shape: "bar" })] });
+    const spec = createSpec({ series: [createSeries({ ticker: "A", metric: "revenue", transform: "indexed", shape: "bar" })] });
     expect(codes(spec)).toEqual(["indexed_needs_line"]);
   });
 

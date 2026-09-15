@@ -7,6 +7,7 @@ import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
   CANVAS_THEMES,
+  METRICS,
   METRIC_GROUPS,
   SERIES_PALETTE,
   metricsInGroup,
@@ -83,7 +84,16 @@ function common<K extends keyof ChartSeries>(series: ChartSeries[], key: K): Cha
  */
 export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
   const style = (changes: Partial<ChartStyle>, coalesce?: string) => onChange({ ...spec, style: { ...spec.style, ...changes } }, coalesce);
-  const bulk = (changes: Partial<ChartSeries>) => onChange({ ...spec, series: spec.series.map((s) => ({ ...s, ...changes })) });
+  const bulk = (changes: Partial<ChartSeries>) =>
+    onChange({
+      ...spec,
+      series: spec.series.map((s) => {
+        const next = { ...s, ...changes };
+        // Prices stay lines whatever the chart-wide shape is (see validateSpec).
+        if (next.shape === "bar" && METRICS[next.metric].source === "price") next.shape = "line";
+        return next;
+      }),
+    });
 
   const metric = common(spec.series, "metric");
   const transform = common(spec.series, "transform");
