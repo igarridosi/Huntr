@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuthGate } from "@/providers/auth-gate-provider";
@@ -34,7 +34,7 @@ export function useSavedCharts() {
   const { supabase, user, isLoading: isAuthLoading } = useSupabase();
   const { openGate } = useAuthGate();
   const queryClient = useQueryClient();
-  const queryKey = [...SAVED_CHARTS_KEY, user?.id ?? "anon"] as const;
+  const queryKey = useMemo(() => [...SAVED_CHARTS_KEY, user?.id ?? "anon"] as const, [user?.id]);
 
   const query = useQuery<SavedChart[]>({
     queryKey,
