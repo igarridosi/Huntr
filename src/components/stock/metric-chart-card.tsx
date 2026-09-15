@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { ExpandChartDialog } from "@/components/charts/expand-chart-dialog";
+import { chartBuilderHref, type MetricId } from "@/lib/chart-builder/link";
 import { useChartColors } from "@/hooks/use-chart-colors";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import { Badge } from "@/components/ui/badge";
@@ -72,6 +73,8 @@ export interface MetricChartCardProps {
   showPerformanceFooter?: boolean;
   /** Optional max clamp for Y-axis visual scaling */
   yMaxClamp?: number;
+  /** Offers "Open in Chart Builder" in the expanded view for this ticker + metric. */
+  builder?: { ticker: string; metric: MetricId };
 }
 
 type ChartPeriodFilter = "annual" | "quarterly";
@@ -103,6 +106,7 @@ export function MetricChartCard({
   referenceLineColor = "#ef4444",
   showPerformanceFooter = true,
   yMaxClamp,
+  builder,
 }: MetricChartCardProps) {
   const chartId = useId().replace(/:/g, "");
   const miniGradientId = `mc-grad-${chartId}-mini`;
@@ -188,6 +192,7 @@ export function MetricChartCard({
         <div className="ml-auto">
           <ExpandChartDialog
             title={title}
+            builderHref={builder ? chartBuilderHref(builder.ticker, builder.metric) : undefined}
             headerRight={
               <div className="flex items-center gap-2">
                 <div className="inline-flex h-8 items-center rounded-xl bg-snow-peak/[0.04] p-0.5 ring-1 ring-inset ring-wolf-border/50">

@@ -3,13 +3,14 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChartColumnStacked, Download, LayoutTemplate, Link2, Redo2, Undo2 } from "lucide-react";
+import { ChartColumnStacked, Download, LayoutTemplate, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartControls } from "@/components/chart-builder/chart-controls";
 import { ChartFrame } from "@/components/chart-builder/chart-frame";
 import { DesignPanel } from "@/components/chart-builder/design-panel";
 import { ExportDialog } from "@/components/chart-builder/export-dialog";
+import { SavedChartsMenu } from "@/components/chart-builder/saved-charts-menu";
 import { SeriesPanel } from "@/components/chart-builder/series-panel";
 import { StartPrompt } from "@/components/chart-builder/start-prompt";
 import { TemplateGallery } from "@/components/chart-builder/template-gallery";
@@ -18,6 +19,8 @@ import { useChartHistory } from "@/hooks/use-chart-history";
 import { useDeepFinancials, type DeepLoadOutcome } from "@/hooks/use-deep-financials";
 import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { useMediaQuery } from "@/hooks/use-media-query";
+import { useSavedCharts, type SavedChart } from "@/hooks/use-saved-charts";
+import { useAuthGate } from "@/providers/auth-gate-provider";
 import { SPEC_QUERY_PARAM, createSeries, createSpec, decodeSpec, encodeSpec, paletteColor, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
 import ChartBuilderLoading from "./loading";
 
@@ -56,6 +59,12 @@ function ChartBuilder() {
   const [toast, setToast] = useState<Toast | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const saved = useSavedCharts();
+  const { openGate } = useAuthGate();
+  // The row this chart lives in, and the spec as it was last saved there,
+  // so "Unsaved changes" is a comparison rather than a flag to maintain.
+  const [savedRef, setSavedRef] = useState<{ id: string; encoded: string } | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const getFrame = useCallback(() => frameRef.current, []);
 
@@ -101,6 +110,7 @@ function ChartBuilder() {
       const next = t.build(data.tickers);
       if (next.series.length === 0) return;
       reset(next);
+      setSavedRef(null);
       setSelectedId(null);
       setShowTemplates(false);
     },
@@ -110,6 +120,7 @@ function ChartBuilder() {
   const startWith = useCallback(
     (ticker: string) => {
       const t = ticker.toUpperCase();
+      setSavedRef(null);
       reset(
         createSpec({
           title: `${t} — Revenue`,
@@ -134,6 +145,45 @@ function ChartBuilder() {
 
   const empty = spec.series.length === 0;
   const hasPlot = !empty && data.chart.points.length > 0;
+  const encoded = encodeSpec(spec);
+  const savedRow = savedRef ? saved.charts.find((c) => c.id === savedRef.id) ?? null : null;
+  const dirty = savedRef !== null && savedRef.encoded !== encoded;
+
+  const saveChart = useCallback(async () => {
+    if (empty || saving) return;
+    setSaving(true);
+    try {
+      const name = savedRow?.name ?? spec.title.trim() ?? "";
+      const id = await saved.save({ id: savedRef?.id, name: name || "Untitled chart", spec });
+      if (id) {
+        setSavedRef({ id, encoded });
+        notify(savedRef ? "Chart updated" : "Chart saved", savedRef ? undefined : "Find it under My charts.");
+      } else if (saved.isSignedIn) {
+        notify("Could not save", "Try again in a moment.", "error");
+      }
+    } finally {
+      setSaving(false);
+    }
+  }, [empty, saving, savedRow, spec, saved, savedRef, encoded, notify]);
+
+  const openSaved = useCallback(
+    (c: SavedChart) => {
+      reset(c.spec);
+      setSavedRef({ id: c.id, encoded: encodeSpec(c.spec) });
+      setSelectedId(null);
+    },
+    [reset]
+  );
+
+  const deleteSaved = useCallback(
+    async (id: string) => {
+      const ok = await saved.remove(id);
+      if (ok && savedRef?.id === id) setSavedRef(null);
+      if (ok) notify("Chart deleted");
+      return ok;
+    },
+    [saved, savedRef, notify]
+  );
 
   const seriesPanel = <SeriesPanel spec={spec} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} />;
   const designPanel = (
@@ -168,6 +218,28 @@ function ChartBuilder() {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {!empty && (
+            <span className="mr-1 text-[11px] text-mist" aria-live="polite">
+              {savedRow ? (
+                <>
+                  <span className="text-snow-peak">{savedRow.name}</span>
+                  {dirty ? <span className="text-golden-hour"> · unsaved changes</span> : <span> · saved</span>}
+                </>
+              ) : (
+                <span className="text-golden-hour">Unsaved</span>
+              )}
+            </span>
+          )}
+          <SavedChartsMenu
+            charts={saved.charts}
+            isLoading={saved.isLoading}
+            isSignedIn={saved.isSignedIn}
+            currentId={savedRef?.id ?? null}
+            onOpen={openSaved}
+            onRename={saved.rename}
+            onDelete={deleteSaved}
+            onGate={() => openGate("charts")}
+          />
+          {!empty && (
             <Button variant="ghost" size="sm" aria-pressed={showTemplates} onClick={() => setShowTemplates((v) => !v)}>
               <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
               Templates
@@ -182,6 +254,10 @@ function ChartBuilder() {
           <Button variant="secondary" size="sm" disabled={empty} onClick={share}>
             <Link2 className="mr-1.5 h-3.5 w-3.5" />
             Share
+          </Button>
+          <Button variant="secondary" size="sm" disabled={empty || saving || (savedRef !== null && !dirty)} onClick={saveChart}>
+            {saving ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Save className="mr-1.5 h-3.5 w-3.5" />}
+            {savedRef ? "Update" : "Save"}
           </Button>
           <Button size="sm" disabled={!hasPlot} onClick={() => setExportOpen(true)}>
             <Download className="mr-1.5 h-3.5 w-3.5" />

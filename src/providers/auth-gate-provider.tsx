@@ -20,6 +20,7 @@ export type AuthGateReason =
   | "portfolio"
   | "deepData"
   | "addTicker"
+  | "charts"
   | "generic";
 
 const REASON_COPY: Record<AuthGateReason, { title: string; description: string }> = {
@@ -42,6 +43,11 @@ const REASON_COPY: Record<AuthGateReason, { title: string; description: string }
     title: "Create a free account to unlock extended history",
     description:
       "Extended historical data (20Y financials, full earnings history) is only available to registered users to keep this data source sustainable.",
+  },
+  charts: {
+    title: "Create a free account to save your charts",
+    description:
+      "The Chart Builder works without an account — share links carry the whole chart — but keeping charts in My charts requires signing up.",
   },
   addTicker: {
     title: "Create a free account to add new tickers",

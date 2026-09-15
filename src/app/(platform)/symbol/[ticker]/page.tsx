@@ -787,6 +787,7 @@ export default function OverviewPage() {
           >
             <MetricChartCard
             title="Revenue"
+            builder={{ ticker, metric: "revenue" }}
             data={charts.revenue.data}
             annualData={charts.revenue.annualData}
             quarterlyData={charts.revenue.quarterlyData}
@@ -797,6 +798,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="EBITDA"
+            builder={{ ticker, metric: "ebitda" }}
             data={charts.ebitda.data}
             annualData={charts.ebitda.annualData}
             quarterlyData={charts.ebitda.quarterlyData}
@@ -807,6 +809,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Free Cash Flow"
+            builder={{ ticker, metric: "free_cash_flow" }}
             data={charts.fcf.data}
             annualData={charts.fcf.annualData}
             quarterlyData={charts.fcf.quarterlyData}
@@ -817,6 +820,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Net Income"
+            builder={{ ticker, metric: "net_income" }}
             data={charts.netIncome.data}
             annualData={charts.netIncome.annualData}
             quarterlyData={charts.netIncome.quarterlyData}
@@ -827,6 +831,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="EPS"
+            builder={{ ticker, metric: "eps_diluted" }}
             data={charts.eps.data}
             annualData={charts.eps.annualData}
             quarterlyData={charts.eps.quarterlyData}
@@ -837,6 +842,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Cash & Equivalents"
+            builder={{ ticker, metric: "cash_and_equivalents" }}
             data={charts.cashDebt.data}
             annualData={charts.cashDebt.annualData}
             quarterlyData={charts.cashDebt.quarterlyData}
@@ -847,6 +853,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Dividends Paid"
+            builder={{ ticker, metric: "dividends_paid" }}
             data={charts.dividends.data}
             annualData={charts.dividends.annualData}
             quarterlyData={charts.dividends.quarterlyData}
@@ -857,6 +864,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Shares Outstanding"
+            builder={{ ticker, metric: "shares_outstanding_diluted" }}
             data={charts.sharesOut.data}
             annualData={charts.sharesOut.annualData}
             quarterlyData={charts.sharesOut.quarterlyData}
@@ -867,6 +875,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Gross Margin"
+            builder={{ ticker, metric: "gross_margin" }}
             data={charts.grossMargin.data}
             annualData={charts.grossMargin.annualData}
             quarterlyData={charts.grossMargin.quarterlyData}
@@ -877,6 +886,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Operating Margin"
+            builder={{ ticker, metric: "operating_margin" }}
             data={charts.opMargin.data}
             annualData={charts.opMargin.annualData}
             quarterlyData={charts.opMargin.quarterlyData}
@@ -898,6 +908,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="ROE"
+            builder={{ ticker, metric: "roe" }}
             data={charts.roe.data}
             annualData={charts.roe.annualData}
             quarterlyData={charts.roe.quarterlyData}
@@ -909,6 +920,7 @@ export default function OverviewPage() {
           />
           <MetricChartCard
             title="Capex"
+            builder={{ ticker, metric: "capex" }}
             data={charts.capex.data}
             annualData={charts.capex.annualData}
             quarterlyData={charts.capex.quarterlyData}

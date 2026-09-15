@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Maximize2, X } from "lucide-react";
+import Link from "next/link";
+import { ChartColumnStacked, Maximize2, X } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +17,8 @@ interface ExpandChartDialogProps {
   children: ReactNode;
   headerRight?: ReactNode;
   footer?: ReactNode;
+  /** When set, the dialog offers to open this metric in the Chart Builder. */
+  builderHref?: string;
 }
 
 export function ExpandChartDialog({
@@ -23,6 +26,7 @@ export function ExpandChartDialog({
   children,
   headerRight,
   footer,
+  builderHref,
 }: ExpandChartDialogProps) {
   const [open, setOpen] = useState(false);
 
@@ -41,6 +45,16 @@ export function ExpandChartDialog({
             <DialogTitle className="text-sm md:text-base">{title}</DialogTitle>
             <div className="flex items-center gap-2">
               {headerRight}
+              {builderHref && (
+                <Link
+                  href={builderHref}
+                  className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-mist transition-colors hover:bg-wolf-surface hover:text-snow-peak focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange"
+                  title="Compare with other companies, change the metric, export"
+                >
+                  <ChartColumnStacked className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Open in Chart Builder</span>
+                </Link>
+              )}
               <Button
                 type="button"
                 size="icon-sm"
