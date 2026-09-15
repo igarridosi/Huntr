@@ -32,6 +32,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
   const theme = CANVAS_THEMES[spec.style.theme];
   const plotRef = useRef<HTMLDivElement>(null);
   const [plotWidth, setPlotWidth] = useState(0);
+  const [hoverId, setHoverId] = useState<string | null>(null);
 
   useEffect(() => {
     const el = plotRef.current;
@@ -75,6 +76,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
         onToggle={toggle}
         onIsolate={isolate}
         onSelect={onSelect}
+        onHover={setHoverId}
       />
 
       <div
@@ -82,7 +84,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
         className="mx-auto mt-2 w-full"
         style={{ maxWidth: spec.style.aspect === "1:1" ? 640 : spec.style.aspect === "4:3" ? 860 : undefined, height }}
       >
-        {plotWidth > 0 && (showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} />)}
+        {plotWidth > 0 && (showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />)}
       </div>
 
       <div className="mt-3 flex items-end justify-between gap-4">

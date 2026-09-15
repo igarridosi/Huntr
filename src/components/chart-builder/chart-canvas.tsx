@@ -37,6 +37,8 @@ export interface ChartCanvasProps {
   chart: ResolvedChart;
   /** Pixel height of the plot; the parent derives it from the aspect ratio. */
   height: number;
+  /** Series under the pointer in the legend; every other series fades. */
+  emphasisId?: string | null;
 }
 
 /** What Recharts hands a LabelList / ReferenceDot label renderer. */
@@ -110,7 +112,9 @@ function Pill({ x, y, text, theme, anchor }: { x: number; y: number; text: strin
  * daily closes in the same table that gap is one day — every bar would be
  * a hairline. A rectangle from bucket-start to bucket-end does not care.
  */
-export function ChartCanvas({ spec, chart, height }: ChartCanvasProps) {
+export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCanvasProps) {
+  /** 1 for the emphasised series (or all, when none is), faint for the rest. */
+  const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.22);
   const theme = CANVAS_THEMES[spec.style.theme];
   const reducedMotion = usePrefersReducedMotion();
   const gradientPrefix = useId().replace(/:/g, "");
@@ -306,7 +310,7 @@ export function ChartCanvas({ spec, chart, height }: ChartCanvasProps) {
                 y1={b.y1}
                 y2={b.y2}
                 fill={b.ink}
-                fillOpacity={1}
+                fillOpacity={alpha(b.seriesId)}
                 stroke="none"
                 radius={b.radius}
                 ifOverflow="visible"
@@ -331,6 +335,8 @@ export function ChartCanvas({ spec, chart, height }: ChartCanvasProps) {
             {visible.map((s) => {
               const ink = seriesInk(s.color, spec.style.theme);
               const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, isAnimationActive: !reducedMotion };
+              // Presentation attributes reach the drawn path; a `style` prop would not.
+              const fade = { strokeOpacity: alpha(s.id), fillOpacity: alpha(s.id) };
 
               if (s.shape === "bar") {
                 // On the time axis the bar is a ReferenceArea; keep an invisible
@@ -338,7 +344,7 @@ export function ChartCanvas({ spec, chart, height }: ChartCanvasProps) {
                 if (timeMode) return <Bar key={s.id} {...common} fill="none" isAnimationActive={false} />;
                 const r = spec.style.barRadius;
                 return (
-                  <Bar key={s.id} {...common} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: ink, fillOpacity: 0.85 }} />
+                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: ink, fillOpacity: 0.85 }} />
                 );
               }
               if (s.shape === "area") {
@@ -346,6 +352,7 @@ export function ChartCanvas({ spec, chart, height }: ChartCanvasProps) {
                   <Area
                     key={s.id}
                     {...common}
+                    {...fade}
                     type="monotone"
                     stroke={ink}
                     strokeWidth={spec.style.lineWidth}
@@ -360,6 +367,7 @@ export function ChartCanvas({ spec, chart, height }: ChartCanvasProps) {
                 <Line
                   key={s.id}
                   {...common}
+                  {...fade}
                   type="monotone"
                   stroke={ink}
                   strokeWidth={spec.style.lineWidth}
