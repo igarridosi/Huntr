@@ -301,7 +301,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 })}
             </defs>
 
-            {spec.style.grid && <CartesianGrid strokeDasharray="3 3" stroke={theme.grid} strokeOpacity={0.55} vertical={timeMode} />}
+            {spec.style.grid && <CartesianGrid stroke={theme.grid} strokeOpacity={0.9} vertical={timeMode} />}
 
             {timeMode ? (
               <XAxis dataKey="x" type="number" scale="time" domain={timeDomain} axisLine={false} tickLine={false} tick={tick} dy={8} minTickGap={40} tickFormatter={xTickFormatter} />

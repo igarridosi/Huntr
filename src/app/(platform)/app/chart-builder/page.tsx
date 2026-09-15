@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChartColumnStacked, Download, LayoutTemplate, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
+import { ChartColumnStacked, Download, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartControls } from "@/components/chart-builder/chart-controls";
@@ -55,7 +55,6 @@ function ChartBuilder() {
   const { spec, update, reset, undo, redo, canUndo, canRedo } = history;
   const data = useChartData(spec);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -113,7 +112,6 @@ function ChartBuilder() {
       reset(next);
       setSavedRef(null);
       setSelectedId(null);
-      setShowTemplates(false);
     },
     [reset, data.tickers]
   );
@@ -187,6 +185,7 @@ function ChartBuilder() {
   );
 
   const seriesPanel = <SeriesPanel spec={spec} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} />;
+  const templatesPanel = <TemplateGallery variant="list" onPick={pickTemplate} />;
   const designPanel = (
     <DesignPanel
       spec={spec}
@@ -243,12 +242,6 @@ function ChartBuilder() {
             onDelete={deleteSaved}
             onGate={() => openGate("charts")}
           />
-          {!empty && (
-            <Button variant="ghost" size="sm" aria-pressed={showTemplates} onClick={() => setShowTemplates((v) => !v)}>
-              <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
-              Templates
-            </Button>
-          )}
           <Button variant="ghost" size="icon-sm" aria-label="Undo" disabled={!canUndo} onClick={undo}>
             <Undo2 className="h-4 w-4" />
           </Button>
@@ -274,18 +267,17 @@ function ChartBuilder() {
         <StartPrompt onPick={startWith} />
       ) : (
         <div className={cn("grid grid-cols-1 items-start gap-4 lg:grid-cols-[272px_minmax(0,1fr)_264px]", isDesktop && "min-h-0 flex-1 lg:items-stretch")}>
-          {isDesktop && <div className="scroll-quiet min-h-0 overflow-y-auto">{seriesPanel}</div>}
+          {isDesktop && (
+            <div className="flex min-h-0 flex-col gap-4">
+              <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">{seriesPanel}</div>
+              <div className="shrink-0">{templatesPanel}</div>
+            </div>
+          )}
           <div className={cn("flex min-w-0 flex-col gap-3", isDesktop && "min-h-0")}>
             <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} fill={isDesktop} className={isDesktop ? "flex-1" : undefined} />
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-1">
               <ChartControls spec={spec} dates={data.dates} range={data.range} onChange={onChange} />
             </div>
-            {showTemplates && (
-              <div className="shrink-0 rounded-2xl bg-wolf-surface/60 p-3 ring-1 ring-inset ring-wolf-border/50">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Templates · replaces the current chart</p>
-                <TemplateGallery compact onPick={pickTemplate} />
-              </div>
-            )}
           </div>
           {isDesktop && <div className="scroll-quiet min-h-0 overflow-y-auto">{designPanel}</div>}
           {/* Room for the collapsed sheet so the range controls are never under it. */}
@@ -293,7 +285,17 @@ function ChartBuilder() {
         </div>
       )}
 
-      {!empty && !isDesktop && <MobileSheet series={seriesPanel} design={designPanel} />}
+      {!empty && !isDesktop && (
+        <MobileSheet
+          series={
+            <div className="flex flex-col gap-3">
+              {seriesPanel}
+              {templatesPanel}
+            </div>
+          }
+          design={designPanel}
+        />
+      )}
 
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} spec={spec} getFrame={getFrame} onNotify={notify} />
 

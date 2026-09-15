@@ -70,6 +70,7 @@ export interface ChartStyle {
   stacked: boolean;
   barRadius: 0 | 2 | 4;
   lineWidth: 1.5 | 2 | 2.5;
+  /** Kept for older specs; the canvas always carries the watermark now. */
   watermark: boolean;
   yLeftFormat: AxisFormat;
   yRightFormat: AxisFormat;

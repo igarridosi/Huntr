@@ -116,15 +116,18 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
             </li>
           ))}
         </ul>
-        {spec.style.watermark && (
-          <p className="flex shrink-0 items-center gap-1.5 text-[11px]" style={{ color: theme.tick }}>
-            <span>Powered by</span>
-            <span className="text-[10px] font-semibold tracking-[0.12em]" style={{ color: theme.title, opacity: 0.8 }}>
+        {/* The watermark is part of the artifact, not an option: a chart that
+            travels should say where it came from. */}
+        <p className="flex shrink-0 items-center gap-2 text-xs" style={{ color: theme.tick }}>
+          <span>Powered by</span>
+          <span className="inline-flex items-center gap-1.5">
+            {/* eslint-disable-next-line @next/next/no-img-element -- tiny static asset, plain <img> keeps the export path simple */}
+            <img src="/logo/HunterLogoCut-removebg.png" alt="" aria-hidden className="h-5 w-5 object-contain" />
+            <span className="text-[15px] font-semibold tracking-[0.14em]" style={{ color: theme.title }}>
               HUNTR
             </span>
-            <span>· huntrvalue.me</span>
-          </p>
-        )}
+          </span>
+        </p>
       </div>
     </div>
   );

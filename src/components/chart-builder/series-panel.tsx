@@ -41,6 +41,15 @@ const TRANSFORM_LABELS: Record<SeriesTransform, string> = {
   indexed: "Indexed to start %",
 };
 
+/** Chip-sized versions for the row header. */
+const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
+  raw: "",
+  per_share: "/sh",
+  ttm: "TTM",
+  yoy: "YoY",
+  indexed: "Indexed",
+};
+
 const SHAPES: ReadonlyArray<{ key: SeriesShape; label: string }> = [
   { key: "bar", label: "Bar" },
   { key: "line", label: "Line" },
@@ -128,7 +137,7 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
           const chips: string[] = [];
           if (s.shape !== "bar") chips.push(s.shape);
           if (s.axis === "right") chips.push("right");
-          if (s.transform !== "raw") chips.push(TRANSFORM_LABELS[s.transform].split(" ")[0]);
+          if (s.transform !== "raw") chips.push(TRANSFORM_CHIPS[s.transform]);
           const ink = seriesInk(s.color, spec.style.theme);
 
           return (
@@ -148,9 +157,9 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
                       {def.label}
                     </span>
                     {chips.length > 0 && (
-                      <span className="mt-0.5 flex gap-1">
+                      <span className="mt-1 flex flex-wrap gap-1">
                         {chips.map((c) => (
-                          <span key={c} className="rounded bg-mist/10 px-1 font-mono text-[10px] leading-4 text-mist">
+                          <span key={c} className="whitespace-nowrap rounded-md bg-mist/12 px-1.5 font-mono text-[10px] uppercase leading-[18px] tracking-[0.04em] text-mist/85">
                             {c}
                           </span>
                         ))}

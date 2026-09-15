@@ -247,9 +247,6 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
         <Row label="Grid">
           <Switch checked={spec.style.grid} onChange={(grid) => style({ grid })} label="Grid" />
         </Row>
-        <Row label="Watermark">
-          <Switch checked={spec.style.watermark} onChange={(watermark) => style({ watermark })} label="Watermark" />
-        </Row>
       </Group>
 
       <Group title="Bars & lines">

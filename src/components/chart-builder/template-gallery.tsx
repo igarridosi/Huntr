@@ -5,9 +5,13 @@ import { cn } from "@/lib/utils";
 
 interface TemplateGalleryProps {
   onPick: (template: ChartTemplate) => void;
-  /** Compact strip under the canvas rather than the full empty-state grid. */
+  /** `strip`: chips in a row; `list`: one per line for a side panel; default: the full grid. */
+  variant?: "grid" | "strip" | "list";
+  /** @deprecated use `variant="strip"` */
   compact?: boolean;
   activeId?: TemplateId | null;
+  /** Greys the list out when there is nothing to reshape yet. */
+  disabled?: boolean;
 }
 
 /** Static thumbnails: instant, and honest about being a shape, not data. */
@@ -54,8 +58,44 @@ const THUMBS: Record<TemplateId, React.ReactNode> = {
   ),
 };
 
-export function TemplateGallery({ onPick, compact = false, activeId = null }: TemplateGalleryProps) {
-  if (compact) {
+export function TemplateGallery({ onPick, variant, compact = false, activeId = null, disabled = false }: TemplateGalleryProps) {
+  const mode = variant ?? (compact ? "strip" : "grid");
+
+  if (mode === "list") {
+    return (
+      <section aria-label="Templates" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
+        <div className="mb-2 flex items-baseline justify-between px-1">
+          <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Templates</h2>
+          <span className="text-[10px] text-mist">reshapes the current chart</span>
+        </div>
+        <ul className="flex flex-col gap-1">
+          {TEMPLATES.map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                aria-pressed={activeId === t.id}
+                disabled={disabled}
+                onClick={() => onPick(t)}
+                className={cn(
+                  "flex w-full items-center gap-3 rounded-xl px-2 py-1.5 text-left transition-colors duration-150",
+                  "hover:bg-wolf-black/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60 disabled:opacity-40",
+                  activeId === t.id && "bg-sunset-orange/5 ring-1 ring-inset ring-sunset-orange/40"
+                )}
+              >
+                <span className="block h-7 w-12 shrink-0 rounded-md bg-wolf-black/60 p-1 ring-1 ring-inset ring-wolf-border/40">{THUMBS[t.id]}</span>
+                <span className="min-w-0">
+                  <span className="block truncate text-[13px] font-medium text-snow-peak">{t.name}</span>
+                  <span className="block truncate text-[11px] text-mist">{t.description}</span>
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      </section>
+    );
+  }
+
+  if (mode === "strip") {
     return (
       <div className="flex flex-wrap gap-2" aria-label="Templates">
         {TEMPLATES.map((t) => (
