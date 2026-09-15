@@ -1025,6 +1025,134 @@ export async function getFinancialsFromAlphaVantage(
   }
 }
 
+// ─────────────────────────────────────────────────────────
+// Per-statement fetch (Chart Builder)
+// ─────────────────────────────────────────────────────────
+
+export type AlphaStatementKind = "income" | "balance" | "cashflow";
+
+const STATEMENT_FUNCTION: Record<AlphaStatementKind, AlphaFunction> = {
+  income: "INCOME_STATEMENT",
+  balance: "BALANCE_SHEET",
+  cashflow: "CASH_FLOW",
+};
+
+const STATEMENT_CACHE_KEY: Record<AlphaStatementKind, string> = {
+  income: "alpha-income-v1",
+  balance: "alpha-balance-v1",
+  cashflow: "alpha-cashflow-v1",
+};
+
+const STATEMENT_TTL_MS = 12 * 60 * 60 * 1000;
+const STATEMENT_STALE_MS = 7 * 24 * 60 * 60 * 1000;
+
+export interface AlphaStatementsOptions {
+  /** Only answer from cache; never spend an API call. */
+  cachedOnly?: boolean;
+}
+
+/**
+ * The statements a chart needs and nothing more. Alpha Vantage has no
+ * per-field endpoint — INCOME_STATEMENT, BALANCE_SHEET and CASH_FLOW are
+ * the finest grain — so asking for one statement instead of the bundle
+ * turns three or four calls per ticker into one. Each statement is cached
+ * on its own, and a full bundle already in cache answers for any subset.
+ *
+ * Returns `CompanyFinancials` with only the requested statements filled
+ * (the others are empty arrays), or null when `cachedOnly` and something
+ * requested is not cached. Throttle errors propagate like everywhere else.
+ */
+export async function getAlphaStatements(
+  ticker: string,
+  apiKey: string,
+  which: readonly AlphaStatementKind[],
+  options: AlphaStatementsOptions = {}
+): Promise<CompanyFinancials | null> {
+  const symbol = ticker.toUpperCase();
+  const wanted = Array.from(new Set(which));
+  if (wanted.length === 0) return null;
+
+  const full = await getCachedDataState<CompanyFinancials>(
+    symbol,
+    "financials-alpha-v2",
+    STATEMENT_TTL_MS,
+    STATEMENT_STALE_MS
+  );
+  if (full.status !== "miss" && full.data && full.data.income_statement?.annual?.length) {
+    return full.data;
+  }
+
+  const raw: Partial<Record<AlphaStatementKind, AlphaFinancialResponse>> = {};
+  for (const kind of wanted) {
+    const cached = await getCachedDataState<AlphaFinancialResponse>(
+      symbol,
+      STATEMENT_CACHE_KEY[kind],
+      STATEMENT_TTL_MS,
+      STATEMENT_STALE_MS
+    );
+    if (cached.status !== "miss" && cached.data) {
+      raw[kind] = cached.data;
+      continue;
+    }
+    if (options.cachedOnly) return null;
+    const response = (await fetchWithRetry(symbol, STATEMENT_FUNCTION[kind], apiKey)) as AlphaFinancialResponse;
+    if (response.annualReports?.length || response.quarterlyReports?.length) {
+      await setCachedData(symbol, STATEMENT_CACHE_KEY[kind], response as unknown as Record<string, unknown>);
+    }
+    raw[kind] = response;
+  }
+
+  const balanceAnnual = raw.balance ? mapBalance(raw.balance.annualReports, "annual") : [];
+  const balanceQuarterly = raw.balance ? mapBalance(raw.balance.quarterlyReports, "quarterly") : [];
+
+  let incomeAnnual: IncomeStatement[] = [];
+  let incomeQuarterly: IncomeStatement[] = [];
+  if (raw.income) {
+    const hasEps = (rows?: AlphaFinancialReport[]) =>
+      (rows ?? []).some((row) => parseNumber(row.dilutedEPS) !== 0 || parseNumber(row.reportedEPS) !== 0);
+    let earnings: AlphaEarningsResponse = {};
+    if (!options.cachedOnly && (!hasEps(raw.income.annualReports) || !hasEps(raw.income.quarterlyReports))) {
+      try {
+        earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
+      } catch (error) {
+        if (isAlphaThrottleError(error)) throw error;
+      }
+    }
+    const annualEps = buildEpsMaps(earnings.annualEarnings, "annual");
+    const quarterlyEps = buildEpsMaps(earnings.quarterlyEarnings, "quarterly");
+    incomeAnnual = mapIncome(
+      raw.income.annualReports,
+      "annual",
+      annualEps.byDate,
+      annualEps.byPeriod,
+      new Map(balanceAnnual.map((row) => [row.date, row.shares_outstanding])),
+      buildSharesPeriodMap(balanceAnnual, "annual")
+    );
+    incomeQuarterly = mapIncome(
+      raw.income.quarterlyReports,
+      "quarterly",
+      quarterlyEps.byDate,
+      quarterlyEps.byPeriod,
+      new Map(balanceQuarterly.map((row) => [row.date, row.shares_outstanding])),
+      buildSharesPeriodMap(balanceQuarterly, "quarterly")
+    );
+  }
+
+  const cashAnnual = raw.cashflow ? mapCashFlow(raw.cashflow.annualReports, "annual") : [];
+  const cashQuarterly = raw.cashflow ? mapCashFlow(raw.cashflow.quarterlyReports, "quarterly") : [];
+
+  const rows =
+    incomeAnnual.length + incomeQuarterly.length + balanceAnnual.length + balanceQuarterly.length + cashAnnual.length + cashQuarterly.length;
+  if (rows === 0) return null;
+
+  return {
+    ticker: symbol,
+    income_statement: { annual: incomeAnnual, quarterly: incomeQuarterly },
+    balance_sheet: { annual: balanceAnnual, quarterly: balanceQuarterly },
+    cash_flow: { annual: cashAnnual, quarterly: cashQuarterly },
+  };
+}
+
 export async function getEarningsInsightFromAlphaVantage(
   ticker: string,
   apiKey: string

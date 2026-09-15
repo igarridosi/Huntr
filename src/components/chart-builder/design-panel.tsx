@@ -22,12 +22,15 @@ import {
   type PeriodAlignment,
   type SeriesShape,
   type SeriesTransform,
+  type StatementKind,
   type ValueLabels,
 } from "@/lib/chart-builder";
 
 export interface DataSourceState {
-  /** Tickers whose statements come from the full Alpha Vantage history. */
+  /** Tickers whose statements come from the Alpha Vantage history. */
   deepTickers: string[];
+  /** Statements the chart reads — what a load will ask for. */
+  statements: readonly StatementKind[];
   loading: boolean;
   /** Why the deep source cannot be used right now, if it cannot. */
   blocked?: "throttled" | "not_configured" | null;
@@ -97,7 +100,12 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
     { key: "area", label: "Area" },
   ];
 
-  const allDeep = spec.series.length > 0 && spec.series.every((s) => dataSource.deepTickers.includes(s.ticker));
+  const tickers = Array.from(new Set(spec.series.map((s) => s.ticker)));
+  const missingDeep = tickers.filter((t) => !dataSource.deepTickers.includes(t));
+  const allDeep = tickers.length > 0 && missingDeep.length === 0;
+  const someDeep = dataSource.deepTickers.length > 0 && !allDeep;
+  const statementNames: Record<StatementKind, string> = { income: "income statement", balance: "balance sheet", cashflow: "cash flow" };
+  const askFor = dataSource.statements.map((k) => statementNames[k]).join(" + ");
 
   return (
     <section aria-label="Design" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
@@ -148,16 +156,16 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             onClick={dataSource.onLoadDeep}
           >
             {dataSource.loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Database className="mr-1.5 h-3.5 w-3.5" />}
-            {allDeep ? "20-year history loaded" : "Load 20-year history"}
+            {allDeep ? "20-year history loaded" : someDeep ? `Load history for ${missingDeep.length} more` : "Load 20-year history"}
           </Button>
           <p className="px-1 text-[11px] leading-snug text-mist">
             {allDeep
               ? "Powered by Alpha Vantage · full statement history."
               : dataSource.blocked === "throttled"
-                ? "Alpha Vantage is rate-limited right now; showing Yahoo Finance data."
-                : dataSource.deepTickers.length > 0
-                  ? `Alpha Vantage for ${dataSource.deepTickers.join(", ")}; Yahoo Finance for the rest.`
-                  : "Yahoo Finance · last few periods. Alpha Vantage adds up to 20 years."}
+                ? "Alpha Vantage is rate-limited right now; the rest stay on Yahoo Finance until it clears."
+                : someDeep
+                  ? `Alpha Vantage for ${dataSource.deepTickers.join(", ")}; Yahoo Finance for ${missingDeep.join(", ")}.${spec.align === "common" ? " With Periods on Common the chart shows only what every company has — load the rest or switch to All." : ""}`
+                  : `Yahoo Finance · last few periods. Alpha Vantage adds up to 20 years — ${dataSource.statements.length || 1} call${dataSource.statements.length === 1 ? "" : "s"} per company (${askFor || "income statement"} only).`}
           </p>
         </div>
       </Group>

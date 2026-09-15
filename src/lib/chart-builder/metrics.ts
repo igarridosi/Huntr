@@ -24,6 +24,9 @@ import type {
 
 export type MetricSource = "statements" | "price" | "market";
 
+/** Which of the three statements a metric reads; drives what to fetch. */
+export type StatementKind = "income" | "balance" | "cashflow";
+
 /** Drives axis formatting and which transforms make sense. */
 export type MetricUnit =
   | "currency"   // absolute money, compact ($1.8t)
@@ -78,6 +81,8 @@ export interface MetricDef {
   unit: MetricUnit;
   kind: MetricKind;
   source: MetricSource;
+  /** Statements the reader/deriver touches (empty for price). */
+  statements: readonly StatementKind[];
   read?: StatementReader;
   derive?: (ctx: MarketContext) => number | null;
 }
@@ -223,65 +228,65 @@ export type MetricId = (typeof METRIC_IDS)[number];
 
 const defs: Record<MetricId, Omit<MetricDef, "id">> = {
   // Income
-  revenue: { label: "Revenue", short: "Rev", group: "Income", unit: "currency", kind: "flow", source: "statements", read: revenue },
-  cost_of_revenue: { label: "Cost of revenue", short: "COGS", group: "Income", unit: "currency", kind: "flow", source: "statements", read: abs(inc("cost_of_revenue")) },
-  gross_profit: { label: "Gross profit", short: "GP", group: "Income", unit: "currency", kind: "flow", source: "statements", read: inc("gross_profit") },
-  operating_expenses: { label: "Operating expenses", short: "OpEx", group: "Income", unit: "currency", kind: "flow", source: "statements", read: abs(inc("operating_expenses")) },
-  operating_income: { label: "Operating income", short: "EBIT", group: "Income", unit: "currency", kind: "flow", source: "statements", read: inc("operating_income") },
-  ebitda: { label: "EBITDA", short: "EBITDA", group: "Income", unit: "currency", kind: "flow", source: "statements", read: ebitda },
-  pre_tax_income: { label: "Pre-tax income", short: "EBT", group: "Income", unit: "currency", kind: "flow", source: "statements", read: inc("pre_tax_income") },
-  income_tax: { label: "Income tax", short: "Tax", group: "Income", unit: "currency", kind: "flow", source: "statements", read: abs(inc("income_tax")) },
-  net_income: { label: "Net income", short: "NI", group: "Income", unit: "currency", kind: "flow", source: "statements", read: netIncome },
+  revenue: { label: "Revenue", short: "Rev", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: revenue },
+  cost_of_revenue: { label: "Cost of revenue", short: "COGS", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: abs(inc("cost_of_revenue")) },
+  gross_profit: { label: "Gross profit", short: "GP", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: inc("gross_profit") },
+  operating_expenses: { label: "Operating expenses", short: "OpEx", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: abs(inc("operating_expenses")) },
+  operating_income: { label: "Operating income", short: "EBIT", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: inc("operating_income") },
+  ebitda: { label: "EBITDA", short: "EBITDA", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: ebitda },
+  pre_tax_income: { label: "Pre-tax income", short: "EBT", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: inc("pre_tax_income") },
+  income_tax: { label: "Income tax", short: "Tax", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: abs(inc("income_tax")) },
+  net_income: { label: "Net income", short: "NI", group: "Income", unit: "currency", kind: "flow", source: "statements", statements: ["income"], read: netIncome },
 
   // Cash flow
-  operating_cash_flow: { label: "Operating cash flow", short: "OCF", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: cf("operating_cash_flow") },
-  capex: { label: "Capital expenditures", short: "CapEx", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: capex },
-  free_cash_flow: { label: "Free cash flow", short: "FCF", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: fcf },
-  dividends_paid: { label: "Dividends paid", short: "Div", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: dividends },
-  share_repurchases: { label: "Share repurchases", short: "Buyback", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: buybacks },
-  shareholder_returns: { label: "Dividends + buybacks", short: "Returns", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: sum(dividends, buybacks) },
-  net_change_in_cash: { label: "Net change in cash", short: "ΔCash", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", read: cf("net_change_in_cash") },
+  operating_cash_flow: { label: "Operating cash flow", short: "OCF", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: cf("operating_cash_flow") },
+  capex: { label: "Capital expenditures", short: "CapEx", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: capex },
+  free_cash_flow: { label: "Free cash flow", short: "FCF", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: fcf },
+  dividends_paid: { label: "Dividends paid", short: "Div", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: dividends },
+  share_repurchases: { label: "Share repurchases", short: "Buyback", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: buybacks },
+  shareholder_returns: { label: "Dividends + buybacks", short: "Returns", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: sum(dividends, buybacks) },
+  net_change_in_cash: { label: "Net change in cash", short: "ΔCash", group: "Cash flow", unit: "currency", kind: "flow", source: "statements", statements: ["cashflow"], read: cf("net_change_in_cash") },
 
   // Balance
-  cash_and_equivalents: { label: "Cash & equivalents", short: "Cash", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: bal("cash_and_equivalents") },
-  total_cash: { label: "Cash + short-term investments", short: "Cash+STI", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: totalCash },
-  long_term_debt: { label: "Long-term debt", short: "Debt", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: debt },
-  net_debt: { label: "Net debt", short: "Net debt", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: sub(debt, totalCash) },
-  total_assets: { label: "Total assets", short: "Assets", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: bal("total_assets") },
-  total_liabilities: { label: "Total liabilities", short: "Liab", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: bal("total_liabilities") },
-  total_equity: { label: "Shareholders' equity", short: "Equity", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: equity },
-  retained_earnings: { label: "Retained earnings", short: "RE", group: "Balance", unit: "currency", kind: "stock", source: "statements", read: bal("retained_earnings") },
+  cash_and_equivalents: { label: "Cash & equivalents", short: "Cash", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: bal("cash_and_equivalents") },
+  total_cash: { label: "Cash + short-term investments", short: "Cash+STI", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: totalCash },
+  long_term_debt: { label: "Long-term debt", short: "Debt", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: debt },
+  net_debt: { label: "Net debt", short: "Net debt", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: sub(debt, totalCash) },
+  total_assets: { label: "Total assets", short: "Assets", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: bal("total_assets") },
+  total_liabilities: { label: "Total liabilities", short: "Liab", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: bal("total_liabilities") },
+  total_equity: { label: "Shareholders' equity", short: "Equity", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: equity },
+  retained_earnings: { label: "Retained earnings", short: "RE", group: "Balance", unit: "currency", kind: "stock", source: "statements", statements: ["balance"], read: bal("retained_earnings") },
 
   // Per share
-  eps_diluted: { label: "EPS (diluted)", short: "EPS", group: "Per share", unit: "per_share", kind: "flow", source: "statements", read: inc("eps_diluted") },
-  eps_basic: { label: "EPS (basic)", short: "EPS basic", group: "Per share", unit: "per_share", kind: "flow", source: "statements", read: inc("eps_basic") },
-  fcf_per_share: { label: "FCF per share", short: "FCF/sh", group: "Per share", unit: "per_share", kind: "flow", source: "statements", read: div(fcf, sharesDiluted) },
-  book_value_per_share: { label: "Book value per share", short: "BV/sh", group: "Per share", unit: "per_share", kind: "stock", source: "statements", read: div(equity, sharesDiluted) },
-  shares_outstanding_diluted: { label: "Shares outstanding (diluted)", short: "Shares", group: "Per share", unit: "shares", kind: "stock", source: "statements", read: sharesDiluted },
+  eps_diluted: { label: "EPS (diluted)", short: "EPS", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income"], read: inc("eps_diluted") },
+  eps_basic: { label: "EPS (basic)", short: "EPS basic", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income"], read: inc("eps_basic") },
+  fcf_per_share: { label: "FCF per share", short: "FCF/sh", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income", "cashflow"], read: div(fcf, sharesDiluted) },
+  book_value_per_share: { label: "Book value per share", short: "BV/sh", group: "Per share", unit: "per_share", kind: "stock", source: "statements", statements: ["income", "balance"], read: div(equity, sharesDiluted) },
+  shares_outstanding_diluted: { label: "Shares outstanding (diluted)", short: "Shares", group: "Per share", unit: "shares", kind: "stock", source: "statements", statements: ["income"], read: sharesDiluted },
 
   // Margins & returns
-  gross_margin: { label: "Gross margin", short: "GM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", read: pct(inc("gross_profit"), revenue) },
-  operating_margin: { label: "Operating margin", short: "OM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", read: pct(inc("operating_income"), revenue) },
-  net_margin: { label: "Net margin", short: "NM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", read: pct(netIncome, revenue) },
-  fcf_margin: { label: "FCF margin", short: "FCF %", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", read: pct(fcf, revenue) },
-  payout_ratio: { label: "Payout ratio", short: "Payout", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", read: pct(dividends, netIncome) },
-  roe: { label: "Return on equity", short: "ROE", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", read: pct(netIncome, equity) },
-  debt_to_equity: { label: "Debt to equity", short: "D/E", group: "Margins & returns", unit: "ratio", kind: "ratio", source: "statements", read: div(debt, equity) },
+  gross_margin: { label: "Gross margin", short: "GM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(inc("gross_profit"), revenue) },
+  operating_margin: { label: "Operating margin", short: "OM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(inc("operating_income"), revenue) },
+  net_margin: { label: "Net margin", short: "NM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(netIncome, revenue) },
+  fcf_margin: { label: "FCF margin", short: "FCF %", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "cashflow"], read: pct(fcf, revenue) },
+  payout_ratio: { label: "Payout ratio", short: "Payout", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "cashflow"], read: pct(dividends, netIncome) },
+  roe: { label: "Return on equity", short: "ROE", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "balance"], read: pct(netIncome, equity) },
+  debt_to_equity: { label: "Debt to equity", short: "D/E", group: "Margins & returns", unit: "ratio", kind: "ratio", source: "statements", statements: ["balance"], read: div(debt, equity) },
 
   // Market (price × statements)
-  price: { label: "Price", short: "Price", group: "Market", unit: "price", kind: "price", source: "price" },
-  market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", derive: marketCap },
-  enterprise_value: { label: "Enterprise value", short: "EV", group: "Market", unit: "currency", kind: "stock", source: "market", derive: enterpriseValue },
-  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", derive: (ctx) => ratio(ctx.price, ctx.flow(inc("eps_diluted"))) },
-  price_to_sales: { label: "Price to sales", short: "P/S", group: "Market", unit: "ratio", kind: "ratio", source: "market", derive: (ctx) => ratio(marketCap(ctx), ctx.flow(revenue)) },
-  price_to_book: { label: "Price to book", short: "P/B", group: "Market", unit: "ratio", kind: "ratio", source: "market", derive: (ctx) => ratio(marketCap(ctx), ctx.stock(equity)) },
-  price_to_fcf: { label: "Price to FCF", short: "P/FCF", group: "Market", unit: "ratio", kind: "ratio", source: "market", derive: (ctx) => ratio(marketCap(ctx), ctx.flow(fcf)) },
-  ev_to_ebitda: { label: "EV / EBITDA", short: "EV/EBITDA", group: "Market", unit: "ratio", kind: "ratio", source: "market", derive: (ctx) => ratio(enterpriseValue(ctx), ctx.flow(ebitda)) },
-  earnings_yield: { label: "Earnings yield", short: "E/P", group: "Market", unit: "percent", kind: "ratio", source: "market", derive: (ctx) => yieldPct(ctx.flow(netIncome), marketCap(ctx)) },
-  fcf_yield: { label: "FCF yield", short: "FCF yld", group: "Market", unit: "percent", kind: "ratio", source: "market", derive: (ctx) => yieldPct(ctx.flow(fcf), marketCap(ctx)) },
-  dividend_yield: { label: "Dividend yield", short: "Div yld", group: "Market", unit: "percent", kind: "ratio", source: "market", derive: (ctx) => yieldPct(ctx.flow(dividends), marketCap(ctx)) },
-  buyback_yield: { label: "Buyback yield", short: "BB yld", group: "Market", unit: "percent", kind: "ratio", source: "market", derive: (ctx) => yieldPct(ctx.flow(buybacks), marketCap(ctx)) },
-  shareholder_yield: { label: "Shareholder yield", short: "SH yld", group: "Market", unit: "percent", kind: "ratio", source: "market", derive: (ctx) => yieldPct(ctx.flow(sum(dividends, buybacks)), marketCap(ctx)) },
+  price: { label: "Price", short: "Price", group: "Market", unit: "price", kind: "price", source: "price", statements: [] },
+  market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income"], derive: marketCap },
+  enterprise_value: { label: "Enterprise value", short: "EV", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: enterpriseValue },
+  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(ctx.price, ctx.flow(inc("eps_diluted"))) },
+  price_to_sales: { label: "Price to sales", short: "P/S", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(revenue)) },
+  price_to_book: { label: "Price to book", short: "P/B", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(marketCap(ctx), ctx.stock(equity)) },
+  price_to_fcf: { label: "Price to FCF", short: "P/FCF", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(fcf)) },
+  ev_to_ebitda: { label: "EV / EBITDA", short: "EV/EBITDA", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(enterpriseValue(ctx), ctx.flow(ebitda)) },
+  earnings_yield: { label: "Earnings yield", short: "E/P", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => yieldPct(ctx.flow(netIncome), marketCap(ctx)) },
+  fcf_yield: { label: "FCF yield", short: "FCF yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(fcf), marketCap(ctx)) },
+  dividend_yield: { label: "Dividend yield", short: "Div yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(dividends), marketCap(ctx)) },
+  buyback_yield: { label: "Buyback yield", short: "BB yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(buybacks), marketCap(ctx)) },
+  shareholder_yield: { label: "Shareholder yield", short: "SH yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(sum(dividends, buybacks)), marketCap(ctx)) },
 };
 
 export const METRICS: Record<MetricId, MetricDef> = Object.fromEntries(

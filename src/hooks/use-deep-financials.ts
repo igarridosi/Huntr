@@ -1,66 +1,52 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { fetchAlphaFinancials, getAlphaAvailability } from "@/app/actions/stock";
-import { QUERY_KEYS } from "@/lib/constants";
+import { fetchAlphaStatements, getAlphaAvailability } from "@/app/actions/stock";
 import { useAuthGate } from "@/providers/auth-gate-provider";
 import { useSupabase } from "@/providers/supabase-provider";
-import type { CompanyFinancials } from "@/types/financials";
-
-/** More history than Yahoo's quick statements ever carry. */
-const DEEP_QUARTERS = 8;
-
-export function isDeepFinancials(fin: CompanyFinancials | null | undefined): boolean {
-  return !!fin && (fin.income_statement.quarterly.length > DEEP_QUARTERS || fin.income_statement.annual.length > 5);
-}
+import type { StatementKind } from "@/lib/chart-builder";
+import { deepQueryKey } from "./use-chart-data";
 
 export interface DeepFinancialsState {
-  /** Tickers whose statements in the cache come from Alpha Vantage. */
-  deepTickers: string[];
   loading: boolean;
   blocked: "throttled" | "not_configured" | null;
-  /** Loads the full history for the tickers that do not have it yet. */
-  load: (tickers: string[]) => Promise<void>;
+  /** Loads the chart's statements for the tickers that lack them. */
+  load: (tickers: string[], statements: StatementKind[]) => Promise<void>;
 }
 
 export interface DeepLoadOutcome {
   loaded: string[];
   limitHit: boolean;
   failed: string[];
+  /** Alpha Vantage calls this run cost at most (one per statement per ticker). */
+  calls: number;
 }
 
 /**
- * The Chart Builder's "Load 20-year history": the same Alpha Vantage flow
- * the ticker page uses, applied to every ticker on the chart and written
- * into the React Query cache under the keys the chart reads, so the plot
- * updates as each company arrives. Guests are sent to the auth gate;
- * a rate limit stops the run and leaves the rest on Yahoo data.
+ * The Chart Builder's "Load 20-year history": Alpha Vantage, but only the
+ * statements the chart reads — one call per statement per ticker instead
+ * of the ticker page's full bundle — written into the deep overlay the
+ * chart merges over its quick data. Guests are sent to the auth gate; a
+ * rate limit stops the run and leaves the rest on Yahoo data.
  */
-export function useDeepFinancials(
-  tickers: string[],
-  financials: Record<string, CompanyFinancials | null | undefined>,
-  onDone?: (outcome: DeepLoadOutcome) => void
-): DeepFinancialsState {
+export function useDeepFinancials(onDone?: (outcome: DeepLoadOutcome) => void): DeepFinancialsState {
   const queryClient = useQueryClient();
   const { user } = useSupabase();
   const { openGate } = useAuthGate();
   const [loading, setLoading] = useState(false);
   const [blocked, setBlocked] = useState<"throttled" | "not_configured" | null>(null);
 
-  const deepTickers = useMemo(() => tickers.filter((t) => isDeepFinancials(financials[t])), [tickers, financials]);
-
   const load = useCallback(
-    async (wanted: string[]) => {
-      const todo = wanted.filter((t) => !isDeepFinancials(financials[t]));
-      if (todo.length === 0 || loading) return;
+    async (tickers: string[], statements: StatementKind[]) => {
+      if (tickers.length === 0 || statements.length === 0 || loading) return;
       if (!user) {
         openGate("deepData");
         return;
       }
       setLoading(true);
       setBlocked(null);
-      const outcome: DeepLoadOutcome = { loaded: [], limitHit: false, failed: [] };
+      const outcome: DeepLoadOutcome = { loaded: [], limitHit: false, failed: [], calls: tickers.length * statements.length };
       try {
         const availability = await getAlphaAvailability();
         if (!availability.available) {
@@ -69,16 +55,14 @@ export function useDeepFinancials(
           return;
         }
         // Sequential on purpose: Alpha Vantage counts calls per minute.
-        for (const ticker of todo) {
+        for (const ticker of tickers) {
           try {
-            const data = await withTimeout(fetchAlphaFinancials(ticker), 50_000);
+            const data = await withTimeout(fetchAlphaStatements(ticker, statements, false), 50_000);
             if (!data) {
               outcome.failed.push(ticker);
               continue;
             }
-            for (const granularity of ["annual", "quarterly"] as const) {
-              queryClient.setQueryData([...QUERY_KEYS.FINANCIALS(ticker), granularity], data);
-            }
+            queryClient.setQueryData(deepQueryKey(ticker, statements), data);
             outcome.loaded.push(ticker);
           } catch (error) {
             if (isAlphaLimitError(error)) {
@@ -94,10 +78,10 @@ export function useDeepFinancials(
         onDone?.(outcome);
       }
     },
-    [financials, loading, user, openGate, queryClient, onDone]
+    [loading, user, openGate, queryClient, onDone]
   );
 
-  return { deepTickers, loading, blocked, load };
+  return { loading, blocked, load };
 }
 
 function isAlphaLimitError(error: unknown): boolean {

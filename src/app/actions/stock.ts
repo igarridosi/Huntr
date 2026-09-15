@@ -11,7 +11,7 @@ import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
 import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
-import { getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState } from "@/lib/api/alphavantage";
+import { getAlphaStatements, getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState, type AlphaStatementKind } from "@/lib/api/alphavantage";
 import { getCachedDataState, setCachedData, withSingleFlight, getBatchCachedScreenerMetrics } from "@/lib/api/cache";
 import type { ScreenerMetrics } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
@@ -147,6 +147,34 @@ export async function fetchAlphaFinancials(
     await setCachedData(normalizedTicker, "financials-alpha-v2", alphaFinancials);
     return alphaFinancials;
   }).catch((error) => {
+    if (isAlphaThrottleError(error)) {
+      throw new Error("ALPHA_VANTAGE_LIMIT_REACHED");
+    }
+    throw error;
+  });
+}
+
+/**
+ * Chart Builder: only the statements a chart reads, one Alpha Vantage
+ * call per statement. With `cachedOnly` it never spends a call and
+ * returns null when the cache has nothing, so the builder can pick up
+ * history loaded earlier without touching the quota.
+ */
+export async function fetchAlphaStatements(
+  ticker: string,
+  statements: AlphaStatementKind[],
+  cachedOnly = false
+): Promise<CompanyFinancials | null> {
+  const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  if (!alphaKey) return null;
+  const normalizedTicker = sanitizeTicker(ticker);
+  const allowed = statements.filter((s): s is AlphaStatementKind => s === "income" || s === "balance" || s === "cashflow");
+  if (allowed.length === 0) return null;
+
+  const run = () => getAlphaStatements(normalizedTicker, alphaKey, allowed, { cachedOnly });
+  if (cachedOnly) return run();
+
+  return withSingleFlight(`${normalizedTicker}:alpha-statements:${allowed.sort().join("+")}`, run).catch((error) => {
     if (isAlphaThrottleError(error)) {
       throw new Error("ALPHA_VANTAGE_LIMIT_REACHED");
     }

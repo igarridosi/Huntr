@@ -67,13 +67,14 @@ function ChartBuilder() {
 
   const onDeepDone = useCallback(
     (o: DeepLoadOutcome) => {
-      if (o.limitHit) notify("Alpha Vantage is rate-limited", "Showing Yahoo Finance data for the rest; try again later.", "warning");
+      if (o.limitHit && o.loaded.length > 0) notify("Alpha Vantage limit reached", `${o.loaded.join(", ")} loaded; the rest stay on Yahoo Finance for now.`, "warning");
+      else if (o.limitHit) notify("Alpha Vantage is rate-limited", "Showing Yahoo Finance data; try again in a minute.", "warning");
       else if (o.loaded.length > 0) notify("20-year history loaded", `${o.loaded.join(", ")} now come from Alpha Vantage.`);
       else if (o.failed.length > 0) notify("History unavailable", `No Alpha Vantage statements for ${o.failed.join(", ")}.`, "warning");
     },
     [notify]
   );
-  const deep = useDeepFinancials(data.tickers, data.financials, onDeepDone);
+  const deep = useDeepFinancials(onDeepDone);
 
   const watchlist = useQuery({
     queryKey: ["watchlist", "default-tickers"],
@@ -131,10 +132,15 @@ function ChartBuilder() {
       spec={spec}
       onChange={onChange}
       dataSource={{
-        deepTickers: deep.deepTickers,
+        deepTickers: data.deepTickers,
+        statements: data.statements,
         loading: deep.loading,
         blocked: deep.blocked,
-        onLoadDeep: () => deep.load(data.tickers),
+        onLoadDeep: () =>
+          deep.load(
+            data.tickers.filter((t) => !data.deepTickers.includes(t)),
+            data.statements
+          ),
       }}
     />
   );

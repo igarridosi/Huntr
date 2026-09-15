@@ -2,27 +2,46 @@
 
 import { useMemo } from "react";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
-import { fetchCompanyFinancials } from "@/app/actions/stock";
+import { fetchAlphaStatements, fetchCompanyFinancials } from "@/app/actions/stock";
 import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
-import { METRICS, resolveChart, type ChartSpec, type ResolveInputs, type ResolvedChart } from "@/lib/chart-builder";
+import {
+  METRICS,
+  coversStatements,
+  mergeFinancials,
+  resolveChart,
+  statementsFor,
+  type ChartSpec,
+  type ResolveInputs,
+  type ResolvedChart,
+  type StatementKind,
+} from "@/lib/chart-builder";
 import type { CompanyFinancials } from "@/types/financials";
 import { useBatchDailyHistory } from "./use-stock-data";
 
-type StatementResult = UseQueryResult<CompanyFinancials | null>;
+type FinResult = UseQueryResult<CompanyFinancials | null>;
 
-function combineStatements(results: StatementResult[]) {
+function combineFinancials(results: FinResult[]) {
   return {
     data: results.map((r) => r.data),
     pending: results.map((r) => r.isPending),
   };
 }
 
+/** Cache key of the deep-history overlay for one ticker and statement set. */
+export function deepQueryKey(ticker: string, statements: readonly StatementKind[]) {
+  return ["chart-builder", "deep", ticker, statements.join("+")] as const;
+}
+
 export interface ChartData {
   chart: ResolvedChart;
-  /** Statements per ticker as currently cached (undefined while loading). */
+  /** Quick statements per ticker with the deep overlay merged in. */
   financials: Record<string, CompanyFinancials | null | undefined>;
   /** Every distinct ticker on the chart. */
   tickers: string[];
+  /** Statements the chart's metrics read. */
+  statements: StatementKind[];
+  /** Tickers whose statements come from the deep (Alpha Vantage) overlay. */
+  deepTickers: string[];
   /** Tickers whose statements or prices are still on their way. */
   pendingTickers: string[];
   /** True until every needed query has settled at least once. */
@@ -32,78 +51,81 @@ export interface ChartData {
 /**
  * Fetches what a spec needs and resolves it.
  *
- * Statements are one query per ticker under the same key `useFinancials`
- * uses, so a company opened earlier on its ticker page is already in the
- * cache. `fetchCompanyFinancials` returns annual and quarterly together;
- * granularity is a resolver concern, but it stays in the key to match the
- * existing hook. Prices come in one batch for every ticker that needs them.
+ * Quick statements are one query per ticker under the same key
+ * `useFinancials` uses, so a company opened earlier on its ticker page is
+ * already in the cache. On top of that, a deep overlay per ticker holds
+ * only the statements this chart reads, from Alpha Vantage: read from the
+ * server cache for free here, filled by "Load 20-year history". Kept
+ * under its own key because it is partial — the ticker page must never
+ * see an income-only object under the shared key.
  */
 export function useChartData(spec: ChartSpec): ChartData {
-  const tickers = useMemo(
-    () => Array.from(new Set(spec.series.map((s) => s.ticker))),
-    [spec.series]
-  );
+  const tickers = useMemo(() => Array.from(new Set(spec.series.map((s) => s.ticker))), [spec.series]);
   const statementTickers = useMemo(
-    () =>
-      tickers.filter((t) =>
-        spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "price")
-      ),
+    () => tickers.filter((t) => spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "price")),
     [tickers, spec.series]
   );
   const priceTickers = useMemo(
-    () =>
-      tickers.filter((t) =>
-        spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "statements")
-      ),
+    () => tickers.filter((t) => spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "statements")),
     [tickers, spec.series]
   );
+  const statements = useMemo(() => statementsFor(spec), [spec]);
+  const statementsKey = statements.join("+");
 
-  const statements = useQueries({
+  const quick = useQueries({
     queries: statementTickers.map((ticker) => ({
       queryKey: [...QUERY_KEYS.FINANCIALS(ticker), spec.granularity],
       queryFn: () => fetchCompanyFinancials(ticker),
       staleTime: STALE_TIMES.FINANCIALS,
-      meta: { ticker },
     })),
-    // A stable `combine` lets React Query hand back the same object while
-    // nothing inside changed, which keeps the memos below honest.
-    combine: combineStatements,
+    combine: combineFinancials,
+  });
+
+  const deep = useQueries({
+    queries: statementTickers.map((ticker) => ({
+      queryKey: deepQueryKey(ticker, statements),
+      // Cache-only: never spends an Alpha Vantage call by itself.
+      queryFn: () => (statements.length ? fetchAlphaStatements(ticker, statements, true) : Promise.resolve(null)),
+      staleTime: STALE_TIMES.STATIC,
+    })),
+    combine: combineFinancials,
   });
 
   const prices = useBatchDailyHistory(priceTickers, "ALL", priceTickers.length > 0);
 
-  const financials = useMemo(() => {
+  const { financials, deepTickers } = useMemo(() => {
     const out: Record<string, CompanyFinancials | null | undefined> = {};
+    const deepList: string[] = [];
     statementTickers.forEach((ticker, i) => {
-      out[ticker] = statements.data[i];
+      const overlay = deep.data[i];
+      const covered = coversStatements(overlay, statements);
+      if (covered) deepList.push(ticker);
+      out[ticker] = quick.pending[i] && !covered ? undefined : mergeFinancials(quick.data[i], covered ? overlay : null);
     });
-    return out;
-  }, [statementTickers, statements.data]);
+    return { financials: out, deepTickers: deepList };
+    // statementsKey stands in for the statements array's identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey]);
 
   const pendingTickers = useMemo(() => {
     const pending = new Set<string>();
     statementTickers.forEach((ticker, i) => {
-      if (statements.pending[i]) pending.add(ticker);
+      if (quick.pending[i] && !deepTickers.includes(ticker)) pending.add(ticker);
     });
     if (prices.isPending && priceTickers.length > 0) priceTickers.forEach((t) => pending.add(t));
     return Array.from(pending);
-  }, [statementTickers, statements.pending, priceTickers, prices.isPending]);
+  }, [statementTickers, quick.pending, deepTickers, priceTickers, prices.isPending]);
 
   const chart = useMemo(() => {
     const inputs: ResolveInputs = {
       // A ticker still loading is left out entirely so the resolver does not
       // warn about "no statements" for something that is merely on its way.
-      financials: Object.fromEntries(
-        Object.entries(financials).filter(([t]) => !pendingTickers.includes(t))
-      ),
+      financials: Object.fromEntries(Object.entries(financials).filter(([t]) => !pendingTickers.includes(t))),
       prices: prices.data ?? {},
     };
-    const visible: ChartSpec = {
-      ...spec,
-      series: spec.series.filter((s) => !pendingTickers.includes(s.ticker)),
-    };
+    const visible: ChartSpec = { ...spec, series: spec.series.filter((s) => !pendingTickers.includes(s.ticker)) };
     return resolveChart(visible, inputs);
   }, [spec, financials, prices.data, pendingTickers]);
 
-  return { chart, financials, tickers, pendingTickers, isLoading: pendingTickers.length > 0 };
+  return { chart, financials, tickers, statements, deepTickers, pendingTickers, isLoading: pendingTickers.length > 0 };
 }
