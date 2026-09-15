@@ -10,6 +10,8 @@ import type { MetricUnit } from "./metrics";
 import type { AxisFormat } from "./spec";
 
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+const fullNumber = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const fullMoney = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const compactMoney = new Intl.NumberFormat("en-US", {
   style: "currency",
   currency: "USD",
@@ -41,14 +43,15 @@ export function formatValue(unit: MetricUnit, v: number): string {
   }
 }
 
-/** Short rendering for axis ticks. */
-export function formatTick(unit: MetricUnit | null, v: number): string {
-  if (unit === null) return compact.format(v);
+/** Short rendering for axis ticks; `notation` widens compact figures to full digits. */
+export function formatTick(unit: MetricUnit | null, v: number, notation: AxisFormat = "auto"): string {
+  const full = notation === "full";
+  if (unit === null) return full ? fullNumber.format(v) : compact.format(v);
   switch (unit) {
     case "currency":
-      return compactMoney.format(v);
+      return full ? fullMoney.format(v) : compactMoney.format(v);
     case "shares":
-      return compact.format(v);
+      return full ? fullNumber.format(v) : compact.format(v);
     case "per_share":
     case "price":
       return money.format(v);
@@ -56,20 +59,6 @@ export function formatTick(unit: MetricUnit | null, v: number): string {
       return signed(`${plain.format(v)}%`, v);
     case "ratio":
       return `${plain.format(v)}x`;
-  }
-}
-
-/** The unit an axis is formatted in once the user's override is applied. */
-export function effectiveAxisUnit(unit: MetricUnit | null, override: AxisFormat): MetricUnit | null {
-  switch (override) {
-    case "currency":
-      return "currency";
-    case "percent":
-      return "percent";
-    case "number":
-      return null;
-    default:
-      return unit;
   }
 }
 

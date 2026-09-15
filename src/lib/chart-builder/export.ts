@@ -78,6 +78,32 @@ async function inlinedFontFaces(families: string[]): Promise<string> {
   return fontFaceCache;
 }
 
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Could not load ${src}`));
+    img.src = src;
+  });
+}
+
+/** Letter-spaced text: canvas has no reliable letterSpacing across browsers. */
+function measureTracked(ctx: CanvasRenderingContext2D, text: string, tracking: number): number {
+  let w = 0;
+  for (const ch of text) w += ctx.measureText(ch).width + tracking;
+  return w - tracking;
+}
+function fillTracked(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, tracking: number): void {
+  const align = ctx.textAlign;
+  ctx.textAlign = "left";
+  let cx = x;
+  for (const ch of text) {
+    ctx.fillText(ch, cx, y);
+    cx += ctx.measureText(ch).width + tracking;
+  }
+  ctx.textAlign = align;
+}
+
 function svgToImage(svgMarkup: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -135,7 +161,7 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
   const titleH = spec.title ? titleSize * 1.25 : 0;
   const subH = spec.subtitle ? subtitleSize * 1.5 : 0;
   const legendH = legendOn ? legendSize * 2 : 0;
-  const footerH = spec.style.watermark ? 24 : 8;
+  const footerH = 36;
   const height = Math.round(PAD + titleH + subH + (spec.style.legend === "top" ? legendH : 0) + 10 + plotHeight + (spec.style.legend === "bottom" ? legendH : 0) + footerH + PAD / 2);
 
   const canvas = document.createElement("canvas");
@@ -202,21 +228,30 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
     y += legendH;
   }
 
-  if (spec.style.watermark) {
-    ctx.textAlign = "right";
-    ctx.fillStyle = theme.tick;
-    ctx.font = `400 12px ${headingFont}`;
-    const tail = " · huntrvalue.me";
-    const tailW = ctx.measureText(tail).width;
-    ctx.fillText(tail, width - PAD, y + 8);
-    ctx.font = `600 11px ${headingFont}`;
+  // Watermark, always: "Powered by  [logo] HUNTR", bottom right.
+  {
+    const logo = await loadImage("/logo/HunterLogoCut-removebg.png").catch(() => null);
+    const wordSize = 18;
+    ctx.textBaseline = "middle";
+    const baseline = y + 16;
+    ctx.font = `600 ${wordSize}px ${headingFont}`;
+    const wordW = measureTracked(ctx, "HUNTR", wordSize * 0.14);
+    let x = width - PAD;
+    x -= wordW;
     ctx.fillStyle = theme.title;
-    const brand = "HUNTR";
-    const brandW = ctx.measureText(brand).width + 4;
-    ctx.fillText(brand, width - PAD - tailW, y + 9);
-    ctx.font = `400 12px ${headingFont}`;
+    fillTracked(ctx, "HUNTR", x, baseline, wordSize * 0.14);
+    if (logo) {
+      const h = 24;
+      const w = (logo.width / logo.height) * h;
+      x -= w + 8;
+      ctx.drawImage(logo, x, baseline - h / 2, w, h);
+    }
+    ctx.font = `400 14px ${headingFont}`;
     ctx.fillStyle = theme.tick;
-    ctx.fillText("Powered by ", width - PAD - tailW - brandW, y + 8);
+    const lead = "Powered by";
+    x -= ctx.measureText(lead).width + 10;
+    ctx.fillText(lead, x, baseline);
+    ctx.textBaseline = "top";
   }
 
   return new Promise((resolve, reject) => {

@@ -54,11 +54,16 @@ export interface ChartSeries {
 }
 
 export type Granularity = "annual" | "quarterly";
-export type CanvasTheme = "wolf" | "snow" | "parchment";
+export type CanvasTheme = "wolf" | "navy" | "snow" | "parchment";
 export type AspectRatio = "16:9" | "4:3" | "1:1";
 export type ValueLabels = "none" | "last" | "ends" | "all";
 export type LegendPosition = "top" | "bottom" | "hidden";
-export type AxisFormat = "auto" | "currency" | "percent" | "number";
+/**
+ * How an axis writes its numbers. The unit (currency, percent, multiple…)
+ * comes from the series and is never overridden — "revenue as a
+ * percentage" is not a thing an axis can mean — only the notation is.
+ */
+export type AxisFormat = "auto" | "compact" | "full";
 
 export interface ChartStyle {
   theme: CanvasTheme;
@@ -70,6 +75,7 @@ export interface ChartStyle {
   stacked: boolean;
   barRadius: 0 | 2 | 4;
   lineWidth: 1.5 | 2 | 2.5;
+  /** Kept for older specs; the canvas always carries the watermark now. */
   watermark: boolean;
   yLeftFormat: AxisFormat;
   yRightFormat: AxisFormat;
@@ -176,6 +182,7 @@ export type SpecIssueCode =
   | "ttm_needs_flow"
   | "per_share_needs_currency"
   | "indexed_needs_line"
+  | "price_needs_line"
   | "title_too_long"
   | "bad_range"
   | "range_inverted"
@@ -290,6 +297,17 @@ export function validateSpec(spec: ChartSpec): SpecIssue[] {
         message: "Indexed series are drawn as lines.",
       });
     }
+
+    // A daily price as bars would be thousands of one-day rectangles on a
+    // time axis — unreadable, and heavy enough to stall the page.
+    if (def.source === "price" && s.shape === "bar") {
+      issues.push({
+        code: "price_needs_line",
+        seriesId: s.id,
+        severity: "warning",
+        message: "Prices are drawn as lines.",
+      });
+    }
   }
 
   const { from, to } = spec.range;
@@ -335,7 +353,7 @@ export function normalizeSpec(spec: ChartSpec): ChartSpec {
         if (transform === "per_share" && !(def.source === "statements" && def.unit === "currency")) {
           transform = "raw";
         }
-        const shape: SeriesShape = transform === "indexed" && s.shape === "bar" ? "line" : s.shape;
+        const shape: SeriesShape = s.shape === "bar" && (transform === "indexed" || def.source === "price") ? "line" : s.shape;
         return { ...s, ticker: normalizeTicker(s.ticker), transform, shape };
       }),
   };
@@ -424,14 +442,16 @@ function oneOf<T extends string | number>(v: unknown, allowed: readonly T[]): T 
 /** Keeps only known style fields with valid values; the rest fall back to defaults. */
 function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   const out: Partial<ChartStyle> = {};
-  const theme = oneOf<CanvasTheme>(raw.theme, ["wolf", "snow", "parchment"]);
+  const theme = oneOf<CanvasTheme>(raw.theme, ["wolf", "navy", "snow", "parchment"]);
   const aspect = oneOf<AspectRatio>(raw.aspect, ["16:9", "4:3", "1:1"]);
   const legend = oneOf<LegendPosition>(raw.legend, ["top", "bottom", "hidden"]);
   const valueLabels = oneOf<ValueLabels>(raw.valueLabels, ["none", "last", "ends", "all"]);
   const barRadius = oneOf<0 | 2 | 4>(raw.barRadius, [0, 2, 4]);
   const lineWidth = oneOf<1.5 | 2 | 2.5>(raw.lineWidth, [1.5, 2, 2.5]);
-  const yLeftFormat = oneOf<AxisFormat>(raw.yLeftFormat, ["auto", "currency", "percent", "number"]);
-  const yRightFormat = oneOf<AxisFormat>(raw.yRightFormat, ["auto", "currency", "percent", "number"]);
+  // Older specs stored a unit override here ("currency" | "percent" |
+  // "number"); those collapse to the default notation.
+  const yLeftFormat = oneOf<AxisFormat>(raw.yLeftFormat, ["auto", "compact", "full"]);
+  const yRightFormat = oneOf<AxisFormat>(raw.yRightFormat, ["auto", "compact", "full"]);
   if (theme) out.theme = theme;
   if (aspect) out.aspect = aspect;
   if (legend) out.legend = legend;

@@ -10,6 +10,8 @@ interface ChartLegendProps {
   onToggle: (id: string) => void;
   onIsolate: (id: string) => void;
   onSelect: (id: string) => void;
+  /** Pointer over a legend entry: the canvas fades the other series. */
+  onHover: (id: string | null) => void;
 }
 
 /**
@@ -17,7 +19,7 @@ interface ChartLegendProps {
  * isolates it, and either way the series panel follows the selection.
  * Rendered as HTML rather than a Recharts legend so it can do that.
  */
-export function ChartLegend({ spec, pendingTickers, selectedId, onToggle, onIsolate, onSelect }: ChartLegendProps) {
+export function ChartLegend({ spec, pendingTickers, selectedId, onToggle, onIsolate, onSelect, onHover }: ChartLegendProps) {
   if (spec.style.legend === "hidden" || spec.series.length === 0) return null;
   const theme = CANVAS_THEMES[spec.style.theme];
 
@@ -43,6 +45,10 @@ export function ChartLegend({ spec, pendingTickers, selectedId, onToggle, onIsol
                 if (e.altKey) onIsolate(s.id);
                 else onToggle(s.id);
               }}
+              onMouseEnter={() => onHover(s.id)}
+              onMouseLeave={() => onHover(null)}
+              onFocus={() => onHover(s.id)}
+              onBlur={() => onHover(null)}
               className={cn(
                 "inline-flex items-center gap-2 rounded-md px-1.5 py-0.5 text-[12.5px] transition-opacity duration-150",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",

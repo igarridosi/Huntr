@@ -111,6 +111,25 @@ export function bucketFromKey(key: number, granularity: Granularity): Bucket {
   return { key, label: `Q${q + 1} ${y}`, mid: Date.UTC(y, q * 3 + 1, 15) };
 }
 
+/** First day of the bucket a period-end date falls in, ISO. */
+export function bucketStart(date: string, granularity: Granularity): string {
+  const p = parseIso(date);
+  if (!p) return date;
+  if (granularity === "annual") return `${p.y}-01-01`;
+  const m = Math.floor(p.m / 3) * 3 + 1;
+  return `${p.y}-${String(m).padStart(2, "0")}-01`;
+}
+
+/** Last day of the bucket a period-end date falls in, ISO. */
+export function bucketEnd(date: string, granularity: Granularity): string {
+  const p = parseIso(date);
+  if (!p) return date;
+  if (granularity === "annual") return `${p.y}-12-31`;
+  const q = Math.floor(p.m / 3);
+  const last = new Date(Date.UTC(p.y, q * 3 + 3, 0)).getUTCDate();
+  return `${p.y}-${String(q * 3 + 3).padStart(2, "0")}-${String(last).padStart(2, "0")}`;
+}
+
 /** Distance between consecutive buckets in key units. */
 const KEY_STEP = 1;
 /** How many buckets back "one year ago" is. */
@@ -420,12 +439,23 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
 
     if (def.source === "price") {
       const prices = pricesFor(series.ticker);
+      // The range is expressed in period ends; a price line must cover the
+      // whole of the first and last bucket, not start at the first period's
+      // close, or it begins after the bar that sits in that quarter.
+      // A price-only chart has no buckets and keeps the range as given.
+      const hasBuckets = spec.series.some((x) => METRICS[x.metric].source !== "price");
+      const priceRange = hasBuckets
+        ? {
+            from: spec.range.from === null ? null : bucketStart(spec.range.from, spec.granularity),
+            to: spec.range.to === null ? null : bucketEnd(spec.range.to, spec.granularity),
+          }
+        : spec.range;
       if (prices.length === 0 && !warnedTickers.has(`p:${series.ticker}`)) {
         warnedTickers.add(`p:${series.ticker}`);
         warnings.push({ seriesId: series.id, ticker: series.ticker, message: `No price history for ${series.ticker}.` });
       }
       let points = prices
-        .filter((p) => inRange(p.date, spec.range))
+        .filter((p) => inRange(p.date, priceRange))
         .map((p) => ({ x: Date.parse(p.date), value: p.close as number | null }));
       if (series.transform === "indexed") points = indexValues(points);
       all.push({ series, unit, points });

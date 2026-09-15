@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChartColumnStacked, Download, LayoutTemplate, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
+import { ChartColumnStacked, Download, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartControls } from "@/components/chart-builder/chart-controls";
@@ -22,6 +22,7 @@ import { useMediaQuery } from "@/hooks/use-media-query";
 import { useSavedCharts, type SavedChart } from "@/hooks/use-saved-charts";
 import { useAuthGate } from "@/providers/auth-gate-provider";
 import { SPEC_QUERY_PARAM, createSeries, createSpec, decodeSpec, encodeSpec, paletteColor, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
+import { cn } from "@/lib/utils";
 import ChartBuilderLoading from "./loading";
 
 // framer-motion only rides along on phones.
@@ -54,7 +55,6 @@ function ChartBuilder() {
   const { spec, update, reset, undo, redo, canUndo, canRedo } = history;
   const data = useChartData(spec);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [showTemplates, setShowTemplates] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -112,7 +112,6 @@ function ChartBuilder() {
       reset(next);
       setSavedRef(null);
       setSelectedId(null);
-      setShowTemplates(false);
     },
     [reset, data.tickers]
   );
@@ -186,6 +185,7 @@ function ChartBuilder() {
   );
 
   const seriesPanel = <SeriesPanel spec={spec} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} />;
+  const templatesPanel = <TemplateGallery variant="list" onPick={pickTemplate} />;
   const designPanel = (
     <DesignPanel
       spec={spec}
@@ -205,8 +205,11 @@ function ChartBuilder() {
   );
 
   return (
-    <div className="w-full space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-4">
+    // On desktop the whole workspace fits the viewport (topbar 3.5rem + page
+    // padding 4rem); the side panels scroll on their own and the canvas
+    // takes the remaining height. Phones keep the natural page scroll.
+    <div className={cn("flex w-full flex-col gap-4", isDesktop && !empty && "h-[calc(100dvh-7.5rem)] min-h-[520px]")}>
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sunset-orange/10 ring-1 ring-inset ring-sunset-orange/20">
             <ChartColumnStacked className="h-5 w-5 text-sunset-orange" aria-hidden />
@@ -239,12 +242,6 @@ function ChartBuilder() {
             onDelete={deleteSaved}
             onGate={() => openGate("charts")}
           />
-          {!empty && (
-            <Button variant="ghost" size="sm" aria-pressed={showTemplates} onClick={() => setShowTemplates((v) => !v)}>
-              <LayoutTemplate className="mr-1.5 h-3.5 w-3.5" />
-              Templates
-            </Button>
-          )}
           <Button variant="ghost" size="icon-sm" aria-label="Undo" disabled={!canUndo} onClick={undo}>
             <Undo2 className="h-4 w-4" />
           </Button>
@@ -269,27 +266,36 @@ function ChartBuilder() {
       {empty ? (
         <StartPrompt onPick={startWith} />
       ) : (
-        <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-[280px_minmax(0,1fr)_264px]">
-          {isDesktop && <div>{seriesPanel}</div>}
-          <div className="flex min-w-0 flex-col gap-3">
-            <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} />
-            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
+        <div className={cn("grid grid-cols-1 items-start gap-4 lg:grid-cols-[272px_minmax(0,1fr)_264px]", isDesktop && "min-h-0 flex-1 lg:items-stretch")}>
+          {isDesktop && (
+            <div className="flex min-h-0 flex-col gap-4">
+              <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">{seriesPanel}</div>
+              <div className="shrink-0">{templatesPanel}</div>
+            </div>
+          )}
+          <div className={cn("flex min-w-0 flex-col gap-3", isDesktop && "min-h-0")}>
+            <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} fill={isDesktop} className={isDesktop ? "flex-1" : undefined} />
+            <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-1">
               <ChartControls spec={spec} dates={data.dates} range={data.range} onChange={onChange} />
             </div>
-            {showTemplates && (
-              <div className="rounded-2xl bg-wolf-surface/60 p-3 ring-1 ring-inset ring-wolf-border/50">
-                <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Templates · replaces the current chart</p>
-                <TemplateGallery compact onPick={pickTemplate} />
-              </div>
-            )}
           </div>
-          {isDesktop && <div>{designPanel}</div>}
+          {isDesktop && <div className="scroll-quiet min-h-0 overflow-y-auto">{designPanel}</div>}
           {/* Room for the collapsed sheet so the range controls are never under it. */}
           {!isDesktop && <div aria-hidden className="h-24" />}
         </div>
       )}
 
-      {!empty && !isDesktop && <MobileSheet series={seriesPanel} design={designPanel} />}
+      {!empty && !isDesktop && (
+        <MobileSheet
+          series={
+            <div className="flex flex-col gap-3">
+              {seriesPanel}
+              {templatesPanel}
+            </div>
+          }
+          design={designPanel}
+        />
+      )}
 
       <ExportDialog open={exportOpen} onOpenChange={setExportOpen} spec={spec} getFrame={getFrame} onNotify={notify} />
 

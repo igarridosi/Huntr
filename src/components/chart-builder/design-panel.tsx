@@ -7,6 +7,7 @@ import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
   CANVAS_THEMES,
+  METRICS,
   METRIC_GROUPS,
   SERIES_PALETTE,
   metricsInGroup,
@@ -19,7 +20,6 @@ import {
   type ChartStyle,
   type LegendPosition,
   type MetricId,
-  type PeriodAlignment,
   type SeriesShape,
   type SeriesTransform,
   type StatementKind,
@@ -63,9 +63,8 @@ const AXIS_FORMATS: ReadonlyArray<SelectMenuGroup<AxisFormat>> = [
     label: "Format",
     options: [
       { value: "auto", label: "Auto" },
-      { value: "currency", label: "Currency" },
-      { value: "percent", label: "Percent" },
-      { value: "number", label: "Plain number" },
+      { value: "compact", label: "Compact ($60.8B)" },
+      { value: "full", label: "Full digits" },
     ],
   },
 ];
@@ -85,13 +84,22 @@ function common<K extends keyof ChartSeries>(series: ChartSeries[], key: K): Cha
  */
 export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
   const style = (changes: Partial<ChartStyle>, coalesce?: string) => onChange({ ...spec, style: { ...spec.style, ...changes } }, coalesce);
-  const bulk = (changes: Partial<ChartSeries>) => onChange({ ...spec, series: spec.series.map((s) => ({ ...s, ...changes })) });
+  const bulk = (changes: Partial<ChartSeries>) =>
+    onChange({
+      ...spec,
+      series: spec.series.map((s) => {
+        const next = { ...s, ...changes };
+        // Prices stay lines whatever the chart-wide shape is (see validateSpec).
+        if (next.shape === "bar" && METRICS[next.metric].source === "price") next.shape = "line";
+        return next;
+      }),
+    });
 
   const metric = common(spec.series, "metric");
   const transform = common(spec.series, "transform");
   const shape = common(spec.series, "shape");
   const withMixed = <T extends string>(groups: ReadonlyArray<SelectMenuGroup<T>>, mixed: boolean): ReadonlyArray<SelectMenuGroup<T | typeof MIXED>> =>
-    mixed ? [{ label: "", options: [{ value: MIXED, label: "Mixed — set for all" }] }, ...groups] : groups;
+    mixed ? [{ label: "", options: [{ value: MIXED, label: "Mixed" }] }, ...groups] : groups;
 
   const shapeItems: ReadonlyArray<{ key: SeriesShape | typeof MIXED; label: string }> = [
     ...(shape === MIXED ? [{ key: MIXED, label: "Mixed" }] : []),
@@ -100,6 +108,10 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
     { key: "area", label: "Area" },
   ];
 
+  const shapes = new Set(spec.series.map((s) => s.shape));
+  const hasBars = shapes.has("bar");
+  const hasLines = shapes.has("line") || shapes.has("area");
+  const hasRightAxis = spec.series.some((s) => s.axis === "right");
   const tickers = Array.from(new Set(spec.series.map((s) => s.ticker)));
   const missingDeep = tickers.filter((t) => !dataSource.deepTickers.includes(t));
   const allDeep = tickers.length > 0 && missingDeep.length === 0;
@@ -126,24 +138,12 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             ariaLabel="Transform for every series"
           />
         </Row>
-        <Row label="Shape">
+        <Row label="Shape" stack={shape === MIXED}>
           <SegmentedTabs<SeriesShape | typeof MIXED>
             items={shapeItems}
             value={shape}
             onChange={(v) => v !== MIXED && bulk({ shape: v })}
             ariaLabel="Shape for every series"
-            size="sm"
-          />
-        </Row>
-        <Row label="Periods" hint="Common hides quarters that not every company has filed yet.">
-          <SegmentedTabs<PeriodAlignment>
-            items={[
-              { key: "common", label: "Common" },
-              { key: "all", label: "All" },
-            ]}
-            value={spec.align}
-            onChange={(align) => onChange({ ...spec, align })}
-            ariaLabel="Period alignment"
             size="sm"
           />
         </Row>
@@ -171,7 +171,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
       </Group>
 
       <Group title="Canvas">
-        <div className="flex gap-1.5" role="radiogroup" aria-label="Canvas theme">
+        <div className="grid grid-cols-2 gap-1.5" role="radiogroup" aria-label="Canvas theme">
           {(Object.keys(CANVAS_THEMES) as CanvasTheme[]).map((key) => {
             const t = CANVAS_THEMES[key];
             const active = spec.style.theme === key;
@@ -184,7 +184,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
                 aria-label={`${t.name} theme`}
                 onClick={() => style({ theme: key })}
                 className={cn(
-                  "relative h-10 flex-1 overflow-hidden rounded-lg border-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                  "relative h-11 overflow-hidden rounded-lg border-2 transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
                   active ? "border-sunset-orange" : "border-transparent ring-1 ring-inset ring-wolf-border/60"
                 )}
                 style={{ background: t.bg }}
@@ -230,7 +230,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
-        <Row label="Values">
+        <Row label="Values" stack>
           <SegmentedTabs<ValueLabels>
             items={[
               { key: "none", label: "None" },
@@ -247,15 +247,16 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
         <Row label="Grid">
           <Switch checked={spec.style.grid} onChange={(grid) => style({ grid })} label="Grid" />
         </Row>
-        <Row label="Watermark">
-          <Switch checked={spec.style.watermark} onChange={(watermark) => style({ watermark })} label="Watermark" />
-        </Row>
       </Group>
 
-      <Group title="Bars & lines">
-        <Row label="Stacked">
-          <Switch checked={spec.style.stacked} onChange={(stacked) => style({ stacked })} label="Stack bars" />
-        </Row>
+      {(hasBars || hasLines) && (
+      <Group title={hasBars && hasLines ? "Bars & lines" : hasBars ? "Bars" : "Lines"}>
+        {hasBars && spec.series.filter((s) => s.shape === "bar").length > 1 && (
+          <Row label="Stacked">
+            <Switch checked={spec.style.stacked} onChange={(stacked) => style({ stacked })} label="Stack bars" />
+          </Row>
+        )}
+        {hasBars && (
         <Row label="Bar radius">
           <SegmentedTabs<"0" | "2" | "4">
             items={[
@@ -269,6 +270,8 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
+        )}
+        {hasLines && (
         <Row label="Line width">
           <SegmentedTabs<"1.5" | "2" | "2.5">
             items={[
@@ -282,15 +285,19 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
+        )}
       </Group>
+      )}
 
-      <Group title="Axes">
-        <Row label="Left">
+      <Group title={hasRightAxis ? "Axes" : "Axis"}>
+        <Row label={hasRightAxis ? "Left" : "Format"}>
           <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yLeftFormat} onChange={(yLeftFormat) => style({ yLeftFormat })} ariaLabel="Left axis format" />
         </Row>
-        <Row label="Right">
-          <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yRightFormat} onChange={(yRightFormat) => style({ yRightFormat })} ariaLabel="Right axis format" />
-        </Row>
+        {hasRightAxis && (
+          <Row label="Right">
+            <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yRightFormat} onChange={(yRightFormat) => style({ yRightFormat })} ariaLabel="Right axis format" />
+          </Row>
+        )}
       </Group>
     </section>
   );
@@ -305,7 +312,18 @@ function Group({ title, first = false, children }: { title: string; first?: bool
   );
 }
 
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** Label left, control right; `stack` puts the control on its own line for wide controls. */
+function Row({ label, hint, stack = false, children }: { label: string; hint?: string; stack?: boolean; children: React.ReactNode }) {
+  if (stack) {
+    return (
+      <div className="flex flex-col gap-1.5 px-1">
+        <span className="text-xs text-mist/85" title={hint}>
+          {label}
+        </span>
+        <div className="flex min-w-0 [&>*]:min-w-0">{children}</div>
+      </div>
+    );
+  }
   return (
     <div className="grid grid-cols-[68px_minmax(0,1fr)] items-center gap-2 px-1">
       <span className="text-xs text-mist/85" title={hint}>
