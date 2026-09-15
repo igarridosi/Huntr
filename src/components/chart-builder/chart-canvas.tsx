@@ -18,7 +18,7 @@ import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   CANVAS_THEMES,
-  effectiveAxisUnit,
+  METRICS,
   formatDate,
   formatMonthTick,
   formatTick,
@@ -141,8 +141,23 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   const timeMode = chart.xMode === "time";
   const visible = useMemo(() => chart.series.filter((s) => !s.hidden), [chart.series]);
   const hasRight = visible.some((s) => s.axis === "right");
-  const leftUnit = effectiveAxisUnit(chart.axes.left, spec.style.yLeftFormat);
-  const rightUnit = effectiveAxisUnit(chart.axes.right, spec.style.yRightFormat);
+  const leftUnit = chart.axes.left;
+  const rightUnit = chart.axes.right;
+  const leftWidth = spec.style.yLeftFormat === "full" ? 104 : Y_AXIS_WIDTH;
+  const rightWidth = spec.style.yRightFormat === "full" ? 104 : Y_AXIS_WIDTH;
+
+  /** What an axis measures, for its rotated caption: "Revenue", "Price · FCF / share". */
+  const axisCaption = (axis: "left" | "right") => {
+    const names = new Set<string>();
+    for (const s of visible) {
+      if (s.axis !== axis) continue;
+      const base = METRICS[s.metric].label;
+      names.add(
+        s.transform === "per_share" ? `${base} / share` : s.transform === "ttm" ? `${base} TTM` : s.transform === "yoy" ? `${base} YoY %` : s.transform === "indexed" ? `${base}, indexed %` : base
+      );
+    }
+    return [...names].join(" · ");
+  };
 
   const unitByLabel = useMemo(() => {
     const m = new Map<string, MetricUnit>();
@@ -281,6 +296,34 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     : (label: string) => chart.xLabels[Number(label)] ?? label;
 
   const tick = { fill: theme.tick, fontSize: 11, fontFamily: "var(--font-mono)" } as const;
+  const axisLabel = (axis: "left" | "right") => ({
+    value: axisCaption(axis),
+    angle: axis === "left" ? -90 : 90,
+    position: (axis === "left" ? "insideLeft" : "insideRight") as "insideLeft" | "insideRight",
+    offset: 12,
+    style: { textAnchor: "middle" as const, fill: theme.tick, fontSize: 11, fontFamily: "var(--font-heading)" },
+  });
+
+  // Grid lines sit between categories, not through them: one at each band
+  // boundary. On the time axis the axis ticks are used, minus the edges,
+  // which the plot frame already draws.
+  const verticalLines = ({ xAxis, offset }: { xAxis?: { scale?: unknown } | undefined; offset: { left: number; width: number } }): number[] => {
+    const left = offset.left;
+    const width = offset.width;
+    if (!timeMode) {
+      const n = Math.max(1, chart.points.length);
+      return Array.from({ length: n + 1 }, (_, i) => left + (width / n) * i);
+    }
+    // Recharts wraps the d3 scale: `.ticks()` proposes tick values, `.map()`
+    // places them.
+    const scale = xAxis?.scale as { map?: (v: unknown) => number | undefined; ticks?: (n: number) => unknown[] } | undefined;
+    if (!scale || typeof scale.map !== "function" || typeof scale.ticks !== "function") return [];
+    const map = scale.map;
+    return scale
+      .ticks(8)
+      .map((t) => map.call(scale, t))
+      .filter((x): x is number => typeof x === "number" && x > left + 1 && x < left + width - 1);
+  };
 
   return (
     <div ref={wrapRef} style={{ width: "100%", height }}>
@@ -301,7 +344,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 })}
             </defs>
 
-            {spec.style.grid && <CartesianGrid stroke={theme.grid} strokeOpacity={1} vertical horizontal />}
+            {spec.style.grid && <CartesianGrid stroke={theme.grid} strokeOpacity={1} vertical horizontal verticalCoordinatesGenerator={verticalLines} />}
 
             {timeMode ? (
               <XAxis dataKey="x" type="number" scale="time" domain={timeDomain} axisLine={false} tickLine={false} tick={tick} dy={8} minTickGap={40} tickFormatter={xTickFormatter} />
@@ -309,9 +352,9 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
               <XAxis dataKey="x" type="category" axisLine={false} tickLine={false} tick={tick} dy={8} interval="preserveStartEnd" minTickGap={28} tickFormatter={xTickFormatter} />
             )}
 
-            <YAxis yAxisId="left" orientation="left" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(leftUnit, v)} />
+            <YAxis yAxisId="left" orientation="left" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={leftWidth} tickFormatter={(v: number) => formatTick(leftUnit, v, spec.style.yLeftFormat)} label={axisLabel("left")} />
             {hasRight && (
-              <YAxis yAxisId="right" orientation="right" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={Y_AXIS_WIDTH} tickFormatter={(v: number) => formatTick(rightUnit, v)} />
+              <YAxis yAxisId="right" orientation="right" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={rightWidth} tickFormatter={(v: number) => formatTick(rightUnit, v, spec.style.yRightFormat)} label={axisLabel("right")} />
             )}
 
             {/* No cursor line: the hovered bar brightens and the point on a

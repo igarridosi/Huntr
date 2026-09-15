@@ -62,9 +62,8 @@ const AXIS_FORMATS: ReadonlyArray<SelectMenuGroup<AxisFormat>> = [
     label: "Format",
     options: [
       { value: "auto", label: "Auto" },
-      { value: "currency", label: "Currency" },
-      { value: "percent", label: "Percent" },
-      { value: "number", label: "Plain number" },
+      { value: "compact", label: "Compact ($60.8B)" },
+      { value: "full", label: "Full digits" },
     ],
   },
 ];
@@ -90,7 +89,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
   const transform = common(spec.series, "transform");
   const shape = common(spec.series, "shape");
   const withMixed = <T extends string>(groups: ReadonlyArray<SelectMenuGroup<T>>, mixed: boolean): ReadonlyArray<SelectMenuGroup<T | typeof MIXED>> =>
-    mixed ? [{ label: "", options: [{ value: MIXED, label: "Mixed — set for all" }] }, ...groups] : groups;
+    mixed ? [{ label: "", options: [{ value: MIXED, label: "Mixed" }] }, ...groups] : groups;
 
   const shapeItems: ReadonlyArray<{ key: SeriesShape | typeof MIXED; label: string }> = [
     ...(shape === MIXED ? [{ key: MIXED, label: "Mixed" }] : []),

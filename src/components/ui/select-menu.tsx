@@ -46,6 +46,10 @@ export function SelectMenu<T extends string>({
   className,
 }: SelectMenuProps<T>) {
   const [open, setOpen] = useState(false);
+  // Opens upward when the viewport has no room below: a menu near the
+  // bottom of a scrolling panel would otherwise grow the panel instead of
+  // showing its options.
+  const [placement, setPlacement] = useState<"down" | "up">("down");
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const listId = useId();
@@ -72,6 +76,15 @@ export function SelectMenu<T extends string>({
     return () => document.removeEventListener("pointerdown", onPointerDown);
   }, [open]);
 
+  const openMenu = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (rect) {
+      const below = window.innerHeight - rect.bottom;
+      setPlacement(below < 280 && rect.top > below ? "up" : "down");
+    }
+    setOpen(true);
+  }, []);
+
   const commit = (next: T) => {
     onChange(next);
     close(true);
@@ -82,7 +95,7 @@ export function SelectMenu<T extends string>({
       if (event.key === "Enter" || event.key === " " || event.key === "ArrowDown") {
         event.preventDefault();
         setActiveIndex(Math.max(0, flat.findIndex((option) => option.value === value)));
-        setOpen(true);
+        openMenu();
       }
       return;
     }
@@ -139,7 +152,7 @@ export function SelectMenu<T extends string>({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        onClick={() => setOpen((previous) => !previous)}
+        onClick={() => (open ? setOpen(false) : openMenu())}
         className={cn(
           "flex h-10 w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3.5 text-[13px] font-medium",
           "bg-snow-peak/[0.04] text-snow-peak ring-1 ring-inset ring-wolf-border/45",
@@ -165,11 +178,11 @@ export function SelectMenu<T extends string>({
           role="listbox"
           aria-label={ariaLabel}
           className={cn(
-            // Tied to the trigger's width rather than sized to its content: a
-            // panel that is a few pixels narrower than the button that opened
-            // it reads as misaligned, and the labels are short enough that
-            // matching costs nothing.
-            "popover-materialize scroll-quiet absolute right-0 z-50 mt-2 max-h-[24rem] w-full origin-top-right",
+            // At least as wide as the trigger (a narrower panel reads as
+            // misaligned) and as wide as its longest label needs, so no option
+            // is ever cut off in a narrow column.
+            "popover-materialize scroll-quiet absolute right-0 z-50 max-h-[24rem] w-max min-w-full max-w-[min(20rem,calc(100vw-2rem))]",
+            placement === "up" ? "bottom-full mb-2 origin-bottom-right" : "top-full mt-2 origin-top-right",
             "overflow-y-auto rounded-xl bg-wolf-surface/95 p-2 shadow-2xl ring-1 ring-inset ring-wolf-border/60 backdrop-blur-xl"
           )}
         >

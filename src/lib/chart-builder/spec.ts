@@ -58,7 +58,12 @@ export type CanvasTheme = "wolf" | "navy" | "snow" | "parchment";
 export type AspectRatio = "16:9" | "4:3" | "1:1";
 export type ValueLabels = "none" | "last" | "ends" | "all";
 export type LegendPosition = "top" | "bottom" | "hidden";
-export type AxisFormat = "auto" | "currency" | "percent" | "number";
+/**
+ * How an axis writes its numbers. The unit (currency, percent, multiple…)
+ * comes from the series and is never overridden — "revenue as a
+ * percentage" is not a thing an axis can mean — only the notation is.
+ */
+export type AxisFormat = "auto" | "compact" | "full";
 
 export interface ChartStyle {
   theme: CanvasTheme;
@@ -431,8 +436,10 @@ function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   const valueLabels = oneOf<ValueLabels>(raw.valueLabels, ["none", "last", "ends", "all"]);
   const barRadius = oneOf<0 | 2 | 4>(raw.barRadius, [0, 2, 4]);
   const lineWidth = oneOf<1.5 | 2 | 2.5>(raw.lineWidth, [1.5, 2, 2.5]);
-  const yLeftFormat = oneOf<AxisFormat>(raw.yLeftFormat, ["auto", "currency", "percent", "number"]);
-  const yRightFormat = oneOf<AxisFormat>(raw.yRightFormat, ["auto", "currency", "percent", "number"]);
+  // Older specs stored a unit override here ("currency" | "percent" |
+  // "number"); those collapse to the default notation.
+  const yLeftFormat = oneOf<AxisFormat>(raw.yLeftFormat, ["auto", "compact", "full"]);
+  const yRightFormat = oneOf<AxisFormat>(raw.yRightFormat, ["auto", "compact", "full"]);
   if (theme) out.theme = theme;
   if (aspect) out.aspect = aspect;
   if (legend) out.legend = legend;
