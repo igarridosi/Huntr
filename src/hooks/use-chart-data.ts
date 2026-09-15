@@ -19,6 +19,10 @@ function combineStatements(results: StatementResult[]) {
 
 export interface ChartData {
   chart: ResolvedChart;
+  /** Statements per ticker as currently cached (undefined while loading). */
+  financials: Record<string, CompanyFinancials | null | undefined>;
+  /** Every distinct ticker on the chart. */
+  tickers: string[];
   /** Tickers whose statements or prices are still on their way. */
   pendingTickers: string[];
   /** True until every needed query has settled at least once. */
@@ -101,5 +105,5 @@ export function useChartData(spec: ChartSpec): ChartData {
     return resolveChart(visible, inputs);
   }, [spec, financials, prices.data, pendingTickers]);
 
-  return { chart, pendingTickers, isLoading: pendingTickers.length > 0 };
+  return { chart, financials, tickers, pendingTickers, isLoading: pendingTickers.length > 0 };
 }

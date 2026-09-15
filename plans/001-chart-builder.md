@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| Estado | Fase 0 mergeada (#17); fase 1 en PR (`feat/chart-builder-1`); fases 2–4 TODO |
+| Estado | Fases 0–1 mergeadas (#17, #18); fase 2 en PR (`feat/chart-builder-2`); fases 3–4 TODO |
 | Escrito contra | `b54ba8a` (main, 2026-09-15) |
 | Esfuerzo | L (4 fases entregables por separado; MVP = fases 0–1) |
 | Riesgo de la implementación | Medio — todo es código nuevo y aislado; el único punto de contacto con lo existente es el sidebar, una migración y (fase 3) un botón en `ExpandChartDialog` |
@@ -147,6 +147,7 @@ export interface ChartSpec {
   title: string;
   subtitle?: string;
   granularity: Granularity;
+  align: "common" | "all";    // common = solo periodos que todas las series tienen (evita columnas huérfanas cuando una empresa ya presentó un trimestre y las demás no)
   range: { from: string | null; to: string | null };   // ISO date o null = todo
   series: ChartSeries[];      // máx. 8
   style: ChartStyle;
@@ -346,7 +347,7 @@ Escritorio (≥ 1024 px):
 
 - **Series (izquierda)**: lista ordenable (arrastre con Pointer Events + `setPointerCapture`, umbral 10 px; teclado `Alt+↑/↓`). Cada fila: swatch, `TICKER · Metric`, chips pequeños `bar · left · TTM` solo cuando se alejan del valor por defecto. Clic → se expande *en su sitio* el inspector de esa serie (ticker con el input de búsqueda de `dcf-ticker-input.tsx`, `SelectMenu` de métrica agrupado por `group`, transform, shape, axis, color). Una fila expandida a la vez.
 - **Lienzo (centro)**: ocupa el resto; `aspect-ratio` CSS según `style.aspect`; `max-width` para que 1:1 no desborde en alto. Debajo, `SegmentedTabs` Annual/Quarterly y un selector de rango (dos `<input type="month">` estilizados; suficiente en v1).
-- **Design (derecha)**: solo opciones globales, todas con efecto inmediato. Sin acordeones anidados; grupos separados por 24 px y un `text-[10px] uppercase tracking-[0.11em] text-mist/85` como en los cards existentes.
+- **Design (derecha)**: opciones globales, todas con efecto inmediato. El primer grupo, **Data**, edita las series en bloque — métrica, transformación y forma son casi siempre iguales en una comparativa, así que se fijan una vez aquí (con estado "Mixed" cuando difieren) y el inspector de serie queda para las excepciones (combos). Ahí viven también **Periods** (`align`) y el botón **Load 20-year history**: la misma ruta Alpha Vantage que "Load 20 Years Data" en la ficha del ticker (`fetchAlphaFinancials` + `getAlphaAvailability`, gate `deepData` para invitados, secuencial por ticker, se detiene al primer límite) escribiendo en la caché de React Query bajo las claves que el gráfico lee; sin cuenta o con la cuota agotada se sigue con Yahoo, y `align: common` es lo que mantiene esos datos consistentes entre empresas. Sin acordeones anidados; grupos separados por 24 px y un `text-[10px] uppercase tracking-[0.11em] text-mist/85` como en los cards existentes.
 - **Cabecera**: mismo bloque `h1` + caption que `dcf-calculator/page.tsx:1168-1173` (icono en `bg-sunset-orange/10`, `tracking-[-0.02em]`, caption `text-[10px] uppercase tracking-[0.09em]`).
 
 Móvil (< 1024 px): cabecera compacta, lienzo a ancho completo arriba (1:1 o 4:3 forzado en pantalla; el `aspect` del spec se respeta solo al exportar), y una **hoja inferior** con `SegmentedTabs` `Series | Design` que se arrastra entre dos puntos (peek 96 px / 70 % alto). Implementarla con framer-motion `drag="y"`, `dragConstraints`, y en `onDragEnd` decidir por `velocity.y` y proyección (`current + (v/1000)·0.998/(1−0.998)`), spring `bounce: 0.15` **solo** en esa hoja (viene de un gesto con momento), `bounce: 0` en todo lo demás.

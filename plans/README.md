@@ -4,7 +4,7 @@ Planes de implementación escritos para que los ejecute otro agente/modelo sin c
 
 | # | Plan | Estado | Depende de | Escrito contra |
 |---|---|---|---|---|
-| 001 | [Chart Builder](001-chart-builder.md) | Fase 0 ✓ · fase 1 en PR · fases 2–4 TODO | — | `b54ba8a` |
+| 001 | [Chart Builder](001-chart-builder.md) | Fases 0–1 ✓ · fase 2 en PR · fases 3–4 TODO | — | `b54ba8a` |
 
 Orden recomendado dentro de 001: fase 0 → 1 → 2 → 3 → 4, un PR por fase.
 

@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { CANVAS_THEMES, type AspectRatio, type ChartSpec } from "@/lib/chart-builder";
@@ -28,7 +28,7 @@ const RATIO: Record<AspectRatio, number> = { "16:9": 9 / 16, "4:3": 3 / 4, "1:1"
  * The exportable object: title, legend, plot and watermark on the canvas
  * theme's background, independent of the app's light/dark chrome.
  */
-export function ChartFrame({ spec, data, selectedId, onSelect, onChange }: ChartFrameProps) {
+export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function ChartFrame({ spec, data, selectedId, onSelect, onChange }, ref) {
   const theme = CANVAS_THEMES[spec.style.theme];
   const plotRef = useRef<HTMLDivElement>(null);
   const [plotWidth, setPlotWidth] = useState(0);
@@ -56,6 +56,7 @@ export function ChartFrame({ spec, data, selectedId, onSelect, onChange }: Chart
 
   return (
     <div
+      ref={ref}
       className="flex flex-col rounded-2xl px-4 pb-4 pt-5 ring-1 ring-inset transition-colors duration-200 sm:px-6"
       style={{ background: theme.bg, ["--tw-ring-color" as string]: theme.ring }}
     >
@@ -105,4 +106,4 @@ export function ChartFrame({ spec, data, selectedId, onSelect, onChange }: Chart
       </div>
     </div>
   );
-}
+});
