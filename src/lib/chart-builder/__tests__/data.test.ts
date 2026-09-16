@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableDates, coversStatements, defaultRange, mergeFinancials, statementsFor } from "../data";
+import { availableDates, coversStatements, defaultRange, mergeFinancials, priceMonthEnds, statementsFor } from "../data";
 import { METRICS, METRIC_IDS } from "../metrics";
 import { createSeries, createSpec } from "../spec";
 import { fin, quarterEnds } from "./fixtures";
@@ -69,5 +69,13 @@ describe("availableDates / defaultRange", () => {
     expect(defaultRange(dates, 5)).toEqual({ from: "2021-03-31", to: null });
     expect(defaultRange(dates.slice(-3), 5)).toEqual({ from: dates[dates.length - 3], to: null });
     expect(defaultRange([], 5)).toEqual({ from: null, to: null });
+  });
+});
+
+describe("priceMonthEnds", () => {
+  it("keeps the last trading day of every month across tickers, sorted", () => {
+    const a = [{ date: "2024-01-02" }, { date: "2024-01-31" }, { date: "2024-02-01" }, { date: "2024-02-29" }];
+    const b = [{ date: "2024-02-28" }, { date: "2024-03-15" }];
+    expect(priceMonthEnds({ A: a, B: b, C: undefined })).toEqual(["2024-01-31", "2024-02-29", "2024-03-15"]);
   });
 });

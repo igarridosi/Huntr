@@ -276,7 +276,7 @@ function ChartBuilder() {
           <div className={cn("flex min-w-0 flex-col gap-3", isDesktop && "min-h-0")}>
             <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} fill={isDesktop} className={isDesktop ? "flex-1" : undefined} />
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-1">
-              <ChartControls spec={spec} dates={data.dates} range={data.range} onChange={onChange} />
+              <ChartControls spec={spec} dates={data.dates} datesAreMonthly={data.datesAreMonthly} range={data.range} onChange={onChange} />
             </div>
           </div>
           {isDesktop && <div className="scroll-quiet min-h-0 overflow-y-auto">{designPanel}</div>}

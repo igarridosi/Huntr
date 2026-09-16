@@ -14,6 +14,7 @@ import {
   seriesInk,
   type AspectRatio,
   type AxisFormat,
+  type AxisScale,
   type CanvasTheme,
   type ChartSeries,
   type ChartSpec,
@@ -109,6 +110,11 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
   ];
 
   const shapes = new Set(spec.series.map((s) => s.shape));
+  const allPrices = spec.series.length > 0 && spec.series.every((s) => METRICS[s.metric].source === "price");
+  const priceView: "price" | "change" | typeof MIXED = allPrices ? (transform === "raw" ? "price" : transform === "indexed" ? "change" : MIXED) : MIXED;
+  const logEligible =
+    spec.series.length > 0 &&
+    spec.series.every((s) => s.shape !== "bar" && s.transform !== "indexed" && s.transform !== "yoy" && METRICS[s.metric].unit !== "percent");
   const hasBars = shapes.has("bar");
   const hasLines = shapes.has("line") || shapes.has("area");
   const hasRightAxis = spec.series.some((s) => s.axis === "right");
@@ -130,14 +136,30 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             ariaLabel="Metric for every series"
           />
         </Row>
-        <Row label="Transform">
-          <SelectMenu<SeriesTransform | typeof MIXED>
-            groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
-            value={transform}
-            onChange={(v) => v !== MIXED && bulk({ transform: v })}
-            ariaLabel="Transform for every series"
-          />
-        </Row>
+        {allPrices ? (
+          <Row label="Show" hint="Percent change puts companies of any price on the same footing.">
+            <SegmentedTabs<"price" | "change" | typeof MIXED>
+              items={[
+                ...(priceView === MIXED ? [{ key: MIXED as typeof MIXED, label: "Mixed" }] : []),
+                { key: "price", label: "Price" },
+                { key: "change", label: "% change" },
+              ]}
+              value={priceView}
+              onChange={(v) => v !== MIXED && bulk({ transform: v === "change" ? "indexed" : "raw", shape: "line" })}
+              ariaLabel="Price view"
+              size="sm"
+            />
+          </Row>
+        ) : (
+          <Row label="Transform">
+            <SelectMenu<SeriesTransform | typeof MIXED>
+              groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
+              value={transform}
+              onChange={(v) => v !== MIXED && bulk({ transform: v })}
+              ariaLabel="Transform for every series"
+            />
+          </Row>
+        )}
         <Row label="Shape" stack={shape === MIXED}>
           <SegmentedTabs<SeriesShape | typeof MIXED>
             items={shapeItems}
@@ -147,6 +169,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
+        {dataSource.statements.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Button
             variant={allDeep ? "ghost" : "secondary"}
@@ -168,6 +191,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
                   : `Yahoo Finance · last few periods. Alpha Vantage adds up to 20 years — ${dataSource.statements.length || 1} call${dataSource.statements.length === 1 ? "" : "s"} per company (${askFor || "income statement"} only).`}
           </p>
         </div>
+        )}
       </Group>
 
       <Group title="Canvas">
@@ -290,6 +314,20 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
       )}
 
       <Group title={hasRightAxis ? "Axes" : "Axis"}>
+        {logEligible && (
+          <Row label="Scale" hint="Log: equal vertical steps are equal percentage moves, so compounding reads as a straight line.">
+            <SegmentedTabs<AxisScale>
+              items={[
+                { key: "linear", label: "Linear" },
+                { key: "log", label: "Log" },
+              ]}
+              value={spec.style.yScale}
+              onChange={(yScale) => style({ yScale })}
+              ariaLabel="Axis scale"
+              size="sm"
+            />
+          </Row>
+        )}
         <Row label={hasRightAxis ? "Left" : "Format"}>
           <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yLeftFormat} onChange={(yLeftFormat) => style({ yLeftFormat })} ariaLabel="Left axis format" />
         </Row>

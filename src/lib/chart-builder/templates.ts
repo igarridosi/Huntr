@@ -52,19 +52,19 @@ export const TEMPLATES: readonly ChartTemplate[] = [
   },
   {
     id: "price-indexed",
-    name: "Price, indexed",
-    description: "Two or more share prices as percent change from a common start.",
-    tickers: 2,
+    name: "Price comparison",
+    description: "Share prices as % change from a common start, so companies of any size compare.",
+    tickers: 4,
     build: (tickers) => {
-      const t = pick(tickers, 2);
+      const t = pick(tickers, 4);
       return createSpec({
         title: `${t.join(", ")} — Stock price`,
-        subtitle: "Indexed to zero (%)",
+        subtitle: "Percent change from the start of the window",
         granularity: "quarterly",
         series: t.map((ticker, i) =>
           createSeries({ ticker, metric: "price", transform: "indexed", shape: "line", color: paletteColor(i === 1 ? 4 : i) })
         ),
-        style: { theme: "snow", aspect: "1:1", lineWidth: 2.5, valueLabels: "ends" },
+        style: { theme: "wolf", lineWidth: 2, valueLabels: "last" },
       });
     },
   },

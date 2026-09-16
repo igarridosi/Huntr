@@ -151,6 +151,15 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   const hasRight = visible.some((s) => s.axis === "right");
   const leftUnit = chart.axes.left;
   const rightUnit = chart.axes.right;
+  // Log needs strictly positive data and no bars (a bar has no base on a
+  // log axis); anything else silently stays linear.
+  const logOk =
+    spec.style.yScale === "log" &&
+    visible.length > 0 &&
+    visible.every((s) => s.shape !== "bar" && s.unit !== "percent") &&
+    chart.points.every((p) => visible.every((s) => p[s.id] === null || (p[s.id] as number) > 0));
+  const yScale = logOk ? "log" : "auto";
+  const yDomain = logOk ? (["auto", "auto"] as const) : Y_DOMAIN;
   const leftWidth = spec.style.yLeftFormat === "full" ? 104 : Y_AXIS_WIDTH;
   const rightWidth = spec.style.yRightFormat === "full" ? 104 : Y_AXIS_WIDTH;
 
@@ -360,9 +369,9 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
               <XAxis dataKey="x" type="category" axisLine={false} tickLine={false} tick={tick} dy={8} interval="preserveStartEnd" minTickGap={28} tickFormatter={xTickFormatter} />
             )}
 
-            <YAxis yAxisId="left" orientation="left" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={leftWidth} tickFormatter={(v: number) => formatTick(leftUnit, v, spec.style.yLeftFormat)} label={axisLabel("left")} />
+            <YAxis yAxisId="left" orientation="left" scale={yScale} domain={yDomain} allowDataOverflow={logOk} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={leftWidth} tickFormatter={(v: number) => formatTick(leftUnit, v, spec.style.yLeftFormat)} label={axisLabel("left")} />
             {hasRight && (
-              <YAxis yAxisId="right" orientation="right" domain={Y_DOMAIN} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={rightWidth} tickFormatter={(v: number) => formatTick(rightUnit, v, spec.style.yRightFormat)} label={axisLabel("right")} />
+              <YAxis yAxisId="right" orientation="right" scale={yScale} domain={yDomain} allowDataOverflow={logOk} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={rightWidth} tickFormatter={(v: number) => formatTick(rightUnit, v, spec.style.yRightFormat)} label={axisLabel("right")} />
             )}
 
             {/* No cursor line: the hovered bar brightens and the point on a

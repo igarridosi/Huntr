@@ -14,6 +14,8 @@ interface PeriodSliderProps {
   granularity: Granularity;
   /** True while the window is the automatic default, not the user's. */
   isDefault: boolean;
+  /** Chip text for a date; defaults to the calendar period ("Q3 2024"). */
+  labelOf?: (date: string) => string;
   onChange: (from: string | null, to: string | null) => void;
   onReset: () => void;
 }
@@ -26,7 +28,7 @@ const HANDLE = 16;
  * handles track the pointer 1:1 and snap to the nearest period on every
  * move, so the chart follows the drag rather than the release.
  */
-export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange, onReset }: PeriodSliderProps) {
+export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf, onChange, onReset }: PeriodSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<"from" | "to" | null>(null);
   const n = dates.length;
@@ -48,7 +50,7 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
   const i0 = indexOf(from, "from");
   const i1 = Math.max(i0, indexOf(to, "to"));
   const pct = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
-  const label = (date: string) => toCalendarBucket(date, granularity)?.label ?? date;
+  const label = (date: string) => labelOf?.(date) ?? toCalendarBucket(date, granularity)?.label ?? date;
 
   // Year ticks under the track, thinned so they never collide.
   const yearTicks = useMemo(() => {

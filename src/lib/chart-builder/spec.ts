@@ -64,6 +64,8 @@ export type LegendPosition = "top" | "bottom" | "hidden";
  * percentage" is not a thing an axis can mean — only the notation is.
  */
 export type AxisFormat = "auto" | "compact" | "full";
+/** Linear, or logarithmic so a constant growth rate reads as a straight line. */
+export type AxisScale = "linear" | "log";
 
 export interface ChartStyle {
   theme: CanvasTheme;
@@ -79,6 +81,8 @@ export interface ChartStyle {
   watermark: boolean;
   yLeftFormat: AxisFormat;
   yRightFormat: AxisFormat;
+  /** Applies to line/area charts of positive values; bars and percentages stay linear. */
+  yScale: AxisScale;
 }
 
 export interface ChartRange {
@@ -123,6 +127,7 @@ export const DEFAULT_STYLE: ChartStyle = {
   watermark: true,
   yLeftFormat: "auto",
   yRightFormat: "auto",
+  yScale: "linear",
 };
 
 export function createSeriesId(): string {
@@ -452,6 +457,7 @@ function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   // "number"); those collapse to the default notation.
   const yLeftFormat = oneOf<AxisFormat>(raw.yLeftFormat, ["auto", "compact", "full"]);
   const yRightFormat = oneOf<AxisFormat>(raw.yRightFormat, ["auto", "compact", "full"]);
+  const yScale = oneOf<AxisScale>(raw.yScale, ["linear", "log"]);
   if (theme) out.theme = theme;
   if (aspect) out.aspect = aspect;
   if (legend) out.legend = legend;
@@ -460,6 +466,7 @@ function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   if (lineWidth !== undefined) out.lineWidth = lineWidth;
   if (yLeftFormat) out.yLeftFormat = yLeftFormat;
   if (yRightFormat) out.yRightFormat = yRightFormat;
+  if (yScale) out.yScale = yScale;
   if (typeof raw.grid === "boolean") out.grid = raw.grid;
   if (typeof raw.stacked === "boolean") out.stacked = raw.stacked;
   if (typeof raw.watermark === "boolean") out.watermark = raw.watermark;
