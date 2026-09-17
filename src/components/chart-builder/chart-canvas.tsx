@@ -39,8 +39,6 @@ export interface ChartCanvasProps {
   height: number;
   /** Series under the pointer in the legend; every other series fades. */
   emphasisId?: string | null;
-  /** True while a slider handle is held: redraws follow with a short tween instead of the entrance. */
-  scrubbing?: boolean;
 }
 
 /** What Recharts hands a LabelList / ReferenceDot label renderer. */
@@ -100,8 +98,6 @@ const ENTER_MS = 560;
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
 /** Each series starts a beat after the previous one, so the chart builds rather than pops. */
 const STAGGER_MS = 70;
-/** While scrubbing every window change is a short retarget, so the plot glides under the handle. */
-const SCRUB_MS = 160;
 
 function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
   const ref = useRef<T | null>(null);
@@ -147,7 +143,7 @@ function Pill({ x, y, text, theme, anchor }: { x: number; y: number; text: strin
  * daily closes in the same table that gap is one day — every bar would be
  * a hairline. A rectangle from bucket-start to bucket-end does not care.
  */
-export function ChartCanvas({ spec, chart, height, emphasisId = null, scrubbing = false }: ChartCanvasProps) {
+export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCanvasProps) {
   /** 1 for the emphasised series (or all, when none is), faint for the rest. */
   const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.18);
   /** The emphasised stroke steps forward a little; the rest keep their width. */
@@ -155,14 +151,13 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null, scrubbing 
   const theme = CANVAS_THEMES[spec.style.theme];
   const reducedMotion = usePrefersReducedMotion();
   // Recharts' own tweens drive the shapes: a staggered, strongly eased-out
-  // entrance, or a short retarget while the window is being scrubbed. Its
-  // default 1.5 s ease is what made every change feel late.
+  // entrance. Its default 1.5 s ease is what made every change feel late.
   const tween = (index: number) => ({
     isAnimationActive: !reducedMotion,
-    animationDuration: scrubbing ? SCRUB_MS : ENTER_MS,
+    animationDuration: ENTER_MS,
     // Recharts parses cubic-bezier() strings at runtime; its prop type only lists the keywords.
     animationEasing: ENTER_EASE as "ease",
-    animationBegin: scrubbing ? 0 : index * STAGGER_MS,
+    animationBegin: index * STAGGER_MS,
   });
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
@@ -407,7 +402,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null, scrubbing 
   };
 
   return (
-    <div ref={wrapRef} className="chart-builder-plot" data-scrub={scrubbing || undefined} style={{ width: "100%", height }}>
+    <div ref={wrapRef} className="chart-builder-plot" style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1}>

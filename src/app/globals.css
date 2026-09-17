@@ -583,10 +583,14 @@ select optgroup {
 .chart-builder-plot .recharts-reference-area-rect {
   transition: stroke-opacity 220ms var(--ease-out), fill-opacity 220ms var(--ease-out), stroke-width 220ms var(--ease-out);
 }
+/* A freshly mounted plot (new window, new granularity) fades in over the
+   canvas while its series make their entrance. */
+.cb-plot-in {
+  animation: cb-fade-in 320ms var(--ease-entrance) both;
+}
 /* Time-axis bars are plain rectangles with no tween of their own: they
    rise from the baseline when they (re)appear. Value pills wait for the
-   shapes to land, then fade up into place. Neither runs while scrubbing —
-   the plot is gliding under the handle and a replay would flicker. */
+   shapes to land, then fade up into place. */
 .chart-builder-plot .recharts-reference-area-rect {
   transform-box: fill-box;
   transform-origin: 50% 100%;
@@ -594,10 +598,6 @@ select optgroup {
 }
 .chart-builder-plot .cb-pill {
   animation: cb-pill-in 240ms var(--ease-entrance) 420ms both;
-}
-.chart-builder-plot[data-scrub] .recharts-reference-area-rect,
-.chart-builder-plot[data-scrub] .cb-pill {
-  animation: none;
 }
 /* Slider handles and span settle onto their period after a release. */
 .cb-slider-settle {

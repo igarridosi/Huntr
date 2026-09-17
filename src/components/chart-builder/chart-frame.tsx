@@ -27,8 +27,6 @@ interface ChartFrameProps {
    * larger size that still respects the aspect ratio.
    */
   fill?: boolean;
-  /** True while the range is being scrubbed: the plot glides rather than re-enters. */
-  scrubbing?: boolean;
   className?: string;
 }
 
@@ -39,7 +37,7 @@ const RATIO: Record<AspectRatio, number> = { "16:9": 9 / 16, "4:3": 3 / 4, "1:1"
  * theme's background, independent of the app's light/dark chrome.
  */
 export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function ChartFrame(
-  { spec, data, selectedId, onSelect, onChange, fill = false, scrubbing = false, className },
+  { spec, data, selectedId, onSelect, onChange, fill = false, className },
   ref
 ) {
   const theme = CANVAS_THEMES[spec.style.theme];
@@ -69,6 +67,10 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
   const height = fill && plotBox.h > 120 ? Math.round(Math.min(plotWidth * ratio, plotBox.h)) : byWidth;
   const width = Math.round(Math.min(plotWidth, height / ratio));
   const showSkeleton = data.isLoading && data.chart.points.length === 0;
+  // A new window or granularity remounts the plot: it fades in and its
+  // series re-enter, so the change reads as a fresh chart rather than
+  // bars shuffling into new slots.
+  const plotKey = `${data.range.from ?? ""}|${data.range.to ?? ""}|${spec.granularity}`;
 
   const toggle = (id: string) =>
     onChange({ ...spec, series: spec.series.map((s) => (s.id === id ? { ...s, hidden: !s.hidden } : s)) });
@@ -104,8 +106,8 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
 
       <div ref={plotRef} className={cn("mt-2 flex w-full justify-center", fill ? "min-h-0 flex-1 items-center" : "items-start")} style={fill ? undefined : { height }}>
         {plotWidth > 0 && (
-          <div style={{ width, height }}>
-            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} scrubbing={scrubbing} />}
+          <div key={plotKey} className="cb-plot-in" style={{ width, height }}>
+            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />}
           </div>
         )}
       </div>

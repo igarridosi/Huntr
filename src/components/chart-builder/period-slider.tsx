@@ -18,8 +18,6 @@ interface PeriodSliderProps {
   labelOf?: (date: string) => string;
   onChange: (from: string | null, to: string | null) => void;
   onReset: () => void;
-  /** Fires when a handle is picked up and put down; the chart skips its tweens in between. */
-  onScrub?: (active: boolean) => void;
 }
 
 const HANDLE = 16;
@@ -28,18 +26,17 @@ const HANDLE = 16;
  * Two handles over the periods on file, one dot per period: the window is
  * chosen by dragging on the actual dates rather than typing months.
  *
- * While a handle is held it follows the pointer 1:1 from local state, so
- * the drag never waits on the chart; the spec (and with it the chart) is
- * updated only when the snapped period actually changes, and inside a
- * transition so the handle stays responsive while the plot catches up.
- * On release the handle settles onto its period with a short eased glide
- * (a transform, so it costs no layout); keyboard and reset moves glide too.
+ * While a handle is held it follows the pointer 1:1 from local state and
+ * the chips read the period it will land on; the chart is left alone. The
+ * window is committed once, on release, so the plot redraws a single time
+ * and can afford its entrance. The handle then settles onto its period
+ * with a short eased glide (a transform, so it costs no layout); keyboard
+ * and reset moves glide too.
  */
-export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf, onChange, onReset, onScrub }: PeriodSliderProps) {
+export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf, onChange, onReset }: PeriodSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const [drag, setDrag] = useState<{ side: "from" | "to"; frac: number } | null>(null);
   const dragging = drag?.side ?? null;
-  const committed = useRef<number | null>(null);
   const n = dates.length;
 
   const indexOf = useCallback(
@@ -104,25 +101,16 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf,
 
   const startDrag = (side: "from" | "to") => (e: React.PointerEvent<HTMLButtonElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    committed.current = side === "from" ? i0 : i1;
     setDrag({ side, frac: fracAt(e.clientX) });
-    onScrub?.(true);
   };
   const moveDrag = (side: "from" | "to") => (e: React.PointerEvent<HTMLButtonElement>) => {
     if (dragging !== side) return;
-    const frac = fracAt(e.clientX);
-    setDrag({ side, frac });
-    const i = side === "from" ? Math.min(snap(frac), i1) : Math.max(snap(frac), i0);
-    if (i === committed.current) return;
-    committed.current = i;
-    if (side === "from") commit(i, i1);
-    else commit(i0, i);
+    setDrag({ side, frac: fracAt(e.clientX) });
   };
   const endDrag = () => {
     if (!drag) return;
     setDrag(null);
-    committed.current = null;
-    onScrub?.(false);
+    if (live0 !== i0 || live1 !== i1) commit(live0, live1);
   };
 
   const keyDrag = (side: "from" | "to") => (e: React.KeyboardEvent<HTMLButtonElement>) => {
