@@ -4,6 +4,7 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
@@ -20,6 +21,7 @@ import {
   type ChartSeries,
   type ChartSpec,
   type MetricId,
+  type SeriesShape,
   type SeriesTransform,
 } from "@/lib/chart-builder";
 
@@ -47,8 +49,8 @@ const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
 /**
  * The list of series with an inspector that opens in place. What is
  * per-series here is only what cannot be global: the company and its
- * colour — and the metric, when the chart's metrics are per series (a
- * custom mix). Transform and shape are set for the whole chart in the
+ * colour — and the metric and shape, when the chart's metrics are per
+ * series (a custom mix). Transform is set for the whole chart in the
  * design panel; templates still compose mixed charts (bars + a price line).
  * One row open at a time; the legend's selection and this panel's
  * selection are the same state, so clicking either brings the other along.
@@ -173,9 +175,25 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
                   {open && (
                     <div className="flex flex-col gap-3 px-2.5 pb-3 pt-1">
                       {perSeries && (
-                        <Field label="Metric">
-                          <SelectMenu<MetricId> groups={METRIC_GROUP_OPTIONS} value={s.metric} onChange={(m) => setMetric(s, m)} ariaLabel={`Metric for ${seriesLabel(s)}`} />
-                        </Field>
+                        <>
+                          <Field label="Metric">
+                            <SelectMenu<MetricId> groups={METRIC_GROUP_OPTIONS} value={s.metric} onChange={(m) => setMetric(s, m)} ariaLabel={`Metric for ${seriesLabel(s)}`} />
+                          </Field>
+                          <Field label="Shape">
+                            <SegmentedTabs<SeriesShape>
+                              items={[
+                                // A price series is never a bar (one rectangle per trading day).
+                                ...(METRICS[s.metric].source === "price" ? [] : [{ key: "bar" as const, label: "Bar" }]),
+                                { key: "line", label: "Line" },
+                                { key: "area", label: "Area" },
+                              ]}
+                              value={s.shape}
+                              onChange={(shape) => patch(s.id, { shape })}
+                              ariaLabel={`Shape for ${seriesLabel(s)}`}
+                              size="sm"
+                            />
+                          </Field>
+                        </>
                       )}
                       <Field label="Ticker">
                         <DCFTickerInput value={s.ticker} onSelect={(ticker) => setTicker(s.id, ticker)} />
