@@ -57,6 +57,18 @@ interface TimeBar {
 
 const Y_AXIS_WIDTH = 64;
 
+/** Log-axis bounds on a 1 / 2 / 5 × 10ⁿ ladder: a $108 high ends at $200, not $1,000. */
+function logCeil(v: number): number {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+function logFloor(v: number): number {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [5, 2, 1]) if (m * p <= v) return m * p;
+  return p;
+}
+
 /** The smallest 1 / 2 / 2.5 / 5 × 10ⁿ at or above `v`. */
 function niceCeil(v: number): number {
   if (!Number.isFinite(v) || v <= 0) return v;
@@ -289,11 +301,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         }
       }
       if (!Number.isFinite(min)) return niceAxis(0, 0);
-      if (logOk && min > 0) {
-        const lo = Math.pow(10, Math.floor(Math.log10(min)));
-        const hi = Math.pow(10, Math.ceil(Math.log10(max)));
-        return { domain: [lo, hi] as [number, number], ticks: null };
-      }
+      if (logOk && min > 0) return { domain: [logFloor(min), logCeil(max)] as [number, number], ticks: null };
       return niceAxis(min, max);
     };
     const left: { domain: [number, number]; ticks: number[] | null } = extent("left");
@@ -304,15 +312,21 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
     // narrower axis is widened around its data.
     if (logOk && left.ticks === null && right.ticks === null && hasRight) {
       type Axis = { domain: [number, number]; ticks: number[] | null };
-      const decades = (a: Axis) => Math.round(Math.log10(a.domain[1]) - Math.log10(a.domain[0]));
+      const span = (a: Axis) => Math.log10(a.domain[1]) - Math.log10(a.domain[0]);
+      // Step the narrower axis out along the 1-2-5 ladder, above and
+      // below in turn, until it covers as much (in log units) as the other.
       const widen = (a: Axis, to: number): Axis => {
-        const extra = to - decades(a);
-        if (extra <= 0) return a;
-        const below = Math.floor(extra / 2);
-        return { ...a, domain: [a.domain[0] / Math.pow(10, below), a.domain[1] * Math.pow(10, extra - below)] as [number, number] };
+        let [lo, hi] = a.domain;
+        let up = true;
+        for (let i = 0; i < 12 && Math.log10(hi) - Math.log10(lo) < to - 1e-9; i++) {
+          if (up) hi = logCeil(hi * 1.0001);
+          else lo = logFloor(lo * 0.9999);
+          up = !up;
+        }
+        return { ...a, domain: [lo, hi] };
       };
-      const span = Math.max(decades(left), decades(right));
-      return { left: widen(left, span), right: widen(right, span) };
+      const target = Math.max(span(left), span(right));
+      return { left: widen(left, target), right: widen(right, target) };
     }
     return { left, right };
   }, [visible, stackedBars, chart.points, logOk, hasRight]);
@@ -530,7 +544,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                 line grows, which is all the pointer needs. */}
             <Tooltip
               cursor={false}
-              content={<ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
+              content={<FullTooltip points={chart.points} series={visible} timeMode={timeMode} theme={spec.style.theme} formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
             />
 
             {timeBars.map((b) => (
@@ -606,6 +620,49 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       )}
     </div>
   );
+}
+
+/**
+ * The tooltip with every visible series in it. Recharts only hands over
+ * the entries that have a value on the hovered row, and on the time axis
+ * a statement series has one on a handful of days a year — hovering a
+ * price-vs-EPS chart showed the price alone. Each missing series is read
+ * out as its last value at or before the hovered point, as the legend does.
+ */
+function FullTooltip({
+  active,
+  payload,
+  label,
+  points,
+  series,
+  timeMode,
+  theme,
+  formatter,
+  labelFormatter,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color?: string; dataKey?: string }>;
+  label?: string | number;
+  points: ResolvedPoint[];
+  series: ResolvedSeries[];
+  timeMode: boolean;
+  theme: ChartSpec["style"]["theme"];
+  formatter: (value: number, name: string) => string;
+  labelFormatter: (label: string) => string;
+}) {
+  if (!active || label === undefined || label === null) return null;
+  const rowIndex = timeMode ? points.findIndex((p) => p.x === Number(label)) : Number(label);
+  const full = series.map((s) => {
+    const given = (payload ?? []).find((e) => (e.dataKey ?? e.name) === s.id);
+    if (given) return { name: s.label, value: given.value, color: seriesInk(s.color, theme), dataKey: s.id };
+    // Only on the time axis: on the category axis a gap is a gap.
+    let v: number | null = null;
+    if (timeMode) for (let i = rowIndex; i >= 0 && v === null; i--) v = points[i]?.[s.id] ?? null;
+    return v === null ? null : { name: s.label, value: v, color: seriesInk(s.color, theme), dataKey: s.id };
+  });
+  const rows = full.filter((e): e is NonNullable<typeof e> => e !== null);
+  if (rows.length === 0) return null;
+  return <ChartTooltip active payload={rows} label={String(label)} formatter={formatter} labelFormatter={labelFormatter} />;
 }
 
 export const ChartCanvas = memo(ChartCanvasImpl);
