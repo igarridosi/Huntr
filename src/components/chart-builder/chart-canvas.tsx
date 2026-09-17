@@ -8,7 +8,6 @@ import {
   ComposedChart,
   Line,
   ReferenceArea,
-  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -44,16 +43,6 @@ export interface ChartCanvasProps {
   onHoverRow?: (row: number | null) => void;
 }
 
-/** What Recharts hands a LabelList / ReferenceDot label renderer. */
-interface LabelRenderProps {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  index?: number;
-  viewBox?: { x?: number; y?: number; cx?: number; cy?: number; width?: number; height?: number };
-}
-
 interface TimeBar {
   key: string;
   seriesId: string;
@@ -82,7 +71,7 @@ function niceCeil(v: number): number {
  * its ticks are multiples of one clean step — so a growth chart that dips
  * negative reads −10 / 0 / +10 / +20 rather than −11 / −2 / +7.
  */
-function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] } {
+function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] | null } {
   const lo0 = min < 0 ? min * 1.08 : 0;
   const hi0 = max > 0 ? max * 1.08 : 0;
   if (!(hi0 > lo0)) return { domain: [0, 1], ticks: [0, 1] };
@@ -105,8 +94,6 @@ const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
  * (1200). Lines sit just above the active bar and below the dot.
  */
 const LINE_Z = 1050;
-/** Value pills ride on ReferenceDots, which default to z 600 — under the active bar. They go above the active dot (1200). */
-const PILL_Z = 1300;
 /** Each series starts a beat after the previous one, so the chart builds rather than pops. */
 const STAGGER_MS = 70;
 
@@ -126,21 +113,8 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
   return [ref, width];
 }
 
-/**
- * The value pill: same drawing for bars, lines and areas. Rendered as a
- * ReferenceDot label *element* (Recharts clones it with the viewBox), so
- * the component type is stable across renders — an inline render function
- * would be a new type each time, remounting every pill and replaying its
- * entrance on every pointer move.
- */
-function Pill({ viewBox, text, theme, lift, xMin, xMax }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; lift: number; xMin: number; xMax: number }) {
-  const x = viewBox?.cx ?? viewBox?.x ?? 0;
-  const y = viewBox?.cy ?? viewBox?.y ?? 0;
-  const w = pillWidth(text);
-  // Centred over the point, kept inside the plot at the edges, lifted
-  // clear of any pill it would otherwise sit on.
-  const left = Math.min(Math.max(x - w / 2, xMin), xMax - w);
-  const top = y - PILL_H - PILL_GAP - lift;
+/** A value pill, already laid out in plot pixels. */
+function Pill({ left, top, w, text, theme }: { left: number; top: number; w: number; text: string; theme: CanvasTokens }) {
   return (
     <g className="cb-pill">
       <rect x={left} y={top} width={w} height={PILL_H} rx={5} fill={theme.labelBg} />
@@ -283,9 +257,11 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
   }, [spec.style.stacked, visible]);
   const stackIdFor = (s: ResolvedSeries) => (stackedBars[s.axis].includes(s) ? s.axis : undefined);
 
-  // The linear axes are laid out here, not by Recharts: the extent per
-  // axis (stacks summed) becomes a clean-stepped domain with its ticks.
-  const linearAxes = useMemo(() => {
+  // The axes are laid out here, not by Recharts: the extent per axis
+  // (stacks summed) becomes a clean-stepped linear domain with its ticks,
+  // or a decade-bounded log domain. Knowing the domain is what lets the
+  // value pills be placed in pixels without asking Recharts.
+  const axisLayout = useMemo(() => {
     const extent = (axis: "left" | "right") => {
       let min = Infinity;
       let max = -Infinity;
@@ -312,12 +288,20 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
           if (pos > max) max = pos;
         }
       }
-      return Number.isFinite(min) ? niceAxis(min, max) : niceAxis(0, 0);
+      if (!Number.isFinite(min)) return niceAxis(0, 0);
+      if (logOk && min > 0) {
+        const lo = Math.pow(10, Math.floor(Math.log10(min)));
+        const hi = Math.pow(10, Math.ceil(Math.log10(max)));
+        return { domain: [lo, hi] as [number, number], ticks: null };
+      }
+      return niceAxis(min, max);
     };
     return { left: extent("left"), right: extent("right") };
-  }, [visible, stackedBars, chart.points]);
-  const yAxisProps = (axis: "left" | "right") =>
-    logOk ? { domain: ["auto", "auto"] as const, tickCount: 6 } : { domain: linearAxes[axis].domain, ticks: linearAxes[axis].ticks };
+  }, [visible, stackedBars, chart.points, logOk]);
+  const yAxisProps = (axis: "left" | "right") => {
+    const a = axisLayout[axis];
+    return a.ticks ? { domain: a.domain, ticks: a.ticks } : { domain: a.domain, tickCount: 6 };
+  };
   const topOfStack = (s: ResolvedSeries) => {
     const stack = stackedBars[s.axis];
     return stack.length === 0 || stack[stack.length - 1] === s;
@@ -402,15 +386,30 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
 
   // Value pills in data coordinates, so bars, lines and areas on either
   // axis share one mechanism regardless of how Recharts lays the item out.
-  // Every pill sits centred above its point. Two pills in one column (a
-  // line crossing a bar, say) would land on each other, so their pixel
-  // positions are worked out here from the axes the plot is given, and a
-  // pill that would overlap one already placed is lifted above it.
+  // Value pills are drawn on an overlay of our own, not through Recharts:
+  // every one sits centred above its bar top or line point, inside the
+  // plot at the edges, and where two would land on the same spot (a line
+  // crossing a bar's top, say) the higher one is lifted clear. Pixel
+  // positions come from the plot geometry and the axis domains set above,
+  // so the overlay agrees with the plot without measuring it. Being a
+  // sibling drawn after the chart, it is in front of everything in it.
   const plotLeft = leftWidth;
   const plotRight = width - (hasRight ? rightWidth : 12);
   const pills = useMemo(() => {
-    type P = { key: string; axis: "left" | "right"; x: number; y: number; text: string; row: number; lift: number };
-    const out: P[] = [];
+    type P = { key: string; left: number; top: number; w: number; text: string };
+    if (width <= 0) return [] as P[];
+    const plotW = plotRight - plotLeft;
+    const plotH = height - PLOT_TOP - X_AXIS_H;
+    const n = chart.points.length;
+    const [t0, t1] = timeDomain;
+    const px = (x: number, row: number) => (timeMode ? plotLeft + ((x - t0) / Math.max(1, t1 - t0)) * plotW : plotLeft + (plotW / n) * (row + 0.5));
+    const py = (axis: "left" | "right", v: number) => {
+      const [lo, hi] = axisLayout[axis].domain;
+      if (logOk && lo > 0 && v > 0) return PLOT_TOP + ((Math.log10(hi) - Math.log10(v)) / (Math.log10(hi) - Math.log10(lo) || 1)) * plotH;
+      return PLOT_TOP + ((hi - v) / (hi - lo || 1)) * plotH;
+    };
+
+    const wanted: Array<{ key: string; x: number; y: number; text: string }> = [];
     for (const s of visible) {
       const rows = labelRows.get(s.id);
       if (!rows) continue;
@@ -421,38 +420,26 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         if (!row) continue;
         const raw = isBar ? stackTotal(s, row) : row[s.id];
         if (raw === null || raw === undefined) continue;
-        out.push({ key: `${s.id}-${i}-${raw}`, axis: s.axis, x: row.x, y: raw, text: formatValue(s.unit, raw), row: i, lift: 0 });
+        wanted.push({ key: `${s.id}-${i}-${raw}`, x: px(row.x, i), y: py(s.axis, raw), text: formatValue(s.unit, raw) });
       }
     }
-    if (logOk || out.length < 2 || width <= 0) return out;
-
-    const plotW = plotRight - plotLeft;
-    const plotH = height - PLOT_TOP - X_AXIS_H;
-    const n = chart.points.length;
-    const [t0, t1] = timeDomain;
-    const px = (p: P) => (timeMode ? plotLeft + ((p.x - t0) / Math.max(1, t1 - t0)) * plotW : plotLeft + (plotW / n) * (p.row + 0.5));
-    const py = (p: P) => {
-      const [lo, hi] = linearAxes[p.axis].domain;
-      return PLOT_TOP + ((hi - p.y) / (hi - lo || 1)) * plotH;
-    };
     // Lowest pills first, so a higher one lifts over what is already placed.
-    const placed: Array<{ x: number; top: number; w: number }> = [];
-    for (const p of out.slice().sort((a, b) => py(b) - py(a))) {
+    const out: P[] = [];
+    for (const p of wanted.sort((a, b) => b.y - a.y)) {
       const w = pillWidth(p.text);
-      const x = Math.min(Math.max(px(p) - w / 2, plotLeft), plotRight - w);
-      let top = py(p) - PILL_H - PILL_GAP;
-      for (const q of placed) {
-        const overlapsX = x < q.x + q.w + 3 && x + w > q.x - 3;
+      const left = Math.min(Math.max(p.x - w / 2, plotLeft), plotRight - w);
+      let top = p.y - PILL_H - PILL_GAP;
+      for (const q of out) {
+        const overlapsX = left < q.left + q.w + 3 && left + w > q.left - 3;
         const overlapsY = top < q.top + PILL_H + 2 && top + PILL_H > q.top - 2;
         if (overlapsX && overlapsY) top = q.top - PILL_H - 3;
       }
-      p.lift = py(p) - PILL_H - PILL_GAP - top;
-      placed.push({ x, top, w });
+      out.push({ key: p.key, left, top, w, text: p.text });
     }
     return out;
     // stackTotal / topOfStack derive from stackedBars, which is listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, linearAxes]);
+  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout]);
 
   const xTickFormatter = timeMode ? (v: number) => formatMonthTick(v) : (v: number) => chart.xLabels[v] ?? "";
   const tooltipLabel = timeMode
@@ -490,7 +477,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
   };
 
   return (
-    <div ref={wrapRef} className="chart-builder-plot" style={{ width: "100%", height }}>
+    <div ref={wrapRef} className="chart-builder-plot relative" style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1} onMouseMove={onChartMove} onMouseLeave={onChartLeave}>
@@ -543,21 +530,6 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                 ifOverflow="visible"
               />
             ))}
-            {pills.map((p) => (
-              <ReferenceDot
-                key={p.key}
-                yAxisId={p.axis}
-                x={p.x}
-                y={p.y}
-                r={0}
-                stroke="none"
-                fill="none"
-                ifOverflow="visible"
-                zIndex={PILL_Z}
-                label={<Pill text={p.text} theme={theme} lift={p.lift} xMin={plotLeft} xMax={plotRight} />}
-              />
-            ))}
-
             {visible.map((s, index) => {
               const ink = seriesInk(s.color, spec.style.theme);
               const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, ...tween(index) };
@@ -606,6 +578,13 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
             })}
           </ComposedChart>
         </ResponsiveContainer>
+      )}
+      {pills.length > 0 && (
+        <svg className="pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
+          {pills.map((p) => (
+            <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} theme={theme} />
+          ))}
+        </svg>
       )}
     </div>
   );
