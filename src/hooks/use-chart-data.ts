@@ -7,7 +7,9 @@ import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import {
   METRICS,
   availableDates,
+  clipToListing,
   coversStatements,
+  firstTradeDate,
   defaultRange,
   lacksEps,
   mergeFinancials,
@@ -78,10 +80,10 @@ export function useChartData(spec: ChartSpec): ChartData {
     () => tickers.filter((t) => spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "price")),
     [tickers, spec.series]
   );
-  const priceTickers = useMemo(
-    () => tickers.filter((t) => spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "statements")),
-    [tickers, spec.series]
-  );
+  // Prices for every company on the chart, not only those with a price
+  // or market series: the first close on file is what tells a statement
+  // history where the listing begins.
+  const priceTickers = tickers;
   const statements = useMemo(() => statementsFor(spec), [spec]);
   const statementsKey = statements.join("+");
 
@@ -119,12 +121,13 @@ export function useChartData(spec: ChartSpec): ChartData {
         // for the few periods it has, which would hide the gap.
         if (lacksEps(overlay)) noEps.push(ticker);
       }
-      out[ticker] = quick.pending[i] && !covered ? undefined : mergeFinancials(quick.data[i], covered ? overlay : null);
+      const merged = quick.pending[i] && !covered ? undefined : mergeFinancials(quick.data[i], covered ? overlay : null);
+      out[ticker] = clipToListing(merged, firstTradeDate(prices.data?.[ticker]));
     });
     return { financials: out, deepTickers: deepList, deepWithoutEps: noEps };
     // statementsKey stands in for the statements array's identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey]);
+  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey, prices.data]);
 
   const epsMissing = useMemo(() => (needsEps(spec) ? deepWithoutEps : []), [spec, deepWithoutEps]);
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableDates, coversStatements, defaultRange, mergeFinancials, priceMonthEnds, statementsFor } from "../data";
+import { availableDates, clipToListing, coversStatements, defaultRange, firstTradeDate, mergeFinancials, priceMonthEnds, statementsFor } from "../data";
 import { METRICS, METRIC_IDS } from "../metrics";
 import { createSeries, createSpec } from "../spec";
 import { fin, quarterEnds } from "./fixtures";
@@ -87,5 +87,17 @@ describe("mergeFinancials — EPS gaps", () => {
     const overlay = { ticker: "A", income_statement: { annual: [row("2023-12-31", 0), row("2024-12-31", 0)], quarterly: [] }, balance_sheet: { annual: [], quarterly: [] }, cash_flow: { annual: [], quarterly: [] } };
     const merged = mergeFinancials(base, overlay)!;
     expect(merged.income_statement.annual.map((r) => r.eps_diluted)).toEqual([0, 1.5]);
+  });
+});
+
+describe("clipToListing", () => {
+  it("drops statement periods that ended before the first close on file", () => {
+    const a = fin("A", { annual: [{ date: "2016-12-31", revenue: 1 }, { date: "2018-12-31", revenue: 2 }, { date: "2019-12-31", revenue: 3 }] });
+    const prices = [{ date: "2018-10-25", close: 20 }, { date: "2018-10-26", close: 21 }];
+    expect(firstTradeDate(prices)).toBe("2018-10-25");
+    const clipped = clipToListing(a, firstTradeDate(prices))!;
+    expect(clipped.income_statement.annual.map((r) => r.date).sort()).toEqual(["2018-12-31", "2019-12-31"]);
+    // Unknown listing date: nothing is dropped.
+    expect(clipToListing(a, firstTradeDate([]))).toBe(a);
   });
 });

@@ -82,6 +82,38 @@ export function mergeFinancials(
   };
 }
 
+/**
+ * Earliest date in a price history, or null when there is none. The
+ * first close on file is the day the stock started trading, as far as
+ * the chart can know.
+ */
+export function firstTradeDate(prices: ReadonlyArray<{ date: string }> | undefined): string | null {
+  let first: string | null = null;
+  for (const p of prices ?? []) if (first === null || p.date < first) first = p.date;
+  return first;
+}
+
+/**
+ * Drops statement periods that ended before the stock traded. Data
+ * vendors carry pre-listing figures lifted from the S-1 — sparse
+ * quarters, some of them a fiscal year filed as a quarter — and a
+ * chart built on them says things about a company that did not exist
+ * on the market yet. Nothing is dropped while the listing date is
+ * unknown.
+ */
+export function clipToListing(fin: CompanyFinancials | null | undefined, firstDate: string | null): CompanyFinancials | null | undefined {
+  if (!fin || !firstDate) return fin;
+  const keep = <T extends { date: string }>(rows: T[] | undefined) => (rows ?? []).filter((r) => r.date >= firstDate);
+  const clip = <T extends { date: string }>(s: { annual: T[]; quarterly: T[] } | undefined) =>
+    s ? { annual: keep(s.annual), quarterly: keep(s.quarterly) } : s;
+  return {
+    ...fin,
+    income_statement: clip(fin.income_statement) ?? fin.income_statement,
+    balance_sheet: clip(fin.balance_sheet) ?? fin.balance_sheet,
+    cash_flow: clip(fin.cash_flow) ?? fin.cash_flow,
+  };
+}
+
 /** Whether any series reads a per-share figure (EPS itself, a per-share transform, or a price multiple built on one). */
 export function needsEps(spec: ChartSpec): boolean {
   return spec.series.some((s) => s.transform === "per_share" || s.metric === "eps_diluted" || s.metric === "eps_basic" || s.metric === "pe_ttm" || s.metric === "earnings_yield");
