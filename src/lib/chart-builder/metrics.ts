@@ -159,7 +159,9 @@ const epsDiluted: StatementReader = (p) => {
   if (reported !== null && reported !== 0) return reported;
   const ni = netIncome(p);
   const sh = sharesDiluted(p);
-  return ni === null || sh === null || sh <= 0 ? reported : ni / sh;
+  // A 0 with nothing to derive it from is a missing figure, not a result:
+  // as a value it would drag a TTM to zero and draw a line along the floor.
+  return ni === null || sh === null || sh <= 0 ? null : ni / sh;
 };
 const totalCash = sum(bal("cash_and_equivalents"), bal("short_term_investments"));
 const debt = bal("long_term_debt");

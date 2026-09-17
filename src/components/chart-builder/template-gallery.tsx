@@ -81,9 +81,10 @@ const THUMBS: Record<TemplateId, React.ReactNode> = {
   ),
   "capital-returns": (
     <svg viewBox="0 0 64 36" aria-hidden>
-      <g fill="#FFBF69">{[4, 16, 28, 40, 52].map((x, i) => <rect key={x} x={x} y={28 - i} width="8" height={6 + i} />)}</g>
-      <g fill="#FF8C42">{[4, 16, 28, 40, 52].map((x, i) => <rect key={x} x={x} y={20 - i * 4} width="8" height={8 + i * 3} />)}</g>
-      <path d="M4 14c14-2 28-6 56-10" fill="none" stroke="#F2F4F3" strokeWidth="2.5" strokeLinecap="round" />
+      <g fill="#7C8CF8">{[4, 16, 28, 40, 52].map((x, i) => <rect key={x} x={x} y={29 - i} width="8" height={5 + i} />)}</g>
+      <g fill="#FFBF69">{[4, 16, 28, 40, 52].map((x, i) => <rect key={x} x={x} y={24 - i * 2} width="8" height={5 + i} />)}</g>
+      <g fill="#FF8C42">{[4, 16, 28, 40, 52].map((x, i) => <rect key={x} x={x} y={17 - i * 4} width="8" height={7 + i * 2} />)}</g>
+      <path d="M4 12c14-2 28-6 56-9" fill="none" stroke="#F2F4F3" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   ),
   valuation: (
@@ -91,6 +92,18 @@ const THUMBS: Record<TemplateId, React.ReactNode> = {
       <path d="M4 30c10-16 20-2 30-12s14 6 26 2V34H4z" fill="#FF8C42" fillOpacity=".3" />
       <path d="M4 30c10-16 20-2 30-12s14 6 26 2" fill="none" stroke="#FF8C42" strokeWidth="2.5" strokeLinecap="round" />
       <path d="M4 12c14 6 28 2 56 8" fill="none" stroke="#4DA3FF" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  ),
+  "cash-conversion": (
+    <svg viewBox="0 0 64 36" aria-hidden>
+      <g fill="#FF8C42">{[4, 16, 28, 40, 52].map((x, i) => <rect key={x} x={x} y={28 - i * 4} width="8" height={6 + i * 4} />)}</g>
+      <path d="M8 24c10-4 14-10 24-10s12 0 28-10" fill="none" stroke="#F2F4F3" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  ),
+  "price-vs-earnings": (
+    <svg viewBox="0 0 64 36" fill="none" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+      <path d="M4 30c10-6 16-16 26-14s14-6 30-12" stroke="#F2F4F3" />
+      <path d="M4 32c12-2 20-6 30-8s16-6 26-8" stroke="#FF8C42" />
     </svg>
   ),
   custom: (
