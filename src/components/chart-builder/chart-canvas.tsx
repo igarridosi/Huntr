@@ -151,6 +151,24 @@ function Pill({ viewBox, text, theme, lift, xMin, xMax }: { viewBox?: LabelRende
   );
 }
 
+/**
+ * The hovered bar: the same colour, one step brighter on a dark canvas or
+ * deeper on a light one — a change of light rather than an outline.
+ */
+function hoverInk(hex: string, themeKey: ChartSpec["style"]["theme"]): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const light = themeKey === "snow" || themeKey === "parchment";
+  const target = light ? 0 : 255;
+  const k = light ? 0.12 : 0.16;
+  const mix = (c: number) => Math.round(c + (target - c) * k);
+  const n = parseInt(m[1], 16);
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
 const PILL_H = 18;
 /** Space between a point (or bar top) and its pill. */
 const PILL_GAP = 5;
@@ -552,7 +570,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                 if (timeMode) return <Bar key={s.id} {...common} fill="none" isAnimationActive={false} />;
                 const r = spec.style.barRadius;
                 return (
-                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: ink, stroke: theme.title, strokeWidth: 1, strokeOpacity: 0.45 }} />
+                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: hoverInk(ink, spec.style.theme) }} />
                 );
               }
               if (s.shape === "area") {
