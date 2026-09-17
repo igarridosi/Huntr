@@ -193,14 +193,15 @@ function ChartBuilder() {
       periods={data.chart.points.length}
       dataSource={{
         deepTickers: data.deepTickers,
+        epsMissing: data.epsMissing,
         statements: data.statements,
         loading: deep.loading,
         blocked: deep.blocked,
-        onLoadDeep: () =>
-          deep.load(
-            data.tickers.filter((t) => !data.deepTickers.includes(t)),
-            data.statements
-          ),
+        onLoadDeep: () => {
+          const missing = data.tickers.filter((t) => !data.deepTickers.includes(t));
+          // Statements come back from the cache; only the EPS call is spent.
+          deep.load(missing.length > 0 ? missing : data.epsMissing, data.statements);
+        },
       }}
     />
   );

@@ -3,7 +3,7 @@
  * partial deep-history overlay combines with the quick data.
  */
 
-import type { CompanyFinancials } from "@/types/financials";
+import type { CompanyFinancials, IncomeStatement } from "@/types/financials";
 import { METRICS, type StatementKind } from "./metrics";
 import { bundlePeriods } from "./resolve";
 import type { ChartSpec } from "./spec";
@@ -55,12 +55,42 @@ export function mergeFinancials(
     const o = overlay[KEY[k]];
     return (o?.annual?.length ?? 0) + (o?.quarterly?.length ?? 0) > 0;
   };
+  // The deep income statement can arrive without EPS (Alpha Vantage
+  // serves it separately); where Yahoo has the same period, its EPS
+  // fills the gap so the ratios built on it do not go dark.
+  const fillEps = (deep: IncomeStatement[] | undefined, quick: IncomeStatement[] | undefined) => {
+    if (!deep?.length || !quick?.length) return deep ?? [];
+    const byDate = new Map(quick.map((r) => [r.date, r] as const));
+    return deep.map((r) => {
+      if (r.eps_diluted !== 0 && r.eps_basic !== 0) return r;
+      const q = byDate.get(r.date);
+      if (!q) return r;
+      return { ...r, eps_diluted: r.eps_diluted || q.eps_diluted, eps_basic: r.eps_basic || q.eps_basic };
+    });
+  };
+  const income = has("income")
+    ? {
+        annual: fillEps(overlay.income_statement?.annual, base.income_statement?.annual),
+        quarterly: fillEps(overlay.income_statement?.quarterly, base.income_statement?.quarterly),
+      }
+    : base.income_statement;
   return {
     ticker: base.ticker,
-    income_statement: has("income") ? overlay.income_statement : base.income_statement,
+    income_statement: income,
     balance_sheet: has("balance") ? overlay.balance_sheet : base.balance_sheet,
     cash_flow: has("cashflow") ? overlay.cash_flow : base.cash_flow,
   };
+}
+
+/** Whether any series reads a per-share figure (EPS itself, a per-share transform, or a price multiple built on one). */
+export function needsEps(spec: ChartSpec): boolean {
+  return spec.series.some((s) => s.transform === "per_share" || s.metric === "eps_diluted" || s.metric === "eps_basic" || s.metric === "pe_ttm" || s.metric === "earnings_yield");
+}
+
+/** True when a statement set has income rows but every one of them carries a 0 EPS — the figure never arrived. */
+export function lacksEps(fin: CompanyFinancials | null | undefined): boolean {
+  const rows = [...(fin?.income_statement?.annual ?? []), ...(fin?.income_statement?.quarterly ?? [])];
+  return rows.length > 0 && rows.every((r) => !r.eps_diluted && !r.eps_basic);
 }
 
 /**

@@ -504,7 +504,7 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       .map((b) => ({ x: xMode === "time" ? b.bucket.mid : b.bucket.key, value: transformed.get(b.bucket.key) ?? null }));
 
     if (def.source === "market" && prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
-      warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown.` });
+      warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown, and the per-share figures behind it.` });
     }
 
     const keyOfX = new Map(bundles.map((b) => [xMode === "time" ? b.bucket.mid : b.bucket.key, b.bucket.key] as const));

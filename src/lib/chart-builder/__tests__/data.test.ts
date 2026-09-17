@@ -79,3 +79,13 @@ describe("priceMonthEnds", () => {
     expect(priceMonthEnds({ A: a, B: b, C: undefined })).toEqual(["2024-01-31", "2024-02-29", "2024-03-15"]);
   });
 });
+
+describe("mergeFinancials — EPS gaps", () => {
+  it("lends the quick data's EPS to deep income rows that arrived without it", () => {
+    const row = (date: string, eps: number) => ({ period: date, date, currency: "USD", revenue: 10, cost_of_revenue: 0, gross_profit: 0, operating_expenses: 0, operating_income: 0, interest_expense: 0, pre_tax_income: 0, income_tax: 0, net_income: 5, eps_basic: eps, eps_diluted: eps, shares_outstanding_basic: 0, shares_outstanding_diluted: 0, ebitda: 0 });
+    const base = { ticker: "A", income_statement: { annual: [row("2024-12-31", 1.5)], quarterly: [] }, balance_sheet: { annual: [], quarterly: [] }, cash_flow: { annual: [], quarterly: [] } };
+    const overlay = { ticker: "A", income_statement: { annual: [row("2023-12-31", 0), row("2024-12-31", 0)], quarterly: [] }, balance_sheet: { annual: [], quarterly: [] }, cash_flow: { annual: [], quarterly: [] } };
+    const merged = mergeFinancials(base, overlay)!;
+    expect(merged.income_statement.annual.map((r) => r.eps_diluted)).toEqual([0, 1.5]);
+  });
+});

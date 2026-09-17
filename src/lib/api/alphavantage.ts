@@ -1074,6 +1074,8 @@ const STATEMENT_CACHE_KEY: Record<AlphaStatementKind, string> = {
   balance: "alpha-balance-v1",
   cashflow: "alpha-cashflow-v1",
 };
+/** The EARNINGS answer that lends EPS to the income statement; cached so a later cache-only read still has it. */
+const EARNINGS_CACHE_KEY = "alpha-earnings-v1";
 
 const STATEMENT_TTL_MS = 12 * 60 * 60 * 1000;
 const STATEMENT_STALE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1143,11 +1145,19 @@ export async function getAlphaStatements(
     const hasEps = (rows?: AlphaFinancialReport[]) =>
       (rows ?? []).some((row) => parseNumber(row.dilutedEPS) !== 0 || parseNumber(row.reportedEPS) !== 0);
     let earnings: AlphaEarningsResponse = {};
-    if (!options.cachedOnly && (!hasEps(raw.income.annualReports) || !hasEps(raw.income.quarterlyReports))) {
-      try {
-        earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
-      } catch (error) {
-        if (isAlphaThrottleError(error)) throw error;
+    if (!hasEps(raw.income.annualReports) || !hasEps(raw.income.quarterlyReports)) {
+      const cachedEarnings = await getCachedDataState<AlphaEarningsResponse>(symbol, EARNINGS_CACHE_KEY, STATEMENT_TTL_MS, STATEMENT_STALE_MS);
+      if (cachedEarnings.status !== "miss" && cachedEarnings.data) {
+        earnings = cachedEarnings.data;
+      } else if (!options.cachedOnly) {
+        try {
+          earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
+          if (earnings.annualEarnings?.length || earnings.quarterlyEarnings?.length) {
+            await setCachedData(symbol, EARNINGS_CACHE_KEY, earnings as unknown as Record<string, unknown>);
+          }
+        } catch (error) {
+          if (isAlphaThrottleError(error)) throw error;
+        }
       }
     }
     const annualEps = buildEpsMaps(earnings.annualEarnings, "annual");
