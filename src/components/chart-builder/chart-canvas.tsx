@@ -131,22 +131,31 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
  * would be a new type each time, remounting every pill and replaying its
  * entrance on every pointer move.
  */
-function Pill({ viewBox, text, theme, anchor }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left" }) {
+function Pill({ viewBox, text, theme, lift, xMin, xMax }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; lift: number; xMin: number; xMax: number }) {
   const x = viewBox?.cx ?? viewBox?.x ?? 0;
   const y = viewBox?.cy ?? viewBox?.y ?? 0;
-  const w = text.length * 6.6 + 12;
-  const h = 18;
-  const left = anchor === "above" ? x - w / 2 : anchor === "right" ? x + 8 : x - w - 8;
-  const top = anchor === "above" ? y - h - 5 : y - h / 2;
+  const w = pillWidth(text);
+  // Centred over the point, kept inside the plot at the edges, lifted
+  // clear of any pill it would otherwise sit on.
+  const left = Math.min(Math.max(x - w / 2, xMin), xMax - w);
+  const top = y - PILL_H - PILL_GAP - lift;
   return (
     <g className="cb-pill">
-      <rect x={left} y={top} width={w} height={h} rx={6} fill={theme.labelBg} stroke={theme.grid} strokeOpacity={0.6} />
-      <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={500} fill={theme.labelText} fontFamily="var(--font-mono)">
+      <rect x={left} y={top} width={w} height={PILL_H} rx={5} fill={theme.labelBg} />
+      <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={theme.labelText} fontFamily="var(--font-mono)">
         {text}
       </text>
     </g>
   );
 }
+
+const PILL_H = 18;
+/** Space between a point (or bar top) and its pill. */
+const PILL_GAP = 5;
+/** Recharts' default XAxis height; the plot ends this far above the bottom. */
+const X_AXIS_H = 30;
+const PLOT_TOP = 24;
+const pillWidth = (text: string) => text.length * 6.6 + 12;
 
 /**
  * The plot itself: one ComposedChart that covers bars, lines and areas on
@@ -373,9 +382,15 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
 
   // Value pills in data coordinates, so bars, lines and areas on either
   // axis share one mechanism regardless of how Recharts lays the item out.
+  // Every pill sits centred above its point. Two pills in one column (a
+  // line crossing a bar, say) would land on each other, so their pixel
+  // positions are worked out here from the axes the plot is given, and a
+  // pill that would overlap one already placed is lifted above it.
+  const plotLeft = leftWidth;
+  const plotRight = width - (hasRight ? rightWidth : 12);
   const pills = useMemo(() => {
-    const out: Array<{ key: string; axis: "left" | "right"; x: number; y: number; text: string; anchor: "above" | "left" | "right" }> = [];
-    const lastRow = chart.points.length - 1;
+    type P = { key: string; axis: "left" | "right"; x: number; y: number; text: string; row: number; lift: number };
+    const out: P[] = [];
     for (const s of visible) {
       const rows = labelRows.get(s.id);
       if (!rows) continue;
@@ -386,20 +401,38 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         if (!row) continue;
         const raw = isBar ? stackTotal(s, row) : row[s.id];
         if (raw === null || raw === undefined) continue;
-        out.push({
-          key: `${s.id}-${i}-${raw}`,
-          axis: s.axis,
-          x: row.x,
-          y: raw,
-          text: formatValue(s.unit, raw),
-          anchor: isBar ? "above" : i === lastRow ? "left" : i === 0 ? "right" : "above",
-        });
+        out.push({ key: `${s.id}-${i}-${raw}`, axis: s.axis, x: row.x, y: raw, text: formatValue(s.unit, raw), row: i, lift: 0 });
       }
+    }
+    if (logOk || out.length < 2 || width <= 0) return out;
+
+    const plotW = plotRight - plotLeft;
+    const plotH = height - PLOT_TOP - X_AXIS_H;
+    const n = chart.points.length;
+    const [t0, t1] = timeDomain;
+    const px = (p: P) => (timeMode ? plotLeft + ((p.x - t0) / Math.max(1, t1 - t0)) * plotW : plotLeft + (plotW / n) * (p.row + 0.5));
+    const py = (p: P) => {
+      const [lo, hi] = linearAxes[p.axis].domain;
+      return PLOT_TOP + ((hi - p.y) / (hi - lo || 1)) * plotH;
+    };
+    // Lowest pills first, so a higher one lifts over what is already placed.
+    const placed: Array<{ x: number; top: number; w: number }> = [];
+    for (const p of out.slice().sort((a, b) => py(b) - py(a))) {
+      const w = pillWidth(p.text);
+      const x = Math.min(Math.max(px(p) - w / 2, plotLeft), plotRight - w);
+      let top = py(p) - PILL_H - PILL_GAP;
+      for (const q of placed) {
+        const overlapsX = x < q.x + q.w + 3 && x + w > q.x - 3;
+        const overlapsY = top < q.top + PILL_H + 2 && top + PILL_H > q.top - 2;
+        if (overlapsX && overlapsY) top = q.top - PILL_H - 3;
+      }
+      p.lift = py(p) - PILL_H - PILL_GAP - top;
+      placed.push({ x, top, w });
     }
     return out;
     // stackTotal / topOfStack derive from stackedBars, which is listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, labelRows, chart.points, stackedBars]);
+  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, linearAxes]);
 
   const xTickFormatter = timeMode ? (v: number) => formatMonthTick(v) : (v: number) => chart.xLabels[v] ?? "";
   const tooltipLabel = timeMode
@@ -500,7 +533,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                 stroke="none"
                 fill="none"
                 ifOverflow="visible"
-                label={<Pill text={p.text} theme={theme} anchor={p.anchor} />}
+                label={<Pill text={p.text} theme={theme} lift={p.lift} xMin={plotLeft} xMax={plotRight} />}
               />
             ))}
 
