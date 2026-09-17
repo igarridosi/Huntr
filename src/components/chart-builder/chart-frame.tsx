@@ -27,6 +27,8 @@ interface ChartFrameProps {
    * larger size that still respects the aspect ratio.
    */
   fill?: boolean;
+  /** False while the range is being scrubbed: the plot jumps instead of tweening. */
+  animate?: boolean;
   className?: string;
 }
 
@@ -37,7 +39,7 @@ const RATIO: Record<AspectRatio, number> = { "16:9": 9 / 16, "4:3": 3 / 4, "1:1"
  * theme's background, independent of the app's light/dark chrome.
  */
 export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function ChartFrame(
-  { spec, data, selectedId, onSelect, onChange, fill = false, className },
+  { spec, data, selectedId, onSelect, onChange, fill = false, animate = true, className },
   ref
 ) {
   const theme = CANVAS_THEMES[spec.style.theme];
@@ -93,6 +95,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
         spec={spec}
         pendingTickers={data.pendingTickers}
         selectedId={selectedId}
+        hoverId={hoverId}
         onToggle={toggle}
         onIsolate={isolate}
         onSelect={onSelect}
@@ -102,7 +105,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
       <div ref={plotRef} className={cn("mt-2 flex w-full justify-center", fill ? "min-h-0 flex-1 items-center" : "items-start")} style={fill ? undefined : { height }}>
         {plotWidth > 0 && (
           <div style={{ width, height }}>
-            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />}
+            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} animate={animate} />}
           </div>
         )}
       </div>

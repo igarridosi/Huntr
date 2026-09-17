@@ -454,10 +454,9 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
         warnedTickers.add(`p:${series.ticker}`);
         warnings.push({ seriesId: series.id, ticker: series.ticker, message: `No price history for ${series.ticker}.` });
       }
-      let points = prices
+      const points = prices
         .filter((p) => inRange(p.date, priceRange))
         .map((p) => ({ x: Date.parse(p.date), value: p.close as number | null }));
-      if (series.transform === "indexed") points = indexValues(points);
       all.push({ series, unit, points });
       continue;
     }
@@ -485,10 +484,9 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${series.ticker} has fewer than four quarters; TTM cannot be computed.` });
     }
 
-    let points = bundles
+    const points = bundles
       .filter((b) => inRange(b.date, spec.range))
       .map((b) => ({ x: xMode === "time" ? b.bucket.mid : b.bucket.key, value: transformed.get(b.bucket.key) ?? null }));
-    if (series.transform === "indexed") points = indexValues(points);
 
     if (def.source === "market" && prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown.` });
@@ -523,15 +521,28 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       }
     }
   }
-  const sortedX = [...xs].sort((a, b) => a - b);
+  // Indexing runs last, on what is actually shown: the base is the first
+  // period on the chart, not one the alignment above has since removed.
+  for (const s of all) if (s.series.transform === "indexed") s.points = indexValues(s.points);
+
+  // A history-dependent transform (YoY, TTM) has nothing to say for its
+  // first year; those warm-up periods are dropped from the front rather
+  // than shown as empty columns. Gaps elsewhere stay: they are real.
+  let sortedX = [...xs].sort((a, b) => a - b);
+  if (all.some((s) => s.series.transform === "yoy" || s.series.transform === "ttm")) {
+    const drawn = new Set<number>();
+    for (const s of all) for (const p of s.points) if (p.value !== null) drawn.add(p.x);
+    const firstDrawn = sortedX.findIndex((x) => drawn.has(x));
+    sortedX = firstDrawn <= 0 ? sortedX : sortedX.slice(firstDrawn);
+  }
   const indexOfX = new Map(sortedX.map((x, i) => [x, i] as const));
 
   const points: ResolvedPoint[] = sortedX.map((x, i) => ({ x: xMode === "category" ? i : x }) as ResolvedPoint);
   for (const s of all) {
     for (const p of points) p[s.series.id] = null;
     for (const p of s.points) {
-      const row = points[indexOfX.get(p.x)!];
-      row[s.series.id] = p.value;
+      const i = indexOfX.get(p.x);
+      if (i !== undefined) points[i][s.series.id] = p.value;
     }
   }
 

@@ -46,13 +46,16 @@ interface DesignPanelProps {
 
 const MIXED = "__mixed__" as const;
 
+/** The basis a figure is reported on; growth views live in the Show row. */
 const TRANSFORMS: ReadonlyArray<{ value: SeriesTransform; label: string }> = [
   { value: "raw", label: "As reported" },
   { value: "per_share", label: "Per share" },
   { value: "ttm", label: "Trailing 12 months" },
-  { value: "yoy", label: "Year-over-year %" },
-  { value: "indexed", label: "Indexed to start %" },
 ];
+
+/** How a statement figure is shown: the amount, or one of two percentages. */
+type GrowthView = "value" | "yoy" | "indexed";
+const growthViewOf = (t: SeriesTransform): GrowthView => (t === "yoy" || t === "indexed" ? t : "value");
 
 const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GROUPS.map((group) => ({
   label: group,
@@ -111,6 +114,18 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
 
   const shapes = new Set(spec.series.map((s) => s.shape));
   const allPrices = spec.series.length > 0 && spec.series.every((s) => METRICS[s.metric].source === "price");
+  // Amounts (revenue, FCF, debt, shares…) only compare across companies as
+  // growth rates; margins and multiples are already percentages or ratios.
+  const growthEligible =
+    !allPrices && spec.series.length > 0 && spec.series.every((s) => ["currency", "shares", "per_share"].includes(METRICS[s.metric].unit));
+  const growthView: GrowthView | typeof MIXED = transform === MIXED ? MIXED : growthViewOf(transform);
+  const setGrowthView = (v: GrowthView) =>
+    bulk(
+      v === "value"
+        ? { transform: "raw" }
+        : // Indexed is a line by definition (see validateSpec); YoY keeps the shape.
+          { transform: v, ...(v === "indexed" ? { shape: "line" as const } : {}) }
+    );
   const priceView: "price" | "change" | typeof MIXED = allPrices ? (transform === "raw" ? "price" : transform === "indexed" ? "change" : MIXED) : MIXED;
   const logEligible =
     spec.series.length > 0 &&
@@ -132,7 +147,12 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
           <SelectMenu<MetricId | typeof MIXED>
             groups={withMixed(METRIC_GROUP_OPTIONS, metric === MIXED)}
             value={metric}
-            onChange={(v) => v !== MIXED && bulk({ metric: v })}
+            onChange={(v) => {
+              if (v === MIXED) return;
+              // A growth view of a margin or a multiple means nothing; fall back to the value.
+              const growthOk = ["currency", "shares", "per_share"].includes(METRICS[v].unit);
+              bulk({ metric: v, ...(!growthOk && growthView !== "value" ? { transform: "raw" as const } : {}) });
+            }}
             ariaLabel="Metric for every series"
           />
         </Row>
@@ -151,14 +171,43 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             />
           </Row>
         ) : (
-          <Row label="Transform">
-            <SelectMenu<SeriesTransform | typeof MIXED>
-              groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
-              value={transform}
-              onChange={(v) => v !== MIXED && bulk({ transform: v })}
-              ariaLabel="Transform for every series"
-            />
-          </Row>
+          <>
+            {growthEligible && (
+              <Row
+                label="Show"
+                stack
+                hint="YoY %: growth against the same period a year earlier. Indexed %: change since the first period shown — companies of any size on one scale."
+              >
+                <SegmentedTabs<GrowthView | typeof MIXED>
+                  items={[
+                    ...(growthView === MIXED ? [{ key: MIXED as typeof MIXED, label: "Mixed" }] : []),
+                    { key: "value", label: "Value" },
+                    { key: "yoy", label: "YoY %" },
+                    { key: "indexed", label: "Indexed %" },
+                  ]}
+                  value={growthView}
+                  onChange={(v) => v !== MIXED && setGrowthView(v)}
+                  ariaLabel="Show as value or growth"
+                  size="sm"
+                />
+              </Row>
+            )}
+            {growthView !== "yoy" && growthView !== "indexed" && (
+              <Row label="Transform">
+                <SelectMenu<SeriesTransform | typeof MIXED>
+                  groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
+                  value={transform}
+                  onChange={(v) => v !== MIXED && bulk({ transform: v })}
+                  ariaLabel="Transform for every series"
+                />
+              </Row>
+            )}
+            {growthView === "yoy" && !allDeep && dataSource.statements.length > 0 && (
+              <p className="px-1 text-[11px] leading-snug text-mist">
+                YoY needs the year before each period: with Yahoo Finance&apos;s few periods that is one or two points. The 20-year history below gives the full series.
+              </p>
+            )}
+          </>
         )}
         <Row label="Shape" stack={shape === MIXED}>
           <SegmentedTabs<SeriesShape | typeof MIXED>

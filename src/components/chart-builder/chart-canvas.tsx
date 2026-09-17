@@ -39,6 +39,8 @@ export interface ChartCanvasProps {
   height: number;
   /** Series under the pointer in the legend; every other series fades. */
   emphasisId?: string | null;
+  /** False while the range is scrubbed: every redraw lands at once. */
+  animate?: boolean;
 }
 
 /** What Recharts hands a LabelList / ReferenceDot label renderer. */
@@ -65,7 +67,7 @@ interface TimeBar {
 
 const Y_AXIS_WIDTH = 64;
 
-/** Rounds up to 1 / 2 / 2.5 / 5 × 10ⁿ so the top tick is a clean number. */
+/** The smallest 1 / 2 / 2.5 / 5 × 10ⁿ at or above `v`. */
 function niceCeil(v: number): number {
   if (!Number.isFinite(v) || v <= 0) return v;
   const p = Math.pow(10, Math.floor(Math.log10(v)));
@@ -74,17 +76,26 @@ function niceCeil(v: number): number {
 }
 
 /**
- * Both axes start at zero (unless the data goes negative) and end a step
- * above the data, so a line on one axis and bars on the other read at
- * the same proportion and nothing touches the top edge.
+ * A linear axis over [min, max]: it starts at zero unless the data goes
+ * below it, ends a step above the data so nothing touches the frame, and
+ * its ticks are multiples of one clean step — so a growth chart that dips
+ * negative reads −10 / 0 / +10 / +20 rather than −11 / −2 / +7.
  */
-const Y_DOMAIN: [(min: number) => number, (max: number) => number] = [
-  (min) => (min < 0 ? -niceCeil(Math.abs(min) * 1.1) : 0),
-  (max) => (max > 0 ? niceCeil(max * 1.08) : 0),
-];
+function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] } {
+  const lo0 = min < 0 ? min * 1.08 : 0;
+  const hi0 = max > 0 ? max * 1.08 : 0;
+  if (!(hi0 > lo0)) return { domain: [0, 1], ticks: [0, 1] };
+  const step = niceCeil((hi0 - lo0) / 5);
+  const lo = Math.floor(lo0 / step) * step;
+  const hi = Math.ceil(hi0 / step) * step;
+  const ticks: number[] = [];
+  for (let v = lo; v <= hi + step / 1000; v += step) ticks.push(Number(v.toFixed(10)));
+  return { domain: [lo, hi], ticks };
+}
 /** Share of a bucket a bar (or a group of bars) occupies on the time axis. */
 const TIME_BAR_FILL = 0.72;
 const QUARTER_MS = 91 * 86_400_000;
+const TWEEN_MS = 420;
 
 function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
   const ref = useRef<T | null>(null);
@@ -130,11 +141,16 @@ function Pill({ x, y, text, theme, anchor }: { x: number; y: number; text: strin
  * daily closes in the same table that gap is one day — every bar would be
  * a hairline. A rectangle from bucket-start to bucket-end does not care.
  */
-export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCanvasProps) {
+export function ChartCanvas({ spec, chart, height, emphasisId = null, animate = true }: ChartCanvasProps) {
   /** 1 for the emphasised series (or all, when none is), faint for the rest. */
-  const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.22);
+  const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.18);
+  /** The emphasised stroke steps forward a little; the rest keep their width. */
+  const strokeFor = (id: string) => (emphasisId === id ? spec.style.lineWidth + 1 : spec.style.lineWidth);
   const theme = CANVAS_THEMES[spec.style.theme];
   const reducedMotion = usePrefersReducedMotion();
+  // Short and eased-out: the shape settles before the eye looks for it.
+  // Recharts' default 1.5 s is what made every change feel late.
+  const tween = { isAnimationActive: animate && !reducedMotion, animationDuration: TWEEN_MS, animationEasing: "ease-out" as const };
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
 
@@ -159,7 +175,6 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     visible.every((s) => s.shape !== "bar" && s.unit !== "percent") &&
     chart.points.every((p) => visible.every((s) => p[s.id] === null || (p[s.id] as number) > 0));
   const yScale = logOk ? "log" : "auto";
-  const yDomain = logOk ? (["auto", "auto"] as const) : Y_DOMAIN;
   const leftWidth = spec.style.yLeftFormat === "full" ? 104 : Y_AXIS_WIDTH;
   const rightWidth = spec.style.yRightFormat === "full" ? 104 : Y_AXIS_WIDTH;
 
@@ -197,6 +212,42 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     return byAxis;
   }, [spec.style.stacked, visible]);
   const stackIdFor = (s: ResolvedSeries) => (stackedBars[s.axis].includes(s) ? s.axis : undefined);
+
+  // The linear axes are laid out here, not by Recharts: the extent per
+  // axis (stacks summed) becomes a clean-stepped domain with its ticks.
+  const linearAxes = useMemo(() => {
+    const extent = (axis: "left" | "right") => {
+      let min = Infinity;
+      let max = -Infinity;
+      const own = visible.filter((s) => s.axis === axis);
+      const stack = stackedBars[axis];
+      const loose = own.filter((s) => !stack.includes(s));
+      for (const row of chart.points) {
+        for (const s of loose) {
+          const v = row[s.id];
+          if (v === null || v === undefined) continue;
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+        if (stack.length) {
+          let pos = 0;
+          let neg = 0;
+          for (const s of stack) {
+            const v = row[s.id];
+            if (v === null || v === undefined) continue;
+            if (v >= 0) pos += v;
+            else neg += v;
+          }
+          if (neg < min) min = neg;
+          if (pos > max) max = pos;
+        }
+      }
+      return Number.isFinite(min) ? niceAxis(min, max) : niceAxis(0, 0);
+    };
+    return { left: extent("left"), right: extent("right") };
+  }, [visible, stackedBars, chart.points]);
+  const yAxisProps = (axis: "left" | "right") =>
+    logOk ? { domain: ["auto", "auto"] as const, tickCount: 6 } : { domain: linearAxes[axis].domain, ticks: linearAxes[axis].ticks };
   const topOfStack = (s: ResolvedSeries) => {
     const stack = stackedBars[s.axis];
     return stack.length === 0 || stack[stack.length - 1] === s;
@@ -343,7 +394,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   };
 
   return (
-    <div ref={wrapRef} style={{ width: "100%", height }}>
+    <div ref={wrapRef} className="chart-builder-plot" style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1}>
@@ -369,9 +420,9 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
               <XAxis dataKey="x" type="category" axisLine={false} tickLine={false} tick={tick} dy={8} interval="preserveStartEnd" minTickGap={28} tickFormatter={xTickFormatter} />
             )}
 
-            <YAxis yAxisId="left" orientation="left" scale={yScale} domain={yDomain} allowDataOverflow={logOk} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={leftWidth} tickFormatter={(v: number) => formatTick(leftUnit, v, spec.style.yLeftFormat)} label={axisLabel("left")} />
+            <YAxis yAxisId="left" orientation="left" scale={yScale} {...yAxisProps("left")} allowDataOverflow={logOk} axisLine={false} tickLine={false} tick={tick} width={leftWidth} tickFormatter={(v: number) => formatTick(leftUnit, v, spec.style.yLeftFormat)} label={axisLabel("left")} />
             {hasRight && (
-              <YAxis yAxisId="right" orientation="right" scale={yScale} domain={yDomain} allowDataOverflow={logOk} tickCount={6} axisLine={false} tickLine={false} tick={tick} width={rightWidth} tickFormatter={(v: number) => formatTick(rightUnit, v, spec.style.yRightFormat)} label={axisLabel("right")} />
+              <YAxis yAxisId="right" orientation="right" scale={yScale} {...yAxisProps("right")} allowDataOverflow={logOk} axisLine={false} tickLine={false} tick={tick} width={rightWidth} tickFormatter={(v: number) => formatTick(rightUnit, v, spec.style.yRightFormat)} label={axisLabel("right")} />
             )}
 
             {/* No cursor line: the hovered bar brightens and the point on a
@@ -414,7 +465,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
 
             {visible.map((s) => {
               const ink = seriesInk(s.color, spec.style.theme);
-              const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, isAnimationActive: !reducedMotion };
+              const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, ...tween };
               // Presentation attributes reach the drawn path; a `style` prop would not.
               const fade = { strokeOpacity: alpha(s.id), fillOpacity: alpha(s.id) };
 
@@ -435,7 +486,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                     {...fade}
                     type="monotone"
                     stroke={ink}
-                    strokeWidth={spec.style.lineWidth}
+                    strokeWidth={strokeFor(s.id)}
                     fill={`url(#${gradientPrefix}-${s.id})`}
                     dot={false}
                     connectNulls={timeMode}
@@ -450,7 +501,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                   {...fade}
                   type="monotone"
                   stroke={ink}
-                  strokeWidth={spec.style.lineWidth}
+                  strokeWidth={strokeFor(s.id)}
                   dot={false}
                   connectNulls={timeMode}
                   activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}

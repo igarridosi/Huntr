@@ -205,6 +205,23 @@ describe("resolveChart — category mode", () => {
     expect(chart.series[0].first).toEqual({ x: 0, value: 2 });
   });
 
+  it("drops the warm-up year of a YoY series from the front and keeps later gaps", () => {
+    const a = fin("A", {
+      annual: [
+        { date: "2021-12-31", revenue: 10 },
+        { date: "2022-12-31", revenue: 12 },
+        { date: "2023-12-31", revenue: 0 },
+        { date: "2024-12-31", revenue: 15 },
+      ],
+    });
+    const spec = createSpec({ granularity: "annual", series: [createSeries({ id: "a", ticker: "A", metric: "revenue", transform: "yoy" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    expect(chart.xLabels).toEqual(["2022", "2023", "2024"]);
+    expect(col(chart, "a")[0]).toBeCloseTo(20);
+    expect(col(chart, "a").slice(1)).toEqual([-100, null]);
+    expect(chart.series[0].first?.x).toBe(0);
+  });
+
   it("align=common ignores a series with no data at all instead of emptying the chart", () => {
     const chart = resolveChart(
       createSpec({ granularity: "annual", series: [...twoSeries, createSeries({ id: "z", ticker: "ZZZ", metric: "revenue" })] }),

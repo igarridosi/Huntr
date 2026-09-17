@@ -571,3 +571,23 @@ select optgroup {
     max-height: var(--fit-height, none);
   }
 }
+
+/* Chart Builder plot: legend hover steps the other series back with a
+   short fade rather than a cut, on the SVG presentation attributes
+   Recharts writes (they are animatable CSS properties). */
+.chart-builder-plot .recharts-line-curve,
+.chart-builder-plot .recharts-area-curve,
+.chart-builder-plot .recharts-area-area,
+.chart-builder-plot .recharts-bar-rectangle path,
+.chart-builder-plot .recharts-reference-area-rect {
+  transition: stroke-opacity 220ms ease-out, fill-opacity 220ms ease-out, stroke-width 220ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .chart-builder-plot .recharts-line-curve,
+  .chart-builder-plot .recharts-area-curve,
+  .chart-builder-plot .recharts-area-area,
+  .chart-builder-plot .recharts-bar-rectangle path,
+  .chart-builder-plot .recharts-reference-area-rect {
+    transition: none;
+  }
+}
