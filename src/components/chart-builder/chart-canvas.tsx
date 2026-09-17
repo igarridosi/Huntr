@@ -40,11 +40,7 @@ export interface ChartCanvasProps {
   height: number;
   /** Series under the pointer in the legend; every other series fades. */
   emphasisId?: string | null;
-  /**
-   * Row (index into `chart.points`) under the pointer, or null. When set,
-   * the legend shows that row's values and the floating tooltip is not
-   * drawn — nothing ever sits on top of the plot.
-   */
+  /** Row (index into `chart.points`) under the pointer, or null; the legend reads that row out. */
   onHoverRow?: (row: number | null) => void;
 }
 
@@ -103,6 +99,12 @@ const QUARTER_MS = 91 * 86_400_000;
 /** Entrance: lines draw in, bars rise. Same curve as --ease-entrance; Recharts needs the literal. */
 const ENTER_MS = 560;
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
+/**
+ * Recharts lifts the hovered bar to z 1000, above lines (400): a line
+ * crossing that column vanished under it, leaving only its active dot
+ * (1200). Lines sit just above the active bar and below the dot.
+ */
+const LINE_Z = 1050;
 /** Each series starts a beat after the previous one, so the chart builds rather than pops. */
 const STAGGER_MS = 70;
 
@@ -192,7 +194,6 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
   };
   const onChartLeave = () => reportRow(null);
   useEffect(() => () => onHoverRow?.(null), [onHoverRow]);
-  const legendReadsOut = !!onHoverRow && spec.style.legend !== "hidden";
 
   const timeMode = chart.xMode === "time";
   // Hidden series are not painted; a price series is never a bar, whatever
@@ -468,19 +469,10 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
             )}
 
             {/* No cursor line: the hovered bar brightens and the point on a
-                line grows, which is all the pointer needs. With a legend on
-                the chart the values are read out there, and nothing floats
-                over the plot; the tooltip stays only to drive the active
-                bar / dot. */}
+                line grows, which is all the pointer needs. */}
             <Tooltip
               cursor={false}
-              content={
-                legendReadsOut ? (
-                  <NoTooltip />
-                ) : (
-                  <ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />
-                )
-              }
+              content={<ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
             />
 
             {timeBars.map((b) => (
@@ -554,6 +546,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                   dot={false}
                   connectNulls={timeMode}
                   activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}
+                  zIndex={LINE_Z}
                 />
               );
             })}
@@ -562,10 +555,6 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       )}
     </div>
   );
-}
-
-function NoTooltip() {
-  return null;
 }
 
 export const ChartCanvas = memo(ChartCanvasImpl);
