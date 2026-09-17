@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Area,
   Bar,
@@ -40,6 +40,12 @@ export interface ChartCanvasProps {
   height: number;
   /** Series under the pointer in the legend; every other series fades. */
   emphasisId?: string | null;
+  /**
+   * Row (index into `chart.points`) under the pointer, or null. When set,
+   * the legend shows that row's values and the floating tooltip is not
+   * drawn — nothing ever sits on top of the plot.
+   */
+  onHoverRow?: (row: number | null) => void;
 }
 
 /** What Recharts hands a LabelList / ReferenceDot label renderer. */
@@ -123,7 +129,7 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
  * would be a new type each time, remounting every pill and replaying its
  * entrance on every pointer move.
  */
-function Pill({ viewBox, text, theme, anchor, row }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left"; row: number }) {
+function Pill({ viewBox, text, theme, anchor }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left" }) {
   const x = viewBox?.cx ?? viewBox?.x ?? 0;
   const y = viewBox?.cy ?? viewBox?.y ?? 0;
   const w = text.length * 6.6 + 12;
@@ -131,7 +137,7 @@ function Pill({ viewBox, text, theme, anchor, row }: { viewBox?: LabelRenderProp
   const left = anchor === "above" ? x - w / 2 : anchor === "right" ? x + 8 : x - w - 8;
   const top = anchor === "above" ? y - h - 5 : y - h / 2;
   return (
-    <g className="cb-pill" data-row={row}>
+    <g className="cb-pill">
       <rect x={left} y={top} width={w} height={h} rx={6} fill={theme.labelBg} stroke={theme.grid} strokeOpacity={0.6} />
       <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={500} fill={theme.labelText} fontFamily="var(--font-mono)">
         {text}
@@ -152,7 +158,7 @@ function Pill({ viewBox, text, theme, anchor, row }: { viewBox?: LabelRenderProp
  * daily closes in the same table that gap is one day — every bar would be
  * a hairline. A rectangle from bucket-start to bucket-end does not care.
  */
-export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCanvasProps) {
+function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }: ChartCanvasProps) {
   /** 1 for the emphasised series (or all, when none is), faint for the rest. */
   const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.18);
   /** The emphasised stroke steps forward a little; the rest keep their width. */
@@ -170,24 +176,23 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   });
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
-  // The hovered column's pills step aside for the tooltip, which carries
-  // the same numbers and would otherwise sit on top of them. Done on the
-  // DOM directly: a state change here would re-render the whole chart on
-  // every pointer move, and Recharts would restart its bar tweens with it.
-  const mutedRow = useRef<number | null>(null);
-  const muteRow = (row: number | null) => {
-    if (row === mutedRow.current) return;
-    mutedRow.current = row;
-    const pills = wrapRef.current?.querySelectorAll<SVGGElement>(".cb-pill[data-row]");
-    pills?.forEach((g) => {
-      g.style.opacity = Number(g.dataset.row) === row ? "0" : "";
-    });
+  // The row under the pointer goes up to the legend, which reads it out;
+  // reported only when it changes, so a pointer crossing a column is one
+  // update rather than one per pixel. The canvas itself is memoised, so
+  // that update does not come back down as a re-render of the plot.
+  const hoveredRow = useRef<number | null>(null);
+  const reportRow = (row: number | null) => {
+    if (row === hoveredRow.current) return;
+    hoveredRow.current = row;
+    onHoverRow?.(row);
   };
   const onChartMove = (state: { activeTooltipIndex?: number | string | null | undefined }) => {
     const i = state.activeTooltipIndex === undefined || state.activeTooltipIndex === null ? NaN : Number(state.activeTooltipIndex);
-    muteRow(Number.isFinite(i) ? i : null);
+    reportRow(Number.isFinite(i) ? i : null);
   };
-  const onChartLeave = () => muteRow(null);
+  const onChartLeave = () => reportRow(null);
+  useEffect(() => () => onHoverRow?.(null), [onHoverRow]);
+  const legendReadsOut = !!onHoverRow && spec.style.legend !== "hidden";
 
   const timeMode = chart.xMode === "time";
   // Hidden series are not painted; a price series is never a bar, whatever
@@ -368,7 +373,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   // Value pills in data coordinates, so bars, lines and areas on either
   // axis share one mechanism regardless of how Recharts lays the item out.
   const pills = useMemo(() => {
-    const out: Array<{ key: string; row: number; axis: "left" | "right"; x: number; y: number; text: string; anchor: "above" | "left" | "right" }> = [];
+    const out: Array<{ key: string; axis: "left" | "right"; x: number; y: number; text: string; anchor: "above" | "left" | "right" }> = [];
     const lastRow = chart.points.length - 1;
     for (const s of visible) {
       const rows = labelRows.get(s.id);
@@ -382,7 +387,6 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
         if (raw === null || raw === undefined) continue;
         out.push({
           key: `${s.id}-${i}-${raw}`,
-          row: i,
           axis: s.axis,
           x: row.x,
           y: raw,
@@ -464,10 +468,19 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
             )}
 
             {/* No cursor line: the hovered bar brightens and the point on a
-                line grows, which is all the pointer needs. */}
+                line grows, which is all the pointer needs. With a legend on
+                the chart the values are read out there, and nothing floats
+                over the plot; the tooltip stays only to drive the active
+                bar / dot. */}
             <Tooltip
               cursor={false}
-              content={<ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
+              content={
+                legendReadsOut ? (
+                  <NoTooltip />
+                ) : (
+                  <ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />
+                )
+              }
             />
 
             {timeBars.map((b) => (
@@ -495,7 +508,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 stroke="none"
                 fill="none"
                 ifOverflow="visible"
-                label={<Pill text={p.text} theme={theme} anchor={p.anchor} row={p.row} />}
+                label={<Pill text={p.text} theme={theme} anchor={p.anchor} />}
               />
             ))}
 
@@ -550,5 +563,11 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     </div>
   );
 }
+
+function NoTooltip() {
+  return null;
+}
+
+export const ChartCanvas = memo(ChartCanvasImpl);
 
 export default ChartCanvas;

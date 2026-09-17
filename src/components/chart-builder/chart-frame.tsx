@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +44,9 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
   const plotRef = useRef<HTMLDivElement>(null);
   const [plotBox, setPlotBox] = useState({ w: 0, h: 0 });
   const [hoverId, setHoverId] = useState<string | null>(null);
+  /** Plot row under the pointer; the legend reads its values out. */
+  const [hoverRow, setHoverRow] = useState<number | null>(null);
+  const onHoverRow = useCallback((row: number | null) => setHoverRow(row), []);
 
   useEffect(() => {
     const el = plotRef.current;
@@ -95,6 +98,8 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
 
       <ChartLegend
         spec={spec}
+        chart={data.chart}
+        hoverRow={hoverRow}
         pendingTickers={data.pendingTickers}
         selectedId={selectedId}
         hoverId={hoverId}
@@ -107,7 +112,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
       <div ref={plotRef} className={cn("mt-2 flex w-full justify-center", fill ? "min-h-0 flex-1 items-center" : "items-start")} style={fill ? undefined : { height }}>
         {plotWidth > 0 && (
           <div key={plotKey} className="cb-plot-in" style={{ width, height }}>
-            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />}
+            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} onHoverRow={onHoverRow} />}
           </div>
         )}
       </div>

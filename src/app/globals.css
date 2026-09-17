@@ -597,10 +597,7 @@ select optgroup {
   animation: cb-rise 560ms var(--ease-entrance) both;
 }
 .chart-builder-plot .cb-pill {
-  /* `backwards`, not `both`: once it has landed, the hover mute (an inline
-     opacity) must win over the keyframe's final value. */
   animation: cb-pill-in 240ms var(--ease-entrance) 420ms backwards;
-  transition: opacity 150ms var(--ease-out);
 }
 /* Slider handles and span settle onto their period after a release. */
 .cb-slider-settle {
