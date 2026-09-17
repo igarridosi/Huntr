@@ -15,7 +15,8 @@ export type TemplateId =
   | "fcf-vs-price"
   | "margins"
   | "capital-returns"
-  | "valuation";
+  | "valuation"
+  | "custom";
 
 export interface ChartTemplate {
   id: TemplateId;
@@ -145,6 +146,28 @@ export const TEMPLATES: readonly ChartTemplate[] = [
         series: [
           createSeries({ ticker, metric: "pe_ttm", shape: "area", axis: "left", color: paletteColor(0) }),
           createSeries({ ticker, metric: "revenue", transform: "yoy", shape: "line", axis: "right", color: paletteColor(1) }),
+        ],
+        style: { theme: "wolf", valueLabels: "last" },
+      });
+    },
+  },
+  {
+    id: "custom",
+    name: "Custom mix",
+    description: "Any metrics side by side — each series picks its own in the inspector.",
+    tickers: 1,
+    build: (tickers) => {
+      const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
+      return createSpec({
+        title: `${ticker} — Revenue, net income and free cash flow`,
+        subtitle: "Annual · change any series' metric in the Series panel",
+        granularity: "annual",
+        metrics: "per_series",
+        series: [
+          createSeries({ ticker, metric: "revenue", shape: "bar", color: paletteColor(0) }),
+          createSeries({ ticker, metric: "net_income", shape: "bar", color: paletteColor(1) }),
+          createSeries({ ticker, metric: "free_cash_flow", shape: "line", color: "#F2F4F3" }),
         ],
         style: { theme: "wolf", valueLabels: "last" },
       });

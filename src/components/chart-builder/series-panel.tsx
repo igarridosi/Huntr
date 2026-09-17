@@ -4,18 +4,22 @@ import { useState } from "react";
 import { ChevronDown, ChevronUp, Eye, EyeOff, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
+import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
   MAX_SERIES,
   MAX_TICKERS,
   METRICS,
+  METRIC_GROUPS,
   SERIES_PALETTE,
+  metricsInGroup,
   createSeries,
   paletteColor,
   seriesInk,
   seriesLabel,
   type ChartSeries,
   type ChartSpec,
+  type MetricId,
   type SeriesTransform,
 } from "@/lib/chart-builder";
 
@@ -25,6 +29,11 @@ interface SeriesPanelProps {
   onSelect: (id: string | null) => void;
   onChange: (next: ChartSpec, coalesce?: string) => void;
 }
+
+const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GROUPS.map((group) => ({
+  label: group,
+  options: metricsInGroup(group).map((m) => ({ value: m.id, label: m.label })),
+}));
 
 /** Chip-sized versions for the row header. */
 const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
@@ -38,7 +47,8 @@ const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
 /**
  * The list of series with an inspector that opens in place. What is
  * per-series here is only what cannot be global: the company and its
- * colour. Metric, transform and shape are set for the whole chart in the
+ * colour — and the metric, when the chart's metrics are per series (a
+ * custom mix). Transform and shape are set for the whole chart in the
  * design panel; templates still compose mixed charts (bars + a price line).
  * One row open at a time; the legend's selection and this panel's
  * selection are the same state, so clicking either brings the other along.
@@ -49,6 +59,16 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
     onChange({ ...spec, series: spec.series.map((s) => (s.id === id ? { ...s, ...changes } : s)) }, coalesce);
 
   const tickerCount = new Set(spec.series.map((s) => s.ticker)).size;
+  const perSeries = spec.metrics === "per_series";
+  /** A metric change keeps the series drawable: prices are never bars, growth views need an amount. */
+  const setMetric = (s: ChartSeries, metric: MetricId) => {
+    const def = METRICS[metric];
+    const changes: Partial<ChartSeries> = { metric };
+    if (s.shape === "bar" && def.source === "price") changes.shape = "line";
+    if ((s.transform === "yoy" || s.transform === "indexed") && !["currency", "shares", "per_share"].includes(def.unit)) changes.transform = "raw";
+    if (s.transform === "per_share" && def.unit !== "currency") changes.transform = "raw";
+    patch(s.id, changes);
+  };
   /** A new company only gets on when there is room for a fifth data source not to be needed. */
   const setTicker = (id: string, ticker: string) => {
     const others = new Set(spec.series.filter((s) => s.id !== id).map((s) => s.ticker));
@@ -152,6 +172,11 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
                 <div className="overflow-hidden">
                   {open && (
                     <div className="flex flex-col gap-3 px-2.5 pb-3 pt-1">
+                      {perSeries && (
+                        <Field label="Metric">
+                          <SelectMenu<MetricId> groups={METRIC_GROUP_OPTIONS} value={s.metric} onChange={(m) => setMetric(s, m)} ariaLabel={`Metric for ${seriesLabel(s)}`} />
+                        </Field>
+                      )}
                       <Field label="Ticker">
                         <DCFTickerInput value={s.ticker} onSelect={(ticker) => setTicker(s.id, ticker)} />
                         {limitNote && selectedId === s.id && <p className="mt-1 text-[11px] text-golden-hour">{limitNote}</p>}

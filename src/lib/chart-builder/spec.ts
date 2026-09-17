@@ -113,12 +113,21 @@ export interface ChartRange {
  */
 export type PeriodAlignment = "common" | "all";
 
+/**
+ * Whether the metric is one setting for the whole chart (a comparison of
+ * companies on one figure) or chosen series by series (one company, several
+ * figures — or whatever mix the user wants). The design panel edits it in
+ * bulk in the first case; the series inspector exposes it in the second.
+ */
+export type MetricScope = "shared" | "per_series";
+
 export interface ChartSpec {
   v: typeof CHART_SPEC_VERSION;
   title: string;
   subtitle?: string;
   granularity: Granularity;
   align: PeriodAlignment;
+  metrics: MetricScope;
   range: ChartRange;
   series: ChartSeries[];
   style: ChartStyle;
@@ -174,6 +183,7 @@ export function createSpec(partial: SpecInit = {}): ChartSpec {
     ...(partial.subtitle !== undefined ? { subtitle: partial.subtitle } : {}),
     granularity: partial.granularity ?? "quarterly",
     align: partial.align ?? "common",
+    metrics: partial.metrics ?? "shared",
     range: partial.range ?? { from: null, to: null },
     series: partial.series ?? [],
     style: { ...DEFAULT_STYLE, ...(partial.style ?? {}) },
@@ -432,6 +442,7 @@ export function migrateSpec(input: unknown): MigrationResult {
     subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
     granularity: input.granularity === "annual" ? "annual" : "quarterly",
     align: input.align === "all" ? "all" : "common",
+    metrics: input.metrics === "per_series" ? "per_series" : "shared",
     range: {
       from: typeof range.from === "string" ? range.from : null,
       to: typeof range.to === "string" ? range.to : null,

@@ -138,6 +138,14 @@ describe("migrateSpec", () => {
     expect(r2.ok && r2.spec.align).toBe("all");
   });
 
+  it("keeps the metric scope and defaults it to shared", () => {
+    const r0 = migrateSpec({ v: 1, title: "T", series: [] });
+    expect(r0.ok && r0.spec.metrics).toBe("shared");
+    const r = migrateSpec({ v: 1, title: "T", series: [], metrics: "per_series" });
+    expect(r.ok && r.spec.metrics).toBe("per_series");
+    expect(TEMPLATES.find((t) => t.id === "custom")!.build(["AAPL"]).metrics).toBe("per_series");
+  });
+
   it("lifts a version-less object and reports where it came from", () => {
     const r = migrateSpec({ title: "old", series: [{ ticker: "aapl", metric: "revenue" }] });
     expect(r.ok && r.migratedFrom).toBe(0);

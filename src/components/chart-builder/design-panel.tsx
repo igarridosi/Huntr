@@ -22,6 +22,7 @@ import {
   type ChartStyle,
   type LegendPosition,
   type MetricId,
+  type MetricScope,
   type SeriesShape,
   type SeriesTransform,
   type StatementKind,
@@ -150,19 +151,35 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
   return (
     <section aria-label="Design" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
       <Group title="Data" first>
-        <Row label="Metric">
-          <SelectMenu<MetricId | typeof MIXED>
-            groups={withMixed(METRIC_GROUP_OPTIONS, metric === MIXED)}
-            value={metric}
-            onChange={(v) => {
-              if (v === MIXED) return;
-              // A growth view of a margin or a multiple means nothing; fall back to the value.
-              const growthOk = ["currency", "shares", "per_share"].includes(METRICS[v].unit);
-              bulk({ metric: v, ...(!growthOk && growthView !== "value" ? { transform: "raw" as const } : {}) });
-            }}
-            ariaLabel="Metric for every series"
+        <Row label="Metrics">
+          <SegmentedTabs<MetricScope>
+            items={[
+              { key: "shared", label: "Shared" },
+              { key: "per_series", label: "Per series" },
+            ]}
+            value={spec.metrics}
+            onChange={(metrics) => onChange({ ...spec, metrics })}
+            ariaLabel="Metric scope"
+            size="sm"
           />
         </Row>
+        {spec.metrics === "per_series" ? (
+          <p className="px-1 text-[11px] leading-snug text-mist">Each series picks its metric in the Series panel — open a row to change it.</p>
+        ) : (
+          <Row label="Metric">
+            <SelectMenu<MetricId | typeof MIXED>
+              groups={withMixed(METRIC_GROUP_OPTIONS, metric === MIXED)}
+              value={metric}
+              onChange={(v) => {
+                if (v === MIXED) return;
+                // A growth view of a margin or a multiple means nothing; fall back to the value.
+                const growthOk = ["currency", "shares", "per_share"].includes(METRICS[v].unit);
+                bulk({ metric: v, ...(!growthOk && growthView !== "value" ? { transform: "raw" as const } : {}) });
+              }}
+              ariaLabel="Metric for every series"
+            />
+          </Row>
+        )}
         {allPrices ? (
           <Row label="Show" hint="Percent change puts companies of any price on the same footing.">
             <SegmentedTabs<"price" | "change" | typeof MIXED>
