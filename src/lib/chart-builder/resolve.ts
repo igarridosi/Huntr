@@ -326,9 +326,14 @@ export function applyTransform(
   return out;
 }
 
-/** Percent change from the first non-null value, in place order. */
-export function indexValues<T extends { value: number | null }>(points: T[]): T[] {
-  const base = points.find((p) => p.value !== null && p.value !== 0)?.value ?? null;
+/**
+ * Percent change from a base, in place order. The base is the value of
+ * the period just before the first one shown when the caller has it, so
+ * the first column carries its own change rather than a 0 % by
+ * definition; otherwise the first non-null value shown (which is then 0).
+ */
+export function indexValues<T extends { value: number | null }>(points: T[], priorBase: number | null = null): T[] {
+  const base = priorBase !== null && priorBase !== 0 ? priorBase : (points.find((p) => p.value !== null && p.value !== 0)?.value ?? null);
   return points.map((p) => ({
     ...p,
     value: base === null || p.value === null ? null : (p.value / base - 1) * 100,
@@ -400,6 +405,8 @@ interface SeriesPoints {
   unit: MetricUnit;
   /** Category mode: bucket key; time mode: epoch ms. */
   points: Array<{ x: number; value: number | null }>;
+  /** The value of the period before `x`, from the unfiltered data — the base an indexed series starts from. */
+  priorTo?: (x: number) => number | null;
 }
 
 function inRange(date: string, range: ChartSpec["range"]): boolean {
@@ -454,11 +461,18 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
         warnedTickers.add(`p:${series.ticker}`);
         warnings.push({ seriesId: series.id, ticker: series.ticker, message: `No price history for ${series.ticker}.` });
       }
-      let points = prices
+      const points = prices
         .filter((p) => inRange(p.date, priceRange))
         .map((p) => ({ x: Date.parse(p.date), value: p.close as number | null }));
-      if (series.transform === "indexed") points = indexValues(points);
-      all.push({ series, unit, points });
+      const priorTo = (x: number) => {
+        let last: number | null = null;
+        for (const p of prices) {
+          if (Date.parse(p.date) >= x) break;
+          last = p.close;
+        }
+        return last;
+      };
+      all.push({ series, unit, points, priorTo });
       continue;
     }
 
@@ -485,16 +499,20 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${series.ticker} has fewer than four quarters; TTM cannot be computed.` });
     }
 
-    let points = bundles
+    const points = bundles
       .filter((b) => inRange(b.date, spec.range))
       .map((b) => ({ x: xMode === "time" ? b.bucket.mid : b.bucket.key, value: transformed.get(b.bucket.key) ?? null }));
-    if (series.transform === "indexed") points = indexValues(points);
 
     if (def.source === "market" && prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown.` });
     }
 
-    all.push({ series, unit, points });
+    const keyOfX = new Map(bundles.map((b) => [xMode === "time" ? b.bucket.mid : b.bucket.key, b.bucket.key] as const));
+    const priorTo = (x: number) => {
+      const key = keyOfX.get(x);
+      return key === undefined ? null : (transformed.get(key - KEY_STEP) ?? null);
+    };
+    all.push({ series, unit, points, priorTo });
   }
 
   // Axes
@@ -523,15 +541,33 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       }
     }
   }
-  const sortedX = [...xs].sort((a, b) => a - b);
+  // Indexing runs last, on what is actually shown: the base is the period
+  // just before the first one on the chart (so that column shows its own
+  // change), falling back to the first shown value when there is none.
+  for (const s of all) {
+    if (s.series.transform !== "indexed") continue;
+    const first = s.points.find((p) => p.value !== null);
+    s.points = indexValues(s.points, first ? (s.priorTo?.(first.x) ?? null) : null);
+  }
+
+  // A history-dependent transform (YoY, TTM) has nothing to say for its
+  // first year; those warm-up periods are dropped from the front rather
+  // than shown as empty columns. Gaps elsewhere stay: they are real.
+  let sortedX = [...xs].sort((a, b) => a - b);
+  if (all.some((s) => s.series.transform === "yoy" || s.series.transform === "ttm")) {
+    const drawn = new Set<number>();
+    for (const s of all) for (const p of s.points) if (p.value !== null) drawn.add(p.x);
+    const firstDrawn = sortedX.findIndex((x) => drawn.has(x));
+    sortedX = firstDrawn <= 0 ? sortedX : sortedX.slice(firstDrawn);
+  }
   const indexOfX = new Map(sortedX.map((x, i) => [x, i] as const));
 
   const points: ResolvedPoint[] = sortedX.map((x, i) => ({ x: xMode === "category" ? i : x }) as ResolvedPoint);
   for (const s of all) {
     for (const p of points) p[s.series.id] = null;
     for (const p of s.points) {
-      const row = points[indexOfX.get(p.x)!];
-      row[s.series.id] = p.value;
+      const i = indexOfX.get(p.x);
+      if (i !== undefined) points[i][s.series.id] = p.value;
     }
   }
 

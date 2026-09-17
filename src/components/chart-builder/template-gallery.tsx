@@ -56,6 +56,13 @@ const THUMBS: Record<TemplateId, React.ReactNode> = {
       <path d="M4 12c14 6 28 2 56 8" fill="none" stroke="#4DA3FF" strokeWidth="2.5" strokeLinecap="round" />
     </svg>
   ),
+  custom: (
+    <svg viewBox="0 0 64 36" aria-hidden>
+      <g fill="#FF8C42">{[4, 20, 36, 52].map((x, i) => <rect key={x} x={x} y={26 - i * 5} width="6" height={8 + i * 5} />)}</g>
+      <g fill="#4DA3FF">{[11, 27, 43, 59].map((x, i) => <rect key={x} x={x} y={30 - i * 3} width="5" height={4 + i * 3} />)}</g>
+      <path d="M4 22c12-10 24 2 36-6s12-4 20-8" fill="none" stroke="#F2F4F3" strokeWidth="2.5" strokeLinecap="round" />
+    </svg>
+  ),
 };
 
 export function TemplateGallery({ onPick, variant, compact = false, activeId = null, disabled = false }: TemplateGalleryProps) {

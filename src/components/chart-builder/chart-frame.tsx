@@ -67,6 +67,10 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
   const height = fill && plotBox.h > 120 ? Math.round(Math.min(plotWidth * ratio, plotBox.h)) : byWidth;
   const width = Math.round(Math.min(plotWidth, height / ratio));
   const showSkeleton = data.isLoading && data.chart.points.length === 0;
+  // A new window or granularity remounts the plot: it fades in and its
+  // series re-enter, so the change reads as a fresh chart rather than
+  // bars shuffling into new slots.
+  const plotKey = `${data.range.from ?? ""}|${data.range.to ?? ""}|${spec.granularity}`;
 
   const toggle = (id: string) =>
     onChange({ ...spec, series: spec.series.map((s) => (s.id === id ? { ...s, hidden: !s.hidden } : s)) });
@@ -93,6 +97,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
         spec={spec}
         pendingTickers={data.pendingTickers}
         selectedId={selectedId}
+        hoverId={hoverId}
         onToggle={toggle}
         onIsolate={isolate}
         onSelect={onSelect}
@@ -101,7 +106,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
 
       <div ref={plotRef} className={cn("mt-2 flex w-full justify-center", fill ? "min-h-0 flex-1 items-center" : "items-start")} style={fill ? undefined : { height }}>
         {plotWidth > 0 && (
-          <div style={{ width, height }}>
+          <div key={plotKey} className="cb-plot-in" style={{ width, height }}>
             {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />}
           </div>
         )}

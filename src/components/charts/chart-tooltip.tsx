@@ -40,7 +40,7 @@ export function ChartTooltip({
         textRendering: "geometricPrecision",
       }}
     >
-      {label && (
+      {label !== undefined && label !== null && label !== "" && (
         <p className="text-mist/70 font-medium mb-1.5">
           {labelFormatter ? labelFormatter(label) : label}
         </p>

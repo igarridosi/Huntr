@@ -10,6 +10,7 @@ import {
   coversStatements,
   defaultRange,
   mergeFinancials,
+  priceMonthEnds,
   resolveChart,
   statementsFor,
   type ChartSpec,
@@ -44,8 +45,10 @@ export interface ChartData {
   statements: StatementKind[];
   /** Tickers whose statements come from the deep (Alpha Vantage) overlay. */
   deepTickers: string[];
-  /** Period-end dates the chart could show, before the range is applied. */
+  /** Period-end dates the chart could show, before the range is applied (month ends for price-only charts). */
   dates: string[];
+  /** True when `dates` are month ends of price history rather than statement periods. */
+  datesAreMonthly: boolean;
   /** The range in effect: the spec's, or the default window when unset. */
   range: { from: string | null; to: string | null };
   /** Tickers whose statements or prices are still on their way. */
@@ -122,7 +125,11 @@ export function useChartData(spec: ChartSpec): ChartData {
     return Array.from(pending);
   }, [statementTickers, quick.pending, deepTickers, priceTickers, prices.isPending]);
 
-  const dates = useMemo(() => availableDates(spec, financials), [spec, financials]);
+  const dates = useMemo(() => {
+    const fromStatements = availableDates(spec, financials);
+    if (fromStatements.length > 0 || statementTickers.length > 0) return fromStatements;
+    return priceMonthEnds(prices.data ?? {});
+  }, [spec, financials, statementTickers.length, prices.data]);
 
   // No range chosen → the last ten years with deep history, five with
   // Yahoo's quick data (all it carries). Not written to the spec, so a
@@ -144,5 +151,16 @@ export function useChartData(spec: ChartSpec): ChartData {
     return resolveChart(visible, inputs);
   }, [spec, range, financials, prices.data, pendingTickers]);
 
-  return { chart, financials, tickers, statements, deepTickers, dates, range, pendingTickers, isLoading: pendingTickers.length > 0 };
+  return {
+    chart,
+    financials,
+    tickers,
+    statements,
+    deepTickers,
+    dates,
+    datesAreMonthly: statementTickers.length === 0,
+    range,
+    pendingTickers,
+    isLoading: pendingTickers.length > 0,
+  };
 }

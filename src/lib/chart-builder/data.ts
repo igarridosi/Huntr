@@ -91,3 +91,19 @@ export function defaultRange(dates: readonly string[], years: number): { from: s
   const from = dates.find((d) => d > cutoff) ?? dates[0];
   return { from, to: null };
 }
+
+/**
+ * For a chart with no statements (prices only): the last trading day of
+ * each month on file, so the period slider has something to snap to.
+ */
+export function priceMonthEnds(prices: Record<string, Array<{ date: string }> | undefined>): string[] {
+  const lastOfMonth = new Map<string, string>();
+  for (const points of Object.values(prices)) {
+    for (const p of points ?? []) {
+      const month = p.date.slice(0, 7);
+      const prev = lastOfMonth.get(month);
+      if (!prev || p.date > prev) lastOfMonth.set(month, p.date);
+    }
+  }
+  return [...lastOfMonth.values()].sort();
+}

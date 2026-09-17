@@ -263,6 +263,21 @@ function parseNumber(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+/**
+ * Alpha Vantage reports the same figure under different keys from one
+ * filer to the next and writes "None" for the rest — Adobe's buybacks,
+ * say, sit in `paymentsForRepurchaseOfEquity` while
+ * `paymentsForRepurchaseOfCommonStock` is "None". The first key that
+ * parses to a non-zero number wins.
+ */
+function firstNumber(row: AlphaFinancialReport, ...keys: string[]): number {
+  for (const key of keys) {
+    const v = parseNumber(row[key]);
+    if (v !== 0) return v;
+  }
+  return 0;
+}
+
 function getDate(value: string | undefined): Date {
   if (!value) return new Date(0);
   const date = new Date(value);
@@ -845,7 +860,7 @@ function buildSharesPeriodMap(
   return map;
 }
 
-function mapIncome(
+export function mapIncome(
   rows: AlphaFinancialReport[] | undefined,
   kind: "annual" | "quarterly",
   epsByDate: Map<string, number>,
@@ -859,6 +874,15 @@ function mapIncome(
       const dateKey = toDateString(date);
       const periodKey = toPeriodKey(date, kind);
       const netIncome = parseNumber(row.netIncome);
+      const revenue = parseNumber(row.totalRevenue);
+      const costOfRevenue = firstNumber(row, "costOfRevenue", "costofGoodsAndServicesSold");
+      const grossProfit = parseNumber(row.grossProfit) || (revenue && costOfRevenue ? revenue - costOfRevenue : 0);
+      const operatingIncome = parseNumber(row.operatingIncome);
+      const opex =
+        parseNumber(row.operatingExpenses) ||
+        firstNumber(row, "sellingGeneralAndAdministrative") + firstNumber(row, "researchAndDevelopment") ||
+        (grossProfit && operatingIncome ? grossProfit - operatingIncome : 0);
+      const da = firstNumber(row, "depreciationAndAmortization", "depreciationDepletionAndAmortization");
       const sharesRaw = parseNumber(row.commonStockSharesOutstanding);
       const shares =
         sharesRaw ||
@@ -876,12 +900,12 @@ function mapIncome(
         period: toPeriodLabel(date, kind),
         date: dateKey,
         currency: "USD",
-        revenue: parseNumber(row.totalRevenue),
-        cost_of_revenue: parseNumber(row.costOfRevenue),
-        gross_profit: parseNumber(row.grossProfit),
-        operating_expenses: parseNumber(row.operatingExpenses),
-        operating_income: parseNumber(row.operatingIncome),
-        interest_expense: parseNumber(row.interestExpense),
+        revenue,
+        cost_of_revenue: costOfRevenue,
+        gross_profit: grossProfit,
+        operating_expenses: opex,
+        operating_income: operatingIncome,
+        interest_expense: firstNumber(row, "interestExpense", "interestAndDebtExpense"),
         pre_tax_income: parseNumber(row.incomeBeforeTax),
         income_tax: parseNumber(row.incomeTaxExpense),
         net_income: netIncome,
@@ -889,33 +913,39 @@ function mapIncome(
         eps_diluted: epsDiluted,
         shares_outstanding_basic: inferredShares,
         shares_outstanding_diluted: inferredShares,
-        ebitda: parseNumber(row.ebitda),
+        ebitda: parseNumber(row.ebitda) || (operatingIncome && da ? operatingIncome + da : 0),
       } satisfies IncomeStatement;
     })
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-function mapBalance(
+export function mapBalance(
   rows: AlphaFinancialReport[] | undefined,
   kind: "annual" | "quarterly"
 ): BalanceSheet[] {
   return (rows ?? [])
     .map((row) => {
       const date = getDate(row.fiscalDateEnding);
+      const totalAssets = parseNumber(row.totalAssets);
+      const currentAssets = parseNumber(row.totalCurrentAssets);
+      const currentLiabilities = parseNumber(row.totalCurrentLiabilities);
+      const equity = parseNumber(row.totalShareholderEquity);
+      const totalLiabilities = parseNumber(row.totalLiabilities) || (totalAssets && equity ? totalAssets - equity : 0);
       return {
         period: toPeriodLabel(date, kind),
         date: toDateString(date),
         currency: "USD",
-        cash_and_equivalents: parseNumber(row.cashAndCashEquivalentsAtCarryingValue),
+        cash_and_equivalents: firstNumber(row, "cashAndCashEquivalentsAtCarryingValue", "cashAndShortTermInvestments"),
         short_term_investments: parseNumber(row.shortTermInvestments),
-        total_current_assets: parseNumber(row.totalCurrentAssets),
-        total_non_current_assets: parseNumber(row.totalNonCurrentAssets),
-        total_assets: parseNumber(row.totalAssets),
-        total_current_liabilities: parseNumber(row.totalCurrentLiabilities),
-        long_term_debt: parseNumber(row.longTermDebt),
-        total_non_current_liabilities: parseNumber(row.totalNonCurrentLiabilities),
-        total_liabilities: parseNumber(row.totalLiabilities),
-        total_equity: parseNumber(row.totalShareholderEquity),
+        total_current_assets: currentAssets,
+        total_non_current_assets: parseNumber(row.totalNonCurrentAssets) || (totalAssets && currentAssets ? totalAssets - currentAssets : 0),
+        total_assets: totalAssets,
+        total_current_liabilities: currentLiabilities,
+        long_term_debt: firstNumber(row, "longTermDebt", "longTermDebtNoncurrent"),
+        total_non_current_liabilities:
+          parseNumber(row.totalNonCurrentLiabilities) || (totalLiabilities && currentLiabilities ? totalLiabilities - currentLiabilities : 0),
+        total_liabilities: totalLiabilities,
+        total_equity: equity,
         retained_earnings: parseNumber(row.retainedEarnings),
         shares_outstanding: parseNumber(row.commonStockSharesOutstanding),
       } satisfies BalanceSheet;
@@ -923,7 +953,7 @@ function mapBalance(
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 }
 
-function mapCashFlow(
+export function mapCashFlow(
   rows: AlphaFinancialReport[] | undefined,
   kind: "annual" | "quarterly"
 ): CashFlowStatement[] {
@@ -940,8 +970,10 @@ function mapCashFlow(
         operating_cash_flow: operatingCashFlow,
         capital_expenditures: capex,
         free_cash_flow: operatingCashFlow + capex,
-        dividends_paid: parseNumber(row.dividendPayout),
-        share_repurchases: parseNumber(row.paymentsForRepurchaseOfCommonStock),
+        dividends_paid: firstNumber(row, "dividendPayout", "dividendPayoutCommonStock"),
+        // Reported as a payment (positive) under one of two keys, or as
+        // negative "proceeds"; the chart reads the magnitude either way.
+        share_repurchases: firstNumber(row, "paymentsForRepurchaseOfCommonStock", "paymentsForRepurchaseOfEquity", "proceedsFromRepurchaseOfEquity"),
         net_investing: parseNumber(row.cashflowFromInvestment),
         net_financing: parseNumber(row.cashflowFromFinancing),
         net_change_in_cash: parseNumber(row.changeInCashAndCashEquivalents),

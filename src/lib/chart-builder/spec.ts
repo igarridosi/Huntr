@@ -57,6 +57,19 @@ export type Granularity = "annual" | "quarterly";
 export type CanvasTheme = "wolf" | "navy" | "snow" | "parchment";
 export type AspectRatio = "16:9" | "4:3" | "1:1";
 export type ValueLabels = "none" | "last" | "ends" | "all";
+
+/** "All" value labels are a bar-chart affordance and stop reading (and start costing) past this many periods. */
+export const MAX_ALL_LABELS = 20;
+
+/**
+ * The label mode the canvas actually draws: "all" degrades to "last" on a
+ * chart that is not all bars, or that shows more periods than fit a pill
+ * each. The spec keeps what was chosen; only the rendering steps back.
+ */
+export function effectiveValueLabels(mode: ValueLabels, allBars: boolean, periods: number): ValueLabels {
+  if (mode !== "all") return mode;
+  return allBars && periods <= MAX_ALL_LABELS ? "all" : "last";
+}
 export type LegendPosition = "top" | "bottom" | "hidden";
 /**
  * How an axis writes its numbers. The unit (currency, percent, multiple…)
@@ -64,6 +77,8 @@ export type LegendPosition = "top" | "bottom" | "hidden";
  * percentage" is not a thing an axis can mean — only the notation is.
  */
 export type AxisFormat = "auto" | "compact" | "full";
+/** Linear, or logarithmic so a constant growth rate reads as a straight line. */
+export type AxisScale = "linear" | "log";
 
 export interface ChartStyle {
   theme: CanvasTheme;
@@ -79,6 +94,8 @@ export interface ChartStyle {
   watermark: boolean;
   yLeftFormat: AxisFormat;
   yRightFormat: AxisFormat;
+  /** Applies to line/area charts of positive values; bars and percentages stay linear. */
+  yScale: AxisScale;
 }
 
 export interface ChartRange {
@@ -96,12 +113,21 @@ export interface ChartRange {
  */
 export type PeriodAlignment = "common" | "all";
 
+/**
+ * Whether the metric is one setting for the whole chart (a comparison of
+ * companies on one figure) or chosen series by series (one company, several
+ * figures — or whatever mix the user wants). The design panel edits it in
+ * bulk in the first case; the series inspector exposes it in the second.
+ */
+export type MetricScope = "shared" | "per_series";
+
 export interface ChartSpec {
   v: typeof CHART_SPEC_VERSION;
   title: string;
   subtitle?: string;
   granularity: Granularity;
   align: PeriodAlignment;
+  metrics: MetricScope;
   range: ChartRange;
   series: ChartSeries[];
   style: ChartStyle;
@@ -123,6 +149,7 @@ export const DEFAULT_STYLE: ChartStyle = {
   watermark: true,
   yLeftFormat: "auto",
   yRightFormat: "auto",
+  yScale: "linear",
 };
 
 export function createSeriesId(): string {
@@ -156,6 +183,7 @@ export function createSpec(partial: SpecInit = {}): ChartSpec {
     ...(partial.subtitle !== undefined ? { subtitle: partial.subtitle } : {}),
     granularity: partial.granularity ?? "quarterly",
     align: partial.align ?? "common",
+    metrics: partial.metrics ?? "shared",
     range: partial.range ?? { from: null, to: null },
     series: partial.series ?? [],
     style: { ...DEFAULT_STYLE, ...(partial.style ?? {}) },
@@ -414,6 +442,7 @@ export function migrateSpec(input: unknown): MigrationResult {
     subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
     granularity: input.granularity === "annual" ? "annual" : "quarterly",
     align: input.align === "all" ? "all" : "common",
+    metrics: input.metrics === "per_series" ? "per_series" : "shared",
     range: {
       from: typeof range.from === "string" ? range.from : null,
       to: typeof range.to === "string" ? range.to : null,
@@ -452,6 +481,7 @@ function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   // "number"); those collapse to the default notation.
   const yLeftFormat = oneOf<AxisFormat>(raw.yLeftFormat, ["auto", "compact", "full"]);
   const yRightFormat = oneOf<AxisFormat>(raw.yRightFormat, ["auto", "compact", "full"]);
+  const yScale = oneOf<AxisScale>(raw.yScale, ["linear", "log"]);
   if (theme) out.theme = theme;
   if (aspect) out.aspect = aspect;
   if (legend) out.legend = legend;
@@ -460,6 +490,7 @@ function pickStyle(raw: Record<string, unknown>): Partial<ChartStyle> {
   if (lineWidth !== undefined) out.lineWidth = lineWidth;
   if (yLeftFormat) out.yLeftFormat = yLeftFormat;
   if (yRightFormat) out.yRightFormat = yRightFormat;
+  if (yScale) out.yScale = yScale;
   if (typeof raw.grid === "boolean") out.grid = raw.grid;
   if (typeof raw.stacked === "boolean") out.stacked = raw.stacked;
   if (typeof raw.watermark === "boolean") out.watermark = raw.watermark;

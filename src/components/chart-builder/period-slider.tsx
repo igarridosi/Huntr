@@ -14,6 +14,8 @@ interface PeriodSliderProps {
   granularity: Granularity;
   /** True while the window is the automatic default, not the user's. */
   isDefault: boolean;
+  /** Chip text for a date; defaults to the calendar period ("Q3 2024"). */
+  labelOf?: (date: string) => string;
   onChange: (from: string | null, to: string | null) => void;
   onReset: () => void;
 }
@@ -22,13 +24,19 @@ const HANDLE = 16;
 
 /**
  * Two handles over the periods on file, one dot per period: the window is
- * chosen by dragging on the actual dates rather than typing months. The
- * handles track the pointer 1:1 and snap to the nearest period on every
- * move, so the chart follows the drag rather than the release.
+ * chosen by dragging on the actual dates rather than typing months.
+ *
+ * While a handle is held it follows the pointer 1:1 from local state and
+ * the chips read the period it will land on; the chart is left alone. The
+ * window is committed once, on release, so the plot redraws a single time
+ * and can afford its entrance. The handle then settles onto its period
+ * with a short eased glide (a transform, so it costs no layout); keyboard
+ * and reset moves glide too.
  */
-export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange, onReset }: PeriodSliderProps) {
+export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf, onChange, onReset }: PeriodSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
-  const [dragging, setDragging] = useState<"from" | "to" | null>(null);
+  const [drag, setDrag] = useState<{ side: "from" | "to"; frac: number } | null>(null);
+  const dragging = drag?.side ?? null;
   const n = dates.length;
 
   const indexOf = useCallback(
@@ -48,7 +56,20 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
   const i0 = indexOf(from, "from");
   const i1 = Math.max(i0, indexOf(to, "to"));
   const pct = (i: number) => (n <= 1 ? 0 : (i / (n - 1)) * 100);
-  const label = (date: string) => toCalendarBucket(date, granularity)?.label ?? date;
+  const snap = (frac: number) => Math.round(frac * (n - 1));
+  // While dragging, the held handle reads its position from the pointer
+  // and its label from the period it will snap to; the other stays put.
+  const live0 = drag?.side === "from" ? Math.min(snap(drag.frac), i1) : i0;
+  const live1 = drag?.side === "to" ? Math.max(snap(drag.frac), i0) : i1;
+  const handlePct = (side: "from" | "to") => {
+    if (drag?.side === side) {
+      const lo = side === "from" ? 0 : pct(i0);
+      const hi = side === "from" ? pct(i1) : 100;
+      return Math.min(Math.max(drag.frac * 100, lo), hi);
+    }
+    return pct(side === "from" ? i0 : i1);
+  };
+  const label = (date: string) => labelOf?.(date) ?? toCalendarBucket(date, granularity)?.label ?? date;
 
   // Year ticks under the track, thinned so they never collide.
   const yearTicks = useMemo(() => {
@@ -65,12 +86,11 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
     return out.filter((_, k) => k % every === 0);
   }, [dates]);
 
-  const indexAt = (clientX: number) => {
+  const fracAt = (clientX: number) => {
     const el = trackRef.current;
     if (!el || n <= 1) return 0;
     const r = el.getBoundingClientRect();
-    const x = Math.min(Math.max(clientX - r.left, 0), r.width);
-    return Math.round((x / r.width) * (n - 1));
+    return Math.min(Math.max(clientX - r.left, 0), r.width) / r.width;
   };
 
   const commit = (a: number, b: number) => {
@@ -81,15 +101,17 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
 
   const startDrag = (side: "from" | "to") => (e: React.PointerEvent<HTMLButtonElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId);
-    setDragging(side);
+    setDrag({ side, frac: fracAt(e.clientX) });
   };
   const moveDrag = (side: "from" | "to") => (e: React.PointerEvent<HTMLButtonElement>) => {
     if (dragging !== side) return;
-    const i = indexAt(e.clientX);
-    if (side === "from") commit(Math.min(i, i1), i1);
-    else commit(i0, Math.max(i, i0));
+    setDrag({ side, frac: fracAt(e.clientX) });
   };
-  const endDrag = () => setDragging(null);
+  const endDrag = () => {
+    if (!drag) return;
+    setDrag(null);
+    if (live0 !== i0 || live1 !== i1) commit(live0, live1);
+  };
 
   const keyDrag = (side: "from" | "to") => (e: React.KeyboardEvent<HTMLButtonElement>) => {
     const step = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : e.key === "Home" ? -n : e.key === "End" ? n : 0;
@@ -119,25 +141,35 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
 
   return (
     <div className="flex w-full items-center gap-3">
-      {chip(label(dates[i0]), "from")}
+      {chip(label(dates[live0]), "from")}
       <div className="relative min-w-0 flex-1 px-2 pb-4 pt-2">
         <div ref={trackRef} className="relative h-1.5 rounded-full bg-wolf-border/60">
-          {/* Selected span */}
-          <div className="absolute inset-y-0 rounded-full bg-sunset-orange/70" style={{ left: `${pct(i0)}%`, right: `${100 - pct(i1)}%` }} />
+          {/* Selected span: a full-width bar positioned and sized by transform. */}
+          <div
+            aria-hidden
+            className={cn("absolute inset-0 origin-left rounded-full bg-sunset-orange/70", !dragging && "cb-slider-settle")}
+            style={{ transform: `translateX(${handlePct("from")}%) scaleX(${Math.max(0, handlePct("to") - handlePct("from")) / 100})` }}
+          />
           {/* One dot per period */}
           {dates.map((d, i) => (
             <span
               key={d}
               aria-hidden
-              className={cn("absolute top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full", i >= i0 && i <= i1 ? "bg-wolf-black/60" : "bg-mist/40")}
+              className={cn("absolute top-1/2 h-1 w-1 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-150", i >= live0 && i <= live1 ? "bg-wolf-black/60" : "bg-mist/40")}
               style={{ left: `${pct(i)}%` }}
             />
           ))}
           {(["from", "to"] as const).map((side) => {
-            const i = side === "from" ? i0 : i1;
+            const i = side === "from" ? live0 : live1;
             return (
-              <button
+              // A full-width layer carries the position, so translateX(%)
+              // is a share of the track rather than of the 16 px handle.
+              <div
                 key={side}
+                className={cn("pointer-events-none absolute inset-0", dragging !== side && "cb-slider-settle")}
+                style={{ transform: `translateX(${handlePct(side)}%)` }}
+              >
+              <button
                 type="button"
                 role="slider"
                 aria-label={side === "from" ? "Start period" : "End period"}
@@ -151,12 +183,14 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
                 onPointerCancel={endDrag}
                 onKeyDown={keyDrag(side)}
                 className={cn(
-                  "absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-sunset-orange bg-wolf-black transition-transform duration-100",
+                  "pointer-events-auto absolute left-0 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-sunset-orange bg-wolf-black",
+                  "transition-[scale,box-shadow] duration-150 ease-[var(--ease-settle)]",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
-                  dragging === side ? "scale-110 cursor-grabbing" : "hover:scale-110"
+                  dragging === side ? "scale-125 cursor-grabbing shadow-[0_0_0_7px_rgba(255,140,66,0.16)]" : "[@media(hover:hover)]:hover:scale-110"
                 )}
-                style={{ left: `${pct(i)}%`, width: HANDLE, height: HANDLE }}
+                style={{ width: HANDLE, height: HANDLE }}
               />
+              </div>
             );
           })}
         </div>
@@ -168,7 +202,7 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, onChange
           ))}
         </div>
       </div>
-      {chip(label(dates[i1]), "to")}
+      {chip(label(dates[live1]), "to")}
       {!isDefault && (
         <button type="button" onClick={onReset} className="text-xs text-mist/85 underline-offset-2 hover:text-snow-peak hover:underline">
           Default

@@ -15,7 +15,8 @@ export type TemplateId =
   | "fcf-vs-price"
   | "margins"
   | "capital-returns"
-  | "valuation";
+  | "valuation"
+  | "custom";
 
 export interface ChartTemplate {
   id: TemplateId;
@@ -52,19 +53,19 @@ export const TEMPLATES: readonly ChartTemplate[] = [
   },
   {
     id: "price-indexed",
-    name: "Price, indexed",
-    description: "Two or more share prices as percent change from a common start.",
-    tickers: 2,
+    name: "Price comparison",
+    description: "Share prices as % change from a common start, so companies of any size compare.",
+    tickers: 4,
     build: (tickers) => {
-      const t = pick(tickers, 2);
+      const t = pick(tickers, 4);
       return createSpec({
         title: `${t.join(", ")} — Stock price`,
-        subtitle: "Indexed to zero (%)",
+        subtitle: "Percent change from the start of the window",
         granularity: "quarterly",
         series: t.map((ticker, i) =>
           createSeries({ ticker, metric: "price", transform: "indexed", shape: "line", color: paletteColor(i === 1 ? 4 : i) })
         ),
-        style: { theme: "snow", aspect: "1:1", lineWidth: 2.5, valueLabels: "ends" },
+        style: { theme: "wolf", lineWidth: 2, valueLabels: "last" },
       });
     },
   },
@@ -145,6 +146,28 @@ export const TEMPLATES: readonly ChartTemplate[] = [
         series: [
           createSeries({ ticker, metric: "pe_ttm", shape: "area", axis: "left", color: paletteColor(0) }),
           createSeries({ ticker, metric: "revenue", transform: "yoy", shape: "line", axis: "right", color: paletteColor(1) }),
+        ],
+        style: { theme: "wolf", valueLabels: "last" },
+      });
+    },
+  },
+  {
+    id: "custom",
+    name: "Custom mix",
+    description: "Any metrics side by side — each series picks its own in the inspector.",
+    tickers: 1,
+    build: (tickers) => {
+      const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
+      return createSpec({
+        title: `${ticker} — Revenue, net income and free cash flow`,
+        subtitle: "Annual · change any series' metric in the Series panel",
+        granularity: "annual",
+        metrics: "per_series",
+        series: [
+          createSeries({ ticker, metric: "revenue", shape: "bar", color: paletteColor(0) }),
+          createSeries({ ticker, metric: "net_income", shape: "bar", color: paletteColor(1) }),
+          createSeries({ ticker, metric: "free_cash_flow", shape: "line", color: "#F2F4F3" }),
         ],
         style: { theme: "wolf", valueLabels: "last" },
       });

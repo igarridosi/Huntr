@@ -7,6 +7,7 @@ import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
   CANVAS_THEMES,
+  MAX_ALL_LABELS,
   METRICS,
   METRIC_GROUPS,
   SERIES_PALETTE,
@@ -14,12 +15,14 @@ import {
   seriesInk,
   type AspectRatio,
   type AxisFormat,
+  type AxisScale,
   type CanvasTheme,
   type ChartSeries,
   type ChartSpec,
   type ChartStyle,
   type LegendPosition,
   type MetricId,
+  type MetricScope,
   type SeriesShape,
   type SeriesTransform,
   type StatementKind,
@@ -41,17 +44,22 @@ interface DesignPanelProps {
   spec: ChartSpec;
   onChange: (next: ChartSpec, coalesce?: string) => void;
   dataSource: DataSourceState;
+  /** Periods the chart currently shows; "All" value labels need few enough of them. */
+  periods: number;
 }
 
 const MIXED = "__mixed__" as const;
 
+/** The basis a figure is reported on; growth views live in the Show row. */
 const TRANSFORMS: ReadonlyArray<{ value: SeriesTransform; label: string }> = [
   { value: "raw", label: "As reported" },
   { value: "per_share", label: "Per share" },
   { value: "ttm", label: "Trailing 12 months" },
-  { value: "yoy", label: "Year-over-year %" },
-  { value: "indexed", label: "Indexed to start %" },
 ];
+
+/** How a statement figure is shown: the amount, or one of two percentages. */
+type GrowthView = "value" | "yoy" | "indexed";
+const growthViewOf = (t: SeriesTransform): GrowthView => (t === "yoy" || t === "indexed" ? t : "value");
 
 const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GROUPS.map((group) => ({
   label: group,
@@ -82,7 +90,7 @@ function common<K extends keyof ChartSeries>(series: ChartSeries[], key: K): Cha
  * a comparison, so they are set once here and only overridden per series
  * in the inspector when a chart mixes them.
  */
-export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
+export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanelProps) {
   const style = (changes: Partial<ChartStyle>, coalesce?: string) => onChange({ ...spec, style: { ...spec.style, ...changes } }, coalesce);
   const bulk = (changes: Partial<ChartSeries>) =>
     onChange({
@@ -109,8 +117,29 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
   ];
 
   const shapes = new Set(spec.series.map((s) => s.shape));
+  const allPrices = spec.series.length > 0 && spec.series.every((s) => METRICS[s.metric].source === "price");
+  // Amounts (revenue, FCF, debt, shares…) only compare across companies as
+  // growth rates; margins and multiples are already percentages or ratios.
+  const growthEligible =
+    !allPrices && spec.series.length > 0 && spec.series.every((s) => ["currency", "shares", "per_share"].includes(METRICS[s.metric].unit));
+  const growthView: GrowthView | typeof MIXED = transform === MIXED ? MIXED : growthViewOf(transform);
+  const setGrowthView = (v: GrowthView) =>
+    bulk(
+      v === "value"
+        ? { transform: "raw" }
+        : // Indexed is a line by definition (see validateSpec); YoY keeps the shape.
+          { transform: v, ...(v === "indexed" ? { shape: "line" as const } : {}) }
+    );
+  const priceView: "price" | "change" | typeof MIXED = allPrices ? (transform === "raw" ? "price" : transform === "indexed" ? "change" : MIXED) : MIXED;
+  const logEligible =
+    spec.series.length > 0 &&
+    spec.series.every((s) => s.shape !== "bar" && s.transform !== "indexed" && s.transform !== "yoy" && METRICS[s.metric].unit !== "percent");
   const hasBars = shapes.has("bar");
   const hasLines = shapes.has("line") || shapes.has("area");
+  // "All" is a bar-chart affordance, and only while every period has room for a pill.
+  const allBars = spec.series.length > 0 && spec.series.every((s) => s.shape === "bar");
+  const allLabelsOk = allBars && periods <= MAX_ALL_LABELS;
+  const valueLabels = spec.style.valueLabels === "all" && !allLabelsOk ? "last" : spec.style.valueLabels;
   const hasRightAxis = spec.series.some((s) => s.axis === "right");
   const tickers = Array.from(new Set(spec.series.map((s) => s.ticker)));
   const missingDeep = tickers.filter((t) => !dataSource.deepTickers.includes(t));
@@ -122,22 +151,88 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
   return (
     <section aria-label="Design" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
       <Group title="Data" first>
-        <Row label="Metric">
-          <SelectMenu<MetricId | typeof MIXED>
-            groups={withMixed(METRIC_GROUP_OPTIONS, metric === MIXED)}
-            value={metric}
-            onChange={(v) => v !== MIXED && bulk({ metric: v })}
-            ariaLabel="Metric for every series"
+        <Row label="Metrics">
+          <SegmentedTabs<MetricScope>
+            items={[
+              { key: "shared", label: "Shared" },
+              { key: "per_series", label: "Per series" },
+            ]}
+            value={spec.metrics}
+            onChange={(metrics) => onChange({ ...spec, metrics })}
+            ariaLabel="Metric scope"
+            size="sm"
           />
         </Row>
-        <Row label="Transform">
-          <SelectMenu<SeriesTransform | typeof MIXED>
-            groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
-            value={transform}
-            onChange={(v) => v !== MIXED && bulk({ transform: v })}
-            ariaLabel="Transform for every series"
-          />
-        </Row>
+        {spec.metrics === "per_series" ? (
+          <p className="px-1 text-[11px] leading-snug text-mist">Each series picks its metric in the Series panel — open a row to change it.</p>
+        ) : (
+          <Row label="Metric">
+            <SelectMenu<MetricId | typeof MIXED>
+              groups={withMixed(METRIC_GROUP_OPTIONS, metric === MIXED)}
+              value={metric}
+              onChange={(v) => {
+                if (v === MIXED) return;
+                // A growth view of a margin or a multiple means nothing; fall back to the value.
+                const growthOk = ["currency", "shares", "per_share"].includes(METRICS[v].unit);
+                bulk({ metric: v, ...(!growthOk && growthView !== "value" ? { transform: "raw" as const } : {}) });
+              }}
+              ariaLabel="Metric for every series"
+            />
+          </Row>
+        )}
+        {allPrices ? (
+          <Row label="Show" hint="Percent change puts companies of any price on the same footing.">
+            <SegmentedTabs<"price" | "change" | typeof MIXED>
+              items={[
+                ...(priceView === MIXED ? [{ key: MIXED as typeof MIXED, label: "Mixed" }] : []),
+                { key: "price", label: "Price" },
+                { key: "change", label: "% change" },
+              ]}
+              value={priceView}
+              onChange={(v) => v !== MIXED && bulk({ transform: v === "change" ? "indexed" : "raw", shape: "line" })}
+              ariaLabel="Price view"
+              size="sm"
+            />
+          </Row>
+        ) : (
+          <>
+            {growthEligible && (
+              <Row
+                label="Show"
+                stack
+                hint="YoY %: growth against the same period a year earlier. Indexed %: cumulative change since just before the window, so the first period shows its own move — companies of any size on one scale."
+              >
+                <SegmentedTabs<GrowthView | typeof MIXED>
+                  items={[
+                    ...(growthView === MIXED ? [{ key: MIXED as typeof MIXED, label: "Mixed" }] : []),
+                    { key: "value", label: "Value" },
+                    { key: "yoy", label: "YoY %" },
+                    { key: "indexed", label: "Indexed %" },
+                  ]}
+                  value={growthView}
+                  onChange={(v) => v !== MIXED && setGrowthView(v)}
+                  ariaLabel="Show as value or growth"
+                  size="sm"
+                />
+              </Row>
+            )}
+            {growthView !== "yoy" && growthView !== "indexed" && (
+              <Row label="Transform">
+                <SelectMenu<SeriesTransform | typeof MIXED>
+                  groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
+                  value={transform}
+                  onChange={(v) => v !== MIXED && bulk({ transform: v })}
+                  ariaLabel="Transform for every series"
+                />
+              </Row>
+            )}
+            {growthView === "yoy" && !allDeep && dataSource.statements.length > 0 && (
+              <p className="px-1 text-[11px] leading-snug text-mist">
+                YoY needs the year before each period: with Yahoo Finance&apos;s few periods that is one or two points. The 20-year history below gives the full series.
+              </p>
+            )}
+          </>
+        )}
         <Row label="Shape" stack={shape === MIXED}>
           <SegmentedTabs<SeriesShape | typeof MIXED>
             items={shapeItems}
@@ -147,6 +242,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
             size="sm"
           />
         </Row>
+        {dataSource.statements.length > 0 && (
         <div className="flex flex-col gap-1.5">
           <Button
             variant={allDeep ? "ghost" : "secondary"}
@@ -168,6 +264,7 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
                   : `Yahoo Finance · last few periods. Alpha Vantage adds up to 20 years — ${dataSource.statements.length || 1} call${dataSource.statements.length === 1 ? "" : "s"} per company (${askFor || "income statement"} only).`}
           </p>
         </div>
+        )}
       </Group>
 
       <Group title="Canvas">
@@ -236,14 +333,17 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
               { key: "none", label: "None" },
               { key: "last", label: "Last" },
               { key: "ends", label: "Ends" },
-              { key: "all", label: "All" },
+              ...(allLabelsOk ? [{ key: "all" as const, label: "All" }] : []),
             ]}
-            value={spec.style.valueLabels}
+            value={valueLabels}
             onChange={(valueLabels) => style({ valueLabels })}
             ariaLabel="Value labels"
             size="sm"
           />
         </Row>
+        {allBars && !allLabelsOk && (
+          <p className="px-1 text-[11px] leading-snug text-mist">All: up to {MAX_ALL_LABELS} periods. Narrow the window to label every bar.</p>
+        )}
         <Row label="Grid">
           <Switch checked={spec.style.grid} onChange={(grid) => style({ grid })} label="Grid" />
         </Row>
@@ -290,6 +390,20 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
       )}
 
       <Group title={hasRightAxis ? "Axes" : "Axis"}>
+        {logEligible && (
+          <Row label="Scale" hint="Log: equal vertical steps are equal percentage moves, so compounding reads as a straight line.">
+            <SegmentedTabs<AxisScale>
+              items={[
+                { key: "linear", label: "Linear" },
+                { key: "log", label: "Log" },
+              ]}
+              value={spec.style.yScale}
+              onChange={(yScale) => style({ yScale })}
+              ariaLabel="Axis scale"
+              size="sm"
+            />
+          </Row>
+        )}
         <Row label={hasRightAxis ? "Left" : "Format"}>
           <SelectMenu<AxisFormat> groups={AXIS_FORMATS} value={spec.style.yLeftFormat} onChange={(yLeftFormat) => style({ yLeftFormat })} ariaLabel="Left axis format" />
         </Row>
