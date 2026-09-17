@@ -32,6 +32,8 @@ const HANDLE = 16;
  * the drag never waits on the chart; the spec (and with it the chart) is
  * updated only when the snapped period actually changes, and inside a
  * transition so the handle stays responsive while the plot catches up.
+ * On release the handle settles onto its period with a short eased glide
+ * (a transform, so it costs no layout); keyboard and reset moves glide too.
  */
 export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf, onChange, onReset, onScrub }: PeriodSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
@@ -154,8 +156,12 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf,
       {chip(label(dates[live0]), "from")}
       <div className="relative min-w-0 flex-1 px-2 pb-4 pt-2">
         <div ref={trackRef} className="relative h-1.5 rounded-full bg-wolf-border/60">
-          {/* Selected span */}
-          <div className="absolute inset-y-0 rounded-full bg-sunset-orange/70" style={{ left: `${handlePct("from")}%`, right: `${100 - handlePct("to")}%` }} />
+          {/* Selected span: a full-width bar positioned and sized by transform. */}
+          <div
+            aria-hidden
+            className={cn("absolute inset-0 origin-left rounded-full bg-sunset-orange/70", !dragging && "cb-slider-settle")}
+            style={{ transform: `translateX(${handlePct("from")}%) scaleX(${Math.max(0, handlePct("to") - handlePct("from")) / 100})` }}
+          />
           {/* One dot per period */}
           {dates.map((d, i) => (
             <span
@@ -168,8 +174,14 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf,
           {(["from", "to"] as const).map((side) => {
             const i = side === "from" ? live0 : live1;
             return (
-              <button
+              // A full-width layer carries the position, so translateX(%)
+              // is a share of the track rather than of the 16 px handle.
+              <div
                 key={side}
+                className={cn("pointer-events-none absolute inset-0", dragging !== side && "cb-slider-settle")}
+                style={{ transform: `translateX(${handlePct(side)}%)` }}
+              >
+              <button
                 type="button"
                 role="slider"
                 aria-label={side === "from" ? "Start period" : "End period"}
@@ -183,12 +195,14 @@ export function PeriodSlider({ dates, from, to, granularity, isDefault, labelOf,
                 onPointerCancel={endDrag}
                 onKeyDown={keyDrag(side)}
                 className={cn(
-                  "absolute top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-sunset-orange bg-wolf-black transition-[transform,box-shadow] duration-150 ease-out",
+                  "pointer-events-auto absolute left-0 top-1/2 z-10 -translate-x-1/2 -translate-y-1/2 cursor-grab touch-none rounded-full border-2 border-sunset-orange bg-wolf-black",
+                  "transition-[scale,box-shadow] duration-150 ease-[var(--ease-settle)]",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
-                  dragging === side ? "scale-125 cursor-grabbing shadow-[0_0_0_6px_rgba(255,140,66,0.18)]" : "hover:scale-110"
+                  dragging === side ? "scale-125 cursor-grabbing shadow-[0_0_0_7px_rgba(255,140,66,0.16)]" : "[@media(hover:hover)]:hover:scale-110"
                 )}
-                style={{ left: `${handlePct(side)}%`, width: HANDLE, height: HANDLE }}
+                style={{ width: HANDLE, height: HANDLE }}
               />
+              </div>
             );
           })}
         </div>

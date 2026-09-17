@@ -39,8 +39,8 @@ export interface ChartCanvasProps {
   height: number;
   /** Series under the pointer in the legend; every other series fades. */
   emphasisId?: string | null;
-  /** False while the range is scrubbed: every redraw lands at once. */
-  animate?: boolean;
+  /** True while a slider handle is held: redraws follow with a short tween instead of the entrance. */
+  scrubbing?: boolean;
 }
 
 /** What Recharts hands a LabelList / ReferenceDot label renderer. */
@@ -95,7 +95,13 @@ function niceAxis(min: number, max: number): { domain: [number, number]; ticks: 
 /** Share of a bucket a bar (or a group of bars) occupies on the time axis. */
 const TIME_BAR_FILL = 0.72;
 const QUARTER_MS = 91 * 86_400_000;
-const TWEEN_MS = 420;
+/** Entrance: lines draw in, bars rise. Same curve as --ease-entrance; Recharts needs the literal. */
+const ENTER_MS = 560;
+const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
+/** Each series starts a beat after the previous one, so the chart builds rather than pops. */
+const STAGGER_MS = 70;
+/** While scrubbing every window change is a short retarget, so the plot glides under the handle. */
+const SCRUB_MS = 160;
 
 function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
   const ref = useRef<T | null>(null);
@@ -120,7 +126,7 @@ function Pill({ x, y, text, theme, anchor }: { x: number; y: number; text: strin
   const left = anchor === "above" ? x - w / 2 : anchor === "right" ? x + 8 : x - w - 8;
   const top = anchor === "above" ? y - h - 5 : y - h / 2;
   return (
-    <g>
+    <g className="cb-pill">
       <rect x={left} y={top} width={w} height={h} rx={6} fill={theme.labelBg} stroke={theme.grid} strokeOpacity={0.6} />
       <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={500} fill={theme.labelText} fontFamily="var(--font-mono)">
         {text}
@@ -141,16 +147,23 @@ function Pill({ x, y, text, theme, anchor }: { x: number; y: number; text: strin
  * daily closes in the same table that gap is one day — every bar would be
  * a hairline. A rectangle from bucket-start to bucket-end does not care.
  */
-export function ChartCanvas({ spec, chart, height, emphasisId = null, animate = true }: ChartCanvasProps) {
+export function ChartCanvas({ spec, chart, height, emphasisId = null, scrubbing = false }: ChartCanvasProps) {
   /** 1 for the emphasised series (or all, when none is), faint for the rest. */
   const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.18);
   /** The emphasised stroke steps forward a little; the rest keep their width. */
   const strokeFor = (id: string) => (emphasisId === id ? spec.style.lineWidth + 1 : spec.style.lineWidth);
   const theme = CANVAS_THEMES[spec.style.theme];
   const reducedMotion = usePrefersReducedMotion();
-  // Short and eased-out: the shape settles before the eye looks for it.
-  // Recharts' default 1.5 s is what made every change feel late.
-  const tween = { isAnimationActive: animate && !reducedMotion, animationDuration: TWEEN_MS, animationEasing: "ease-out" as const };
+  // Recharts' own tweens drive the shapes: a staggered, strongly eased-out
+  // entrance, or a short retarget while the window is being scrubbed. Its
+  // default 1.5 s ease is what made every change feel late.
+  const tween = (index: number) => ({
+    isAnimationActive: !reducedMotion,
+    animationDuration: scrubbing ? SCRUB_MS : ENTER_MS,
+    // Recharts parses cubic-bezier() strings at runtime; its prop type only lists the keywords.
+    animationEasing: ENTER_EASE as "ease",
+    animationBegin: scrubbing ? 0 : index * STAGGER_MS,
+  });
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
 
@@ -311,7 +324,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null, animate = 
         const y2 = stacked ? acc[s.axis] + v : v;
         if (stacked) acc[s.axis] += v;
         out.push({
-          key: `${s.id}-${row.x}`,
+          key: `${s.id}-${row.x}-${y2}`,
           seriesId: s.id,
           axis: s.axis,
           ink: seriesInk(s.color, spec.style.theme),
@@ -344,7 +357,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null, animate = 
         const raw = isBar ? stackTotal(s, row) : row[s.id];
         if (raw === null || raw === undefined) continue;
         out.push({
-          key: `${s.id}-${i}`,
+          key: `${s.id}-${i}-${raw}`,
           axis: s.axis,
           x: row.x,
           y: raw,
@@ -394,7 +407,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null, animate = 
   };
 
   return (
-    <div ref={wrapRef} className="chart-builder-plot" style={{ width: "100%", height }}>
+    <div ref={wrapRef} className="chart-builder-plot" data-scrub={scrubbing || undefined} style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1}>
@@ -463,9 +476,9 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null, animate = 
               />
             ))}
 
-            {visible.map((s) => {
+            {visible.map((s, index) => {
               const ink = seriesInk(s.color, spec.style.theme);
-              const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, ...tween };
+              const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, ...tween(index) };
               // Presentation attributes reach the drawn path; a `style` prop would not.
               const fade = { strokeOpacity: alpha(s.id), fillOpacity: alpha(s.id) };
 

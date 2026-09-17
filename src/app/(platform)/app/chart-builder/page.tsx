@@ -56,8 +56,8 @@ function ChartBuilder() {
   const data = useChartData(spec);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
-  // While the period slider is held the plot redraws instantly; tweens
-  // between forty intermediate windows are what made scrubbing feel late.
+  // While the period slider is held the plot retargets with a short tween
+  // instead of replaying its entrance on every intermediate window.
   const [scrubbing, setScrubbing] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const frameRef = useRef<HTMLDivElement>(null);
@@ -277,7 +277,7 @@ function ChartBuilder() {
             </div>
           )}
           <div className={cn("flex min-w-0 flex-col gap-3", isDesktop && "min-h-0")}>
-            <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} fill={isDesktop} animate={!scrubbing} className={isDesktop ? "flex-1" : undefined} />
+            <ChartFrame ref={frameRef} spec={spec} data={data} selectedId={selectedId} onSelect={setSelectedId} onChange={onChange} fill={isDesktop} scrubbing={scrubbing} className={isDesktop ? "flex-1" : undefined} />
             <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-1">
               <ChartControls spec={spec} dates={data.dates} datesAreMonthly={data.datesAreMonthly} range={data.range} onChange={onChange} onScrub={setScrubbing} />
             </div>

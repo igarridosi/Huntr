@@ -572,22 +572,62 @@ select optgroup {
   }
 }
 
-/* Chart Builder plot: legend hover steps the other series back with a
-   short fade rather than a cut, on the SVG presentation attributes
-   Recharts writes (they are animatable CSS properties). */
+/* Chart Builder plot.
+   Legend hover steps the other series back with a short fade rather than
+   a cut, on the SVG presentation attributes Recharts writes (they are
+   animatable CSS properties). */
 .chart-builder-plot .recharts-line-curve,
 .chart-builder-plot .recharts-area-curve,
 .chart-builder-plot .recharts-area-area,
 .chart-builder-plot .recharts-bar-rectangle path,
 .chart-builder-plot .recharts-reference-area-rect {
-  transition: stroke-opacity 220ms ease-out, fill-opacity 220ms ease-out, stroke-width 220ms ease-out;
+  transition: stroke-opacity 220ms var(--ease-out), fill-opacity 220ms var(--ease-out), stroke-width 220ms var(--ease-out);
+}
+/* Time-axis bars are plain rectangles with no tween of their own: they
+   rise from the baseline when they (re)appear. Value pills wait for the
+   shapes to land, then fade up into place. Neither runs while scrubbing —
+   the plot is gliding under the handle and a replay would flicker. */
+.chart-builder-plot .recharts-reference-area-rect {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: cb-rise 560ms var(--ease-entrance) both;
+}
+.chart-builder-plot .cb-pill {
+  animation: cb-pill-in 240ms var(--ease-entrance) 420ms both;
+}
+.chart-builder-plot[data-scrub] .recharts-reference-area-rect,
+.chart-builder-plot[data-scrub] .cb-pill {
+  animation: none;
+}
+/* Slider handles and span settle onto their period after a release. */
+.cb-slider-settle {
+  transition: transform 220ms var(--ease-settle);
+}
+@keyframes cb-rise {
+  from { transform: scaleY(0.001); }
+  to   { transform: scaleY(1); }
+}
+@keyframes cb-pill-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @media (prefers-reduced-motion: reduce) {
   .chart-builder-plot .recharts-line-curve,
   .chart-builder-plot .recharts-area-curve,
   .chart-builder-plot .recharts-area-area,
   .chart-builder-plot .recharts-bar-rectangle path,
-  .chart-builder-plot .recharts-reference-area-rect {
+  .chart-builder-plot .recharts-reference-area-rect,
+  .cb-slider-settle {
     transition: none;
   }
+  .chart-builder-plot .recharts-reference-area-rect {
+    animation: none;
+  }
+  .chart-builder-plot .cb-pill {
+    animation: cb-fade-in 200ms var(--ease-out) both;
+  }
+}
+@keyframes cb-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
