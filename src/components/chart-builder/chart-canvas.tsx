@@ -105,6 +105,8 @@ const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
  * (1200). Lines sit just above the active bar and below the dot.
  */
 const LINE_Z = 1050;
+/** Value pills ride on ReferenceDots, which default to z 600 — under the active bar. They go above the active dot (1200). */
+const PILL_Z = 1300;
 /** Each series starts a beat after the previous one, so the chart builds rather than pops. */
 const STAGGER_MS = 70;
 
@@ -533,6 +535,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                 stroke="none"
                 fill="none"
                 ifOverflow="visible"
+                zIndex={PILL_Z}
                 label={<Pill text={p.text} theme={theme} lift={p.lift} xMin={plotLeft} xMax={plotRight} />}
               />
             ))}
