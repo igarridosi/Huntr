@@ -1,7 +1,44 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+import { ChevronDown } from "lucide-react";
 import { TEMPLATES, type ChartTemplate, type TemplateId } from "@/lib/chart-builder";
 import { cn } from "@/lib/utils";
+
+/**
+ * Whether the side list was left folded — a per-viewer convenience, so it
+ * lives in the browser. Read as an external store so the server render
+ * (always unfolded) and the first client render agree.
+ */
+const FOLD_KEY = "huntr.chart-builder.templates-folded";
+const foldListeners = new Set<() => void>();
+/** This session's value, so the toggle still works when storage is blocked. */
+let foldedNow: boolean | null = null;
+const readFolded = () => {
+  if (foldedNow !== null) return foldedNow;
+  try {
+    return window.localStorage.getItem(FOLD_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+const subscribeFold = (cb: () => void) => {
+  foldListeners.add(cb);
+  window.addEventListener("storage", cb);
+  return () => {
+    foldListeners.delete(cb);
+    window.removeEventListener("storage", cb);
+  };
+};
+const writeFolded = (v: boolean) => {
+  foldedNow = v;
+  try {
+    window.localStorage.setItem(FOLD_KEY, v ? "1" : "0");
+  } catch {
+    /* private mode or blocked storage: the fold just does not persist */
+  }
+  foldListeners.forEach((cb) => cb());
+};
 
 interface TemplateGalleryProps {
   onPick: (template: ChartTemplate) => void;
@@ -67,15 +104,37 @@ const THUMBS: Record<TemplateId, React.ReactNode> = {
 
 export function TemplateGallery({ onPick, variant, compact = false, activeId = null, disabled = false }: TemplateGalleryProps) {
   const mode = variant ?? (compact ? "strip" : "grid");
+  // The side list folds down to its header so the series panel above
+  // can take the height; the fold is remembered for next time.
+  const folded = useSyncExternalStore(subscribeFold, readFolded, () => false);
+  const toggleFold = () => writeFolded(!folded);
 
   if (mode === "list") {
     return (
-      <section aria-label="Templates" className="rounded-2xl bg-wolf-surface p-3.5 ring-1 ring-inset ring-wolf-border/60">
-        <div className="mb-2 flex items-baseline justify-between px-1">
-          <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Templates</h2>
-          <span className="text-[10px] text-mist">reshapes the current chart</span>
+      <section aria-label="Templates" className={cn("rounded-2xl bg-wolf-surface px-3.5 ring-1 ring-inset ring-wolf-border/60", folded ? "py-2" : "py-3.5")}>
+        <div className="flex items-center justify-between gap-2 px-1">
+          <button
+            type="button"
+            aria-expanded={!folded}
+            aria-controls="chart-builder-templates"
+            onClick={toggleFold}
+            className="-ml-1 flex min-w-0 items-center gap-1.5 rounded-md py-0.5 pl-1 pr-1.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60"
+          >
+            <ChevronDown
+              className={cn("h-3.5 w-3.5 shrink-0 text-mist transition-transform duration-200 ease-[var(--ease-settle)] motion-reduce:transition-none", folded && "-rotate-90")}
+              aria-hidden
+            />
+            <h2 className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Templates</h2>
+          </button>
+          {!folded && <span className="truncate text-[10px] text-mist">reshapes the current chart</span>}
         </div>
-        <ul className="flex flex-col gap-1">
+        <div
+          id="chart-builder-templates"
+          className="grid transition-[grid-template-rows] duration-300 ease-[var(--ease-settle)] motion-reduce:transition-none"
+          style={{ gridTemplateRows: folded ? "0fr" : "1fr" }}
+        >
+        <div className="overflow-hidden">
+        <ul className={cn("flex flex-col gap-1 pt-2", folded && "invisible")} aria-hidden={folded}>
           {TEMPLATES.map((t) => (
             <li key={t.id}>
               <button
@@ -98,6 +157,8 @@ export function TemplateGallery({ onPick, variant, compact = false, activeId = n
             </li>
           ))}
         </ul>
+        </div>
+        </div>
       </section>
     );
   }
