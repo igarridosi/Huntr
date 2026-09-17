@@ -36,11 +36,11 @@ interface MobileSidebarProps {
 
 const navItems = [
   { label: "Insights", href: ROUTES.APP_INSIGHTS, icon: Lightbulb },
+  { label: "Chart Builder", href: ROUTES.APP_CHART_BUILDER, icon: ChartColumnStacked },
   { label: "Watchlists", href: ROUTES.APP_WATCHLISTS, icon: Star },
   { label: "Earnings", href: ROUTES.APP_EARNINGS, icon: CalendarClock },
   { label: "Transcripts", href: ROUTES.APP_TRANSCRIPTS, icon: MessageSquareText },
   { label: "DCF Calculator", href: ROUTES.APP_DCF_CALCULATOR, icon: Calculator },
-  { label: "Chart Builder", href: ROUTES.APP_CHART_BUILDER, icon: ChartColumnStacked },
   { label: "Portfolios", href: ROUTES.APP_PORTFOLIOS, icon: BriefcaseBusiness },
 ];
 

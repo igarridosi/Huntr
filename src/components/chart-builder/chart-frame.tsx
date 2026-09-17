@@ -132,8 +132,8 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
           <span>Powered by</span>
           <span className="inline-flex items-center gap-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element -- tiny static asset, plain <img> keeps the export path simple */}
-            <img src="/logo/HunterLogoCut-removebg.png" alt="" aria-hidden className="h-5 w-5 object-contain" />
-            <span className="text-[15px] font-semibold tracking-[0.14em]" style={{ color: theme.title }}>
+            <img src="/logo/HunterLogoCut-removebg.png" alt="" aria-hidden className="h-[22px] w-auto object-contain" />
+            <span className="font-heading text-[15px] font-bold leading-none tracking-tight" style={{ color: theme.title }}>
               HUNTR
             </span>
           </span>
