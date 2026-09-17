@@ -116,16 +116,22 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
   return [ref, width];
 }
 
-/** The value pill: same drawing for bars, lines and areas. */
-function Pill({ x, y, text, theme, anchor, muted }: { x: number; y: number; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left"; muted: boolean }) {
+/**
+ * The value pill: same drawing for bars, lines and areas. Rendered as a
+ * ReferenceDot label *element* (Recharts clones it with the viewBox), so
+ * the component type is stable across renders — an inline render function
+ * would be a new type each time, remounting every pill and replaying its
+ * entrance on every pointer move.
+ */
+function Pill({ viewBox, text, theme, anchor, row }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left"; row: number }) {
+  const x = viewBox?.cx ?? viewBox?.x ?? 0;
+  const y = viewBox?.cy ?? viewBox?.y ?? 0;
   const w = text.length * 6.6 + 12;
   const h = 18;
   const left = anchor === "above" ? x - w / 2 : anchor === "right" ? x + 8 : x - w - 8;
   const top = anchor === "above" ? y - h - 5 : y - h / 2;
   return (
-    // The hovered column's pills step aside for the tooltip, which carries
-    // the same numbers and would otherwise sit on top of them.
-    <g className="cb-pill" style={{ opacity: muted ? 0 : 1, transition: "opacity 150ms var(--ease-out)" }}>
+    <g className="cb-pill" data-row={row}>
       <rect x={left} y={top} width={w} height={h} rx={6} fill={theme.labelBg} stroke={theme.grid} strokeOpacity={0.6} />
       <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={500} fill={theme.labelText} fontFamily="var(--font-mono)">
         {text}
@@ -164,13 +170,24 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   });
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
-  /** Row under the pointer, from Recharts' tooltip index. */
-  const [activeRow, setActiveRow] = useState<number | null>(null);
+  // The hovered column's pills step aside for the tooltip, which carries
+  // the same numbers and would otherwise sit on top of them. Done on the
+  // DOM directly: a state change here would re-render the whole chart on
+  // every pointer move, and Recharts would restart its bar tweens with it.
+  const mutedRow = useRef<number | null>(null);
+  const muteRow = (row: number | null) => {
+    if (row === mutedRow.current) return;
+    mutedRow.current = row;
+    const pills = wrapRef.current?.querySelectorAll<SVGGElement>(".cb-pill[data-row]");
+    pills?.forEach((g) => {
+      g.style.opacity = Number(g.dataset.row) === row ? "0" : "";
+    });
+  };
   const onChartMove = (state: { activeTooltipIndex?: number | string | null | undefined }) => {
     const i = state.activeTooltipIndex === undefined || state.activeTooltipIndex === null ? NaN : Number(state.activeTooltipIndex);
-    setActiveRow((prev) => (Number.isFinite(i) ? (prev === i ? prev : i) : prev === null ? prev : null));
+    muteRow(Number.isFinite(i) ? i : null);
   };
-  const onChartLeave = () => setActiveRow(null);
+  const onChartLeave = () => muteRow(null);
 
   const timeMode = chart.xMode === "time";
   // Hidden series are not painted; a price series is never a bar, whatever
@@ -478,9 +495,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 stroke="none"
                 fill="none"
                 ifOverflow="visible"
-                label={(props: LabelRenderProps) => (
-                  <Pill x={props.viewBox?.cx ?? props.viewBox?.x ?? 0} y={props.viewBox?.cy ?? props.viewBox?.y ?? 0} text={p.text} theme={theme} anchor={p.anchor} muted={activeRow === p.row} />
-                )}
+                label={<Pill text={p.text} theme={theme} anchor={p.anchor} row={p.row} />}
               />
             ))}
 

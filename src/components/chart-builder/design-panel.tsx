@@ -323,10 +323,10 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
             ariaLabel="Value labels"
             size="sm"
           />
-          {allBars && !allLabelsOk && (
-            <p className="px-1 pt-1 text-[11px] leading-snug text-mist">All: up to {MAX_ALL_LABELS} periods. Narrow the window to label every bar.</p>
-          )}
         </Row>
+        {allBars && !allLabelsOk && (
+          <p className="px-1 text-[11px] leading-snug text-mist">All: up to {MAX_ALL_LABELS} periods. Narrow the window to label every bar.</p>
+        )}
         <Row label="Grid">
           <Switch checked={spec.style.grid} onChange={(grid) => style({ grid })} label="Grid" />
         </Row>
