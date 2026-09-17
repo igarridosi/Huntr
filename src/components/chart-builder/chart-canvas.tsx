@@ -19,6 +19,7 @@ import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   CANVAS_THEMES,
   METRICS,
+  effectiveValueLabels,
   formatDate,
   formatMonthTick,
   formatTick,
@@ -116,13 +117,15 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
 }
 
 /** The value pill: same drawing for bars, lines and areas. */
-function Pill({ x, y, text, theme, anchor }: { x: number; y: number; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left" }) {
+function Pill({ x, y, text, theme, anchor, muted }: { x: number; y: number; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left"; muted: boolean }) {
   const w = text.length * 6.6 + 12;
   const h = 18;
   const left = anchor === "above" ? x - w / 2 : anchor === "right" ? x + 8 : x - w - 8;
   const top = anchor === "above" ? y - h - 5 : y - h / 2;
   return (
-    <g className="cb-pill">
+    // The hovered column's pills step aside for the tooltip, which carries
+    // the same numbers and would otherwise sit on top of them.
+    <g className="cb-pill" style={{ opacity: muted ? 0 : 1, transition: "opacity 150ms var(--ease-out)" }}>
       <rect x={left} y={top} width={w} height={h} rx={6} fill={theme.labelBg} stroke={theme.grid} strokeOpacity={0.6} />
       <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={500} fill={theme.labelText} fontFamily="var(--font-mono)">
         {text}
@@ -161,6 +164,13 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   });
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
+  /** Row under the pointer, from Recharts' tooltip index. */
+  const [activeRow, setActiveRow] = useState<number | null>(null);
+  const onChartMove = (state: { activeTooltipIndex?: number | string | null | undefined }) => {
+    const i = state.activeTooltipIndex === undefined || state.activeTooltipIndex === null ? NaN : Number(state.activeTooltipIndex);
+    setActiveRow((prev) => (Number.isFinite(i) ? (prev === i ? prev : i) : prev === null ? prev : null));
+  };
+  const onChartLeave = () => setActiveRow(null);
 
   const timeMode = chart.xMode === "time";
   // Hidden series are not painted; a price series is never a bar, whatever
@@ -262,9 +272,11 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   };
 
   // Rows that get a value pill, per series (row = index into chart.points).
+  const allBars = visible.length > 0 && visible.every((s) => s.shape === "bar");
+  const labelMode = effectiveValueLabels(spec.style.valueLabels, allBars, chart.points.length);
   const labelRows = useMemo(() => {
     const out = new Map<string, Set<number>>();
-    const mode = spec.style.valueLabels;
+    const mode = labelMode;
     if (mode === "none") return out;
     const rowOf = (x: number) => (timeMode ? chart.points.findIndex((p) => p.x === x) : x);
     for (const s of visible) {
@@ -277,7 +289,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
       out.set(s.id, rows);
     }
     return out;
-  }, [spec.style.valueLabels, chart.points, visible, timeMode]);
+  }, [labelMode, chart.points, visible, timeMode]);
 
   /** Stack total at a row, for the pill on the topmost bar of a stack. */
   const stackTotal = (s: ResolvedSeries, row: ResolvedPoint) => {
@@ -339,7 +351,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   // Value pills in data coordinates, so bars, lines and areas on either
   // axis share one mechanism regardless of how Recharts lays the item out.
   const pills = useMemo(() => {
-    const out: Array<{ key: string; axis: "left" | "right"; x: number; y: number; text: string; anchor: "above" | "left" | "right" }> = [];
+    const out: Array<{ key: string; row: number; axis: "left" | "right"; x: number; y: number; text: string; anchor: "above" | "left" | "right" }> = [];
     const lastRow = chart.points.length - 1;
     for (const s of visible) {
       const rows = labelRows.get(s.id);
@@ -353,6 +365,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
         if (raw === null || raw === undefined) continue;
         out.push({
           key: `${s.id}-${i}-${raw}`,
+          row: i,
           axis: s.axis,
           x: row.x,
           y: raw,
@@ -405,7 +418,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     <div ref={wrapRef} className="chart-builder-plot" style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
-          <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1}>
+          <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1} onMouseMove={onChartMove} onMouseLeave={onChartLeave}>
             <defs>
               {visible
                 .filter((s) => s.shape === "area")
@@ -466,7 +479,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 fill="none"
                 ifOverflow="visible"
                 label={(props: LabelRenderProps) => (
-                  <Pill x={props.viewBox?.cx ?? props.viewBox?.x ?? 0} y={props.viewBox?.cy ?? props.viewBox?.y ?? 0} text={p.text} theme={theme} anchor={p.anchor} />
+                  <Pill x={props.viewBox?.cx ?? props.viewBox?.x ?? 0} y={props.viewBox?.cy ?? props.viewBox?.y ?? 0} text={p.text} theme={theme} anchor={p.anchor} muted={activeRow === p.row} />
                 )}
               />
             ))}

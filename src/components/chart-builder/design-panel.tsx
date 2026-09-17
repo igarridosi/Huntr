@@ -7,6 +7,7 @@ import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
   CANVAS_THEMES,
+  MAX_ALL_LABELS,
   METRICS,
   METRIC_GROUPS,
   SERIES_PALETTE,
@@ -42,6 +43,8 @@ interface DesignPanelProps {
   spec: ChartSpec;
   onChange: (next: ChartSpec, coalesce?: string) => void;
   dataSource: DataSourceState;
+  /** Periods the chart currently shows; "All" value labels need few enough of them. */
+  periods: number;
 }
 
 const MIXED = "__mixed__" as const;
@@ -86,7 +89,7 @@ function common<K extends keyof ChartSeries>(series: ChartSeries[], key: K): Cha
  * a comparison, so they are set once here and only overridden per series
  * in the inspector when a chart mixes them.
  */
-export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
+export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanelProps) {
   const style = (changes: Partial<ChartStyle>, coalesce?: string) => onChange({ ...spec, style: { ...spec.style, ...changes } }, coalesce);
   const bulk = (changes: Partial<ChartSeries>) =>
     onChange({
@@ -132,6 +135,10 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
     spec.series.every((s) => s.shape !== "bar" && s.transform !== "indexed" && s.transform !== "yoy" && METRICS[s.metric].unit !== "percent");
   const hasBars = shapes.has("bar");
   const hasLines = shapes.has("line") || shapes.has("area");
+  // "All" is a bar-chart affordance, and only while every period has room for a pill.
+  const allBars = spec.series.length > 0 && spec.series.every((s) => s.shape === "bar");
+  const allLabelsOk = allBars && periods <= MAX_ALL_LABELS;
+  const valueLabels = spec.style.valueLabels === "all" && !allLabelsOk ? "last" : spec.style.valueLabels;
   const hasRightAxis = spec.series.some((s) => s.axis === "right");
   const tickers = Array.from(new Set(spec.series.map((s) => s.ticker)));
   const missingDeep = tickers.filter((t) => !dataSource.deepTickers.includes(t));
@@ -309,13 +316,16 @@ export function DesignPanel({ spec, onChange, dataSource }: DesignPanelProps) {
               { key: "none", label: "None" },
               { key: "last", label: "Last" },
               { key: "ends", label: "Ends" },
-              { key: "all", label: "All" },
+              ...(allLabelsOk ? [{ key: "all" as const, label: "All" }] : []),
             ]}
-            value={spec.style.valueLabels}
+            value={valueLabels}
             onChange={(valueLabels) => style({ valueLabels })}
             ariaLabel="Value labels"
             size="sm"
           />
+          {allBars && !allLabelsOk && (
+            <p className="px-1 pt-1 text-[11px] leading-snug text-mist">All: up to {MAX_ALL_LABELS} periods. Narrow the window to label every bar.</p>
+          )}
         </Row>
         <Row label="Grid">
           <Switch checked={spec.style.grid} onChange={(grid) => style({ grid })} label="Grid" />

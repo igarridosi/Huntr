@@ -57,6 +57,19 @@ export type Granularity = "annual" | "quarterly";
 export type CanvasTheme = "wolf" | "navy" | "snow" | "parchment";
 export type AspectRatio = "16:9" | "4:3" | "1:1";
 export type ValueLabels = "none" | "last" | "ends" | "all";
+
+/** "All" value labels are a bar-chart affordance and stop reading (and start costing) past this many periods. */
+export const MAX_ALL_LABELS = 20;
+
+/**
+ * The label mode the canvas actually draws: "all" degrades to "last" on a
+ * chart that is not all bars, or that shows more periods than fit a pill
+ * each. The spec keeps what was chosen; only the rendering steps back.
+ */
+export function effectiveValueLabels(mode: ValueLabels, allBars: boolean, periods: number): ValueLabels {
+  if (mode !== "all") return mode;
+  return allBars && periods <= MAX_ALL_LABELS ? "all" : "last";
+}
 export type LegendPosition = "top" | "bottom" | "hidden";
 /**
  * How an axis writes its numbers. The unit (currency, percent, multiple…)

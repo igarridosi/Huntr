@@ -597,7 +597,8 @@ select optgroup {
   animation: cb-rise 560ms var(--ease-entrance) both;
 }
 .chart-builder-plot .cb-pill {
-  animation: cb-pill-in 240ms var(--ease-entrance) 420ms both;
+  /* `backwards`, not `both`: once it has landed the inline opacity must win. */
+  animation: cb-pill-in 240ms var(--ease-entrance) 420ms backwards;
 }
 /* Slider handles and span settle onto their period after a release. */
 .cb-slider-settle {
@@ -624,7 +625,7 @@ select optgroup {
     animation: none;
   }
   .chart-builder-plot .cb-pill {
-    animation: cb-fade-in 200ms var(--ease-out) both;
+    animation: cb-fade-in 200ms var(--ease-out) backwards;
   }
 }
 @keyframes cb-fade-in {

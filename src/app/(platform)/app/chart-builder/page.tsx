@@ -190,6 +190,7 @@ function ChartBuilder() {
     <DesignPanel
       spec={spec}
       onChange={onChange}
+      periods={data.chart.points.length}
       dataSource={{
         deepTickers: data.deepTickers,
         statements: data.statements,
