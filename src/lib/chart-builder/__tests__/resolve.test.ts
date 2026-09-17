@@ -125,6 +125,11 @@ describe("indexValues", () => {
     const out = indexValues([{ value: null }, { value: 50 }, { value: 75 }, { value: 25 }]);
     expect(out.map((p) => p.value)).toEqual([null, 0, 50, -50]);
   });
+
+  it("rebases on the period before the window when given one", () => {
+    const out = indexValues([{ value: 50 }, { value: 75 }], 40);
+    expect(out.map((p) => p.value)).toEqual([25, 87.5]);
+  });
 });
 
 describe("unitOf / seriesLabel", () => {
@@ -205,6 +210,27 @@ describe("resolveChart — category mode", () => {
     expect(chart.series[0].first).toEqual({ x: 0, value: 2 });
   });
 
+  it("indexes a windowed series against the period before the window", () => {
+    const a = fin("A", {
+      annual: [
+        { date: "2021-12-31", revenue: 10 },
+        { date: "2022-12-31", revenue: 12 },
+        { date: "2023-12-31", revenue: 15 },
+      ],
+    });
+    const spec = createSpec({
+      granularity: "annual",
+      range: { from: "2022-01-01", to: null },
+      series: [createSeries({ id: "a", ticker: "A", metric: "revenue", transform: "indexed", shape: "line" })],
+    });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    expect(chart.xLabels).toEqual(["2022", "2023"]);
+    expect(col(chart, "a").map((v) => v && Math.round(v))).toEqual([20, 50]);
+    // With no period before the window the first shown one is the base.
+    const whole = resolveChart({ ...spec, range: { from: null, to: null } }, { financials: { A: a }, prices: {} });
+    expect(col(whole, "a")[0]).toBe(0);
+  });
+
   it("drops the warm-up year of a YoY series from the front and keeps later gaps", () => {
     const a = fin("A", {
       annual: [
@@ -230,7 +256,7 @@ describe("resolveChart — category mode", () => {
     expect(chart.xLabels).toEqual(["2023"]);
   });
 
-  it("applies the range by period end and indexes inside it", () => {
+  it("applies the range by period end and indexes against the period before it", () => {
     const a = fin("A", { annual: [2020, 2021, 2022, 2023].map((y) => ({ date: `${y}-12-31`, revenue: y - 2019 })) });
     const spec = createSpec({
       granularity: "annual",
@@ -239,7 +265,8 @@ describe("resolveChart — category mode", () => {
     });
     const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
     expect(chart.xLabels).toEqual(["2022", "2023"]);
-    expect(col(chart, "a")).toEqual([0, (4 / 3 - 1) * 100]);
+    // 2021 (revenue 2) is the base: 3 → +50 %, 4 → +100 %.
+    expect(col(chart, "a")).toEqual([50, 100]);
   });
 
   it("reads capex, dividends and buybacks as positive outflows", () => {
@@ -361,13 +388,16 @@ describe("resolveChart — time mode", () => {
     expect(new Date(Math.max(...priceXs)).toISOString().slice(0, 10)).toBe("2024-09-30");
   });
 
-  it("indexes prices from the first close inside the range", () => {
+  it("indexes prices from the last close before the range", () => {
     const px = prices("2024-01-01", 4, (i) => [50, 100, 150, 200][i]);
     const spec = createSpec({
       range: { from: "2024-01-02", to: null },
       series: [createSeries({ id: "p", ticker: "A", metric: "price", transform: "indexed", shape: "line" })],
     });
     const chart = resolveChart(spec, { financials: {}, prices: { A: px } });
-    expect(col(chart, "p")).toEqual([0, 50, 100]);
+    // The 50 close of Jan 1 is the base, so the first day shown is already +100 %.
+    expect(col(chart, "p")).toEqual([100, 200, 300]);
+    const whole = resolveChart({ ...spec, range: { from: null, to: null } }, { financials: {}, prices: { A: px } });
+    expect(col(whole, "p")).toEqual([0, 100, 200, 300]);
   });
 });

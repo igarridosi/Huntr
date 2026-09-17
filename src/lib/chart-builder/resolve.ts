@@ -326,9 +326,14 @@ export function applyTransform(
   return out;
 }
 
-/** Percent change from the first non-null value, in place order. */
-export function indexValues<T extends { value: number | null }>(points: T[]): T[] {
-  const base = points.find((p) => p.value !== null && p.value !== 0)?.value ?? null;
+/**
+ * Percent change from a base, in place order. The base is the value of
+ * the period just before the first one shown when the caller has it, so
+ * the first column carries its own change rather than a 0 % by
+ * definition; otherwise the first non-null value shown (which is then 0).
+ */
+export function indexValues<T extends { value: number | null }>(points: T[], priorBase: number | null = null): T[] {
+  const base = priorBase !== null && priorBase !== 0 ? priorBase : (points.find((p) => p.value !== null && p.value !== 0)?.value ?? null);
   return points.map((p) => ({
     ...p,
     value: base === null || p.value === null ? null : (p.value / base - 1) * 100,
@@ -400,6 +405,8 @@ interface SeriesPoints {
   unit: MetricUnit;
   /** Category mode: bucket key; time mode: epoch ms. */
   points: Array<{ x: number; value: number | null }>;
+  /** The value of the period before `x`, from the unfiltered data — the base an indexed series starts from. */
+  priorTo?: (x: number) => number | null;
 }
 
 function inRange(date: string, range: ChartSpec["range"]): boolean {
@@ -457,7 +464,15 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       const points = prices
         .filter((p) => inRange(p.date, priceRange))
         .map((p) => ({ x: Date.parse(p.date), value: p.close as number | null }));
-      all.push({ series, unit, points });
+      const priorTo = (x: number) => {
+        let last: number | null = null;
+        for (const p of prices) {
+          if (Date.parse(p.date) >= x) break;
+          last = p.close;
+        }
+        return last;
+      };
+      all.push({ series, unit, points, priorTo });
       continue;
     }
 
@@ -492,7 +507,12 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown.` });
     }
 
-    all.push({ series, unit, points });
+    const keyOfX = new Map(bundles.map((b) => [xMode === "time" ? b.bucket.mid : b.bucket.key, b.bucket.key] as const));
+    const priorTo = (x: number) => {
+      const key = keyOfX.get(x);
+      return key === undefined ? null : (transformed.get(key - KEY_STEP) ?? null);
+    };
+    all.push({ series, unit, points, priorTo });
   }
 
   // Axes
@@ -521,9 +541,14 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       }
     }
   }
-  // Indexing runs last, on what is actually shown: the base is the first
-  // period on the chart, not one the alignment above has since removed.
-  for (const s of all) if (s.series.transform === "indexed") s.points = indexValues(s.points);
+  // Indexing runs last, on what is actually shown: the base is the period
+  // just before the first one on the chart (so that column shows its own
+  // change), falling back to the first shown value when there is none.
+  for (const s of all) {
+    if (s.series.transform !== "indexed") continue;
+    const first = s.points.find((p) => p.value !== null);
+    s.points = indexValues(s.points, first ? (s.priorTo?.(first.x) ?? null) : null);
+  }
 
   // A history-dependent transform (YoY, TTM) has nothing to say for its
   // first year; those warm-up periods are dropped from the front rather

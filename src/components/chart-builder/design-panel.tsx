@@ -183,7 +183,7 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
               <Row
                 label="Show"
                 stack
-                hint="YoY %: growth against the same period a year earlier. Indexed %: change since the first period shown — companies of any size on one scale."
+                hint="YoY %: growth against the same period a year earlier. Indexed %: cumulative change since just before the window, so the first period shows its own move — companies of any size on one scale."
               >
                 <SegmentedTabs<GrowthView | typeof MIXED>
                   items={[
