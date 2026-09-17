@@ -296,8 +296,26 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       }
       return niceAxis(min, max);
     };
-    return { left: extent("left"), right: extent("right") };
-  }, [visible, stackedBars, chart.points, logOk]);
+    const left: { domain: [number, number]; ticks: number[] | null } = extent("left");
+    const right: { domain: [number, number]; ticks: number[] | null } = extent("right");
+    // Two log axes span the same number of decades, or the slopes could
+    // not be compared: a price over 100× drawn on the height an EPS uses
+    // for 10× would look half as steep as the same growth rate. The
+    // narrower axis is widened around its data.
+    if (logOk && left.ticks === null && right.ticks === null && hasRight) {
+      type Axis = { domain: [number, number]; ticks: number[] | null };
+      const decades = (a: Axis) => Math.round(Math.log10(a.domain[1]) - Math.log10(a.domain[0]));
+      const widen = (a: Axis, to: number): Axis => {
+        const extra = to - decades(a);
+        if (extra <= 0) return a;
+        const below = Math.floor(extra / 2);
+        return { ...a, domain: [a.domain[0] / Math.pow(10, below), a.domain[1] * Math.pow(10, extra - below)] as [number, number] };
+      };
+      const span = Math.max(decades(left), decades(right));
+      return { left: widen(left, span), right: widen(right, span) };
+    }
+    return { left, right };
+  }, [visible, stackedBars, chart.points, logOk, hasRight]);
   const yAxisProps = (axis: "left" | "right") => {
     const a = axisLayout[axis];
     return a.ticks ? { domain: a.domain, ticks: a.ticks } : { domain: a.domain, tickCount: 6 };
