@@ -1,7 +1,7 @@
 "use client";
 
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
-import { formatMonthTick, type ChartSpec, type Granularity } from "@/lib/chart-builder";
+import { formatMonthTick, withGranularity, type ChartSpec, type Granularity } from "@/lib/chart-builder";
 import { PeriodSlider } from "./period-slider";
 
 interface ChartControlsProps {
@@ -16,6 +16,7 @@ interface ChartControlsProps {
 
 const GRANULARITY: ReadonlyArray<{ key: Granularity; label: string }> = [
   { key: "quarterly", label: "Quarterly" },
+  { key: "ttm", label: "TTM" },
   { key: "annual", label: "Annual" },
 ];
 
@@ -33,8 +34,8 @@ export function ChartControls({ spec, dates, datesAreMonthly = false, range, onC
       <SegmentedTabs<Granularity>
         items={GRANULARITY}
         value={spec.granularity}
-        onChange={(granularity) => onChange({ ...spec, granularity })}
-        ariaLabel="Granularity"
+        onChange={(granularity) => onChange(withGranularity(spec, granularity))}
+        ariaLabel="Period"
         size="sm"
         className="shrink-0"
       />

@@ -24,6 +24,7 @@ import {
   formatTick,
   formatValue,
   seriesInk,
+  ttmApplies,
   type CanvasTokens,
   type ChartSpec,
   type MetricUnit,
@@ -239,9 +240,10 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
     const names = new Set<string>();
     for (const s of visible) {
       if (s.axis !== axis) continue;
-      const base = METRICS[s.metric].label;
+      const def = METRICS[s.metric];
+      const base = s.transform === "ttm" || (spec.granularity === "ttm" && ttmApplies(def)) ? `${def.label} TTM` : def.label;
       names.add(
-        s.transform === "per_share" ? `${base} / share` : s.transform === "ttm" ? `${base} TTM` : s.transform === "yoy" ? `${base} YoY %` : s.transform === "indexed" ? `${base}, indexed %` : base
+        s.transform === "per_share" ? `${base} / share` : s.transform === "yoy" ? `${base} YoY %` : s.transform === "indexed" ? `${base}, indexed %` : base
       );
     }
     return [...names].join(" · ");
@@ -577,13 +579,15 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                   <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: hoverInk(ink, spec.style.theme) }} />
                 );
               }
+              // Straight segments between the points: a line reads as the
+              // data it joins, with nothing invented between two closes.
               if (s.shape === "area") {
                 return (
                   <Area
                     key={s.id}
                     {...common}
                     {...fade}
-                    type="monotone"
+                    type="linear"
                     stroke={ink}
                     strokeWidth={strokeFor(s.id)}
                     fill={`url(#${gradientPrefix}-${s.id})`}
@@ -598,7 +602,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                   key={s.id}
                   {...common}
                   {...fade}
-                  type="monotone"
+                  type="linear"
                   stroke={ink}
                   strokeWidth={strokeFor(s.id)}
                   dot={false}

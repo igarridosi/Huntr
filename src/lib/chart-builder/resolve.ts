@@ -9,13 +9,16 @@
  * year of their period-end date, so companies with different fiscal years
  * share a column (Microsoft's June quarter and Alphabet's June quarter are
  * the same bucket). When any series is a price, the x axis becomes time and
- * statement points sit at the middle of their bucket.
+ * statement points sit on the fiscal period end they report — the day the
+ * quarter closed, where the price line is at that quarter's close.
  */
 
 import type { CompanyFinancials, FinancialPeriod } from "@/types/financials";
 import {
   METRICS,
+  ttmApplies,
   type MarketContext,
+  type MetricId,
   type MetricUnit,
   type PeriodBundle,
   type StatementReader,
@@ -76,8 +79,6 @@ export interface Bucket {
   /** Sortable, arithmetic key: year*4+quarter or year. */
   key: number;
   label: string;
-  /** Epoch ms at the middle of the bucket (for the time axis). */
-  mid: number;
 }
 
 const ISO_RE = /^(\d{4})-(\d{2})-(\d{2})/;
@@ -92,23 +93,22 @@ export function toCalendarBucket(date: string, granularity: Granularity): Bucket
   const p = parseIso(date);
   if (!p) return null;
   if (granularity === "annual") {
-    return { key: p.y, label: String(p.y), mid: Date.UTC(p.y, 6, 1) };
+    return { key: p.y, label: String(p.y) };
   }
   const q = Math.floor(p.m / 3);
   return {
     key: p.y * 4 + q,
     label: `Q${q + 1} ${p.y}`,
-    mid: Date.UTC(p.y, q * 3 + 1, 15),
   };
 }
 
 export function bucketFromKey(key: number, granularity: Granularity): Bucket {
   if (granularity === "annual") {
-    return { key, label: String(key), mid: Date.UTC(key, 6, 1) };
+    return { key, label: String(key) };
   }
   const y = Math.floor(key / 4);
   const q = key - y * 4;
-  return { key, label: `Q${q + 1} ${y}`, mid: Date.UTC(y, q * 3 + 1, 15) };
+  return { key, label: `Q${q + 1} ${y}` };
 }
 
 /** First day of the bucket a period-end date falls in, ISO. */
@@ -133,7 +133,9 @@ export function bucketEnd(date: string, granularity: Granularity): string {
 /** Distance between consecutive buckets in key units. */
 const KEY_STEP = 1;
 /** How many buckets back "one year ago" is. */
-const yearStep = (g: Granularity) => (g === "quarterly" ? 4 : 1);
+const yearStep = (g: Granularity) => (g === "annual" ? 1 : 4);
+/** The statement rows a granularity reads: `ttm` is quarterly data read four quarters at a time. */
+const rowsOf = (g: Granularity): "annual" | "quarterly" => (g === "annual" ? "annual" : "quarterly");
 
 // ---------------------------------------------------------------------------
 // Bundling statements
@@ -175,9 +177,10 @@ export function bundlePeriods(
     }
   };
 
-  put(fin.income_statement?.[granularity], (b) => b.income !== undefined, (b, r) => { b.income = r; });
-  put(fin.balance_sheet?.[granularity], (b) => b.balance !== undefined, (b, r) => { b.balance = r; });
-  put(fin.cash_flow?.[granularity], (b) => b.cashflow !== undefined, (b, r) => { b.cashflow = r; });
+  const rows = rowsOf(granularity);
+  put(fin.income_statement?.[rows], (b) => b.income !== undefined, (b, r) => { b.income = r; });
+  put(fin.balance_sheet?.[rows], (b) => b.balance !== undefined, (b, r) => { b.balance = r; });
+  put(fin.cash_flow?.[rows], (b) => b.cashflow !== undefined, (b, r) => { b.cashflow = r; });
 
   return [...byKey.values()].sort((a, b) => a.bucket.key - b.bucket.key);
 }
@@ -249,13 +252,24 @@ function statementValues(
   bundles.forEach((b, i) => {
     let v: number | null = null;
     if (def.source === "statements" && def.read) {
-      v = def.read(b);
+      if (granularity === "ttm" && def.parts) {
+        // A ratio over twelve months is the ratio of the sums, not the
+        // mean of four ratios: a heavy quarter weighs what it weighed.
+        const { num, den, denKind, percent } = def.parts;
+        const n = ttmAt(bundles, i, num);
+        const d = denKind === "flow" ? ttmAt(bundles, i, den) : i >= 3 ? den(b) : null;
+        v = n === null || d === null || d <= 0 ? null : (n / d) * (percent ? 100 : 1);
+      } else if (granularity === "ttm" && def.kind === "flow") {
+        v = ttmAt(bundles, i, def.read);
+      } else {
+        v = def.read(b);
+      }
     } else if (def.source === "market" && def.derive) {
       const price = priceAt(prices, b.date);
       if (price !== null) {
         const ctx: MarketContext = {
           price,
-          flow: (read) => (granularity === "quarterly" ? ttmAt(bundles, i, read) : read(b)),
+          flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, i, read)),
           stock: (read) => read(b),
         };
         v = def.derive(ctx);
@@ -267,9 +281,12 @@ function statementValues(
   return out;
 }
 
+/** Diluted shares from the income statement, else the balance sheet's count; a 0 means the source did not have it. */
 const sharesOf: StatementReader = (p) => {
-  const v = p.income?.shares_outstanding_diluted ?? p.balance?.shares_outstanding;
-  return typeof v === "number" && Number.isFinite(v) && v > 0 ? v : null;
+  for (const v of [p.income?.shares_outstanding_diluted, p.balance?.shares_outstanding]) {
+    if (typeof v === "number" && Number.isFinite(v) && v > 0) return v;
+  }
+  return null;
 };
 
 /**
@@ -280,9 +297,13 @@ export function applyTransform(
   values: Keyed,
   transform: ChartSeries["transform"],
   granularity: Granularity,
-  bundles: BundledPeriod[]
+  bundles: BundledPeriod[],
+  metric?: MetricId
 ): Keyed {
   if (transform === "raw" || transform === "indexed") return values;
+  // Four quarters summed once: on the annual view there are none, and on
+  // the trailing-twelve-month view the period already did it.
+  if (transform === "ttm" && granularity !== "quarterly") return values;
 
   const out: Keyed = new Map();
   const byKey = new Map(bundles.map((b) => [b.bucket.key, b] as const));
@@ -292,6 +313,22 @@ export function applyTransform(
       const bundle = byKey.get(key);
       const shares = bundle ? sharesOf(bundle) : null;
       out.set(key, v === null || shares === null ? null : v / shares);
+    }
+    return out;
+  }
+
+  const parts = metric ? METRICS[metric].parts : undefined;
+  if (transform === "ttm" && parts) {
+    // A ratio's TTM is the ratio of the sums, as on the ttm period.
+    for (const [key, v] of values) {
+      const i = bundles.findIndex((b) => b.bucket.key === key);
+      if (v === null || i < 0) {
+        out.set(key, null);
+        continue;
+      }
+      const n = ttmAt(bundles, i, parts.num);
+      const d = parts.denKind === "flow" ? ttmAt(bundles, i, parts.den) : i >= 3 ? parts.den(bundles[i]) : null;
+      out.set(key, n === null || d === null || d <= 0 ? null : (n / d) * (parts.percent ? 100 : 1));
     }
     return out;
   }
@@ -346,20 +383,20 @@ export function unitOf(series: ChartSeries): MetricUnit {
   return METRICS[series.metric].unit;
 }
 
-export function seriesLabel(series: ChartSeries): string {
+/** "AAPL · Rev TTM/sh": the metric, then the period when it is trailing twelve months, then the transform. */
+export function seriesLabel(series: ChartSeries, granularity?: Granularity): string {
   if (series.label) return series.label;
-  const short = METRICS[series.metric].short;
+  const def = METRICS[series.metric];
+  const ttm = series.transform === "ttm" || (granularity === "ttm" && ttmApplies(def)) ? " TTM" : "";
   const suffix =
     series.transform === "per_share"
       ? "/sh"
-      : series.transform === "ttm"
-        ? " TTM"
-        : series.transform === "yoy"
-          ? " YoY"
-          : series.transform === "indexed"
-            ? " (indexed)"
-            : "";
-  return `${series.ticker} · ${short}${suffix}`;
+      : series.transform === "yoy"
+        ? " YoY"
+        : series.transform === "indexed"
+          ? " (indexed)"
+          : "";
+  return `${series.ticker} · ${def.short}${ttm}${suffix}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +474,21 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
     return p;
   };
 
+  // On the time axis a bucket sits on the day its period closed. With
+  // several companies in one bucket the latest of their closes is used,
+  // so they keep sharing a row (and a bar slot) as they do by key.
+  const bucketX = new Map<number, number>();
+  if (xMode === "time") {
+    for (const t of new Set(spec.series.filter((s) => METRICS[s.metric].source !== "price").map((s) => s.ticker))) {
+      for (const b of bundlesFor(t) ?? []) {
+        const end = Date.parse(b.date);
+        if (!Number.isFinite(end)) continue;
+        bucketX.set(b.bucket.key, Math.max(bucketX.get(b.bucket.key) ?? -Infinity, end));
+      }
+    }
+  }
+  const xOf = (b: BundledPeriod) => (xMode === "time" ? (bucketX.get(b.bucket.key) ?? Date.parse(b.date)) : b.bucket.key);
+
   const warnedTickers = new Set<string>();
   const all: SeriesPoints[] = [];
 
@@ -493,21 +545,21 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
     }
 
     const raw = statementValues(series, spec.granularity, bundles, prices);
-    const transformed = applyTransform(raw, series.transform, spec.granularity, bundles);
+    const transformed = applyTransform(raw, series.transform, spec.granularity, bundles, series.metric);
 
-    if (series.transform === "ttm" && spec.granularity === "quarterly" && bundles.length < 4) {
+    if ((series.transform === "ttm" || spec.granularity === "ttm") && spec.granularity !== "annual" && bundles.length < 4) {
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${series.ticker} has fewer than four quarters; TTM cannot be computed.` });
     }
 
     const points = bundles
       .filter((b) => inRange(b.date, spec.range))
-      .map((b) => ({ x: xMode === "time" ? b.bucket.mid : b.bucket.key, value: transformed.get(b.bucket.key) ?? null }));
+      .map((b) => ({ x: xOf(b), value: transformed.get(b.bucket.key) ?? null }));
 
     if (def.source === "market" && prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown, and the per-share figures behind it.` });
     }
 
-    const keyOfX = new Map(bundles.map((b) => [xMode === "time" ? b.bucket.mid : b.bucket.key, b.bucket.key] as const));
+    const keyOfX = new Map(bundles.map((b) => [xOf(b), b.bucket.key] as const));
     const priorTo = (x: number) => {
       const key = keyOfX.get(x);
       return key === undefined ? null : (transformed.get(key - KEY_STEP) ?? null);
@@ -550,11 +602,11 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
     s.points = indexValues(s.points, first ? (s.priorTo?.(first.x) ?? null) : null);
   }
 
-  // A history-dependent transform (YoY, TTM) has nothing to say for its
-  // first year; those warm-up periods are dropped from the front rather
-  // than shown as empty columns. Gaps elsewhere stay: they are real.
+  // A history-dependent transform (YoY, TTM) or period has nothing to say
+  // for its first year; those warm-up periods are dropped from the front
+  // rather than shown as empty columns. Gaps elsewhere stay: they are real.
   let sortedX = [...xs].sort((a, b) => a - b);
-  if (all.some((s) => s.series.transform === "yoy" || s.series.transform === "ttm")) {
+  if (spec.granularity === "ttm" || all.some((s) => s.series.transform === "yoy" || s.series.transform === "ttm")) {
     const drawn = new Set<number>();
     for (const s of all) for (const p of s.points) if (p.value !== null) drawn.add(p.x);
     const firstDrawn = sortedX.findIndex((x) => drawn.has(x));
@@ -580,13 +632,13 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
     const lastP = nonNull[nonNull.length - 1];
     const last = lastP ? { x: toX(lastP.x), value: lastP.value } : null;
     if (nonNull.length === 0 && s.points.length > 0) {
-      warnings.push({ seriesId: s.series.id, ticker: s.series.ticker, message: `${seriesLabel(s.series)} has no values in this range.` });
+      warnings.push({ seriesId: s.series.id, ticker: s.series.ticker, message: `${seriesLabel(s.series, spec.granularity)} has no values in this range.` });
     }
     return {
       ...s.series,
       axis: axisOf.get(s.series.id) ?? s.series.axis,
       unit: s.unit,
-      label: seriesLabel(s.series),
+      label: seriesLabel(s.series, spec.granularity),
       first,
       last,
       count: nonNull.length,

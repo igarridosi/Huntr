@@ -8,7 +8,7 @@
  * as long as `migrateSpec` knows how to lift the old shape.
  */
 
-import { METRICS, isMetricId, type MetricId } from "./metrics";
+import { METRICS, isMetricId, ttmApplies, type MetricId } from "./metrics";
 
 export const CHART_SPEC_VERSION = 1 as const;
 
@@ -30,7 +30,7 @@ export type SeriesTransform =
   | "raw"
   /** Divided by diluted shares outstanding of the same period. */
   | "per_share"
-  /** Rolling four-quarter sum. Flow metrics on quarterly granularity only. */
+  /** Rolling four-quarter sum of one series on quarterly data. The `ttm` granularity does this for the whole chart. */
   | "ttm"
   /** Percent change against the same period one year earlier. */
   | "yoy"
@@ -53,7 +53,13 @@ export interface ChartSeries {
   hidden?: boolean;
 }
 
-export type Granularity = "annual" | "quarterly";
+/**
+ * The period each column stands for. `ttm` is quarterly data read as the
+ * trailing twelve months: every flow is the sum of the latest four
+ * quarters, every ratio of flows the ratio of those sums, so seasonality
+ * drops out and the figure is the one a valuation calibrates on.
+ */
+export type Granularity = "annual" | "quarterly" | "ttm";
 export type CanvasTheme = "wolf" | "navy" | "snow" | "parchment";
 export type AspectRatio = "16:9" | "4:3" | "1:1";
 export type ValueLabels = "none" | "last" | "ends" | "all";
@@ -295,10 +301,13 @@ export function validateSpec(spec: ChartSpec): SpecIssue[] {
           code: "ttm_needs_quarterly",
           seriesId: s.id,
           severity: "warning",
-          message: "TTM only applies to quarterly data; the annual value is shown instead.",
+          message:
+            spec.granularity === "ttm"
+              ? "The chart is already on a trailing twelve-month basis; the series transform is ignored."
+              : "TTM only applies to quarterly data; the annual value is shown instead.",
         });
       }
-      if (def.kind !== "flow") {
+      if (!ttmApplies(def)) {
         issues.push({
           code: "ttm_needs_flow",
           seriesId: s.id,
@@ -375,7 +384,7 @@ export function normalizeSpec(spec: ChartSpec): ChartSpec {
       .map((s) => {
         const def = METRICS[s.metric];
         let transform = s.transform;
-        if (transform === "ttm" && (spec.granularity !== "quarterly" || def.kind !== "flow")) {
+        if (transform === "ttm" && (spec.granularity !== "quarterly" || !ttmApplies(def))) {
           transform = "raw";
         }
         if (transform === "per_share" && !(def.source === "statements" && def.unit === "currency")) {
@@ -384,6 +393,45 @@ export function normalizeSpec(spec: ChartSpec): ChartSpec {
         const shape: SeriesShape = s.shape === "bar" && (transform === "indexed" || def.source === "price") ? "line" : s.shape;
         return { ...s, ticker: normalizeTicker(s.ticker), transform, shape };
       }),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Period
+// ---------------------------------------------------------------------------
+
+const PERIOD_WORD: Record<Granularity, string> = { quarterly: "Quarterly", ttm: "Trailing twelve-month", annual: "Annual" };
+const PERIOD_LEAD = /^(Quarterly|Annual|Trailing twelve[- ]months?|TTM)\b/i;
+
+/**
+ * A subtitle that names its period, re-worded for another one. Only a
+ * leading period word is touched ("Annual margins, …" → "Quarterly
+ * margins, …"; "Trailing twelve months" when the word stands alone), so a
+ * subtitle the user wrote without one is left exactly as it is.
+ */
+export function periodSubtitle(subtitle: string | undefined, granularity: Granularity): string | undefined {
+  if (!subtitle) return subtitle;
+  const m = PERIOD_LEAD.exec(subtitle);
+  if (!m) return subtitle;
+  const rest = subtitle.slice(m[0].length);
+  const standsAlone = rest === "" || /^[,·]|^ ·/.test(rest);
+  const word = granularity === "ttm" && standsAlone ? "Trailing twelve months" : PERIOD_WORD[granularity];
+  return (word + rest).replace(/aligned by calendar (quarter|year)/, `aligned by calendar ${granularity === "annual" ? "year" : "quarter"}`);
+}
+
+/**
+ * The spec on another period. The subtitle follows, and a per-series TTM
+ * transform is folded away where the period already provides it or
+ * cannot (`normalizeSpec` would drop it anyway; doing it here keeps the
+ * stored spec honest).
+ */
+export function withGranularity(spec: ChartSpec, granularity: Granularity): ChartSpec {
+  if (granularity === spec.granularity) return spec;
+  return {
+    ...spec,
+    granularity,
+    subtitle: periodSubtitle(spec.subtitle, granularity),
+    series: spec.series.map((s) => (s.transform === "ttm" && granularity !== "quarterly" ? { ...s, transform: "raw" } : s)),
   };
 }
 
@@ -440,7 +488,7 @@ export function migrateSpec(input: unknown): MigrationResult {
   const spec = createSpec({
     title: input.title,
     subtitle: typeof input.subtitle === "string" ? input.subtitle : undefined,
-    granularity: input.granularity === "annual" ? "annual" : "quarterly",
+    granularity: input.granularity === "annual" ? "annual" : input.granularity === "ttm" ? "ttm" : "quarterly",
     align: input.align === "all" ? "all" : "common",
     metrics: input.metrics === "per_series" ? "per_series" : "shared",
     range: {

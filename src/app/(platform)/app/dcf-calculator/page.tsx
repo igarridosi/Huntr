@@ -74,6 +74,7 @@ import {
   collectAnchorWarnings,
 } from "@/lib/calculations/dcf-anchors";
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
+import { withLivePrice } from "@/lib/dcf/live-price";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -831,7 +832,9 @@ export default function DcfCalculatorPage() {
     setBalanceOverrides({});
     setShareCountBasis(undefined);
     setAppliedSignature(null);
-    setScenarios(payload.scenarios);
+    // Stored with the price zeroed on every scenario; the live quote goes
+    // back on all three, not only the one that opens.
+    setScenarios(withLivePrice(payload.scenarios, quote?.price ?? 0));
     setActiveScenario(payload.activeScenario);
     setWaccEstimate(payload.waccEstimate);
     animateInputsTo(
@@ -902,7 +905,8 @@ export default function DcfCalculatorPage() {
       waccEstimate,
     });
 
-    setScenarios(scenariosToSave);
+    // The zeroed copy is for the store; what stays in memory keeps the price.
+    setScenarios(withLivePrice(scenariosToSave, inputs.currentPrice));
     setSaveStatus(ok ? "saved" : "error");
   }, [activeScenario, inputs, openGate, saveScenario, scenarios, ticker, user, waccEstimate]);
 
@@ -1077,7 +1081,9 @@ export default function DcfCalculatorPage() {
       ticker,
       companyName: profile?.name ?? null,
       currentPrice: inputs.currentPrice,
-      scenarios,
+      // A quote that ticked since a scenario was generated or loaded is
+      // not a divergence between scenarios: the live price goes on all three.
+      scenarios: withLivePrice(scenarios, inputs.currentPrice),
       activeScenario,
       liveInputs: inputs,
       sourcedFields,

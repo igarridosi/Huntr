@@ -110,7 +110,7 @@ export function ChartLegend({ spec, chart, hoverRow, pendingTickers, selectedId,
                   boxShadow: s.shape === "area" ? `0 4px 0 -1px ${ink}55` : hovered && !s.hidden ? `0 0 0 3px ${ink}33` : undefined,
                 }}
               />
-              <span className="font-mono text-[12px] tabular-nums">{seriesLabel(s)}</span>
+              <span className="font-mono text-[12px] tabular-nums">{seriesLabel(s, spec.granularity)}</span>
               {pending ? (
                 <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: theme.tick }}>loading</span>
               ) : (

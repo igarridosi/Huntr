@@ -85,6 +85,18 @@ export interface MetricDef {
   statements: readonly StatementKind[];
   read?: StatementReader;
   derive?: (ctx: MarketContext) => number | null;
+  /**
+   * For a ratio of statement figures, what it divides: on a trailing
+   * twelve-month view the ratio is the sum of the numerator over four
+   * quarters against the sum of a flow denominator (or the latest value
+   * of a stock one), not an average of four ratios.
+   */
+  parts?: { num: StatementReader; den: StatementReader; denKind: "flow" | "stock"; percent: boolean };
+}
+
+/** Whether a metric changes with the period length: flows and ratios built on them do, stocks and prices do not. */
+export function ttmApplies(def: MetricDef): boolean {
+  return def.kind === "flow" || def.parts !== undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -132,6 +144,9 @@ const pct = (a: StatementReader, b: StatementReader): StatementReader => (p) => 
   return (x / y) * 100;
 };
 
+/** The parts of a percentage ratio, for the trailing-twelve-month view. */
+const over = (num: StatementReader, den: StatementReader, denKind: "flow" | "stock" = "flow"): NonNullable<MetricDef["parts"]> => ({ num, den, denKind, percent: true });
+
 const div = (a: StatementReader, b: StatementReader): StatementReader => (p) => {
   const x = a(p);
   const y = b(p);
@@ -146,8 +161,13 @@ const fcf = cf("free_cash_flow");
 const capex = abs(cf("capital_expenditures"));
 const dividends = abs(cf("dividends_paid"));
 const buybacks = abs(cf("share_repurchases"));
-const sharesDiluted: StatementReader = (p) =>
-  num(p.income?.shares_outstanding_diluted) ?? num(p.balance?.shares_outstanding);
+/** Diluted shares from the income statement, else the balance sheet's count; 0 is "not on file", not a count. */
+const sharesDiluted: StatementReader = (p) => {
+  const inc = num(p.income?.shares_outstanding_diluted);
+  if (inc !== null && inc > 0) return inc;
+  const bal = num(p.balance?.shares_outstanding);
+  return bal !== null && bal > 0 ? bal : null;
+};
 /**
  * Diluted EPS as reported, or net income over diluted shares when the
  * source left it at 0 — Alpha Vantage keeps EPS on a separate endpoint,
@@ -275,22 +295,22 @@ const defs: Record<MetricId, Omit<MetricDef, "id">> = {
   // Per share
   eps_diluted: { label: "EPS (diluted)", short: "EPS", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income"], read: epsDiluted },
   eps_basic: { label: "EPS (basic)", short: "EPS basic", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income"], read: inc("eps_basic") },
-  fcf_per_share: { label: "FCF per share", short: "FCF/sh", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income", "cashflow"], read: div(fcf, sharesDiluted) },
+  fcf_per_share: { label: "FCF per share", short: "FCF/sh", group: "Per share", unit: "per_share", kind: "flow", source: "statements", statements: ["income", "balance", "cashflow"], read: div(fcf, sharesDiluted) },
   book_value_per_share: { label: "Book value per share", short: "BV/sh", group: "Per share", unit: "per_share", kind: "stock", source: "statements", statements: ["income", "balance"], read: div(equity, sharesDiluted) },
-  shares_outstanding_diluted: { label: "Shares outstanding (diluted)", short: "Shares", group: "Per share", unit: "shares", kind: "stock", source: "statements", statements: ["income"], read: sharesDiluted },
+  shares_outstanding_diluted: { label: "Shares outstanding (diluted)", short: "Shares", group: "Per share", unit: "shares", kind: "stock", source: "statements", statements: ["income", "balance"], read: sharesDiluted },
 
   // Margins & returns
-  gross_margin: { label: "Gross margin", short: "GM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(inc("gross_profit"), revenue) },
-  operating_margin: { label: "Operating margin", short: "OM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(inc("operating_income"), revenue) },
-  net_margin: { label: "Net margin", short: "NM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(netIncome, revenue) },
-  fcf_margin: { label: "FCF margin", short: "FCF %", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "cashflow"], read: pct(fcf, revenue) },
-  payout_ratio: { label: "Payout ratio", short: "Payout", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "cashflow"], read: pct(dividends, netIncome) },
-  roe: { label: "Return on equity", short: "ROE", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "balance"], read: pct(netIncome, equity) },
+  gross_margin: { label: "Gross margin", short: "GM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(inc("gross_profit"), revenue), parts: over(inc("gross_profit"), revenue) },
+  operating_margin: { label: "Operating margin", short: "OM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(inc("operating_income"), revenue), parts: over(inc("operating_income"), revenue) },
+  net_margin: { label: "Net margin", short: "NM", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income"], read: pct(netIncome, revenue), parts: over(netIncome, revenue) },
+  fcf_margin: { label: "FCF margin", short: "FCF %", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "cashflow"], read: pct(fcf, revenue), parts: over(fcf, revenue) },
+  payout_ratio: { label: "Payout ratio", short: "Payout", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "cashflow"], read: pct(dividends, netIncome), parts: over(dividends, netIncome) },
+  roe: { label: "Return on equity", short: "ROE", group: "Margins & returns", unit: "percent", kind: "ratio", source: "statements", statements: ["income", "balance"], read: pct(netIncome, equity), parts: over(netIncome, equity, "stock") },
   debt_to_equity: { label: "Debt to equity", short: "D/E", group: "Margins & returns", unit: "ratio", kind: "ratio", source: "statements", statements: ["balance"], read: div(debt, equity) },
 
   // Market (price × statements)
   price: { label: "Price", short: "Price", group: "Market", unit: "price", kind: "price", source: "price", statements: [] },
-  market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income"], derive: marketCap },
+  market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: marketCap },
   enterprise_value: { label: "Enterprise value", short: "EV", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: enterpriseValue },
   pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(ctx.price, ctx.flow(epsDiluted)) },
   price_to_sales: { label: "Price to sales", short: "P/S", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(revenue)) },

@@ -45,6 +45,7 @@ import {
   getTranscriptDocument,
 } from "./transcripts";
 import { getCachedDataState } from "./cache";
+import { repairAlphaFinancials } from "./alpha-repair";
 
 const MIN_MARKET_CAP = 10_000_000_000;
 
@@ -292,7 +293,7 @@ export async function getCompanyFinancials(
     // populate, and repairing the fetch changed nothing because this path
     // never reached it.
     if (alphaCached.status !== "miss" && hasStatements(alphaCached.data)) {
-      return alphaCached.data;
+      return repairAlphaFinancials(alphaCached.data);
     }
 
     return yahoo.getFinancials(ticker, { preferAlphaVantage: false });
@@ -321,7 +322,7 @@ export async function getFullStockData(ticker: string) {
     const hasAlphaFinancials =
       alphaCached.status !== "miss" && hasStatements(alphaCached.data);
     const financials = hasAlphaFinancials
-      ? alphaCached.data
+      ? repairAlphaFinancials(alphaCached.data)
       : await yahoo.getFinancials(key, { preferAlphaVantage: false });
 
     return {

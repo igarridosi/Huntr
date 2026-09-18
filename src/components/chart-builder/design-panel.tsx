@@ -222,7 +222,7 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
             {growthView !== "yoy" && growthView !== "indexed" && (
               <Row label="Transform">
                 <SelectMenu<SeriesTransform | typeof MIXED>
-                  groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
+                  groups={withMixed([{ label: "Transform", options: spec.granularity === "quarterly" ? TRANSFORMS : TRANSFORMS.filter((t) => t.value !== "ttm") }], transform === MIXED)}
                   value={transform}
                   onChange={(v) => v !== MIXED && bulk({ transform: v })}
                   ariaLabel="Transform for every series"

@@ -101,7 +101,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
       if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — Margins`,
-        subtitle: "Annual, as a percentage of revenue",
+        subtitle: "Annual margins, as a percentage of revenue",
         granularity: "annual",
         series: [
           createSeries({ ticker, metric: "gross_margin", shape: "line", color: paletteColor(0) }),
@@ -187,7 +187,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
       if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — P/E vs. revenue growth`,
-        subtitle: "Trailing twelve months, quarterly",
+        subtitle: "Quarterly · trailing P/E against year-over-year revenue growth",
         granularity: "quarterly",
         series: [
           createSeries({ ticker, metric: "pe_ttm", shape: "area", axis: "left", color: paletteColor(0) }),

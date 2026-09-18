@@ -194,7 +194,7 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
     ctx.textAlign = "left";
     const gap = 22;
     const items = series.map((s) => {
-      const label = seriesLabel(s);
+      const label = seriesLabel(s, spec.granularity);
       return { s, label, w: 18 + ctx.measureText(label).width };
     });
     const total = items.reduce((a, i) => a + i.w, 0) + gap * (items.length - 1);

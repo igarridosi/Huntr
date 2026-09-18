@@ -14,9 +14,9 @@ describe("statementsFor", () => {
     expect(statementsFor(px)).toEqual([]);
   });
 
-  it("per-share transforms bring the income statement (share counts)", () => {
+  it("per-share transforms bring the income statement and the balance sheet (share counts live on either)", () => {
     const spec = createSpec({ series: [createSeries({ ticker: "A", metric: "free_cash_flow", transform: "per_share" })] });
-    expect(statementsFor(spec)).toEqual(["income", "cashflow"]);
+    expect(statementsFor(spec)).toEqual(["income", "balance", "cashflow"]);
   });
 
   it("every metric declares its statements consistently with its source", () => {
@@ -99,5 +99,17 @@ describe("clipToListing", () => {
     expect(clipped.income_statement.annual.map((r) => r.date).sort()).toEqual(["2018-12-31", "2019-12-31"]);
     // Unknown listing date: nothing is dropped.
     expect(clipToListing(a, firstTradeDate([]))).toBe(a);
+  });
+});
+
+describe("mergeFinancials — buybacks and dividends the deep source left unfiled", () => {
+  it("takes the quick source's quarterly figure where the deep row says 0", () => {
+    const cf = (date: string, buybacks: number, dividends: number) => ({ period: date, date, currency: "USD", operating_cash_flow: 100, capital_expenditures: -10, free_cash_flow: 90, dividends_paid: dividends, share_repurchases: buybacks, net_investing: 0, net_financing: 0, net_change_in_cash: 0 });
+    const empty = { annual: [], quarterly: [] };
+    const base = { ticker: "A", income_statement: empty, balance_sheet: empty, cash_flow: { annual: [], quarterly: [cf("2025-09-30", -149_924_000, 0)] } };
+    const overlay = { ticker: "A", income_statement: empty, balance_sheet: empty, cash_flow: { annual: [cf("2025-12-31", -297_780_000, 0)], quarterly: [cf("2025-06-30", 0, 0), cf("2025-09-30", 0, 0)] } };
+    const merged = mergeFinancials(base, overlay)!;
+    expect(merged.cash_flow.quarterly.map((r) => r.share_repurchases)).toEqual([0, -149_924_000]);
+    expect(merged.cash_flow.annual[0].share_repurchases).toBe(-297_780_000);
   });
 });

@@ -3,7 +3,7 @@
  * partial deep-history overlay combines with the quick data.
  */
 
-import type { CompanyFinancials, IncomeStatement } from "@/types/financials";
+import type { CashFlowStatement, CompanyFinancials, IncomeStatement } from "@/types/financials";
 import { METRICS, type StatementKind } from "./metrics";
 import { bundlePeriods } from "./resolve";
 import type { ChartSpec } from "./spec";
@@ -20,7 +20,12 @@ export function statementsFor(spec: ChartSpec): StatementKind[] {
   const wanted = new Set<StatementKind>();
   for (const s of spec.series) {
     for (const k of METRICS[s.metric].statements) wanted.add(k);
-    if (s.transform === "per_share") wanted.add("income");
+    // Diluted shares: the income statement's, or the balance sheet's when
+    // the source (Alpha Vantage) keeps the count there.
+    if (s.transform === "per_share") {
+      wanted.add("income");
+      wanted.add("balance");
+    }
   }
   return ORDER.filter((k) => wanted.has(k));
 }
@@ -58,14 +63,22 @@ export function mergeFinancials(
   // The deep income statement can arrive without EPS (Alpha Vantage
   // serves it separately); where Yahoo has the same period, its EPS
   // fills the gap so the ratios built on it do not go dark.
+  // The same for share counts, which Alpha Vantage does not put on the
+  // income statement at all.
   const fillEps = (deep: IncomeStatement[] | undefined, quick: IncomeStatement[] | undefined) => {
     if (!deep?.length || !quick?.length) return deep ?? [];
     const byDate = new Map(quick.map((r) => [r.date, r] as const));
     return deep.map((r) => {
-      if (r.eps_diluted !== 0 && r.eps_basic !== 0) return r;
+      if (r.eps_diluted !== 0 && r.eps_basic !== 0 && r.shares_outstanding_diluted > 0 && r.shares_outstanding_basic > 0) return r;
       const q = byDate.get(r.date);
       if (!q) return r;
-      return { ...r, eps_diluted: r.eps_diluted || q.eps_diluted, eps_basic: r.eps_basic || q.eps_basic };
+      return {
+        ...r,
+        eps_diluted: r.eps_diluted || q.eps_diluted,
+        eps_basic: r.eps_basic || q.eps_basic,
+        shares_outstanding_diluted: r.shares_outstanding_diluted || q.shares_outstanding_diluted,
+        shares_outstanding_basic: r.shares_outstanding_basic || q.shares_outstanding_basic,
+      };
     });
   };
   const income = has("income")
@@ -74,11 +87,31 @@ export function mergeFinancials(
         quarterly: fillEps(overlay.income_statement?.quarterly, base.income_statement?.quarterly),
       }
     : base.income_statement;
+  // Likewise the quarterly buybacks and dividends: Alpha Vantage files
+  // them as "None" on many 10-Qs (a whole year of YETI's repurchases
+  // shows only on the 10-K) while Yahoo has the quarter. A 0 on the deep
+  // row is taken as unfiled when Yahoo reports a figure for that period.
+  const fillReturns = (deep: CashFlowStatement[] | undefined, quick: CashFlowStatement[] | undefined) => {
+    if (!deep?.length || !quick?.length) return deep ?? [];
+    const byDate = new Map(quick.map((r) => [r.date, r] as const));
+    return deep.map((r) => {
+      if (r.share_repurchases !== 0 && r.dividends_paid !== 0) return r;
+      const q = byDate.get(r.date);
+      if (!q) return r;
+      return { ...r, share_repurchases: r.share_repurchases || q.share_repurchases || 0, dividends_paid: r.dividends_paid || q.dividends_paid || 0 };
+    });
+  };
+  const cashFlow = has("cashflow")
+    ? {
+        annual: fillReturns(overlay.cash_flow?.annual, base.cash_flow?.annual),
+        quarterly: fillReturns(overlay.cash_flow?.quarterly, base.cash_flow?.quarterly),
+      }
+    : base.cash_flow;
   return {
     ticker: base.ticker,
     income_statement: income,
     balance_sheet: has("balance") ? overlay.balance_sheet : base.balance_sheet,
-    cash_flow: has("cashflow") ? overlay.cash_flow : base.cash_flow,
+    cash_flow: cashFlow,
   };
 }
 

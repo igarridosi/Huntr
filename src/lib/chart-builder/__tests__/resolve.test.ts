@@ -352,7 +352,7 @@ describe("resolveChart — market metrics", () => {
 });
 
 describe("resolveChart — time mode", () => {
-  it("switches to a time axis when a price series is present and centres statement bars in their quarter", () => {
+  it("switches to a time axis when a price series is present and puts statement bars on the fiscal close", () => {
     const a = fin("A", { quarterly: [{ date: "2024-03-31", fcf: 20, shares: 10 }] });
     const px = prices("2024-01-01", 5, (i) => 10 + i);
     const spec = createSpec({
@@ -365,9 +365,9 @@ describe("resolveChart — time mode", () => {
     const chart = resolveChart(spec, { financials: { A: a }, prices: { A: px } });
     expect(chart.xMode).toBe("time");
     expect(chart.xLabels).toEqual([]);
-    expect(chart.points).toHaveLength(6); // 5 closes + 1 quarter midpoint
+    expect(chart.points).toHaveLength(6); // 5 closes + the quarter's close date
     const bar = chart.points.find((p) => p.f !== null)!;
-    expect(bar.x).toBe(Date.UTC(2024, 1, 15));
+    expect(bar.x).toBe(Date.parse("2024-03-31"));
     expect(bar.f).toBe(2);
     expect(bar.p).toBeNull();
     expect(chart.points[0]).toMatchObject({ x: Date.parse("2024-01-01"), p: 10, f: null });
@@ -399,5 +399,92 @@ describe("resolveChart — time mode", () => {
     expect(col(chart, "p")).toEqual([100, 200, 300]);
     const whole = resolveChart({ ...spec, range: { from: null, to: null } }, { financials: {}, prices: { A: px } });
     expect(col(whole, "p")).toEqual([0, 100, 200, 300]);
+  });
+});
+
+describe("resolveChart — trailing twelve months", () => {
+  // Four quarters that sum to 100 of revenue and 30 of gross profit, then a
+  // fifth so the window moves.
+  const rows = [
+    { date: "2024-03-31", revenue: 10, gross_profit: 2, fcf: 1, shares: 10 },
+    { date: "2024-06-30", revenue: 20, gross_profit: 8, fcf: 2, shares: 10 },
+    { date: "2024-09-30", revenue: 30, gross_profit: 10, fcf: 3, shares: 10 },
+    { date: "2024-12-31", revenue: 40, gross_profit: 10, fcf: 4, shares: 10 },
+    { date: "2025-03-31", revenue: 50, gross_profit: 30, fcf: 5, shares: 20 },
+  ];
+  const a = fin("A", { quarterly: rows });
+
+  it("sums a flow over the latest four quarters and starts once four are on file", () => {
+    const spec = createSpec({ granularity: "ttm", series: [createSeries({ id: "r", ticker: "A", metric: "revenue" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    // The three warm-up quarters are not shown.
+    expect(col(chart, "r")).toEqual([100, 140]);
+    expect(chart.series[0].label).toBe("A · Rev TTM");
+  });
+
+  it("reads a margin as the ratio of the sums, not the mean of four margins", () => {
+    const spec = createSpec({ granularity: "ttm", series: [createSeries({ id: "m", ticker: "A", metric: "gross_margin" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    // 30 / 100 and 58 / 140 — the mean of the four quarterly margins would be 29.2 %.
+    expect(col(chart, "m").map((v) => (v === null ? null : Math.round(v * 10) / 10))).toEqual([30, 41.4]);
+  });
+
+  it("composes with per share and year-over-year on top of the twelve-month figure", () => {
+    const spec = createSpec({
+      granularity: "ttm",
+      series: [
+        createSeries({ id: "f", ticker: "A", metric: "free_cash_flow", transform: "per_share" }),
+        createSeries({ id: "y", ticker: "A", metric: "revenue", transform: "yoy" }),
+      ],
+      align: "all",
+    });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    // 10 of FCF over 10 shares, then 14 over 20.
+    expect(col(chart, "f")).toEqual([1, 0.7]);
+    // YoY needs a twelve-month figure a year earlier: none yet.
+    expect(col(chart, "y").every((v) => v === null)).toBe(true);
+  });
+
+  it("does not sum twice when a series also carries the ttm transform", () => {
+    const spec = createSpec({ granularity: "ttm", series: [createSeries({ id: "r", ticker: "A", metric: "revenue", transform: "ttm" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    expect(col(chart, "r")).toEqual([100, 140]);
+  });
+
+  it("gives the ttm transform on quarterly data the same ratio-of-sums for a margin", () => {
+    const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "m", ticker: "A", metric: "gross_margin", transform: "ttm" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    expect(col(chart, "m").map((v) => (v === null ? null : Math.round(v * 10) / 10))).toEqual([30, 41.4]);
+  });
+
+  it("places a non-calendar fiscal quarter on its own close, not the calendar quarter's", () => {
+    // A September-27 fiscal quarter sits in calendar Q3 for alignment but is drawn on the 27th.
+    const b = fin("B", { quarterly: [{ date: "2024-09-27", fcf: 20, shares: 10 }] });
+    const px = prices("2024-07-01", 100, (i) => 10 + i);
+    const spec = createSpec({
+      granularity: "quarterly",
+      series: [createSeries({ id: "f", ticker: "B", metric: "free_cash_flow", transform: "per_share", axis: "right" }), createSeries({ id: "p", ticker: "B", metric: "price", shape: "line" })],
+    });
+    const chart = resolveChart(spec, { financials: { B: b }, prices: { B: px } });
+    const bar = chart.points.find((p) => p.f !== null)!;
+    expect(new Date(bar.x).toISOString().slice(0, 10)).toBe("2024-09-27");
+  });
+
+  it("keeps two companies of one calendar quarter on one row, at the later close", () => {
+    const b = fin("B", { quarterly: [{ date: "2024-09-27", revenue: 20 }] });
+    const c = fin("C", { quarterly: [{ date: "2024-09-30", revenue: 30 }] });
+    const px = prices("2024-07-01", 100, (i) => 10 + i);
+    const spec = createSpec({
+      granularity: "quarterly",
+      series: [
+        createSeries({ id: "b", ticker: "B", metric: "revenue" }),
+        createSeries({ id: "c", ticker: "C", metric: "revenue" }),
+        createSeries({ id: "p", ticker: "B", metric: "price", shape: "line", axis: "right" }),
+      ],
+    });
+    const chart = resolveChart(spec, { financials: { B: b, C: c }, prices: { B: px } });
+    const rows = chart.points.filter((p) => p.b !== null || p.c !== null);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ b: 20, c: 30, x: Date.parse("2024-09-30") });
   });
 });

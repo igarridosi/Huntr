@@ -1,3 +1,4 @@
+import { periodSubtitle, withGranularity } from "../spec";
 import { describe, expect, it } from "vitest";
 import { METRICS, METRIC_GROUPS, METRIC_IDS, isMetricId, metricsInGroup } from "../metrics";
 import {
@@ -222,5 +223,38 @@ describe("themes", () => {
     expect(seriesInk("#ffbf69", "parchment")).not.toBe("#FFBF69");
     expect(seriesInk("#FF8C42", "snow")).toBe("#FF8C42");
     for (const t of Object.values(CANVAS_THEMES)) expect(t.bg).toMatch(/^#[0-9A-F]{6}$/i);
+  });
+});
+
+describe("periods", () => {
+  it("re-words a subtitle's leading period and nothing else", () => {
+    expect(periodSubtitle("Annual margins, as a percentage of revenue", "ttm")).toBe("Trailing twelve-month margins, as a percentage of revenue");
+    expect(periodSubtitle("Quarterly revenue, stacked · aligned by calendar quarter", "annual")).toBe("Annual revenue, stacked · aligned by calendar year");
+    expect(periodSubtitle("Quarterly", "ttm")).toBe("Trailing twelve months");
+    expect(periodSubtitle("Trailing twelve-month capex against operating cash flow", "quarterly")).toBe("Quarterly capex against operating cash flow");
+    expect(periodSubtitle("Daily close against trailing twelve-month EPS", "annual")).toBe("Daily close against trailing twelve-month EPS");
+    expect(periodSubtitle(undefined, "annual")).toBeUndefined();
+  });
+
+  it("switching the period folds a per-series TTM transform the period now provides", () => {
+    const spec = createSpec({
+      subtitle: "Quarterly free cash flow",
+      series: [createSeries({ ticker: "A", metric: "free_cash_flow", transform: "ttm" }), createSeries({ ticker: "A", metric: "revenue", transform: "per_share" })],
+    });
+    const ttm = withGranularity(spec, "ttm");
+    expect(ttm.granularity).toBe("ttm");
+    expect(ttm.subtitle).toBe("Trailing twelve-month free cash flow");
+    expect(ttm.series.map((s) => s.transform)).toEqual(["raw", "per_share"]);
+    expect(validateSpec(ttm)).toEqual([]);
+    expect(withGranularity(spec, "quarterly")).toBe(spec);
+  });
+
+  it("accepts the ttm period from a stored spec and lets a margin carry the ttm transform", () => {
+    const stored = createSpec({ granularity: "ttm", series: [createSeries({ ticker: "A", metric: "gross_margin" })] });
+    const r = migrateSpec(JSON.parse(JSON.stringify(stored)));
+    expect(r.ok && r.spec.granularity).toBe("ttm");
+    const quarterly = createSpec({ series: [createSeries({ ticker: "A", metric: "gross_margin", transform: "ttm" })] });
+    expect(validateSpec(quarterly)).toEqual([]);
+    expect(validateSpec(createSpec({ series: [createSeries({ ticker: "A", metric: "total_assets", transform: "ttm" })] })).map((i) => i.code)).toEqual(["ttm_needs_flow"]);
   });
 });
