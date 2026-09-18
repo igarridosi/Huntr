@@ -488,3 +488,39 @@ describe("resolveChart — trailing twelve months", () => {
     expect(rows[0]).toMatchObject({ b: 20, c: 30, x: Date.parse("2024-09-30") });
   });
 });
+
+describe("resolveChart — capex out of line", () => {
+  // YETI's quarters as Alpha Vantage files them: Q3 2025 carries a $38M
+  // purchase of intangibles on top of $12M of plant.
+  const yeti = fin("YETI", {
+    quarterly: [
+      { date: "2024-06-30", ocf: 55.96, capex: -14.43, revenue: 463 },
+      { date: "2024-09-30", ocf: 83.52, capex: -14.61, revenue: 478 },
+      { date: "2024-12-31", ocf: 225.58, capex: -44.4, revenue: 546 },
+      { date: "2025-03-31", ocf: -80.3, capex: -15.51, revenue: 351 },
+      { date: "2025-06-30", ocf: 61.2, capex: -4.43, revenue: 446 },
+      { date: "2025-09-30", ocf: 100.94, capex: -50.16, revenue: 488 },
+      { date: "2025-12-31", ocf: 172.9, capex: -20.6, revenue: 584 },
+    ],
+  });
+
+  it("flags a quarter whose capex is over twice the mean of the four before it, once per company", () => {
+    const spec = createSpec({
+      granularity: "quarterly",
+      series: [createSeries({ id: "c", ticker: "YETI", metric: "capex" }), createSeries({ id: "f", ticker: "YETI", metric: "free_cash_flow" })],
+    });
+    const chart = resolveChart(spec, { financials: { YETI: yeti }, prices: {} });
+    const capexWarnings = chart.warnings.filter((w) => w.message.includes("capex"));
+    expect(capexWarnings).toHaveLength(1);
+    // 50.16 against the mean of 14.61, 44.4, 15.51 and 4.43 (19.74).
+    expect(capexWarnings[0].message).toContain("Q3 2025");
+    expect(capexWarnings[0].message).toContain("check the filing");
+  });
+
+  it("stays quiet on the annual view and for metrics capex does not reach", () => {
+    const annual = createSpec({ granularity: "annual", series: [createSeries({ id: "c", ticker: "YETI", metric: "capex" })] });
+    expect(resolveChart(annual, { financials: { YETI: yeti }, prices: {} }).warnings.some((w) => w.message.includes("capex"))).toBe(false);
+    const revenue = createSpec({ granularity: "quarterly", series: [createSeries({ id: "r", ticker: "YETI", metric: "revenue" })] });
+    expect(resolveChart(revenue, { financials: { YETI: yeti }, prices: {} }).warnings.some((w) => w.message.includes("capex"))).toBe(false);
+  });
+});

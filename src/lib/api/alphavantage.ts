@@ -971,6 +971,15 @@ export function mapCashFlow(
       // negative outflow. Stored the Yahoo way so every consumer sees one
       // convention, and free cash flow is what it says: cash from
       // operations less what was spent on the assets.
+      //
+      // What the figure covers is not one thing. Checked against YETI's
+      // FY2025 10-K and 10-Qs: the quarterly rows are "purchases of
+      // property and equipment" plus "additions of intangibles" (business
+      // acquisitions excluded), as Yahoo's capitalExpenditure is; the
+      // annual rows are plant alone for 2024–2025 but the whole investing
+      // outflow for 2023. There is no field to separate them, so the
+      // resolver flags a quarter whose capex jumps against the four before
+      // it, and the filing settles it.
       const capex = -Math.abs(parseNumber(row.capitalExpenditures)) || 0;
 
       return {

@@ -24,6 +24,44 @@ import {
   type StatementReader,
 } from "./metrics";
 import type { ChartSeries, ChartSpec, Granularity, SeriesAxis } from "./spec";
+import { formatValue } from "./format";
+
+/** Metrics a one-off investment outflow flows into. */
+const CAPEX_BASED = new Set<MetricId>(["capex", "free_cash_flow", "fcf_margin", "fcf_per_share"]);
+/** A quarter's capex this many times the mean of the four before it is flagged. */
+const CAPEX_SPIKE = 2;
+
+/**
+ * Quarters whose capex is out of line with the four before them. Data
+ * vendors fold one-off purchases into "capital expenditures" — YETI's
+ * Q3 2025 carried a $38M purchase of intangibles on top of $12M of
+ * plant, so the quarter read as $50M of capex — and a chart of free
+ * cash flow cannot tell that from a step up in spending. The filing can.
+ */
+export function capexSpikes(bundles: BundledPeriod[]): Array<{ bundle: BundledPeriod; capex: number; mean: number }> {
+  const out: Array<{ bundle: BundledPeriod; capex: number; mean: number }> = [];
+  const capexOf = (b: BundledPeriod) => {
+    const v = b.cashflow?.capital_expenditures;
+    return typeof v === "number" && Number.isFinite(v) ? Math.abs(v) : null;
+  };
+  for (let i = 4; i < bundles.length; i++) {
+    const capex = capexOf(bundles[i]);
+    if (capex === null) continue;
+    let sum = 0;
+    let ok = true;
+    for (let k = i - 4; k < i; k++) {
+      const v = capexOf(bundles[k]);
+      if (v === null || bundles[k + 1].bucket.key - bundles[k].bucket.key !== KEY_STEP) {
+        ok = false;
+        break;
+      }
+      sum += v;
+    }
+    const mean = sum / 4;
+    if (ok && mean > 0 && capex > CAPEX_SPIKE * mean) out.push({ bundle: bundles[i], capex, mean });
+  }
+  return out;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -546,6 +584,19 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
 
     const raw = statementValues(series, spec.granularity, bundles, prices);
     const transformed = applyTransform(raw, series.transform, spec.granularity, bundles, series.metric);
+
+    if (CAPEX_BASED.has(series.metric) && spec.granularity !== "annual" && !warnedTickers.has(`c:${series.ticker}`)) {
+      const spikes = capexSpikes(bundles).filter((s) => inRange(s.bundle.date, spec.range));
+      const last = spikes[spikes.length - 1];
+      if (last) {
+        warnedTickers.add(`c:${series.ticker}`);
+        warnings.push({
+          seriesId: series.id,
+          ticker: series.ticker,
+          message: `${series.ticker}'s capex in ${last.bundle.bucket.label} (${formatValue("currency", last.capex)}) is over twice the average of the four quarters before it (${formatValue("currency", last.mean)}) — check the filing for an acquisition or a one-off purchase of assets.`,
+        });
+      }
+    }
 
     if ((series.transform === "ttm" || spec.granularity === "ttm") && spec.granularity !== "annual" && bundles.length < 4) {
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${series.ticker} has fewer than four quarters; TTM cannot be computed.` });

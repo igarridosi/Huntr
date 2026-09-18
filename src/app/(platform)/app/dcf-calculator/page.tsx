@@ -537,8 +537,28 @@ export default function DcfCalculatorPage() {
     [sourcedFields, applyAccountingTreatment]
   );
 
-  // What the company has actually managed, which is what makes the implied
-  // assumption meaningful rather than merely precise.
+  /**
+   * What the company has actually managed, which is what makes the implied
+   * assumption meaningful rather than merely precise.
+   *
+   * Where the figures come from: `companyFinancials` is `getCompanyFinancials`
+   * — the Alpha Vantage bundle (`financials-alpha-v2`) while one is on file
+   * and under a week old, otherwise Yahoo's statements. Both feed the same
+   * two series here:
+   *
+   *  - "Realised FCF margin by year" and the 5Y median under the sliders
+   *    come from `buildMarginHistory`, which computes free cash flow itself
+   *    as operating cash flow less |capital_expenditures|, paired by fiscal
+   *    year. It never reads the vendor's `free_cash_flow` field, which is
+   *    why the capex sign bug in the Alpha Vantage mapper (FCF = OCF + capex,
+   *    fixed and repaired on read in `alpha-repair.ts`) never reached it.
+   *  - The generated scenarios' base margin (`generateDCFScenarios`) reads
+   *    the `free_cash_flow` field, and so did see the bug on a fresh bundle.
+   *
+   * Either way "capex" is what the vendor puts in it: Yahoo carries plant
+   * plus additions of intangibles; Alpha Vantage varies by row (see the
+   * note in `mapCashFlow`). The margins move with the source, not the code.
+   */
   const revenueHistory = useMemo(() => {
     const annual = companyFinancials?.income_statement.annual ?? [];
     if (annual.length < 2) {

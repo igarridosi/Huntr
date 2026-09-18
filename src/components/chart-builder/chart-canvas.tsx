@@ -212,6 +212,14 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
   useEffect(() => () => onHoverRow?.(null), [onHoverRow]);
 
   const timeMode = chart.xMode === "time";
+
+  // A line is keyed to the data it draws. Recharts animates a mounted line
+  // by interpolating point positions towards the new ones, and for a few
+  // frames that is a shape no data has; a fresh mount animates the stroke
+  // length instead, so every frame is the true curve, partly drawn.
+  const generation = useRef({ chart, n: 0 });
+  if (generation.current.chart !== chart) generation.current = { chart, n: generation.current.n + 1 };
+  const dataGen = generation.current.n;
   // Hidden series are not painted; a price series is never a bar, whatever
   // a hand-made URL says — that would be one rectangle per trading day.
   const visible = useMemo(
@@ -584,7 +592,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
               if (s.shape === "area") {
                 return (
                   <Area
-                    key={s.id}
+                    key={`${s.id}:${dataGen}`}
                     {...common}
                     {...fade}
                     type="linear"
@@ -599,7 +607,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
               }
               return (
                 <Line
-                  key={s.id}
+                  key={`${s.id}:${dataGen}`}
                   {...common}
                   {...fade}
                   type="linear"
