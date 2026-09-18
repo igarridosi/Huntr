@@ -752,12 +752,14 @@ export function generateDCFScenarios(
 
   const baseInputs: DCFInputs = {
     ...commonInputs,
-    baseFCFMargin: clampRate(marginBase, -0.2, 0.5),
+    // 70%, like the slider: Visa has delivered 52–61% for four years, and a
+    // 50% cap here handed the model a company it then had to undervalue.
+    baseFCFMargin: clampRate(marginBase, -0.2, 0.7),
     growthRatePhase1: baseGrowthPhase1,
     growthRatePhase2: baseGrowthPhase2,
     // Base terminal margin regresses to mean and is capped at 25% unless 5-year history supports higher.
     terminalFCFMargin: hasConsolidatedHighMargins
-      ? clampRate(Math.max(marginBase, marginBase + 0.01), -0.1, 0.5)
+      ? clampRate(Math.max(marginBase, marginBase + 0.01), -0.1, 0.7)
       : clampRate(Math.max(marginBase, marginBase + 0.01), -0.1, 0.25),
     wacc: baseWACC,
     terminalGrowthRate: 0.025,
