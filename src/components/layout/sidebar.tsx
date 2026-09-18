@@ -51,9 +51,9 @@ const mainNav: NavItem[] = [
     matchExact: true,
   },
   {
-    label: "Screener",
-    href: ROUTES.APP_SCREENER,
-    icon: SlidersHorizontal,
+    label: "Chart Builder",
+    href: ROUTES.APP_CHART_BUILDER,
+    icon: ChartColumnStacked,
   },
   {
     label: "Watchlists",
@@ -66,6 +66,11 @@ const mainNav: NavItem[] = [
     icon: CalendarClock,
   },
   {
+    label: "Screener",
+    href: ROUTES.APP_SCREENER,
+    icon: SlidersHorizontal,
+  },
+  {
     label: "Transcripts",
     href: ROUTES.APP_TRANSCRIPTS,
     icon: MessageSquareText,
@@ -74,11 +79,6 @@ const mainNav: NavItem[] = [
     label: "DCF Calculator",
     href: ROUTES.APP_DCF_CALCULATOR,
     icon: Calculator,
-  },
-  {
-    label: "Chart Builder",
-    href: ROUTES.APP_CHART_BUILDER,
-    icon: ChartColumnStacked,
   },
   {
     label: "Portfolios",

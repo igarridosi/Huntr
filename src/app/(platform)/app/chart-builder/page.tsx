@@ -3,7 +3,7 @@
 import dynamic from "next/dynamic";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { ChartColumnStacked, Download, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
+import { ChartColumnStacked, Download, FilePlus2, Link2, Loader2, Redo2, Save, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartControls } from "@/components/chart-builder/chart-controls";
@@ -131,6 +131,16 @@ function ChartBuilder() {
     [reset]
   );
 
+  // Back to the start prompt. What is on the canvas is asked about first
+  // when it would be lost: a chart never saved, or saved with edits since.
+  const newChart = useCallback(() => {
+    const unsaved = spec.series.length > 0 && (savedRef === null || savedRef.encoded !== encodeSpec(spec));
+    if (unsaved && !window.confirm("Start a new chart? The current one has unsaved changes.")) return;
+    reset(createSpec({ title: "" }));
+    setSavedRef(null);
+    setSelectedId(null);
+  }, [spec, savedRef, reset]);
+
   const share = useCallback(async () => {
     const url = new URL(window.location.href);
     url.searchParams.set(SPEC_QUERY_PARAM, encodeSpec(spec));
@@ -193,14 +203,15 @@ function ChartBuilder() {
       periods={data.chart.points.length}
       dataSource={{
         deepTickers: data.deepTickers,
+        epsMissing: data.epsMissing,
         statements: data.statements,
         loading: deep.loading,
         blocked: deep.blocked,
-        onLoadDeep: () =>
-          deep.load(
-            data.tickers.filter((t) => !data.deepTickers.includes(t)),
-            data.statements
-          ),
+        onLoadDeep: () => {
+          const missing = data.tickers.filter((t) => !data.deepTickers.includes(t));
+          // Statements come back from the cache; only the EPS call is spent.
+          deep.load(missing.length > 0 ? missing : data.epsMissing, data.statements);
+        },
       }}
     />
   );
@@ -232,6 +243,12 @@ function ChartBuilder() {
                 <span className="text-golden-hour">Unsaved</span>
               )}
             </span>
+          )}
+          {!empty && (
+            <Button variant="ghost" size="sm" onClick={newChart} title="Start a new chart">
+              <FilePlus2 className="mr-1.5 h-3.5 w-3.5" />
+              New
+            </Button>
           )}
           <SavedChartsMenu
             charts={saved.charts}

@@ -1,10 +1,13 @@
 "use client";
 
 import { cn } from "@/lib/utils";
-import { CANVAS_THEMES, seriesInk, seriesLabel, type ChartSeries, type ChartSpec } from "@/lib/chart-builder";
+import { CANVAS_THEMES, formatDate, formatValue, seriesInk, seriesLabel, type ChartSeries, type ChartSpec, type ResolvedChart } from "@/lib/chart-builder";
 
 interface ChartLegendProps {
   spec: ChartSpec;
+  chart: ResolvedChart;
+  /** Row of `chart.points` under the pointer; null reads out the latest values. */
+  hoverRow: number | null;
   pendingTickers: string[];
   selectedId: string | null;
   /** Entry under the pointer; the others step back with the plot. */
@@ -17,13 +20,36 @@ interface ChartLegendProps {
 }
 
 /**
- * The legend is a control, not a caption: click hides a series, Alt-click
- * isolates it, and either way the series panel follows the selection.
- * Rendered as HTML rather than a Recharts legend so it can do that.
+ * The legend is a control and the readout. Click hides a series, Alt-click
+ * isolates it, and either way the series panel follows the selection. Each
+ * entry also carries a value: the latest one at rest, the hovered period's
+ * while the pointer is over the plot — so nothing has to float over the
+ * chart to tell you a number. Rendered as HTML rather than a Recharts
+ * legend so it can do all that.
  */
-export function ChartLegend({ spec, pendingTickers, selectedId, hoverId, onToggle, onIsolate, onSelect, onHover }: ChartLegendProps) {
+export function ChartLegend({ spec, chart, hoverRow, pendingTickers, selectedId, hoverId, onToggle, onIsolate, onSelect, onHover }: ChartLegendProps) {
   if (spec.style.legend === "hidden" || spec.series.length === 0) return null;
   const theme = CANVAS_THEMES[spec.style.theme];
+
+  const rows = chart.points;
+  const row = hoverRow !== null && rows[hoverRow] ? hoverRow : rows.length - 1;
+  const period =
+    rows.length === 0 ? "" : chart.xMode === "time" ? formatDate(rows[row].x) : (chart.xLabels[row] ?? "");
+  /**
+   * The value to read out for a series at `row`. On the time axis a
+   * statement series only has values at its period midpoints, so the last
+   * one reported at or before the hovered day is the honest answer; on the
+   * category axis a gap is a gap.
+   */
+  const valueAt = (id: string): string => {
+    const resolved = chart.series.find((r) => r.id === id);
+    if (!resolved || rows.length === 0) return "";
+    let v = rows[row]?.[id] ?? null;
+    if (v === null && chart.xMode === "time") {
+      for (let i = row - 1; i >= 0 && v === null; i--) v = rows[i][id] ?? null;
+    }
+    return v === null ? "—" : formatValue(resolved.unit, v);
+  };
 
   return (
     <ul
@@ -33,6 +59,11 @@ export function ChartLegend({ spec, pendingTickers, selectedId, hoverId, onToggl
       )}
       aria-label="Series"
     >
+      {period && (
+        <li aria-live="polite" className="font-mono text-[11px] tabular-nums" style={{ color: theme.tick }}>
+          {period}
+        </li>
+      )}
       {spec.series.map((s: ChartSeries) => {
         const pending = pendingTickers.includes(s.ticker);
         const ink = seriesInk(s.color, spec.style.theme);
@@ -79,8 +110,14 @@ export function ChartLegend({ spec, pendingTickers, selectedId, hoverId, onToggl
                   boxShadow: s.shape === "area" ? `0 4px 0 -1px ${ink}55` : hovered && !s.hidden ? `0 0 0 3px ${ink}33` : undefined,
                 }}
               />
-              <span className="font-mono text-[12px] tabular-nums">{seriesLabel(s)}</span>
-              {pending && <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: theme.tick }}>loading</span>}
+              <span className="font-mono text-[12px] tabular-nums">{seriesLabel(s, spec.granularity)}</span>
+              {pending ? (
+                <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: theme.tick }}>loading</span>
+              ) : (
+                <span className="min-w-[5ch] text-right font-mono text-[12px] font-semibold tabular-nums" style={{ color: theme.title }}>
+                  {valueAt(s.id)}
+                </span>
+              )}
             </button>
           </li>
         );

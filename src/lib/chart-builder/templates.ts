@@ -16,6 +16,8 @@ export type TemplateId =
   | "margins"
   | "capital-returns"
   | "valuation"
+  | "cash-conversion"
+  | "price-vs-earnings"
   | "custom";
 
 export interface ChartTemplate {
@@ -99,7 +101,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
       if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — Margins`,
-        subtitle: "Annual, as a percentage of revenue",
+        subtitle: "Annual margins, as a percentage of revenue",
         granularity: "annual",
         series: [
           createSeries({ ticker, metric: "gross_margin", shape: "line", color: paletteColor(0) }),
@@ -112,22 +114,66 @@ export const TEMPLATES: readonly ChartTemplate[] = [
   },
   {
     id: "capital-returns",
-    name: "Capital returned",
-    description: "Dividends and buybacks, stacked, next to free cash flow.",
+    name: "Capital allocation",
+    description: "Where the cash goes: capex, dividends and buybacks stacked against operating cash flow.",
     tickers: 1,
     build: (tickers) => {
       const [ticker] = pick(tickers, 1);
       if (!ticker) return createSpec({ title: "" });
       return createSpec({
-        title: `${ticker} — Capital returned to shareholders`,
-        subtitle: "Annual dividends and buybacks against free cash flow",
+        title: `${ticker} — Capital allocation`,
+        subtitle: "Annual capex, dividends and buybacks against operating cash flow",
         granularity: "annual",
+        metrics: "per_series",
         series: [
+          createSeries({ ticker, metric: "capex", shape: "bar", color: paletteColor(3) }),
           createSeries({ ticker, metric: "dividends_paid", shape: "bar", color: paletteColor(2) }),
           createSeries({ ticker, metric: "share_repurchases", shape: "bar", color: paletteColor(0) }),
-          createSeries({ ticker, metric: "free_cash_flow", shape: "line", color: "#F2F4F3" }),
+          createSeries({ ticker, metric: "operating_cash_flow", shape: "line", color: "#F2F4F3" }),
         ],
         style: { theme: "wolf", stacked: true, valueLabels: "last" },
+      });
+    },
+  },
+  {
+    id: "cash-conversion",
+    name: "Cash conversion",
+    description: "Net income against free cash flow: whether the profit turns into cash.",
+    tickers: 1,
+    build: (tickers) => {
+      const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
+      return createSpec({
+        title: `${ticker} — Cash conversion`,
+        subtitle: "Annual net income (bars) against free cash flow (line)",
+        granularity: "annual",
+        metrics: "per_series",
+        series: [
+          createSeries({ ticker, metric: "net_income", shape: "bar", color: paletteColor(0) }),
+          createSeries({ ticker, metric: "free_cash_flow", shape: "line", color: "#F2F4F3" }),
+        ],
+        style: { theme: "wolf", valueLabels: "last" },
+      });
+    },
+  },
+  {
+    id: "price-vs-earnings",
+    name: "Price vs. earnings",
+    description: "Share price against trailing EPS on a log axis — multiple expansion is the gap between them.",
+    tickers: 1,
+    build: (tickers) => {
+      const [ticker] = pick(tickers, 1);
+      if (!ticker) return createSpec({ title: "" });
+      return createSpec({
+        title: `${ticker} — Price vs. earnings`,
+        subtitle: "Daily close against trailing twelve-month EPS · log scale",
+        granularity: "quarterly",
+        metrics: "per_series",
+        series: [
+          createSeries({ ticker, metric: "price", shape: "line", axis: "left", color: "#F2F4F3" }),
+          createSeries({ ticker, metric: "eps_diluted", transform: "ttm", shape: "line", axis: "right", color: paletteColor(0) }),
+        ],
+        style: { theme: "wolf", lineWidth: 2, valueLabels: "last", yScale: "log" },
       });
     },
   },
@@ -141,7 +187,7 @@ export const TEMPLATES: readonly ChartTemplate[] = [
       if (!ticker) return createSpec({ title: "" });
       return createSpec({
         title: `${ticker} — P/E vs. revenue growth`,
-        subtitle: "Trailing twelve months, quarterly",
+        subtitle: "Quarterly · trailing P/E against year-over-year revenue growth",
         granularity: "quarterly",
         series: [
           createSeries({ ticker, metric: "pe_ttm", shape: "area", axis: "left", color: paletteColor(0) }),

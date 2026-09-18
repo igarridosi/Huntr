@@ -14,6 +14,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { CompanyFinancials } from "@/types/financials";
 import type { TimeSeriesFinancialsCache } from "@/types/yahoo";
 import { mapTimeSeriesFinancials } from "@/lib/api/mappers";
+import { repairAlphaFinancials } from "./alpha-repair";
 
 // ─────────────────────────────────────────────────────────
 // Constants
@@ -544,7 +545,7 @@ function toCompanyFinancials(ticker: string, data: unknown): CompanyFinancials {
   if (isTimeSeriesShape(data)) {
     return mapTimeSeriesFinancials(ticker, data);
   }
-  return data as CompanyFinancials;
+  return repairAlphaFinancials(data as CompanyFinancials);
 }
 
 /**

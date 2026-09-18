@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { availableDates, coversStatements, defaultRange, mergeFinancials, priceMonthEnds, statementsFor } from "../data";
+import { availableDates, clipToListing, coversStatements, defaultRange, firstTradeDate, mergeFinancials, priceMonthEnds, statementsFor } from "../data";
 import { METRICS, METRIC_IDS } from "../metrics";
 import { createSeries, createSpec } from "../spec";
 import { fin, quarterEnds } from "./fixtures";
@@ -14,9 +14,9 @@ describe("statementsFor", () => {
     expect(statementsFor(px)).toEqual([]);
   });
 
-  it("per-share transforms bring the income statement (share counts)", () => {
+  it("per-share transforms bring the income statement and the balance sheet (share counts live on either)", () => {
     const spec = createSpec({ series: [createSeries({ ticker: "A", metric: "free_cash_flow", transform: "per_share" })] });
-    expect(statementsFor(spec)).toEqual(["income", "cashflow"]);
+    expect(statementsFor(spec)).toEqual(["income", "balance", "cashflow"]);
   });
 
   it("every metric declares its statements consistently with its source", () => {
@@ -77,5 +77,39 @@ describe("priceMonthEnds", () => {
     const a = [{ date: "2024-01-02" }, { date: "2024-01-31" }, { date: "2024-02-01" }, { date: "2024-02-29" }];
     const b = [{ date: "2024-02-28" }, { date: "2024-03-15" }];
     expect(priceMonthEnds({ A: a, B: b, C: undefined })).toEqual(["2024-01-31", "2024-02-29", "2024-03-15"]);
+  });
+});
+
+describe("mergeFinancials — EPS gaps", () => {
+  it("lends the quick data's EPS to deep income rows that arrived without it", () => {
+    const row = (date: string, eps: number) => ({ period: date, date, currency: "USD", revenue: 10, cost_of_revenue: 0, gross_profit: 0, operating_expenses: 0, operating_income: 0, interest_expense: 0, pre_tax_income: 0, income_tax: 0, net_income: 5, eps_basic: eps, eps_diluted: eps, shares_outstanding_basic: 0, shares_outstanding_diluted: 0, ebitda: 0 });
+    const base = { ticker: "A", income_statement: { annual: [row("2024-12-31", 1.5)], quarterly: [] }, balance_sheet: { annual: [], quarterly: [] }, cash_flow: { annual: [], quarterly: [] } };
+    const overlay = { ticker: "A", income_statement: { annual: [row("2023-12-31", 0), row("2024-12-31", 0)], quarterly: [] }, balance_sheet: { annual: [], quarterly: [] }, cash_flow: { annual: [], quarterly: [] } };
+    const merged = mergeFinancials(base, overlay)!;
+    expect(merged.income_statement.annual.map((r) => r.eps_diluted)).toEqual([0, 1.5]);
+  });
+});
+
+describe("clipToListing", () => {
+  it("drops statement periods that ended before the first close on file", () => {
+    const a = fin("A", { annual: [{ date: "2016-12-31", revenue: 1 }, { date: "2018-12-31", revenue: 2 }, { date: "2019-12-31", revenue: 3 }] });
+    const prices = [{ date: "2018-10-25", close: 20 }, { date: "2018-10-26", close: 21 }];
+    expect(firstTradeDate(prices)).toBe("2018-10-25");
+    const clipped = clipToListing(a, firstTradeDate(prices))!;
+    expect(clipped.income_statement.annual.map((r) => r.date).sort()).toEqual(["2018-12-31", "2019-12-31"]);
+    // Unknown listing date: nothing is dropped.
+    expect(clipToListing(a, firstTradeDate([]))).toBe(a);
+  });
+});
+
+describe("mergeFinancials — buybacks and dividends the deep source left unfiled", () => {
+  it("takes the quick source's quarterly figure where the deep row says 0", () => {
+    const cf = (date: string, buybacks: number, dividends: number) => ({ period: date, date, currency: "USD", operating_cash_flow: 100, capital_expenditures: -10, free_cash_flow: 90, dividends_paid: dividends, share_repurchases: buybacks, net_investing: 0, net_financing: 0, net_change_in_cash: 0 });
+    const empty = { annual: [], quarterly: [] };
+    const base = { ticker: "A", income_statement: empty, balance_sheet: empty, cash_flow: { annual: [], quarterly: [cf("2025-09-30", -149_924_000, 0)] } };
+    const overlay = { ticker: "A", income_statement: empty, balance_sheet: empty, cash_flow: { annual: [cf("2025-12-31", -297_780_000, 0)], quarterly: [cf("2025-06-30", 0, 0), cf("2025-09-30", 0, 0)] } };
+    const merged = mergeFinancials(base, overlay)!;
+    expect(merged.cash_flow.quarterly.map((r) => r.share_repurchases)).toEqual([0, -149_924_000]);
+    expect(merged.cash_flow.annual[0].share_repurchases).toBe(-297_780_000);
   });
 });

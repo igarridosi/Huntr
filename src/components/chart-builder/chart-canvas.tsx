@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useId, useMemo, useRef, useState } from "react";
 import {
   Area,
   Bar,
@@ -8,7 +8,6 @@ import {
   ComposedChart,
   Line,
   ReferenceArea,
-  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -25,6 +24,7 @@ import {
   formatTick,
   formatValue,
   seriesInk,
+  ttmApplies,
   type CanvasTokens,
   type ChartSpec,
   type MetricUnit,
@@ -40,16 +40,8 @@ export interface ChartCanvasProps {
   height: number;
   /** Series under the pointer in the legend; every other series fades. */
   emphasisId?: string | null;
-}
-
-/** What Recharts hands a LabelList / ReferenceDot label renderer. */
-interface LabelRenderProps {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  index?: number;
-  viewBox?: { x?: number; y?: number; cx?: number; cy?: number; width?: number; height?: number };
+  /** Row (index into `chart.points`) under the pointer, or null; the legend reads that row out. */
+  onHoverRow?: (row: number | null) => void;
 }
 
 interface TimeBar {
@@ -66,6 +58,18 @@ interface TimeBar {
 
 const Y_AXIS_WIDTH = 64;
 
+/** Log-axis bounds on a 1 / 2 / 5 × 10ⁿ ladder: a $108 high ends at $200, not $1,000. */
+function logCeil(v: number): number {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 5, 10]) if (m * p >= v) return m * p;
+  return 10 * p;
+}
+function logFloor(v: number): number {
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [5, 2, 1]) if (m * p <= v) return m * p;
+  return p;
+}
+
 /** The smallest 1 / 2 / 2.5 / 5 × 10ⁿ at or above `v`. */
 function niceCeil(v: number): number {
   if (!Number.isFinite(v) || v <= 0) return v;
@@ -80,7 +84,7 @@ function niceCeil(v: number): number {
  * its ticks are multiples of one clean step — so a growth chart that dips
  * negative reads −10 / 0 / +10 / +20 rather than −11 / −2 / +7.
  */
-function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] } {
+function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] | null } {
   const lo0 = min < 0 ? min * 1.08 : 0;
   const hi0 = max > 0 ? max * 1.08 : 0;
   if (!(hi0 > lo0)) return { domain: [0, 1], ticks: [0, 1] };
@@ -97,6 +101,12 @@ const QUARTER_MS = 91 * 86_400_000;
 /** Entrance: lines draw in, bars rise. Same curve as --ease-entrance; Recharts needs the literal. */
 const ENTER_MS = 560;
 const ENTER_EASE = "cubic-bezier(0.23, 1, 0.32, 1)";
+/**
+ * Recharts lifts the hovered bar to z 1000, above lines (400): a line
+ * crossing that column vanished under it, leaving only its active dot
+ * (1200). Lines sit just above the active bar and below the dot.
+ */
+const LINE_Z = 1050;
 /** Each series starts a beat after the previous one, so the chart builds rather than pops. */
 const STAGGER_MS = 70;
 
@@ -116,29 +126,43 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
   return [ref, width];
 }
 
-/**
- * The value pill: same drawing for bars, lines and areas. Rendered as a
- * ReferenceDot label *element* (Recharts clones it with the viewBox), so
- * the component type is stable across renders — an inline render function
- * would be a new type each time, remounting every pill and replaying its
- * entrance on every pointer move.
- */
-function Pill({ viewBox, text, theme, anchor, row }: { viewBox?: LabelRenderProps["viewBox"]; text: string; theme: CanvasTokens; anchor: "above" | "right" | "left"; row: number }) {
-  const x = viewBox?.cx ?? viewBox?.x ?? 0;
-  const y = viewBox?.cy ?? viewBox?.y ?? 0;
-  const w = text.length * 6.6 + 12;
-  const h = 18;
-  const left = anchor === "above" ? x - w / 2 : anchor === "right" ? x + 8 : x - w - 8;
-  const top = anchor === "above" ? y - h - 5 : y - h / 2;
+/** A value pill, already laid out in plot pixels. */
+function Pill({ left, top, w, text, theme }: { left: number; top: number; w: number; text: string; theme: CanvasTokens }) {
   return (
-    <g className="cb-pill" data-row={row}>
-      <rect x={left} y={top} width={w} height={h} rx={6} fill={theme.labelBg} stroke={theme.grid} strokeOpacity={0.6} />
-      <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={500} fill={theme.labelText} fontFamily="var(--font-mono)">
+    <g className="cb-pill">
+      <rect x={left} y={top} width={w} height={PILL_H} rx={5} fill={theme.labelBg} />
+      <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={theme.labelText} fontFamily="var(--font-mono)">
         {text}
       </text>
     </g>
   );
 }
+
+/**
+ * The hovered bar: the same colour, one step brighter on a dark canvas or
+ * deeper on a light one — a change of light rather than an outline.
+ */
+function hoverInk(hex: string, themeKey: ChartSpec["style"]["theme"]): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const light = themeKey === "snow" || themeKey === "parchment";
+  const target = light ? 0 : 255;
+  const k = light ? 0.12 : 0.16;
+  const mix = (c: number) => Math.round(c + (target - c) * k);
+  const n = parseInt(m[1], 16);
+  const r = mix((n >> 16) & 255);
+  const g = mix((n >> 8) & 255);
+  const b = mix(n & 255);
+  return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
+}
+
+const PILL_H = 18;
+/** Space between a point (or bar top) and its pill. */
+const PILL_GAP = 5;
+/** Recharts' default XAxis height; the plot ends this far above the bottom. */
+const X_AXIS_H = 30;
+const PLOT_TOP = 24;
+const pillWidth = (text: string) => text.length * 6.6 + 12;
 
 /**
  * The plot itself: one ComposedChart that covers bars, lines and areas on
@@ -152,7 +176,7 @@ function Pill({ viewBox, text, theme, anchor, row }: { viewBox?: LabelRenderProp
  * daily closes in the same table that gap is one day — every bar would be
  * a hairline. A rectangle from bucket-start to bucket-end does not care.
  */
-export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCanvasProps) {
+function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }: ChartCanvasProps) {
   /** 1 for the emphasised series (or all, when none is), faint for the rest. */
   const alpha = (id: string) => (emphasisId === null || emphasisId === id ? 1 : 0.18);
   /** The emphasised stroke steps forward a little; the rest keep their width. */
@@ -170,26 +194,32 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   });
   const gradientPrefix = useId().replace(/:/g, "");
   const [wrapRef, width] = useElementWidth<HTMLDivElement>();
-  // The hovered column's pills step aside for the tooltip, which carries
-  // the same numbers and would otherwise sit on top of them. Done on the
-  // DOM directly: a state change here would re-render the whole chart on
-  // every pointer move, and Recharts would restart its bar tweens with it.
-  const mutedRow = useRef<number | null>(null);
-  const muteRow = (row: number | null) => {
-    if (row === mutedRow.current) return;
-    mutedRow.current = row;
-    const pills = wrapRef.current?.querySelectorAll<SVGGElement>(".cb-pill[data-row]");
-    pills?.forEach((g) => {
-      g.style.opacity = Number(g.dataset.row) === row ? "0" : "";
-    });
+  // The row under the pointer goes up to the legend, which reads it out;
+  // reported only when it changes, so a pointer crossing a column is one
+  // update rather than one per pixel. The canvas itself is memoised, so
+  // that update does not come back down as a re-render of the plot.
+  const hoveredRow = useRef<number | null>(null);
+  const reportRow = (row: number | null) => {
+    if (row === hoveredRow.current) return;
+    hoveredRow.current = row;
+    onHoverRow?.(row);
   };
   const onChartMove = (state: { activeTooltipIndex?: number | string | null | undefined }) => {
     const i = state.activeTooltipIndex === undefined || state.activeTooltipIndex === null ? NaN : Number(state.activeTooltipIndex);
-    muteRow(Number.isFinite(i) ? i : null);
+    reportRow(Number.isFinite(i) ? i : null);
   };
-  const onChartLeave = () => muteRow(null);
+  const onChartLeave = () => reportRow(null);
+  useEffect(() => () => onHoverRow?.(null), [onHoverRow]);
 
   const timeMode = chart.xMode === "time";
+
+  // A line is keyed to the data it draws. Recharts animates a mounted line
+  // by interpolating point positions towards the new ones, and for a few
+  // frames that is a shape no data has; a fresh mount animates the stroke
+  // length instead, so every frame is the true curve, partly drawn.
+  const generation = useRef({ chart, n: 0 });
+  if (generation.current.chart !== chart) generation.current = { chart, n: generation.current.n + 1 };
+  const dataGen = generation.current.n;
   // Hidden series are not painted; a price series is never a bar, whatever
   // a hand-made URL says — that would be one rectangle per trading day.
   const visible = useMemo(
@@ -218,9 +248,10 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
     const names = new Set<string>();
     for (const s of visible) {
       if (s.axis !== axis) continue;
-      const base = METRICS[s.metric].label;
+      const def = METRICS[s.metric];
+      const base = s.transform === "ttm" || (spec.granularity === "ttm" && ttmApplies(def)) ? `${def.label} TTM` : def.label;
       names.add(
-        s.transform === "per_share" ? `${base} / share` : s.transform === "ttm" ? `${base} TTM` : s.transform === "yoy" ? `${base} YoY %` : s.transform === "indexed" ? `${base}, indexed %` : base
+        s.transform === "per_share" ? `${base} / share` : s.transform === "yoy" ? `${base} YoY %` : s.transform === "indexed" ? `${base}, indexed %` : base
       );
     }
     return [...names].join(" · ");
@@ -248,9 +279,11 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   }, [spec.style.stacked, visible]);
   const stackIdFor = (s: ResolvedSeries) => (stackedBars[s.axis].includes(s) ? s.axis : undefined);
 
-  // The linear axes are laid out here, not by Recharts: the extent per
-  // axis (stacks summed) becomes a clean-stepped domain with its ticks.
-  const linearAxes = useMemo(() => {
+  // The axes are laid out here, not by Recharts: the extent per axis
+  // (stacks summed) becomes a clean-stepped linear domain with its ticks,
+  // or a decade-bounded log domain. Knowing the domain is what lets the
+  // value pills be placed in pixels without asking Recharts.
+  const axisLayout = useMemo(() => {
     const extent = (axis: "left" | "right") => {
       let min = Infinity;
       let max = -Infinity;
@@ -277,12 +310,40 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
           if (pos > max) max = pos;
         }
       }
-      return Number.isFinite(min) ? niceAxis(min, max) : niceAxis(0, 0);
+      if (!Number.isFinite(min)) return niceAxis(0, 0);
+      if (logOk && min > 0) return { domain: [logFloor(min), logCeil(max)] as [number, number], ticks: null };
+      return niceAxis(min, max);
     };
-    return { left: extent("left"), right: extent("right") };
-  }, [visible, stackedBars, chart.points]);
-  const yAxisProps = (axis: "left" | "right") =>
-    logOk ? { domain: ["auto", "auto"] as const, tickCount: 6 } : { domain: linearAxes[axis].domain, ticks: linearAxes[axis].ticks };
+    const left: { domain: [number, number]; ticks: number[] | null } = extent("left");
+    const right: { domain: [number, number]; ticks: number[] | null } = extent("right");
+    // Two log axes span the same number of decades, or the slopes could
+    // not be compared: a price over 100× drawn on the height an EPS uses
+    // for 10× would look half as steep as the same growth rate. The
+    // narrower axis is widened around its data.
+    if (logOk && left.ticks === null && right.ticks === null && hasRight) {
+      type Axis = { domain: [number, number]; ticks: number[] | null };
+      const span = (a: Axis) => Math.log10(a.domain[1]) - Math.log10(a.domain[0]);
+      // Step the narrower axis out along the 1-2-5 ladder, above and
+      // below in turn, until it covers as much (in log units) as the other.
+      const widen = (a: Axis, to: number): Axis => {
+        let [lo, hi] = a.domain;
+        let up = true;
+        for (let i = 0; i < 12 && Math.log10(hi) - Math.log10(lo) < to - 1e-9; i++) {
+          if (up) hi = logCeil(hi * 1.0001);
+          else lo = logFloor(lo * 0.9999);
+          up = !up;
+        }
+        return { ...a, domain: [lo, hi] };
+      };
+      const target = Math.max(span(left), span(right));
+      return { left: widen(left, target), right: widen(right, target) };
+    }
+    return { left, right };
+  }, [visible, stackedBars, chart.points, logOk, hasRight]);
+  const yAxisProps = (axis: "left" | "right") => {
+    const a = axisLayout[axis];
+    return a.ticks ? { domain: a.domain, ticks: a.ticks } : { domain: a.domain, tickCount: 6 };
+  };
   const topOfStack = (s: ResolvedSeries) => {
     const stack = stackedBars[s.axis];
     return stack.length === 0 || stack[stack.length - 1] === s;
@@ -367,9 +428,30 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
 
   // Value pills in data coordinates, so bars, lines and areas on either
   // axis share one mechanism regardless of how Recharts lays the item out.
+  // Value pills are drawn on an overlay of our own, not through Recharts:
+  // every one sits centred above its bar top or line point, inside the
+  // plot at the edges, and where two would land on the same spot (a line
+  // crossing a bar's top, say) the higher one is lifted clear. Pixel
+  // positions come from the plot geometry and the axis domains set above,
+  // so the overlay agrees with the plot without measuring it. Being a
+  // sibling drawn after the chart, it is in front of everything in it.
+  const plotLeft = leftWidth;
+  const plotRight = width - (hasRight ? rightWidth : 12);
   const pills = useMemo(() => {
-    const out: Array<{ key: string; row: number; axis: "left" | "right"; x: number; y: number; text: string; anchor: "above" | "left" | "right" }> = [];
-    const lastRow = chart.points.length - 1;
+    type P = { key: string; left: number; top: number; w: number; text: string };
+    if (width <= 0) return [] as P[];
+    const plotW = plotRight - plotLeft;
+    const plotH = height - PLOT_TOP - X_AXIS_H;
+    const n = chart.points.length;
+    const [t0, t1] = timeDomain;
+    const px = (x: number, row: number) => (timeMode ? plotLeft + ((x - t0) / Math.max(1, t1 - t0)) * plotW : plotLeft + (plotW / n) * (row + 0.5));
+    const py = (axis: "left" | "right", v: number) => {
+      const [lo, hi] = axisLayout[axis].domain;
+      if (logOk && lo > 0 && v > 0) return PLOT_TOP + ((Math.log10(hi) - Math.log10(v)) / (Math.log10(hi) - Math.log10(lo) || 1)) * plotH;
+      return PLOT_TOP + ((hi - v) / (hi - lo || 1)) * plotH;
+    };
+
+    const wanted: Array<{ key: string; x: number; y: number; text: string }> = [];
     for (const s of visible) {
       const rows = labelRows.get(s.id);
       if (!rows) continue;
@@ -380,21 +462,26 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
         if (!row) continue;
         const raw = isBar ? stackTotal(s, row) : row[s.id];
         if (raw === null || raw === undefined) continue;
-        out.push({
-          key: `${s.id}-${i}-${raw}`,
-          row: i,
-          axis: s.axis,
-          x: row.x,
-          y: raw,
-          text: formatValue(s.unit, raw),
-          anchor: isBar ? "above" : i === lastRow ? "left" : i === 0 ? "right" : "above",
-        });
+        wanted.push({ key: `${s.id}-${i}-${raw}`, x: px(row.x, i), y: py(s.axis, raw), text: formatValue(s.unit, raw) });
       }
+    }
+    // Lowest pills first, so a higher one lifts over what is already placed.
+    const out: P[] = [];
+    for (const p of wanted.sort((a, b) => b.y - a.y)) {
+      const w = pillWidth(p.text);
+      const left = Math.min(Math.max(p.x - w / 2, plotLeft), plotRight - w);
+      let top = p.y - PILL_H - PILL_GAP;
+      for (const q of out) {
+        const overlapsX = left < q.left + q.w + 3 && left + w > q.left - 3;
+        const overlapsY = top < q.top + PILL_H + 2 && top + PILL_H > q.top - 2;
+        if (overlapsX && overlapsY) top = q.top - PILL_H - 3;
+      }
+      out.push({ key: p.key, left, top, w, text: p.text });
     }
     return out;
     // stackTotal / topOfStack derive from stackedBars, which is listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, labelRows, chart.points, stackedBars]);
+  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout]);
 
   const xTickFormatter = timeMode ? (v: number) => formatMonthTick(v) : (v: number) => chart.xLabels[v] ?? "";
   const tooltipLabel = timeMode
@@ -432,7 +519,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
   };
 
   return (
-    <div ref={wrapRef} className="chart-builder-plot" style={{ width: "100%", height }}>
+    <div ref={wrapRef} className="chart-builder-plot relative" style={{ width: "100%", height }}>
       {width > 0 && (
         <ResponsiveContainer width="100%" height={height}>
           <ComposedChart data={chart.points} margin={{ top: 24, right: hasRight ? 0 : 12, left: 0, bottom: 0 }} barCategoryGap="10%" barGap={1} onMouseMove={onChartMove} onMouseLeave={onChartLeave}>
@@ -467,7 +554,7 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 line grows, which is all the pointer needs. */}
             <Tooltip
               cursor={false}
-              content={<ChartTooltip formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
+              content={<FullTooltip points={chart.points} series={visible} timeMode={timeMode} theme={spec.style.theme} formatter={(value: number, name: string) => formatValue(unitByLabel.get(name) ?? "currency", value)} labelFormatter={tooltipLabel} />}
             />
 
             {timeBars.map((b) => (
@@ -485,20 +572,6 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 ifOverflow="visible"
               />
             ))}
-            {pills.map((p) => (
-              <ReferenceDot
-                key={p.key}
-                yAxisId={p.axis}
-                x={p.x}
-                y={p.y}
-                r={0}
-                stroke="none"
-                fill="none"
-                ifOverflow="visible"
-                label={<Pill text={p.text} theme={theme} anchor={p.anchor} row={p.row} />}
-              />
-            ))}
-
             {visible.map((s, index) => {
               const ink = seriesInk(s.color, spec.style.theme);
               const common = { dataKey: s.id, name: s.label, yAxisId: s.axis, ...tween(index) };
@@ -511,16 +584,18 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
                 if (timeMode) return <Bar key={s.id} {...common} fill="none" isAnimationActive={false} />;
                 const r = spec.style.barRadius;
                 return (
-                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: ink, stroke: theme.title, strokeWidth: 1, strokeOpacity: 0.45 }} />
+                  <Bar key={s.id} {...common} {...fade} fill={ink} stackId={stackIdFor(s)} radius={topOfStack(s) ? [r, r, 0, 0] : 0} minPointSize={1} activeBar={{ fill: hoverInk(ink, spec.style.theme) }} />
                 );
               }
+              // Straight segments between the points: a line reads as the
+              // data it joins, with nothing invented between two closes.
               if (s.shape === "area") {
                 return (
                   <Area
-                    key={s.id}
+                    key={`${s.id}:${dataGen}`}
                     {...common}
                     {...fade}
-                    type="monotone"
+                    type="linear"
                     stroke={ink}
                     strokeWidth={strokeFor(s.id)}
                     fill={`url(#${gradientPrefix}-${s.id})`}
@@ -532,23 +607,76 @@ export function ChartCanvas({ spec, chart, height, emphasisId = null }: ChartCan
               }
               return (
                 <Line
-                  key={s.id}
+                  key={`${s.id}:${dataGen}`}
                   {...common}
                   {...fade}
-                  type="monotone"
+                  type="linear"
                   stroke={ink}
                   strokeWidth={strokeFor(s.id)}
                   dot={false}
                   connectNulls={timeMode}
                   activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}
+                  zIndex={LINE_Z}
                 />
               );
             })}
           </ComposedChart>
         </ResponsiveContainer>
       )}
+      {pills.length > 0 && (
+        <svg className="pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
+          {pills.map((p) => (
+            <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} theme={theme} />
+          ))}
+        </svg>
+      )}
     </div>
   );
 }
+
+/**
+ * The tooltip with every visible series in it. Recharts only hands over
+ * the entries that have a value on the hovered row, and on the time axis
+ * a statement series has one on a handful of days a year — hovering a
+ * price-vs-EPS chart showed the price alone. Each missing series is read
+ * out as its last value at or before the hovered point, as the legend does.
+ */
+function FullTooltip({
+  active,
+  payload,
+  label,
+  points,
+  series,
+  timeMode,
+  theme,
+  formatter,
+  labelFormatter,
+}: {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color?: string; dataKey?: string }>;
+  label?: string | number;
+  points: ResolvedPoint[];
+  series: ResolvedSeries[];
+  timeMode: boolean;
+  theme: ChartSpec["style"]["theme"];
+  formatter: (value: number, name: string) => string;
+  labelFormatter: (label: string) => string;
+}) {
+  if (!active || label === undefined || label === null) return null;
+  const rowIndex = timeMode ? points.findIndex((p) => p.x === Number(label)) : Number(label);
+  const full = series.map((s) => {
+    const given = (payload ?? []).find((e) => (e.dataKey ?? e.name) === s.id);
+    if (given) return { name: s.label, value: given.value, color: seriesInk(s.color, theme), dataKey: s.id };
+    // Only on the time axis: on the category axis a gap is a gap.
+    let v: number | null = null;
+    if (timeMode) for (let i = rowIndex; i >= 0 && v === null; i--) v = points[i]?.[s.id] ?? null;
+    return v === null ? null : { name: s.label, value: v, color: seriesInk(s.color, theme), dataKey: s.id };
+  });
+  const rows = full.filter((e): e is NonNullable<typeof e> => e !== null);
+  if (rows.length === 0) return null;
+  return <ChartTooltip active payload={rows} label={String(label)} formatter={formatter} labelFormatter={labelFormatter} />;
+}
+
+export const ChartCanvas = memo(ChartCanvasImpl);
 
 export default ChartCanvas;

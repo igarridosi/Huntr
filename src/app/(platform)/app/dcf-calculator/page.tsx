@@ -56,6 +56,7 @@ import { useSECFundamentals } from "@/hooks/use-stock-data";
 import {
   applySourcedBalanceSheet,
   buildSourcedFields,
+  readCompanyFacts,
   type ZeroSuspectField,
 } from "@/lib/calculations/dcf-inputs-source";
 import {
@@ -74,6 +75,9 @@ import {
   collectAnchorWarnings,
 } from "@/lib/calculations/dcf-anchors";
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
+import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
+import { looksLikeLender } from "@/lib/dcf/business-model";
+import { shareCountAlert } from "@/lib/dcf/share-count";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -334,7 +338,10 @@ export default function DcfCalculatorPage() {
       reportedMarketCap: quote.market_cap,
       includeLeases,
       overrides: balanceOverrides,
-      shareCountBasis,
+      // One criterion: the diluted count of the latest 10-Q. The market-cap
+      // cross-check reports how far it drifts and which way; it does not
+      // switch the denominator on its own.
+      shareCountBasis: shareCountBasis ?? "filings",
     });
   }, [
     quote,
@@ -536,8 +543,28 @@ export default function DcfCalculatorPage() {
     [sourcedFields, applyAccountingTreatment]
   );
 
-  // What the company has actually managed, which is what makes the implied
-  // assumption meaningful rather than merely precise.
+  /**
+   * What the company has actually managed, which is what makes the implied
+   * assumption meaningful rather than merely precise.
+   *
+   * Where the figures come from: `companyFinancials` is `getCompanyFinancials`
+   * — the Alpha Vantage bundle (`financials-alpha-v2`) while one is on file
+   * and under a week old, otherwise Yahoo's statements. Both feed the same
+   * two series here:
+   *
+   *  - "Realised FCF margin by year" and the 5Y median under the sliders
+   *    come from `buildMarginHistory`, which computes free cash flow itself
+   *    as operating cash flow less |capital_expenditures|, paired by fiscal
+   *    year. It never reads the vendor's `free_cash_flow` field, which is
+   *    why the capex sign bug in the Alpha Vantage mapper (FCF = OCF + capex,
+   *    fixed and repaired on read in `alpha-repair.ts`) never reached it.
+   *  - The generated scenarios' base margin (`generateDCFScenarios`) reads
+   *    the `free_cash_flow` field, and so did see the bug on a fresh bundle.
+   *
+   * Either way "capex" is what the vendor puts in it: Yahoo carries plant
+   * plus additions of intangibles; Alpha Vantage varies by row (see the
+   * note in `mapCashFlow`). The margins move with the source, not the code.
+   */
   const revenueHistory = useMemo(() => {
     const annual = companyFinancials?.income_statement.annual ?? [];
     if (annual.length < 2) {
@@ -564,10 +591,19 @@ export default function DcfCalculatorPage() {
      * while the anchor bands two hundred lines away computed it as operating
      * cash flow less capex. Two definitions of one metric in one file.
      */
+    // The "not a usable margin record" rule is a sector rule inside
+    // buildMarginHistory, and Yahoo's "Financial Services" holds S&P Global
+    // and Visa next to SoFi. The sector is passed only when the business
+    // itself looks like a lender — an unclassified balance sheet with thin
+    // equity, or an industry that names banking, insurance or lending.
+    const latestBalanceRow = [...(companyFinancials?.balance_sheet.annual ?? [])]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .at(-1);
+    const lender = looksLikeLender({ industry: profile?.industry, balance: latestBalanceRow ?? null, income: sortedIncomeRows.at(-1) ?? null });
     const marginHistory = buildMarginHistory({
       revenues: sortedIncomeRows,
       cashFlows,
-      sector: profile?.sector,
+      sector: lender ? profile?.sector : null,
       years: 5,
     });
 
@@ -577,7 +613,7 @@ export default function DcfCalculatorPage() {
       fcfMargin5: marginHistory.median,
       marginHistory,
     };
-  }, [companyFinancials, profile?.sector]);
+  }, [companyFinancials, profile?.sector, profile?.industry]);
 
   // The realised ranges drawn under the sliders, and the checks that compare
   // the assumptions against them.
@@ -831,7 +867,10 @@ export default function DcfCalculatorPage() {
     setBalanceOverrides({});
     setShareCountBasis(undefined);
     setAppliedSignature(null);
-    setScenarios(payload.scenarios);
+    // Stored with the price zeroed on every scenario, and possibly with a
+    // balance sheet from an earlier session on the ones that were not active
+    // then. All three take the facts of the one that opens, priced live.
+    setScenarios(withCompanyFacts(payload.scenarios, liveFacts(selected.inputs, quote?.price)));
     setActiveScenario(payload.activeScenario);
     setWaccEstimate(payload.waccEstimate);
     animateInputsTo(
@@ -902,7 +941,9 @@ export default function DcfCalculatorPage() {
       waccEstimate,
     });
 
-    setScenarios(scenariosToSave);
+    // The zeroed copy is for the store; what stays in memory keeps the live
+    // price and the balance sheet on screen, on all three.
+    setScenarios(withCompanyFacts(scenariosToSave, liveFacts(inputs, inputs.currentPrice)));
     setSaveStatus(ok ? "saved" : "error");
   }, [activeScenario, inputs, openGate, saveScenario, scenarios, ticker, user, waccEstimate]);
 
@@ -1077,7 +1118,13 @@ export default function DcfCalculatorPage() {
       ticker,
       companyName: profile?.name ?? null,
       currentPrice: inputs.currentPrice,
-      scenarios,
+      // The company facts — revenue base, debt, cash, shares, price — are
+      // what is on screen, on all three: a balance sheet that arrived after
+      // a scenario was generated is not a disagreement between scenarios.
+      scenarios: withCompanyFacts(
+        scenarios,
+        readCompanyFacts(sourcedFields ? applySourcedBalanceSheet(inputs, sourcedFields) : inputs)
+      ),
       activeScenario,
       liveInputs: inputs,
       sourcedFields,
@@ -1087,6 +1134,8 @@ export default function DcfCalculatorPage() {
       zones: simulation?.zones ?? null,
       scoreReference: simulation?.reference ?? null,
       warnings: [
+        // First, because it voids every per-share figure below it.
+        ...(shareCountAlert(sourcedFields) ? [shareCountAlert(sourcedFields)!.message] : []),
         ...anchorContext.warnings.map((warning) => warning.message),
         ...coherenceWarnings.map((warning) => warning.message),
       ],

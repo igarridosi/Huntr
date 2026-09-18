@@ -9,6 +9,7 @@ import {
   factAgeInDays,
   selectLatestFact,
   selectShareCount,
+  parseClassDilutedShares,
   sumFacts,
 } from "../sec-edgar";
 import type { SECFact } from "../sec-edgar";
@@ -339,43 +340,66 @@ describe("selectShareCount", () => {
   // LULU: the cover tag carries one class and undercounts by 4.5%, which the
   // model turned into a 4.5% overstatement of value per share.
   it("takes the diluted count when the cover count misses a share class", () => {
-    const picked = selectShareCount(
-      cover(108_437_957),
-      diluted(115_482_000),
-      120.81,
-      13_720_000_000
-    );
+    const picked = selectShareCount(cover(108_437_957), diluted(115_482_000));
     expect(picked?.value).toBe(115_482_000);
   });
 
-  // CROX: the mirror image. The cover count reconciles exactly and the
-  // weighted average lags the buyback by 3.5%.
-  it("keeps the cover count when it is the one that reconciles", () => {
-    const picked = selectShareCount(
-      cover(47_945_075),
-      diluted(49_628_000),
-      122.23,
-      5_860_000_000
-    );
-    expect(picked?.value).toBe(47_945_075);
+  // CROX: the cover count reconciles exactly and the weighted average lags
+  // the buyback by 3.5%. One criterion all the same: the diluted count is
+  // used and the cross-check reports the lag and its direction.
+  it("keeps the diluted count even when the cover count is the one that reconciles", () => {
+    const picked = selectShareCount(cover(47_945_075), diluted(49_628_000));
+    expect(picked?.value).toBe(49_628_000);
   });
 
   it("falls back to whichever exists when only one does", () => {
-    expect(selectShareCount(null, diluted(12_309_000_000), 232, 2_855_000_000_000)?.value)
+    expect(selectShareCount(null, diluted(12_309_000_000))?.value)
       .toBe(12_309_000_000);
-    expect(selectShareCount(cover(100), null, 232, 2_855_000_000_000)?.value).toBe(100);
-    expect(selectShareCount(null, null, 232, 2_855_000_000_000)).toBeNull();
+    expect(selectShareCount(cover(100), null)?.value).toBe(100);
+    expect(selectShareCount(null, null)).toBeNull();
   });
 
-  it("keeps the cover count's precedence when there is no price to check", () => {
-    expect(selectShareCount(cover(108_437_957), diluted(115_482_000), 0, 0)?.value)
-      .toBe(108_437_957);
+  it("does not need a price to decide", () => {
+    expect(selectShareCount(cover(108_437_957), diluted(115_482_000))?.value).toBe(115_482_000);
+  });
+});
+
+describe("parseClassDilutedShares", () => {
+  const ctx = (id: string, start: string, end: string, member: string) =>
+    `<xbrli:context id="${id}"><xbrli:entity><xbrli:segment><xbrldi:explicitMember dimension="us-gaap:StatementClassOfStockAxis">${member}</xbrldi:explicitMember></xbrli:segment></xbrli:entity><xbrli:period><xbrli:startDate>${start}</xbrli:startDate><xbrli:endDate>${end}</xbrli:endDate></xbrli:period></xbrli:context>`;
+  const fact = (tag: string, ref: string, text: string, scale = "6") =>
+    `<ix:nonFraction unitRef="shares" contextRef="${ref}" decimals="-6" name="${tag}" scale="${scale}" format="ixt:num-dot-decimal">${text}</ix:nonFraction>`;
+  const D = "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding";
+  const B = "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic";
+
+  // Visa: class A as-converted, class B and C separately; a quarter and a
+  // year-to-date column each; the prior year alongside.
+  it("takes the largest class of the latest quarter, not the year-to-date column or a small class", () => {
+    const html = [
+      ctx("q", "2026-04-01", "2026-06-30", "us-gaap:CommonClassAMember"), fact(D, "q", "1,898"),
+      ctx("ytd", "2025-10-01", "2026-06-30", "us-gaap:CommonClassAMember"), fact(D, "ytd", "1,916"),
+      ctx("py", "2025-04-01", "2025-06-30", "us-gaap:CommonClassAMember"), fact(D, "py", "1,959"),
+      ctx("b", "2026-04-01", "2026-06-30", "v:CommonClassB1Member"), fact(D, "b", "3"),
+    ].join("");
+    const got = parseClassDilutedShares(html, { form: "10-Q", filed: "2026-07-29" })!;
+    expect(got.value).toBe(1_898_000_000);
+    expect(got.periodEnd).toBe("2026-06-30");
+    expect(got.durationDays).toBe(90);
   });
 
-  // A wrong number is still wrong, but the panel keeps saying so, and there is
-  // no reason to divide by the worse of the two while it does.
-  it("takes the closer count when neither reconciles", () => {
-    const picked = selectShareCount(cover(80_000_000), diluted(110_000_000), 120.81, 13_720_000_000);
-    expect(picked?.value).toBe(110_000_000);
+  // Berkshire: nothing dilutive, so only the basic count by class, in
+  // class A and class B equivalents.
+  it("falls back to the basic count by class when no diluted count is filed", () => {
+    const html = [
+      ctx("a", "2026-04-01", "2026-06-30", "brka:EquivalentClassAMember"), fact(B, "a", "1,436,443", "0"),
+      ctx("b", "2026-04-01", "2026-06-30", "brka:EquivalentClassBMember"), fact(B, "b", "2,154,664,073", "0"),
+    ].join("");
+    expect(parseClassDilutedShares(html, { form: "10-Q", filed: "2026-08-02" })?.value).toBe(2_154_664_073);
+  });
+
+  it("ignores facts sliced by anything other than the class of stock, and documents with none", () => {
+    const html = `<xbrli:context id="s"><xbrli:entity><xbrli:segment><xbrldi:explicitMember dimension="us-gaap:StatementClassOfStockAxis">us-gaap:CommonClassAMember</xbrldi:explicitMember><xbrldi:explicitMember dimension="srt:ConsolidationItemsAxis">srt:X</xbrldi:explicitMember></xbrli:segment></xbrli:entity><xbrli:period><xbrli:startDate>2026-04-01</xbrli:startDate><xbrli:endDate>2026-06-30</xbrli:endDate></xbrli:period></xbrli:context>${fact(D, "s", "5")}`;
+    expect(parseClassDilutedShares(html, { form: "10-Q", filed: "x" })).toBeNull();
+    expect(parseClassDilutedShares("<html></html>", { form: "10-Q", filed: "x" })).toBeNull();
   });
 });

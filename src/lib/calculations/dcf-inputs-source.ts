@@ -326,10 +326,9 @@ export function buildSourcedFields(params: {
     };
   };
 
-  // Decided by the market-cap cross-check, not by tag precedence alone.
-  const filedShares = sec
-    ? selectShareCount(sec.coverShares, sec.weightedDilutedShares, price, reportedMarketCap)
-    : null;
+  // The diluted count of the latest quarterly filing; the market-cap
+  // cross-check reports how far it drifts, it does not pick.
+  const filedShares = sec ? selectShareCount(sec.coverShares, sec.weightedDilutedShares) : null;
   const sharesOutstandingSourced = pickSourced(
     filedShares ?? sec?.dilutedShares ?? null,
     yahoo.sharesOutstanding,

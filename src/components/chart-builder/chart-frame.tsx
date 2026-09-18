@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { forwardRef, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +44,9 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
   const plotRef = useRef<HTMLDivElement>(null);
   const [plotBox, setPlotBox] = useState({ w: 0, h: 0 });
   const [hoverId, setHoverId] = useState<string | null>(null);
+  /** Plot row under the pointer; the legend reads its values out. */
+  const [hoverRow, setHoverRow] = useState<number | null>(null);
+  const onHoverRow = useCallback((row: number | null) => setHoverRow(row), []);
 
   useEffect(() => {
     const el = plotRef.current;
@@ -95,6 +98,8 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
 
       <ChartLegend
         spec={spec}
+        chart={data.chart}
+        hoverRow={hoverRow}
         pendingTickers={data.pendingTickers}
         selectedId={selectedId}
         hoverId={hoverId}
@@ -107,7 +112,7 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
       <div ref={plotRef} className={cn("mt-2 flex w-full justify-center", fill ? "min-h-0 flex-1 items-center" : "items-start")} style={fill ? undefined : { height }}>
         {plotWidth > 0 && (
           <div key={plotKey} className="cb-plot-in" style={{ width, height }}>
-            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} />}
+            {showSkeleton ? <Skeleton className="h-full w-full rounded-xl" /> : <ChartCanvas spec={spec} chart={data.chart} height={height} emphasisId={hoverId} onHoverRow={onHoverRow} />}
           </div>
         )}
       </div>
@@ -127,8 +132,8 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
           <span>Powered by</span>
           <span className="inline-flex items-center gap-1.5">
             {/* eslint-disable-next-line @next/next/no-img-element -- tiny static asset, plain <img> keeps the export path simple */}
-            <img src="/logo/HunterLogoCut-removebg.png" alt="" aria-hidden className="h-5 w-5 object-contain" />
-            <span className="text-[15px] font-semibold tracking-[0.14em]" style={{ color: theme.title }}>
+            <img src="/logo/HunterLogoCut-removebg.png" alt="" aria-hidden className="h-[22px] w-auto object-contain" />
+            <span className="font-heading text-[15px] font-bold leading-none tracking-tight" style={{ color: theme.title }}>
               HUNTR
             </span>
           </span>

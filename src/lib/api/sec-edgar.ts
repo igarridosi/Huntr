@@ -342,40 +342,20 @@ export function checkMarketCap(
 }
 
 /**
- * Which of the two filed share counts to actually divide by.
+ * Which filed share count to divide by: the weighted diluted count of the
+ * latest quarterly filing, whenever there is one.
  *
- * Both are real figures from the same filing, and each is wrong in its own
- * direction: the cover count lags nothing but covers one class, the weighted
- * diluted count covers everything but lags buybacks. Price times shares has to
- * land on the reported market cap, so that is what decides - the check stops
- * being a warning printed next to a number nobody changed and becomes the
- * thing that picks the number.
- *
- * When neither reconciles, or there is no price to check against, the cover
- * count keeps its precedence and the warning does its old job.
+ * One criterion, so two companies' per-share figures are built the same
+ * way. The diluted count covers every class and the options and units
+ * that will become shares; the cover-page count is one class, basic, on
+ * one day. The diluted count is an average over the quarter and lags a
+ * buyback by up to three months — that is what the market-cap cross-check
+ * is for, and it now reports the gap and its direction instead of
+ * quietly switching counts. The cover count is used only when no diluted
+ * count was filed.
  */
-export function selectShareCount(
-  cover: SECFact | null,
-  weightedDiluted: SECFact | null,
-  price: number,
-  reportedMarketCap: number
-): SECFact | null {
-  const preferred = cover ?? weightedDiluted;
-  if (!cover || !weightedDiluted) return preferred;
-
-  const coverCheck = checkMarketCap(price, cover.value, reportedMarketCap);
-  const dilutedCheck = checkMarketCap(price, weightedDiluted.value, reportedMarketCap);
-  if (!coverCheck || !dilutedCheck) return preferred;
-
-  if (coverCheck.agrees) return cover;
-  if (dilutedCheck.agrees) return weightedDiluted;
-
-  // Neither is within tolerance. Take the closer one rather than the
-  // preferred one: being 4.5% out beats being 12% out, and the panel will
-  // still say the count does not reconcile.
-  return Math.abs(dilutedCheck.deviation) < Math.abs(coverCheck.deviation)
-    ? weightedDiluted
-    : cover;
+export function selectShareCount(cover: SECFact | null, weightedDiluted: SECFact | null): SECFact | null {
+  return weightedDiluted ?? cover;
 }
 
 /**
@@ -828,6 +808,118 @@ export async function resolveCash(cik: string): Promise<SECFact | null> {
   };
 }
 
+// ─────────────────────────────────────────────────────────
+// Multi-class issuers: the diluted count from the filing itself
+// ─────────────────────────────────────────────────────────
+
+const SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions";
+const SEC_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data";
+const DILUTED_SHARES_TAG = "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding";
+/** Berkshire has nothing dilutive and files the basic count only; it is the same count. */
+const BASIC_SHARES_TAG = "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic";
+
+/**
+ * The diluted share count of an issuer with several classes of stock,
+ * read off its latest 10-Q or 10-K.
+ *
+ * Visa, Berkshire, Alphabet's cousins with two tickers: they report
+ * earnings per share by class, so every share count in the filing is
+ * tagged with a class dimension, and the SEC's companyfacts feed — which
+ * carries undimensioned facts only — has no share count for them at all.
+ * The model then fell back to the cover-page count, which for Visa is
+ * class A alone: 1.70B against a share base of 1.88B, and every per-share
+ * figure 10% too high.
+ *
+ * The filing's inline XBRL has the facts with their contexts. The count
+ * taken is the largest diluted count of the latest period, which is the
+ * "as-converted" or "equivalent" basis a multi-class issuer reports its
+ * EPS on (Visa's class A with B and C converted in; Berkshire's class B
+ * equivalents — basic, since Berkshire has nothing dilutive and files no
+ * diluted count). Only consulted when no undimensioned count exists.
+ */
+export function parseClassDilutedShares(
+  html: string,
+  meta: { form: string; filed: string }
+): SECFact | null {
+  const contexts = new Map<string, { start: string | null; end: string | null; members: string[] }>();
+  for (const m of html.matchAll(/<(?:xbrli:)?context id="([^"]+)">([\s\S]*?)<\/(?:xbrli:)?context>/g)) {
+    const body = m[2];
+    contexts.set(m[1], {
+      start: /<(?:xbrli:)?startDate>([^<]+)</.exec(body)?.[1] ?? null,
+      end: /<(?:xbrli:)?endDate>([^<]+)</.exec(body)?.[1] ?? null,
+      members: [...body.matchAll(/<xbrldi:explicitMember dimension="([^"]+)">([^<]+)</g)].map((d) => `${d[1]}=${d[2]}`),
+    });
+  }
+
+  type Candidate = { value: number; start: string; end: string; days: number; tag: string };
+  const all: Candidate[] = [];
+  for (const m of html.matchAll(/<ix:nonFraction([^>]*)>([^<]*)</g)) {
+    const attrs = m[1];
+    const tag = [DILUTED_SHARES_TAG, BASIC_SHARES_TAG].find((t) => attrs.includes(`name="${t}"`));
+    if (!tag) continue;
+    const ref = /contextRef="([^"]+)"/.exec(attrs)?.[1];
+    const ctx = ref ? contexts.get(ref) : undefined;
+    if (!ctx || !ctx.start || !ctx.end) continue;
+    // One dimension, and it is the class of stock: nothing else sliced in.
+    if (ctx.members.length !== 1 || !ctx.members[0].startsWith("us-gaap:StatementClassOfStockAxis=")) continue;
+    const scale = Number(/scale="(-?\d+)"/.exec(attrs)?.[1] ?? "0");
+    const raw = Number(m[2].replace(/[,\s]/g, ""));
+    if (!Number.isFinite(raw) || raw <= 0) continue;
+    const value = raw * Math.pow(10, scale);
+    const days = Math.round((Date.parse(ctx.end) - Date.parse(ctx.start)) / 86_400_000);
+    all.push({ value, start: ctx.start, end: ctx.end, days, tag });
+  }
+  const diluted = all.filter((c) => c.tag === DILUTED_SHARES_TAG);
+  const candidates = diluted.length > 0 ? diluted : all;
+  if (candidates.length === 0) return null;
+
+  // Latest period end; among those, the shortest span (the quarter of a
+  // 10-Q rather than its year-to-date column); then the largest class.
+  const latestEnd = candidates.reduce((a, c) => (c.end > a ? c.end : a), "");
+  const latest = candidates.filter((c) => c.end === latestEnd);
+  const shortest = Math.min(...latest.map((c) => c.days));
+  const pick = latest.filter((c) => c.days === shortest).reduce((a, c) => (c.value > a.value ? c : a));
+  return {
+    value: pick.value,
+    form: meta.form,
+    filed: meta.filed,
+    periodEnd: pick.end,
+    concept: `${pick.tag.slice("us-gaap:".length)} (by class, largest as-converted)`,
+    durationDays: pick.days,
+  };
+}
+
+const classDilutedCache = new Map<string, Promise<SECFact | null>>();
+
+export async function fetchClassDilutedShares(cik: string): Promise<SECFact | null> {
+  const cached = classDilutedCache.get(cik);
+  if (cached) return cached;
+  const request = (async () => {
+    const submissions = (await secFetch(`${SEC_SUBMISSIONS_URL}/CIK${cik}.json`)) as {
+      filings?: { recent?: { form?: string[]; accessionNumber?: string[]; primaryDocument?: string[]; filingDate?: string[] } };
+    } | null;
+    const recent = submissions?.filings?.recent;
+    if (!recent?.form) return null;
+    const i = recent.form.findIndex((f) => f === "10-Q" || f === "10-K");
+    if (i < 0) return null;
+    const accession = recent.accessionNumber?.[i]?.replace(/-/g, "");
+    const doc = recent.primaryDocument?.[i];
+    if (!accession || !doc) return null;
+    try {
+      const response = await fetch(`${SEC_ARCHIVES_URL}/${Number(cik)}/${accession}/${doc}`, {
+        headers: { "User-Agent": USER_AGENT },
+        next: { revalidate: 24 * 60 * 60 },
+      });
+      if (!response.ok) return null;
+      return parseClassDilutedShares(await response.text(), { form: recent.form[i], filed: recent.filingDate?.[i] ?? "" });
+    } catch {
+      return null;
+    }
+  })();
+  classDilutedCache.set(cik, request);
+  return request;
+}
+
 export async function getSECFundamentals(
   ticker: string
 ): Promise<SECFundamentals | null> {
@@ -836,7 +928,7 @@ export async function getSECFundamentals(
 
   const [
     coverShares,
-    weightedDilutedShares,
+    undimensionedDilutedShares,
     financialDebt,
     cash,
     leaseNoncurrent,
@@ -844,10 +936,10 @@ export async function getSECFundamentals(
     operatingLeaseExpense,
     shareBasedCompensation,
   ] = await Promise.all([
-    // Point in time, from the cover of the filing, under the dei taxonomy.
+    // Point in time, from the cover of the filing, under the dei taxonomy:
+    // the fallback when no diluted count was filed.
     fetchConcept(cik, SEC_CONCEPTS.sharesOutstandingCover, "any", "dei"),
-    // A period average, and the fallback: it lags buybacks, so it is only
-    // right when nothing better exists.
+    // The count in use: diluted, from the latest quarterly filing.
     fetchConcept(cik, SEC_CONCEPTS.dilutedShares, "quarterly"),
     resolveFinancialDebt(cik),
     resolveCash(cik),
@@ -859,9 +951,13 @@ export async function getSECFundamentals(
     fetchConcept(cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
 
+  // A multi-class issuer files its share counts by class only; the
+  // filing itself is the only place the as-converted count exists.
+  const weightedDilutedShares = undimensionedDilutedShares ?? (await fetchClassDilutedShares(cik));
+
   return {
     cik,
-    dilutedShares: coverShares ?? weightedDilutedShares,
+    dilutedShares: weightedDilutedShares ?? coverShares,
     coverShares,
     weightedDilutedShares,
     financialDebt,

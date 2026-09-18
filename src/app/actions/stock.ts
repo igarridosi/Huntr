@@ -12,6 +12,7 @@ import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
 import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
 import { getAlphaStatements, getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState, type AlphaStatementKind } from "@/lib/api/alphavantage";
+import { repairAlphaFinancials } from "@/lib/api/alpha-repair";
 import { getCachedDataState, setCachedData, withSingleFlight, getBatchCachedScreenerMetrics } from "@/lib/api/cache";
 import type { ScreenerMetrics } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
@@ -134,7 +135,7 @@ export async function fetchAlphaFinancials(
   );
 
   if (cached.status !== "miss" && cached.data) {
-    return cached.data;
+    return repairAlphaFinancials(cached.data);
   }
 
   return withSingleFlight(`${normalizedTicker}:financials-alpha-v2:fetch`, async () => {

@@ -7,6 +7,7 @@ import type {
 import type { EarningsInsight, StockProfile, StockQuote } from "@/types/stock";
 import { buildTickerLogoUrl, normalizeWebsiteUrl } from "@/lib/logo";
 import { getCachedDataState, setCachedData, withSingleFlight } from "./cache";
+import { repairAlphaFinancials } from "./alpha-repair";
 import { createHash } from "crypto";
 
 type AlphaFunction =
@@ -893,8 +894,13 @@ export function mapIncome(
       const epsFromEarnings = epsByDate.get(dateKey) ?? epsByPeriod.get(periodKey) ?? 0;
       const epsDiluted = epsFromIncome || epsFromEarnings || 0;
       const epsBasic = parseNumber(row.reportedEPS) || epsDiluted;
+      // Shares can be backed out of net income only with the statement's
+      // own (GAAP) EPS. The EARNINGS endpoint reports adjusted EPS, and
+      // net income over an adjusted figure is not a share count — it put
+      // YETI at 38 million shares one year and 470 million another.
+      // Unknown is left at 0; the balance sheet or the quick source fills it.
       const inferredShares =
-        shares > 0 ? shares : epsDiluted !== 0 ? Math.abs(netIncome / epsDiluted) : 0;
+        shares > 0 ? shares : epsFromIncome !== 0 ? Math.abs(netIncome / epsFromIncome) : 0;
 
       return {
         period: toPeriodLabel(date, kind),
@@ -961,7 +967,20 @@ export function mapCashFlow(
     .map((row) => {
       const date = getDate(row.fiscalDateEnding);
       const operatingCashFlow = parseNumber(row.operatingCashflow);
-      const capex = parseNumber(row.capitalExpenditures);
+      // Alpha Vantage reports capex as a positive payment; Yahoo as a
+      // negative outflow. Stored the Yahoo way so every consumer sees one
+      // convention, and free cash flow is what it says: cash from
+      // operations less what was spent on the assets.
+      //
+      // What the figure covers is not one thing. Checked against YETI's
+      // FY2025 10-K and 10-Qs: the quarterly rows are "purchases of
+      // property and equipment" plus "additions of intangibles" (business
+      // acquisitions excluded), as Yahoo's capitalExpenditure is; the
+      // annual rows are plant alone for 2024–2025 but the whole investing
+      // outflow for 2023. There is no field to separate them, so the
+      // resolver flags a quarter whose capex jumps against the four before
+      // it, and the filing settles it.
+      const capex = -Math.abs(parseNumber(row.capitalExpenditures)) || 0;
 
       return {
         period: toPeriodLabel(date, kind),
@@ -1074,6 +1093,8 @@ const STATEMENT_CACHE_KEY: Record<AlphaStatementKind, string> = {
   balance: "alpha-balance-v1",
   cashflow: "alpha-cashflow-v1",
 };
+/** The EARNINGS answer that lends EPS to the income statement; cached so a later cache-only read still has it. */
+const EARNINGS_CACHE_KEY = "alpha-earnings-v1";
 
 const STATEMENT_TTL_MS = 12 * 60 * 60 * 1000;
 const STATEMENT_STALE_MS = 7 * 24 * 60 * 60 * 1000;
@@ -1111,7 +1132,7 @@ export async function getAlphaStatements(
     STATEMENT_STALE_MS
   );
   if (full.status !== "miss" && full.data && full.data.income_statement?.annual?.length) {
-    return full.data;
+    return repairAlphaFinancials(full.data);
   }
 
   const raw: Partial<Record<AlphaStatementKind, AlphaFinancialResponse>> = {};
@@ -1134,6 +1155,14 @@ export async function getAlphaStatements(
     raw[kind] = response;
   }
 
+  // Share counts live on the balance sheet. When the income statement is
+  // wanted without it, a balance sheet already in cache still lends its
+  // counts — no call is spent for what is on file.
+  if (raw.income && !raw.balance && !wanted.includes("balance")) {
+    const cached = await getCachedDataState<AlphaFinancialResponse>(symbol, STATEMENT_CACHE_KEY.balance, STATEMENT_TTL_MS, STATEMENT_STALE_MS);
+    if (cached.status !== "miss" && cached.data) raw.balance = cached.data;
+  }
+
   const balanceAnnual = raw.balance ? mapBalance(raw.balance.annualReports, "annual") : [];
   const balanceQuarterly = raw.balance ? mapBalance(raw.balance.quarterlyReports, "quarterly") : [];
 
@@ -1143,11 +1172,19 @@ export async function getAlphaStatements(
     const hasEps = (rows?: AlphaFinancialReport[]) =>
       (rows ?? []).some((row) => parseNumber(row.dilutedEPS) !== 0 || parseNumber(row.reportedEPS) !== 0);
     let earnings: AlphaEarningsResponse = {};
-    if (!options.cachedOnly && (!hasEps(raw.income.annualReports) || !hasEps(raw.income.quarterlyReports))) {
-      try {
-        earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
-      } catch (error) {
-        if (isAlphaThrottleError(error)) throw error;
+    if (!hasEps(raw.income.annualReports) || !hasEps(raw.income.quarterlyReports)) {
+      const cachedEarnings = await getCachedDataState<AlphaEarningsResponse>(symbol, EARNINGS_CACHE_KEY, STATEMENT_TTL_MS, STATEMENT_STALE_MS);
+      if (cachedEarnings.status !== "miss" && cachedEarnings.data) {
+        earnings = cachedEarnings.data;
+      } else if (!options.cachedOnly) {
+        try {
+          earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
+          if (earnings.annualEarnings?.length || earnings.quarterlyEarnings?.length) {
+            await setCachedData(symbol, EARNINGS_CACHE_KEY, earnings as unknown as Record<string, unknown>);
+          }
+        } catch (error) {
+          if (isAlphaThrottleError(error)) throw error;
+        }
       }
     }
     const annualEps = buildEpsMaps(earnings.annualEarnings, "annual");

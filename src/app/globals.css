@@ -597,10 +597,7 @@ select optgroup {
   animation: cb-rise 560ms var(--ease-entrance) both;
 }
 .chart-builder-plot .cb-pill {
-  /* `backwards`, not `both`: once it has landed, the hover mute (an inline
-     opacity) must win over the keyframe's final value. */
   animation: cb-pill-in 240ms var(--ease-entrance) 420ms backwards;
-  transition: opacity 150ms var(--ease-out);
 }
 /* Slider handles and span settle onto their period after a release. */
 .cb-slider-settle {
@@ -633,4 +630,47 @@ select optgroup {
 @keyframes cb-fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
+}
+
+/* Feedback toast: a translucent material that arrives at the top centre.
+   It materialises — blur, scale and position settle together — and leaves
+   along the same path, so it reads as a surface coming and going rather
+   than a box fading. */
+.huntr-toast {
+  background: rgba(22, 34, 37, 0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 18px 48px -12px rgba(0, 0, 0, 0.55);
+  animation: huntr-toast-in 360ms var(--ease-settle) both;
+  will-change: transform, opacity, filter;
+}
+.light .huntr-toast {
+  background: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(20, 30, 33, 0.08),
+    0 18px 48px -12px rgba(20, 30, 33, 0.28);
+}
+.huntr-toast-leave {
+  animation: huntr-toast-out 220ms var(--ease-settle) both;
+}
+@keyframes huntr-toast-in {
+  from { opacity: 0; transform: translateY(-12px) scale(0.96); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+@keyframes huntr-toast-out {
+  from { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+  to   { opacity: 0; transform: translateY(-10px) scale(0.97); filter: blur(4px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .huntr-toast { animation: cb-fade-in 200ms var(--ease-out) both; }
+  .huntr-toast-leave { animation: huntr-toast-fade-out 160ms var(--ease-out) both; }
+  @keyframes huntr-toast-fade-out { from { opacity: 1; } to { opacity: 0; } }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .huntr-toast { background: #162225; backdrop-filter: none; -webkit-backdrop-filter: none; }
+  .light .huntr-toast { background: #ffffff; }
 }

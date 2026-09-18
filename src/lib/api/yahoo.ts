@@ -32,6 +32,7 @@ import { buildTickerLogoUrl } from "@/lib/logo";
 import {
   getFinancialsFromAlphaVantage,
 } from "@/lib/api/alphavantage";
+import { repairAlphaFinancials } from "@/lib/api/alpha-repair";
 import {
   mapToStockProfile,
   mapToStockQuote,
@@ -490,7 +491,7 @@ export async function getFinancials(
     },
   });
 
-  const alphaFinancials = await alphaPromise;
+  const alphaFinancials = repairAlphaFinancials(await alphaPromise);
 
   if (!alphaFinancials) {
     console.warn(

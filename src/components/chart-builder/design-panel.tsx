@@ -32,6 +32,8 @@ import {
 export interface DataSourceState {
   /** Tickers whose statements come from the Alpha Vantage history. */
   deepTickers: string[];
+  /** Deep tickers still without EPS while the chart needs it. */
+  epsMissing: string[];
   /** Statements the chart reads — what a load will ask for. */
   statements: readonly StatementKind[];
   loading: boolean;
@@ -144,6 +146,7 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
   const tickers = Array.from(new Set(spec.series.map((s) => s.ticker)));
   const missingDeep = tickers.filter((t) => !dataSource.deepTickers.includes(t));
   const allDeep = tickers.length > 0 && missingDeep.length === 0;
+  const epsMissing = dataSource.epsMissing;
   const someDeep = dataSource.deepTickers.length > 0 && !allDeep;
   const statementNames: Record<StatementKind, string> = { income: "income statement", balance: "balance sheet", cashflow: "cash flow" };
   const askFor = dataSource.statements.map((k) => statementNames[k]).join(" + ");
@@ -219,7 +222,7 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
             {growthView !== "yoy" && growthView !== "indexed" && (
               <Row label="Transform">
                 <SelectMenu<SeriesTransform | typeof MIXED>
-                  groups={withMixed([{ label: "Transform", options: TRANSFORMS }], transform === MIXED)}
+                  groups={withMixed([{ label: "Transform", options: spec.granularity === "quarterly" ? TRANSFORMS : TRANSFORMS.filter((t) => t.value !== "ttm") }], transform === MIXED)}
                   value={transform}
                   onChange={(v) => v !== MIXED && bulk({ transform: v })}
                   ariaLabel="Transform for every series"
@@ -248,14 +251,22 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
             variant={allDeep ? "ghost" : "secondary"}
             size="sm"
             className="w-full justify-start"
-            disabled={dataSource.loading || allDeep || spec.series.length === 0}
+            disabled={dataSource.loading || (allDeep && epsMissing.length === 0) || spec.series.length === 0}
             onClick={dataSource.onLoadDeep}
           >
             {dataSource.loading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Database className="mr-1.5 h-3.5 w-3.5" />}
-            {allDeep ? "20-year history loaded" : someDeep ? `Load history for ${missingDeep.length} more` : "Load 20-year history"}
+            {allDeep
+              ? epsMissing.length > 0
+                ? `Load EPS history for ${epsMissing.join(", ")}`
+                : "20-year history loaded"
+              : someDeep
+                ? `Load history for ${missingDeep.length} more`
+                : "Load 20-year history"}
           </Button>
           <p className="px-1 text-[11px] leading-snug text-mist">
-            {allDeep
+            {allDeep && epsMissing.length > 0
+              ? "The statements are in, but Alpha Vantage keeps EPS on a separate endpoint — one more call per company completes P/E and per-share figures for the whole history."
+              : allDeep
               ? "Powered by Alpha Vantage · full statement history."
               : dataSource.blocked === "throttled"
                 ? "Alpha Vantage is rate-limited right now; the rest stay on Yahoo Finance until it clears."

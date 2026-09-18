@@ -352,7 +352,7 @@ describe("resolveChart — market metrics", () => {
 });
 
 describe("resolveChart — time mode", () => {
-  it("switches to a time axis when a price series is present and centres statement bars in their quarter", () => {
+  it("switches to a time axis when a price series is present and puts statement bars on the fiscal close", () => {
     const a = fin("A", { quarterly: [{ date: "2024-03-31", fcf: 20, shares: 10 }] });
     const px = prices("2024-01-01", 5, (i) => 10 + i);
     const spec = createSpec({
@@ -365,9 +365,9 @@ describe("resolveChart — time mode", () => {
     const chart = resolveChart(spec, { financials: { A: a }, prices: { A: px } });
     expect(chart.xMode).toBe("time");
     expect(chart.xLabels).toEqual([]);
-    expect(chart.points).toHaveLength(6); // 5 closes + 1 quarter midpoint
+    expect(chart.points).toHaveLength(6); // 5 closes + the quarter's close date
     const bar = chart.points.find((p) => p.f !== null)!;
-    expect(bar.x).toBe(Date.UTC(2024, 1, 15));
+    expect(bar.x).toBe(Date.parse("2024-03-31"));
     expect(bar.f).toBe(2);
     expect(bar.p).toBeNull();
     expect(chart.points[0]).toMatchObject({ x: Date.parse("2024-01-01"), p: 10, f: null });
@@ -399,5 +399,128 @@ describe("resolveChart — time mode", () => {
     expect(col(chart, "p")).toEqual([100, 200, 300]);
     const whole = resolveChart({ ...spec, range: { from: null, to: null } }, { financials: {}, prices: { A: px } });
     expect(col(whole, "p")).toEqual([0, 100, 200, 300]);
+  });
+});
+
+describe("resolveChart — trailing twelve months", () => {
+  // Four quarters that sum to 100 of revenue and 30 of gross profit, then a
+  // fifth so the window moves.
+  const rows = [
+    { date: "2024-03-31", revenue: 10, gross_profit: 2, fcf: 1, shares: 10 },
+    { date: "2024-06-30", revenue: 20, gross_profit: 8, fcf: 2, shares: 10 },
+    { date: "2024-09-30", revenue: 30, gross_profit: 10, fcf: 3, shares: 10 },
+    { date: "2024-12-31", revenue: 40, gross_profit: 10, fcf: 4, shares: 10 },
+    { date: "2025-03-31", revenue: 50, gross_profit: 30, fcf: 5, shares: 20 },
+  ];
+  const a = fin("A", { quarterly: rows });
+
+  it("sums a flow over the latest four quarters and starts once four are on file", () => {
+    const spec = createSpec({ granularity: "ttm", series: [createSeries({ id: "r", ticker: "A", metric: "revenue" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    // The three warm-up quarters are not shown.
+    expect(col(chart, "r")).toEqual([100, 140]);
+    expect(chart.series[0].label).toBe("A · Rev TTM");
+  });
+
+  it("reads a margin as the ratio of the sums, not the mean of four margins", () => {
+    const spec = createSpec({ granularity: "ttm", series: [createSeries({ id: "m", ticker: "A", metric: "gross_margin" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    // 30 / 100 and 58 / 140 — the mean of the four quarterly margins would be 29.2 %.
+    expect(col(chart, "m").map((v) => (v === null ? null : Math.round(v * 10) / 10))).toEqual([30, 41.4]);
+  });
+
+  it("composes with per share and year-over-year on top of the twelve-month figure", () => {
+    const spec = createSpec({
+      granularity: "ttm",
+      series: [
+        createSeries({ id: "f", ticker: "A", metric: "free_cash_flow", transform: "per_share" }),
+        createSeries({ id: "y", ticker: "A", metric: "revenue", transform: "yoy" }),
+      ],
+      align: "all",
+    });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    // 10 of FCF over 10 shares, then 14 over 20.
+    expect(col(chart, "f")).toEqual([1, 0.7]);
+    // YoY needs a twelve-month figure a year earlier: none yet.
+    expect(col(chart, "y").every((v) => v === null)).toBe(true);
+  });
+
+  it("does not sum twice when a series also carries the ttm transform", () => {
+    const spec = createSpec({ granularity: "ttm", series: [createSeries({ id: "r", ticker: "A", metric: "revenue", transform: "ttm" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    expect(col(chart, "r")).toEqual([100, 140]);
+  });
+
+  it("gives the ttm transform on quarterly data the same ratio-of-sums for a margin", () => {
+    const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "m", ticker: "A", metric: "gross_margin", transform: "ttm" })] });
+    const chart = resolveChart(spec, { financials: { A: a }, prices: {} });
+    expect(col(chart, "m").map((v) => (v === null ? null : Math.round(v * 10) / 10))).toEqual([30, 41.4]);
+  });
+
+  it("places a non-calendar fiscal quarter on its own close, not the calendar quarter's", () => {
+    // A September-27 fiscal quarter sits in calendar Q3 for alignment but is drawn on the 27th.
+    const b = fin("B", { quarterly: [{ date: "2024-09-27", fcf: 20, shares: 10 }] });
+    const px = prices("2024-07-01", 100, (i) => 10 + i);
+    const spec = createSpec({
+      granularity: "quarterly",
+      series: [createSeries({ id: "f", ticker: "B", metric: "free_cash_flow", transform: "per_share", axis: "right" }), createSeries({ id: "p", ticker: "B", metric: "price", shape: "line" })],
+    });
+    const chart = resolveChart(spec, { financials: { B: b }, prices: { B: px } });
+    const bar = chart.points.find((p) => p.f !== null)!;
+    expect(new Date(bar.x).toISOString().slice(0, 10)).toBe("2024-09-27");
+  });
+
+  it("keeps two companies of one calendar quarter on one row, at the later close", () => {
+    const b = fin("B", { quarterly: [{ date: "2024-09-27", revenue: 20 }] });
+    const c = fin("C", { quarterly: [{ date: "2024-09-30", revenue: 30 }] });
+    const px = prices("2024-07-01", 100, (i) => 10 + i);
+    const spec = createSpec({
+      granularity: "quarterly",
+      series: [
+        createSeries({ id: "b", ticker: "B", metric: "revenue" }),
+        createSeries({ id: "c", ticker: "C", metric: "revenue" }),
+        createSeries({ id: "p", ticker: "B", metric: "price", shape: "line", axis: "right" }),
+      ],
+    });
+    const chart = resolveChart(spec, { financials: { B: b, C: c }, prices: { B: px } });
+    const rows = chart.points.filter((p) => p.b !== null || p.c !== null);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ b: 20, c: 30, x: Date.parse("2024-09-30") });
+  });
+});
+
+describe("resolveChart — capex out of line", () => {
+  // YETI's quarters as Alpha Vantage files them: Q3 2025 carries a $38M
+  // purchase of intangibles on top of $12M of plant.
+  const yeti = fin("YETI", {
+    quarterly: [
+      { date: "2024-06-30", ocf: 55.96, capex: -14.43, revenue: 463 },
+      { date: "2024-09-30", ocf: 83.52, capex: -14.61, revenue: 478 },
+      { date: "2024-12-31", ocf: 225.58, capex: -44.4, revenue: 546 },
+      { date: "2025-03-31", ocf: -80.3, capex: -15.51, revenue: 351 },
+      { date: "2025-06-30", ocf: 61.2, capex: -4.43, revenue: 446 },
+      { date: "2025-09-30", ocf: 100.94, capex: -50.16, revenue: 488 },
+      { date: "2025-12-31", ocf: 172.9, capex: -20.6, revenue: 584 },
+    ],
+  });
+
+  it("flags a quarter whose capex is over twice the mean of the four before it, once per company", () => {
+    const spec = createSpec({
+      granularity: "quarterly",
+      series: [createSeries({ id: "c", ticker: "YETI", metric: "capex" }), createSeries({ id: "f", ticker: "YETI", metric: "free_cash_flow" })],
+    });
+    const chart = resolveChart(spec, { financials: { YETI: yeti }, prices: {} });
+    const capexWarnings = chart.warnings.filter((w) => w.message.includes("capex"));
+    expect(capexWarnings).toHaveLength(1);
+    // 50.16 against the mean of 14.61, 44.4, 15.51 and 4.43 (19.74).
+    expect(capexWarnings[0].message).toContain("Q3 2025");
+    expect(capexWarnings[0].message).toContain("check the filing");
+  });
+
+  it("stays quiet on the annual view and for metrics capex does not reach", () => {
+    const annual = createSpec({ granularity: "annual", series: [createSeries({ id: "c", ticker: "YETI", metric: "capex" })] });
+    expect(resolveChart(annual, { financials: { YETI: yeti }, prices: {} }).warnings.some((w) => w.message.includes("capex"))).toBe(false);
+    const revenue = createSpec({ granularity: "quarterly", series: [createSeries({ id: "r", ticker: "YETI", metric: "revenue" })] });
+    expect(resolveChart(revenue, { financials: { YETI: yeti }, prices: {} }).warnings.some((w) => w.message.includes("capex"))).toBe(false);
   });
 });

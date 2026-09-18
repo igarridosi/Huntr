@@ -7,9 +7,13 @@ import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import {
   METRICS,
   availableDates,
+  clipToListing,
   coversStatements,
+  firstTradeDate,
   defaultRange,
+  lacksEps,
   mergeFinancials,
+  needsEps,
   priceMonthEnds,
   resolveChart,
   statementsFor,
@@ -45,6 +49,8 @@ export interface ChartData {
   statements: StatementKind[];
   /** Tickers whose statements come from the deep (Alpha Vantage) overlay. */
   deepTickers: string[];
+  /** Deep tickers whose income statement arrived without EPS while the chart needs it — one more call each fills it. */
+  epsMissing: string[];
   /** Period-end dates the chart could show, before the range is applied (month ends for price-only charts). */
   dates: string[];
   /** True when `dates` are month ends of price history rather than statement periods. */
@@ -74,10 +80,10 @@ export function useChartData(spec: ChartSpec): ChartData {
     () => tickers.filter((t) => spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "price")),
     [tickers, spec.series]
   );
-  const priceTickers = useMemo(
-    () => tickers.filter((t) => spec.series.some((s) => s.ticker === t && METRICS[s.metric].source !== "statements")),
-    [tickers, spec.series]
-  );
+  // Prices for every company on the chart, not only those with a price
+  // or market series: the first close on file is what tells a statement
+  // history where the listing begins.
+  const priceTickers = tickers;
   const statements = useMemo(() => statementsFor(spec), [spec]);
   const statementsKey = statements.join("+");
 
@@ -102,19 +108,28 @@ export function useChartData(spec: ChartSpec): ChartData {
 
   const prices = useBatchDailyHistory(priceTickers, "ALL", priceTickers.length > 0);
 
-  const { financials, deepTickers } = useMemo(() => {
+  const { financials, deepTickers, deepWithoutEps } = useMemo(() => {
     const out: Record<string, CompanyFinancials | null | undefined> = {};
     const deepList: string[] = [];
+    const noEps: string[] = [];
     statementTickers.forEach((ticker, i) => {
       const overlay = deep.data[i];
       const covered = coversStatements(overlay, statements);
-      if (covered) deepList.push(ticker);
-      out[ticker] = quick.pending[i] && !covered ? undefined : mergeFinancials(quick.data[i], covered ? overlay : null);
+      if (covered) {
+        deepList.push(ticker);
+        // Judged on the overlay itself: the merge below borrows Yahoo's EPS
+        // for the few periods it has, which would hide the gap.
+        if (lacksEps(overlay)) noEps.push(ticker);
+      }
+      const merged = quick.pending[i] && !covered ? undefined : mergeFinancials(quick.data[i], covered ? overlay : null);
+      out[ticker] = clipToListing(merged, firstTradeDate(prices.data?.[ticker]));
     });
-    return { financials: out, deepTickers: deepList };
+    return { financials: out, deepTickers: deepList, deepWithoutEps: noEps };
     // statementsKey stands in for the statements array's identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey]);
+  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey, prices.data]);
+
+  const epsMissing = useMemo(() => (needsEps(spec) ? deepWithoutEps : []), [spec, deepWithoutEps]);
 
   const pendingTickers = useMemo(() => {
     const pending = new Set<string>();
@@ -157,6 +172,7 @@ export function useChartData(spec: ChartSpec): ChartData {
     tickers,
     statements,
     deepTickers,
+    epsMissing,
     dates,
     datesAreMonthly: statementTickers.length === 0,
     range,

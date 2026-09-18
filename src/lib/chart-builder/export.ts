@@ -194,7 +194,7 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
     ctx.textAlign = "left";
     const gap = 22;
     const items = series.map((s) => {
-      const label = seriesLabel(s);
+      const label = seriesLabel(s, spec.granularity);
       return { s, label, w: 18 + ctx.measureText(label).width };
     });
     const total = items.reduce((a, i) => a + i.w, 0) + gap * (items.length - 1);
@@ -234,14 +234,16 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
     const wordSize = 18;
     ctx.textBaseline = "middle";
     const baseline = y + 16;
-    ctx.font = `600 ${wordSize}px ${headingFont}`;
-    const wordW = measureTracked(ctx, "HUNTR", wordSize * 0.14);
+    // Same proportions as the app's own wordmark: bold, tight tracking, the mark a touch taller than the word.
+    ctx.font = `700 ${wordSize}px ${headingFont}`;
+    const tracking = wordSize * -0.025;
+    const wordW = measureTracked(ctx, "HUNTR", tracking);
     let x = width - PAD;
     x -= wordW;
     ctx.fillStyle = theme.title;
-    fillTracked(ctx, "HUNTR", x, baseline, wordSize * 0.14);
+    fillTracked(ctx, "HUNTR", x, baseline, tracking);
     if (logo) {
-      const h = 24;
+      const h = 26;
       const w = (logo.width / logo.height) * h;
       x -= w + 8;
       ctx.drawImage(logo, x, baseline - h / 2, w, h);
