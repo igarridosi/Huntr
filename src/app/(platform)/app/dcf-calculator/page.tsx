@@ -77,6 +77,7 @@ import {
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
 import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
 import { looksLikeLender } from "@/lib/dcf/business-model";
+import { shareCountAlert } from "@/lib/dcf/share-count";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -1133,6 +1134,8 @@ export default function DcfCalculatorPage() {
       zones: simulation?.zones ?? null,
       scoreReference: simulation?.reference ?? null,
       warnings: [
+        // First, because it voids every per-share figure below it.
+        ...(shareCountAlert(sourcedFields) ? [shareCountAlert(sourcedFields)!.message] : []),
         ...anchorContext.warnings.map((warning) => warning.message),
         ...coherenceWarnings.map((warning) => warning.message),
       ],

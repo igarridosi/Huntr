@@ -13,7 +13,7 @@ import type {
   FCFMarginMode,
   WACCEstimate,
 } from "@/lib/calculations/dcf";
-import { Anchor, Info, TrendingDown, TrendingUp } from "lucide-react";
+import { AlertTriangle, Anchor, Info, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { reconcileWACC } from "@/lib/calculations/dcf-transparency";
@@ -146,6 +146,7 @@ function SliderInput({
   suffix,
   tooltip,
   band,
+  caution,
 }: {
   label: string;
   value: number;
@@ -158,8 +159,11 @@ function SliderInput({
   tooltip?: string;
   /** The company own record for this metric, drawn under the control. */
   band?: HistoricalBand | null;
+  /** A level past which the control keeps working but says so: the message shows while the value is above `from`. */
+  caution?: { from: number; message: string };
 }) {
   const inputId = useId();
+  const cautioned = caution !== undefined && value > caution.from;
 
   const displayValue = (() => {
     switch (format) {
@@ -256,9 +260,28 @@ function SliderInput({
         <span>{format === "percent" ? formatPercent(max, 0) : max}</span>
       </div>
       {band ? <HistoricalBandStrip band={band} /> : null}
+      {cautioned ? (
+        <p className="flex items-start gap-1.5 text-[10px] leading-snug text-golden-hour/90">
+          <AlertTriangle className="mt-px h-3 w-3 shrink-0" aria-hidden />
+          <span>{caution.message}</span>
+        </p>
+      ) : null}
     </div>
   );
 }
+
+/**
+ * The margin sliders run to 70%: Visa has delivered 52–61% for four years,
+ * and a control capped at 50% forced the model to undervalue it with no
+ * way to enter the real figure. Past 50% the slider says so, because that
+ * is above what almost any operating business sustains and the realised
+ * series is the thing to check.
+ */
+const MARGIN_SLIDER_MAX = 0.7;
+const MARGIN_CAUTION = {
+  from: 0.5,
+  message: "Above 50%: more than almost any operating business delivers. Check the realised margin series before relying on it.",
+};
 
 /**
  * What the company has actually done with this metric, under the slider that
@@ -429,8 +452,9 @@ export function DCFAssumptions({
             onChange={(v) => update({ baseFCFMargin: v })}
             band={bands?.baseMargin}
             min={-0.2}
-            max={0.5}
+            max={MARGIN_SLIDER_MAX}
             step={0.005}
+            caution={MARGIN_CAUTION}
             tooltip="Free cash flow as % of revenue (current)"
           />
           <SliderInput
@@ -443,8 +467,9 @@ export function DCFAssumptions({
             onChange={(v) => update({ terminalFCFMargin: v })}
             band={bands?.terminalMargin}
             min={-0.1}
-            max={0.5}
+            max={MARGIN_SLIDER_MAX}
             step={0.005}
+            caution={MARGIN_CAUTION}
             tooltip={
               marginMode === "constant"
                 ? "Applied to the terminal value only. Projected years hold the current margin."

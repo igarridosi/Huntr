@@ -5,7 +5,7 @@ import type { SourcedDCFFields } from "@/lib/calculations/dcf-inputs-source";
 import type { AnchorWarning } from "@/lib/calculations/dcf-anchors";
 import type { CoherenceWarning } from "@/lib/calculations/dcf-scenario-coherence";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
-import { shareCountDrift } from "@/lib/dcf/share-count";
+import { shareCountAlert, shareCountDrift } from "@/lib/dcf/share-count";
 
 /**
  * Everything the model has to say about itself, in one column.
@@ -52,7 +52,7 @@ export function countDiagnostics(params: {
     params.anchorWarnings.length +
     params.coherenceWarnings.length +
     (capCheck !== null && !capCheck.agrees ? 1 : 0) +
-    (shareCountDrift(params.fields) ? 1 : 0) +
+    (!shareCountAlert(params.fields) && shareCountDrift(params.fields) ? 1 : 0) +
     (staleBalance ? 1 : 0)
   );
 }
@@ -71,7 +71,8 @@ export function DCFDiagnostics({
   // Past 1%, the filed diluted count and the market's own arithmetic no
   // longer agree on how many shares there are. The model keeps dividing by
   // the filing; this says which way that leans.
-  const drift = shareCountDrift(fields);
+  const alert = shareCountAlert(fields);
+  const drift = alert ? null : shareCountDrift(fields);
 
   // A balance sheet older than two quarters is describing a company that has
   // reported since.
@@ -144,13 +145,16 @@ export function DCFDiagnostics({
             its own control rather than sending the reader elsewhere. Every
             per-share figure in the middle column is scaled by whichever of
             these is selected. */}
-        {shareCountDisagrees && capCheck && shareCount ? (
-          <div className="space-y-2.5 rounded-lg bg-golden-hour/[0.08] p-2.5 ring-1 ring-inset ring-golden-hour/30">
+        {(shareCountDisagrees || alert) && capCheck && shareCount ? (
+          <div className={cn("space-y-2.5 rounded-lg p-2.5 ring-1 ring-inset", alert ? "bg-bearish/[0.08] ring-bearish/40" : "bg-golden-hour/[0.08] ring-golden-hour/30")}>
             <div className="flex items-start gap-2">
-              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-golden-hour" />
-              <p className="text-[11px] font-medium text-golden-hour">
-                Share count does not reconcile with market cap
-              </p>
+              <AlertTriangle className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", alert ? "text-bearish" : "text-golden-hour")} />
+              <div className="space-y-1">
+                <p className={cn("text-[11px] font-medium", alert ? "text-bearish" : "text-golden-hour")}>
+                  {alert ? "Share count unreliable — per-share values on hold" : "Share count does not reconcile with market cap"}
+                </p>
+                {alert ? <p className="text-[11px] leading-relaxed text-mist/85">{alert.message}</p> : null}
+              </div>
             </div>
 
             <div className="space-y-1">
