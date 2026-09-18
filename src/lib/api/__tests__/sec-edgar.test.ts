@@ -339,43 +339,26 @@ describe("selectShareCount", () => {
   // LULU: the cover tag carries one class and undercounts by 4.5%, which the
   // model turned into a 4.5% overstatement of value per share.
   it("takes the diluted count when the cover count misses a share class", () => {
-    const picked = selectShareCount(
-      cover(108_437_957),
-      diluted(115_482_000),
-      120.81,
-      13_720_000_000
-    );
+    const picked = selectShareCount(cover(108_437_957), diluted(115_482_000));
     expect(picked?.value).toBe(115_482_000);
   });
 
-  // CROX: the mirror image. The cover count reconciles exactly and the
-  // weighted average lags the buyback by 3.5%.
-  it("keeps the cover count when it is the one that reconciles", () => {
-    const picked = selectShareCount(
-      cover(47_945_075),
-      diluted(49_628_000),
-      122.23,
-      5_860_000_000
-    );
-    expect(picked?.value).toBe(47_945_075);
+  // CROX: the cover count reconciles exactly and the weighted average lags
+  // the buyback by 3.5%. One criterion all the same: the diluted count is
+  // used and the cross-check reports the lag and its direction.
+  it("keeps the diluted count even when the cover count is the one that reconciles", () => {
+    const picked = selectShareCount(cover(47_945_075), diluted(49_628_000));
+    expect(picked?.value).toBe(49_628_000);
   });
 
   it("falls back to whichever exists when only one does", () => {
-    expect(selectShareCount(null, diluted(12_309_000_000), 232, 2_855_000_000_000)?.value)
+    expect(selectShareCount(null, diluted(12_309_000_000))?.value)
       .toBe(12_309_000_000);
-    expect(selectShareCount(cover(100), null, 232, 2_855_000_000_000)?.value).toBe(100);
-    expect(selectShareCount(null, null, 232, 2_855_000_000_000)).toBeNull();
+    expect(selectShareCount(cover(100), null)?.value).toBe(100);
+    expect(selectShareCount(null, null)).toBeNull();
   });
 
-  it("keeps the cover count's precedence when there is no price to check", () => {
-    expect(selectShareCount(cover(108_437_957), diluted(115_482_000), 0, 0)?.value)
-      .toBe(108_437_957);
-  });
-
-  // A wrong number is still wrong, but the panel keeps saying so, and there is
-  // no reason to divide by the worse of the two while it does.
-  it("takes the closer count when neither reconciles", () => {
-    const picked = selectShareCount(cover(80_000_000), diluted(110_000_000), 120.81, 13_720_000_000);
-    expect(picked?.value).toBe(110_000_000);
+  it("does not need a price to decide", () => {
+    expect(selectShareCount(cover(108_437_957), diluted(115_482_000))?.value).toBe(115_482_000);
   });
 });

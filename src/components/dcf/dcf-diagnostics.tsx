@@ -5,6 +5,7 @@ import type { SourcedDCFFields } from "@/lib/calculations/dcf-inputs-source";
 import type { AnchorWarning } from "@/lib/calculations/dcf-anchors";
 import type { CoherenceWarning } from "@/lib/calculations/dcf-scenario-coherence";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
+import { shareCountDrift } from "@/lib/dcf/share-count";
 
 /**
  * Everything the model has to say about itself, in one column.
@@ -51,6 +52,7 @@ export function countDiagnostics(params: {
     params.anchorWarnings.length +
     params.coherenceWarnings.length +
     (capCheck !== null && !capCheck.agrees ? 1 : 0) +
+    (shareCountDrift(params.fields) ? 1 : 0) +
     (staleBalance ? 1 : 0)
   );
 }
@@ -66,6 +68,10 @@ export function DCFDiagnostics({
   const capCheck = fields?.marketCapCheck ?? null;
   const shareCount = fields?.shareCount ?? null;
   const shareCountDisagrees = capCheck !== null && !capCheck.agrees;
+  // Past 1%, the filed diluted count and the market's own arithmetic no
+  // longer agree on how many shares there are. The model keeps dividing by
+  // the filing; this says which way that leans.
+  const drift = shareCountDrift(fields);
 
   // A balance sheet older than two quarters is describing a company that has
   // reported since.
@@ -120,6 +126,17 @@ export function DCFDiagnostics({
           <DiagnosticRow
             tone="muted"
             message={`This valuation uses balance-sheet data from ${staleBalance.asOf}. Check it against the latest report.`}
+          />
+        ) : null}
+
+        {drift ? (
+          <DiagnosticRow
+            tone={shareCountDisagrees ? "muted" : "warning"}
+            message={`The latest 10-Q's diluted count (${formatCompactNumber(drift.filed)}) is ${formatPercent(Math.abs(drift.deviation), 1)} ${drift.deviation > 0 ? "above" : "below"} the count the market cap implies at today's price (${formatCompactNumber(drift.implied)}): ${
+              drift.deviation > 0
+                ? "the quarter's average has not caught up with buybacks, so every per-share figure is biased downward."
+                : "the quarter's average has not caught up with new shares, so every per-share figure is biased upward."
+            }`}
           />
         ) : null}
 

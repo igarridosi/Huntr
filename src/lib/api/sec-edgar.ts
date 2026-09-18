@@ -342,40 +342,20 @@ export function checkMarketCap(
 }
 
 /**
- * Which of the two filed share counts to actually divide by.
+ * Which filed share count to divide by: the weighted diluted count of the
+ * latest quarterly filing, whenever there is one.
  *
- * Both are real figures from the same filing, and each is wrong in its own
- * direction: the cover count lags nothing but covers one class, the weighted
- * diluted count covers everything but lags buybacks. Price times shares has to
- * land on the reported market cap, so that is what decides - the check stops
- * being a warning printed next to a number nobody changed and becomes the
- * thing that picks the number.
- *
- * When neither reconciles, or there is no price to check against, the cover
- * count keeps its precedence and the warning does its old job.
+ * One criterion, so two companies' per-share figures are built the same
+ * way. The diluted count covers every class and the options and units
+ * that will become shares; the cover-page count is one class, basic, on
+ * one day. The diluted count is an average over the quarter and lags a
+ * buyback by up to three months — that is what the market-cap cross-check
+ * is for, and it now reports the gap and its direction instead of
+ * quietly switching counts. The cover count is used only when no diluted
+ * count was filed.
  */
-export function selectShareCount(
-  cover: SECFact | null,
-  weightedDiluted: SECFact | null,
-  price: number,
-  reportedMarketCap: number
-): SECFact | null {
-  const preferred = cover ?? weightedDiluted;
-  if (!cover || !weightedDiluted) return preferred;
-
-  const coverCheck = checkMarketCap(price, cover.value, reportedMarketCap);
-  const dilutedCheck = checkMarketCap(price, weightedDiluted.value, reportedMarketCap);
-  if (!coverCheck || !dilutedCheck) return preferred;
-
-  if (coverCheck.agrees) return cover;
-  if (dilutedCheck.agrees) return weightedDiluted;
-
-  // Neither is within tolerance. Take the closer one rather than the
-  // preferred one: being 4.5% out beats being 12% out, and the panel will
-  // still say the count does not reconcile.
-  return Math.abs(dilutedCheck.deviation) < Math.abs(coverCheck.deviation)
-    ? weightedDiluted
-    : cover;
+export function selectShareCount(cover: SECFact | null, weightedDiluted: SECFact | null): SECFact | null {
+  return weightedDiluted ?? cover;
 }
 
 /**
@@ -844,10 +824,10 @@ export async function getSECFundamentals(
     operatingLeaseExpense,
     shareBasedCompensation,
   ] = await Promise.all([
-    // Point in time, from the cover of the filing, under the dei taxonomy.
+    // Point in time, from the cover of the filing, under the dei taxonomy:
+    // the fallback when no diluted count was filed.
     fetchConcept(cik, SEC_CONCEPTS.sharesOutstandingCover, "any", "dei"),
-    // A period average, and the fallback: it lags buybacks, so it is only
-    // right when nothing better exists.
+    // The count in use: diluted, from the latest quarterly filing.
     fetchConcept(cik, SEC_CONCEPTS.dilutedShares, "quarterly"),
     resolveFinancialDebt(cik),
     resolveCash(cik),
@@ -861,7 +841,7 @@ export async function getSECFundamentals(
 
   return {
     cik,
-    dilutedShares: coverShares ?? weightedDilutedShares,
+    dilutedShares: weightedDilutedShares ?? coverShares,
     coverShares,
     weightedDilutedShares,
     financialDebt,

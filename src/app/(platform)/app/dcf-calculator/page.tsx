@@ -56,6 +56,7 @@ import { useSECFundamentals } from "@/hooks/use-stock-data";
 import {
   applySourcedBalanceSheet,
   buildSourcedFields,
+  readCompanyFacts,
   type ZeroSuspectField,
 } from "@/lib/calculations/dcf-inputs-source";
 import {
@@ -74,7 +75,8 @@ import {
   collectAnchorWarnings,
 } from "@/lib/calculations/dcf-anchors";
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
-import { withLivePrice } from "@/lib/dcf/live-price";
+import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
+import { looksLikeLender } from "@/lib/dcf/business-model";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -335,7 +337,10 @@ export default function DcfCalculatorPage() {
       reportedMarketCap: quote.market_cap,
       includeLeases,
       overrides: balanceOverrides,
-      shareCountBasis,
+      // One criterion: the diluted count of the latest 10-Q. The market-cap
+      // cross-check reports how far it drifts and which way; it does not
+      // switch the denominator on its own.
+      shareCountBasis: shareCountBasis ?? "filings",
     });
   }, [
     quote,
@@ -585,10 +590,19 @@ export default function DcfCalculatorPage() {
      * while the anchor bands two hundred lines away computed it as operating
      * cash flow less capex. Two definitions of one metric in one file.
      */
+    // The "not a usable margin record" rule is a sector rule inside
+    // buildMarginHistory, and Yahoo's "Financial Services" holds S&P Global
+    // and Visa next to SoFi. The sector is passed only when the business
+    // itself looks like a lender — an unclassified balance sheet with thin
+    // equity, or an industry that names banking, insurance or lending.
+    const latestBalanceRow = [...(companyFinancials?.balance_sheet.annual ?? [])]
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+      .at(-1);
+    const lender = looksLikeLender({ industry: profile?.industry, balance: latestBalanceRow ?? null, income: sortedIncomeRows.at(-1) ?? null });
     const marginHistory = buildMarginHistory({
       revenues: sortedIncomeRows,
       cashFlows,
-      sector: profile?.sector,
+      sector: lender ? profile?.sector : null,
       years: 5,
     });
 
@@ -598,7 +612,7 @@ export default function DcfCalculatorPage() {
       fcfMargin5: marginHistory.median,
       marginHistory,
     };
-  }, [companyFinancials, profile?.sector]);
+  }, [companyFinancials, profile?.sector, profile?.industry]);
 
   // The realised ranges drawn under the sliders, and the checks that compare
   // the assumptions against them.
@@ -852,9 +866,10 @@ export default function DcfCalculatorPage() {
     setBalanceOverrides({});
     setShareCountBasis(undefined);
     setAppliedSignature(null);
-    // Stored with the price zeroed on every scenario; the live quote goes
-    // back on all three, not only the one that opens.
-    setScenarios(withLivePrice(payload.scenarios, quote?.price ?? 0));
+    // Stored with the price zeroed on every scenario, and possibly with a
+    // balance sheet from an earlier session on the ones that were not active
+    // then. All three take the facts of the one that opens, priced live.
+    setScenarios(withCompanyFacts(payload.scenarios, liveFacts(selected.inputs, quote?.price)));
     setActiveScenario(payload.activeScenario);
     setWaccEstimate(payload.waccEstimate);
     animateInputsTo(
@@ -925,8 +940,9 @@ export default function DcfCalculatorPage() {
       waccEstimate,
     });
 
-    // The zeroed copy is for the store; what stays in memory keeps the price.
-    setScenarios(withLivePrice(scenariosToSave, inputs.currentPrice));
+    // The zeroed copy is for the store; what stays in memory keeps the live
+    // price and the balance sheet on screen, on all three.
+    setScenarios(withCompanyFacts(scenariosToSave, liveFacts(inputs, inputs.currentPrice)));
     setSaveStatus(ok ? "saved" : "error");
   }, [activeScenario, inputs, openGate, saveScenario, scenarios, ticker, user, waccEstimate]);
 
@@ -1101,9 +1117,13 @@ export default function DcfCalculatorPage() {
       ticker,
       companyName: profile?.name ?? null,
       currentPrice: inputs.currentPrice,
-      // A quote that ticked since a scenario was generated or loaded is
-      // not a divergence between scenarios: the live price goes on all three.
-      scenarios: withLivePrice(scenarios, inputs.currentPrice),
+      // The company facts — revenue base, debt, cash, shares, price — are
+      // what is on screen, on all three: a balance sheet that arrived after
+      // a scenario was generated is not a disagreement between scenarios.
+      scenarios: withCompanyFacts(
+        scenarios,
+        readCompanyFacts(sourcedFields ? applySourcedBalanceSheet(inputs, sourcedFields) : inputs)
+      ),
       activeScenario,
       liveInputs: inputs,
       sourcedFields,
