@@ -31,6 +31,8 @@ interface DCFDiagnosticsProps {
   revenueBase?: React.ReactNode;
   /** The five inputs with their provenance, the checks run on them, and the cash-flow basis switch. */
   provenance?: React.ReactNode;
+  /** What kind of company this is, from its statements, and the tab that fits. */
+  regime?: React.ReactNode;
   /** The scenario comparison table, passed as content so this stays presentational. */
   scenarioTable?: React.ReactNode;
   /** The balance-sheet and sources panel. */
@@ -73,6 +75,7 @@ export function DCFDiagnostics({
   onShareCountBasisChange,
   revenueBase,
   provenance,
+  regime,
   scenarioTable,
   balanceSheet,
 }: DCFDiagnosticsProps) {
@@ -209,6 +212,10 @@ export function DCFDiagnostics({
           </div>
         ) : null}
       </div>
+
+      {regime ? (
+        <div className="border-t border-wolf-border/25 pt-4">{regime}</div>
+      ) : null}
 
       {revenueBase ? (
         <div className="border-t border-wolf-border/25 pt-4">{revenueBase}</div>

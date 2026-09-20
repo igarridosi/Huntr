@@ -79,6 +79,8 @@ export interface DCFScenarioExport {
   cashFlowBasis?: { basis: "unlevered" | "levered"; interestAddBackPoints: number | null; taxRate: number | null; taxRateSource: "effective" | "statutory" | null };
   /** The five checks run before the value was shown, and whether the reader uncovered a blocked one. */
   gate?: { checks: Array<{ id: string; label: string; status: "pass" | "fail" | "unverifiable"; detail: string }>; blocked: boolean; uncoveredByReader: boolean };
+  /** What kind of company the statements say this is, and the tab that fits. Empty when nothing stands out. */
+  regimes?: Array<{ id: string; label: string; detail: string; recommendation: string; tab: string | null }>;
   /**
    * The unit every figure below is in, and whether they may be believed.
    *
@@ -266,6 +268,7 @@ export function buildScenarioExport(params: {
   provenance?: DCFScenarioExport["provenance"];
   cashFlowBasis?: DCFScenarioExport["cashFlowBasis"];
   gate?: DCFScenarioExport["gate"];
+  regimes?: DCFScenarioExport["regimes"];
   now?: Date;
 }): DCFScenarioExport {
   const {
@@ -287,6 +290,7 @@ export function buildScenarioExport(params: {
     provenance,
     cashFlowBasis,
     gate,
+    regimes,
     now = new Date(),
   } = params;
 
@@ -455,6 +459,7 @@ export function buildScenarioExport(params: {
     ...(provenance ? { provenance } : {}),
     ...(cashFlowBasis ? { cashFlowBasis } : {}),
     ...(gate ? { gate } : {}),
+    ...(regimes ? { regimes } : {}),
     integrity: {
       companyFactsChecked: COMPANY_FACT_KEYS,
       divergences,

@@ -87,6 +87,8 @@ import { buildProvenance } from "@/lib/dcf/provenance";
 import { valuationGate } from "@/lib/dcf/gate";
 import { DCFProvenance } from "@/components/dcf/dcf-provenance";
 import { ValuationCover } from "@/components/dcf/valuation-cover";
+import { DCFRegime } from "@/components/dcf/dcf-regime";
+import { debtPaydown, detectRegimes, PERIMETER_MONTHS } from "@/lib/dcf/regime";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -1280,6 +1282,35 @@ export default function DcfCalculatorPage() {
   );
   const valueCovered = isPopulated && gate.blocked && !valueUncovered;
 
+  // The regime, from the statements: capex and margin off the latest
+  // fiscal year on the defined basis, leverage off EBITDA, the terminal
+  // weight off the current run, the perimeter off the filings.
+  const regimes = useMemo(() => {
+    const cash = latestAnnualRows.cash;
+    const income = latestAnnualRows.income;
+    const fcf = cash ? statementFreeCashFlow(cash, "annual").value : null;
+    // Measured from the latest statement on file, not the clock: a render
+    // is pure, and "recent" means recent relative to the history in use.
+    const asOf = latestAnnualRows.income?.date ?? latestAnnualRows.cash?.date ?? null;
+    const recent = (fact: { value: number; periodEnd: string } | null | undefined) => {
+      if (!fact || !(fact.value > 0) || !asOf) return null;
+      const ageMonths = (Date.parse(asOf) - Date.parse(fact.periodEnd)) / (30.44 * 86_400_000);
+      return ageMonths <= PERIMETER_MONTHS ? { value: fact.value, periodEnd: fact.periodEnd } : null;
+    };
+    return detectRegimes({
+      lender: revenueHistory.lender,
+      capexToRevenue: cash && income && income.revenue > 0 ? Math.abs(cash.capital_expenditures) / income.revenue : null,
+      terminalWeight: result && result.enterpriseValue > 0 ? result.pvTerminalValue / result.enterpriseValue : null,
+      debtToEbitda: income && income.ebitda > 0 ? inputs.totalDebt / income.ebitda : null,
+      fcfMargin: fcf !== null && income && income.revenue > 0 ? fcf / income.revenue : null,
+      perimeter: { divergence: revenueDivergence?.deviation ?? null, acquisitions: recent(secFundamentals?.acquisitions), divestitures: recent(secFundamentals?.divestitures) },
+    });
+  }, [latestAnnualRows, revenueHistory.lender, result, inputs.totalDebt, revenueDivergence, secFundamentals]);
+  const paydown = useMemo(
+    () => (result ? { ...debtPaydown(inputs.totalDebt, result.projections.map((p) => p.fcf)), debt: inputs.totalDebt } : null),
+    [result, inputs.totalDebt]
+  );
+
   const handleExportScenarios = useCallback(() => {
     if (!ticker || !scenarios) return;
 
@@ -1306,6 +1337,7 @@ export default function DcfCalculatorPage() {
       provenance,
       cashFlowBasis: { basis: cashFlowBasis, interestAddBackPoints: addBack?.marginPoints ?? null, taxRate: addBack?.taxRate ?? null, taxRateSource: addBack?.taxRateSource ?? null },
       gate: { checks: gate.checks, blocked: gate.blocked, uncoveredByReader: gate.blocked && valueUncovered },
+      regimes: regimes.map((r) => ({ id: r.id, label: r.label, detail: r.detail, recommendation: r.recommendation, tab: r.tab })),
       warnings: [
         ...gate.reasons.map((r) => `Check failed — ${r}`),
         // First, because it voids every per-share figure below it.
@@ -1345,6 +1377,7 @@ export default function DcfCalculatorPage() {
     addBack,
     gate,
     valueUncovered,
+    regimes,
   ]);
 
   const handleReset = useCallback(() => {
@@ -1998,6 +2031,7 @@ export default function DcfCalculatorPage() {
                         <DCFProvenance provenance={provenance} gate={gate} basis={cashFlowBasis} addBack={addBack} onBasisChange={handleCashFlowBasisChange} />
                       ) : null
                     }
+                    regime={isPopulated ? <DCFRegime regimes={regimes} paydown={paydown} /> : null}
                     scenarioTable={
                       scenarios ? (
                         <DCFScenarioTable

@@ -132,6 +132,9 @@ export const SEC_CONCEPTS = {
     "OperatingLeasePayments",
   ],
   shareBasedCompensation: ["ShareBasedCompensation"],
+  /** A business bought or sold: the perimeter of the history has moved. */
+  acquisitions: ["PaymentsToAcquireBusinessesNetOfCashAcquired", "PaymentsToAcquireBusinessesGross"],
+  divestitures: ["ProceedsFromDivestitureOfBusinesses", "ProceedsFromDivestitureOfBusinessesNetOfCashDivested", "ProceedsFromSaleOfBusinessesNetOfCashDivested"],
 } as const;
 
 export type SECConceptKey = keyof typeof SEC_CONCEPTS;
@@ -714,6 +717,9 @@ export interface SECFundamentals {
   revenueTtm?: SECRevenueTtm | null;
   /** Operating cash flow of the last fiscal year, from the 10-K, for verifying the margin's numerator. */
   operatingCashFlowAnnual?: SECFact | null;
+  /** The latest business acquisition and disposal on file, whatever their age; the reader of the regime decides if they are recent. */
+  acquisitions?: SECFact | null;
+  divestitures?: SECFact | null;
 }
 
 /**
@@ -1065,9 +1071,11 @@ export async function getSECFundamentals(
     fetchConcept(cik, SEC_CONCEPTS.operatingLeaseExpense, "annual"),
     fetchConcept(cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
-  const [revenueTtm, operatingCashFlowAnnual] = await Promise.all([
+  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures] = await Promise.all([
     resolveRevenueTtm(cik),
     fetchConcept(cik, ["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"], "annual"),
+    fetchConcept(cik, SEC_CONCEPTS.acquisitions),
+    fetchConcept(cik, SEC_CONCEPTS.divestitures),
   ]);
 
   // A multi-class issuer files its share counts by class only; the
@@ -1086,6 +1094,8 @@ export async function getSECFundamentals(
     shareBasedCompensation,
     revenueTtm,
     operatingCashFlowAnnual,
+    acquisitions,
+    divestitures,
   };
 }
 
