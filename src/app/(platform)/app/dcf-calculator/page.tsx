@@ -1669,18 +1669,6 @@ export default function DcfCalculatorPage() {
                   activeScenario={activeScenario}
                   onScenarioChange={handleScenarioChange}
                   onChange={setInputs}
-                  revenueBase={
-                    isPopulated ? (
-                      <RevenueBasePicker
-                        bases={bases}
-                        basis={revenueBasis}
-                        value={inputs.baseRevenue}
-                        divergence={revenueDivergence}
-                        onChange={handleRevenueBasisChange}
-                        onManualChange={(value) => setRevenueBase("manual", value)}
-                      />
-                    ) : null
-                  }
                 />
               </CardContent>
             </Card>
@@ -1862,6 +1850,18 @@ export default function DcfCalculatorPage() {
                     coherenceWarnings={coherenceWarnings}
                     fields={sourcedFields}
                     onShareCountBasisChange={setShareCountBasis}
+                    revenueBase={
+                      isPopulated ? (
+                        <RevenueBasePicker
+                          bases={bases}
+                          basis={revenueBasis}
+                          value={inputs.baseRevenue}
+                          divergence={revenueDivergence}
+                          onChange={handleRevenueBasisChange}
+                          onManualChange={(value) => setRevenueBase("manual", value)}
+                        />
+                      ) : null
+                    }
                     scenarioTable={
                       scenarios ? (
                         <DCFScenarioTable

@@ -25,6 +25,8 @@ interface DCFDiagnosticsProps {
   /** The sourced figures, for the share-count and freshness checks. */
   fields: SourcedDCFFields | null;
   onShareCountBasisChange?: (basis: "filings" | "implied") => void;
+  /** The revenue base picker: which twelve months every projection starts from, right under the checks. */
+  revenueBase?: React.ReactNode;
   /** The scenario comparison table, passed as content so this stays presentational. */
   scenarioTable?: React.ReactNode;
   /** The balance-sheet and sources panel. */
@@ -62,6 +64,7 @@ export function DCFDiagnostics({
   coherenceWarnings,
   fields,
   onShareCountBasisChange,
+  revenueBase,
   scenarioTable,
   balanceSheet,
 }: DCFDiagnosticsProps) {
@@ -195,6 +198,10 @@ export function DCFDiagnostics({
           </div>
         ) : null}
       </div>
+
+      {revenueBase ? (
+        <div className="border-t border-wolf-border/25 pt-4">{revenueBase}</div>
+      ) : null}
 
       {scenarioTable ? (
         <div className="border-t border-wolf-border/25 pt-4">{scenarioTable}</div>

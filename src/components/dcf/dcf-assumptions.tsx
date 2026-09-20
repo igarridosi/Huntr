@@ -59,8 +59,6 @@ interface DCFAssumptionsProps {
   scenarios: DCFScenarioSet | null;
   activeScenario: DCFScenarioKey;
   onScenarioChange: (scenario: DCFScenarioKey) => void;
-  /** The revenue-base picker, rendered under the scenario switch: what every projected flow starts from. */
-  revenueBase?: React.ReactNode;
   onChange: (inputs: DCFInputs) => void;
 }
 
@@ -338,7 +336,6 @@ export function DCFAssumptions({
   activeScenario,
   onScenarioChange,
   onChange,
-  revenueBase,
 }: DCFAssumptionsProps) {
   const update = (partial: Partial<DCFInputs>) =>
     onChange({ ...inputs, ...partial });
@@ -386,13 +383,6 @@ export function DCFAssumptions({
         )}
 
       </div>
-
-      {revenueBase ? (
-        <>
-          <Separator />
-          {revenueBase}
-        </>
-      ) : null}
 
       <Separator />
 
