@@ -894,13 +894,12 @@ export function mapIncome(
       const epsFromEarnings = epsByDate.get(dateKey) ?? epsByPeriod.get(periodKey) ?? 0;
       const epsDiluted = epsFromIncome || epsFromEarnings || 0;
       const epsBasic = parseNumber(row.reportedEPS) || epsDiluted;
-      // Shares can be backed out of net income only with the statement's
-      // own (GAAP) EPS. The EARNINGS endpoint reports adjusted EPS, and
-      // net income over an adjusted figure is not a share count — it put
-      // YETI at 38 million shares one year and 470 million another.
-      // Unknown is left at 0; the balance sheet or the quick source fills it.
-      const inferredShares =
-        shares > 0 ? shares : epsFromIncome !== 0 ? Math.abs(netIncome / epsFromIncome) : 0;
+      // Never inferred. Net income over EPS is not a share count — over the
+      // adjusted EPS of the EARNINGS endpoint it put YETI at 38 million
+      // shares one year and 470 million another, and even over a GAAP EPS
+      // it is a rounding of a rounding. A count the balance sheet does not
+      // carry is left at 0, which every reader treats as "not on file".
+      const inferredShares = shares > 0 ? shares : 0;
 
       return {
         period: toPeriodLabel(date, kind),

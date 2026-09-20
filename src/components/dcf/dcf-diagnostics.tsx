@@ -29,6 +29,8 @@ interface DCFDiagnosticsProps {
   onShareCountBasisChange?: (basis: "filings" | "implied") => void;
   /** The revenue base picker: which twelve months every projection starts from, right under the checks. */
   revenueBase?: React.ReactNode;
+  /** The five inputs with their provenance, the checks run on them, and the cash-flow basis switch. */
+  provenance?: React.ReactNode;
   /** The scenario comparison table, passed as content so this stays presentational. */
   scenarioTable?: React.ReactNode;
   /** The balance-sheet and sources panel. */
@@ -70,6 +72,7 @@ export function DCFDiagnostics({
   notices = [],
   onShareCountBasisChange,
   revenueBase,
+  provenance,
   scenarioTable,
   balanceSheet,
 }: DCFDiagnosticsProps) {
@@ -209,6 +212,10 @@ export function DCFDiagnostics({
 
       {revenueBase ? (
         <div className="border-t border-wolf-border/25 pt-4">{revenueBase}</div>
+      ) : null}
+
+      {provenance ? (
+        <div className="border-t border-wolf-border/25 pt-4">{provenance}</div>
       ) : null}
 
       {scenarioTable ? (

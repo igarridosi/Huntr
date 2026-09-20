@@ -114,6 +114,14 @@ export const SEC_CONCEPTS = {
     "NotesPayable",
   ],
 
+  /** Revenue, for verifying the base the model starts from against the filings. */
+  revenue: [
+    "Revenues",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "SalesRevenueNet",
+  ],
+
   operatingLeaseNoncurrent: ["OperatingLeaseLiabilityNoncurrent"],
   operatingLeaseCurrent: ["OperatingLeaseLiabilityCurrent"],
   // The rent actually charged through the income statement, needed to undo
@@ -702,6 +710,10 @@ export interface SECFundamentals {
    *  count when leases are also treated as debt. */
   operatingLeaseExpense: SECFact | null;
   shareBasedCompensation: SECFact | null;
+  /** Trailing twelve months of revenue from the filings, for verifying the model's base. */
+  revenueTtm?: SECRevenueTtm | null;
+  /** Operating cash flow of the last fiscal year, from the 10-K, for verifying the margin's numerator. */
+  operatingCashFlowAnnual?: SECFact | null;
 }
 
 /**
@@ -956,6 +968,73 @@ export async function fetchClassDilutedShares(cik: string): Promise<SECFact | nu
   return request;
 }
 
+// ─────────────────────────────────────────────────────────
+// Revenue, trailing twelve months, from the filings
+// ─────────────────────────────────────────────────────────
+
+export interface SECRevenueTtm {
+  value: number;
+  periodStart: string;
+  periodEnd: string;
+  /** "10-K FY + 10-Q YTD − prior YTD" or "10-K FY" when no quarter has been filed since. */
+  method: string;
+  /** Every filing the figure was read from. */
+  accessions: string[];
+  concept: string;
+}
+
+const dayAfterIso = (iso: string) => new Date(Date.parse(iso) + 86_400_000).toISOString().slice(0, 10);
+const daysApart = (a: string, b: string) => Math.abs(Date.parse(b) - Date.parse(a)) / 86_400_000;
+
+/**
+ * The trailing twelve months of revenue as the filings carry it: the last
+ * 10-K's year, plus the current year-to-date from the latest 10-Q, less
+ * the same year-to-date a year earlier. A 10-K files only the year and a
+ * 10-Q files the quarter and the year-to-date, so this is the one sum
+ * that uses filed figures alone — no quarter is derived.
+ */
+export function composeRevenueTtm(rows: RawSECFact[], concept: string, now: Date = new Date()): SECRevenueTtm | null {
+  const ok = rows.filter((r) => typeof r.val === "number" && Number.isFinite(r.val) && r.start && r.end);
+  const annual = ok.filter((r) => durationInDays(r) >= 330 && (r.form ?? "10-K").startsWith("10-K"));
+  const fy = selectLatestFact(annual, "annual", concept, now);
+  if (!fy) return null;
+  const fyRow = annual.filter((r) => r.end === fy.periodEnd).sort((a, b) => (b.filed ?? "").localeCompare(a.filed ?? ""))[0];
+  const fyStart = fyRow.start as string;
+
+  const ytd = ok.filter((r) => (r.form ?? "").startsWith("10-Q") && daysApart(r.start as string, dayAfterIso(fy.periodEnd)) <= 4 && (r.end as string) > fy.periodEnd);
+  if (ytd.length === 0) {
+    return { value: fy.value, periodStart: fyStart, periodEnd: fy.periodEnd, method: "10-K FY", accessions: [fy.accession].filter((a): a is string => !!a), concept };
+  }
+  const current = ytd.sort((a, b) => (b.end as string).localeCompare(a.end as string) || (b.filed ?? "").localeCompare(a.filed ?? ""))[0];
+  const span = durationInDays(current);
+  const prior = ok
+    .filter((r) => Math.abs(durationInDays(r) - span) <= 10 && Math.abs(daysApart(r.end as string, current.end as string) - 365) <= 10)
+    .sort((a, b) => (b.filed ?? "").localeCompare(a.filed ?? ""))[0];
+  if (!prior) return null;
+  return {
+    value: fy.value + (current.val as number) - (prior.val as number),
+    periodStart: dayAfterIso(prior.end as string),
+    periodEnd: current.end as string,
+    method: "10-K FY + 10-Q YTD − prior-year YTD",
+    accessions: [...new Set([fy.accession, current.accn, prior.accn].filter((a): a is string => !!a))],
+    concept,
+  };
+}
+
+export async function resolveRevenueTtm(cik: string): Promise<SECRevenueTtm | null> {
+  const facts = await getCompanyFacts(cik);
+  const scope = facts?.["us-gaap"];
+  if (!scope) return null;
+  let best: SECRevenueTtm | null = null;
+  for (const concept of SEC_CONCEPTS.revenue) {
+    const entry = scope[concept];
+    if (!entry) continue;
+    const got = composeRevenueTtm(extractFactRows(entry), concept);
+    if (got && (!best || got.periodEnd > best.periodEnd)) best = got;
+  }
+  return best;
+}
+
 export async function getSECFundamentals(
   ticker: string
 ): Promise<SECFundamentals | null> {
@@ -986,6 +1065,10 @@ export async function getSECFundamentals(
     fetchConcept(cik, SEC_CONCEPTS.operatingLeaseExpense, "annual"),
     fetchConcept(cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
+  const [revenueTtm, operatingCashFlowAnnual] = await Promise.all([
+    resolveRevenueTtm(cik),
+    fetchConcept(cik, ["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"], "annual"),
+  ]);
 
   // A multi-class issuer files its share counts by class only; the
   // filing itself is the only place the as-converted count exists.
@@ -1001,6 +1084,8 @@ export async function getSECFundamentals(
     operatingLeases: sumFacts(leaseNoncurrent, leaseCurrent),
     operatingLeaseExpense,
     shareBasedCompensation,
+    revenueTtm,
+    operatingCashFlowAnnual,
   };
 }
 

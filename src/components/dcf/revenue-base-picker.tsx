@@ -15,6 +15,9 @@ interface RevenueBasePickerProps {
   onChange: (basis: RevenueBasis) => void;
   /** A figure typed in under "Manual", in dollars. */
   onManualChange: (value: number) => void;
+  /** After a divergence: whether the reader confirmed the base in use describes today's perimeter. */
+  perimeterConfirmed?: boolean;
+  onConfirmPerimeter?: () => void;
 }
 
 /** "3.05B", "3047M", "3047000000" → dollars; null when it is not a number. */
@@ -40,7 +43,7 @@ const fmtDate = (iso: string) =>
  * use, the periods it sums and the close it runs to, so the choice is
  * visible at a glance and deliberate when changed.
  */
-export function RevenueBasePicker({ bases, basis, value, divergence, onChange, onManualChange }: RevenueBasePickerProps) {
+export function RevenueBasePicker({ bases, basis, value, divergence, onChange, onManualChange, perimeterConfirmed = false, onConfirmPerimeter }: RevenueBasePickerProps) {
   const option = basis === "ttm" ? bases.ttm : basis === "fiscal_year" ? bases.fiscalYear : null;
   const [draft, setDraft] = useState<string | null>(null);
   const commit = () => {
@@ -104,7 +107,22 @@ export function RevenueBasePicker({ bases, basis, value, divergence, onChange, o
       {divergence ? (
         <div className={cn("flex items-start gap-2 rounded-lg p-2.5 ring-1 ring-inset", "bg-golden-hour/[0.08] ring-golden-hour/30")}>
           <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-golden-hour" aria-hidden />
-          <p className="text-[10px] leading-relaxed text-mist/85">{divergence.message}</p>
+          <div className="space-y-1.5">
+            <p className="text-[10px] leading-relaxed text-mist/85">{divergence.message}</p>
+            {onConfirmPerimeter ? (
+              perimeterConfirmed ? (
+                <p className="text-[10px] font-medium text-bullish">Confirmed: the base in use describes today&apos;s perimeter.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onConfirmPerimeter}
+                  className="rounded-md bg-snow-peak/[0.06] px-2 py-1 text-[10px] font-medium text-snow-peak ring-1 ring-inset ring-wolf-border/50 transition-colors hover:bg-snow-peak/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60"
+                >
+                  I checked: this base describes today&apos;s perimeter
+                </button>
+              )
+            ) : null}
+          </div>
         </div>
       ) : null}
     </div>
