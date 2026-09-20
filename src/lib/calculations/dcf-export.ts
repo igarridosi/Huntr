@@ -46,6 +46,20 @@ export interface DCFScenarioExport {
   currentPrice: number;
   activeScenario: DCFScenarioKey;
   /**
+   * Where the revenue the projection starts from came from: the trailing
+   * twelve months, the last closed fiscal year, or a figure entered by
+   * hand — with the period it covers and its close, so the base can be
+   * audited against the filing later. Absent from files written before
+   * the basis was recorded.
+   */
+  revenueBase?: {
+    basis: "ttm" | "fiscal_year" | "manual";
+    value: number;
+    periodStart: string | null;
+    periodEnd: string | null;
+    periods: string | null;
+  };
+  /**
    * The unit every figure below is in, and whether they may be believed.
    *
    * A file with no currency in it is how a yen valuation reached a reader as
@@ -228,6 +242,7 @@ export function buildScenarioExport(params: {
   scoreReference?: WeightedReference | null;
   warnings?: string[];
   guard?: ValuationGuard | null;
+  revenueBase?: DCFScenarioExport["revenueBase"];
   now?: Date;
 }): DCFScenarioExport {
   const {
@@ -245,6 +260,7 @@ export function buildScenarioExport(params: {
     scoreReference = null,
     warnings = [],
     guard = null,
+    revenueBase,
     now = new Date(),
   } = params;
 
@@ -409,6 +425,7 @@ export function buildScenarioExport(params: {
           }
         : null,
     warnings,
+    ...(revenueBase ? { revenueBase } : {}),
     integrity: {
       companyFactsChecked: COMPANY_FACT_KEYS,
       divergences,

@@ -78,6 +78,8 @@ import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-cohere
 import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
 import { looksLikeLender } from "@/lib/dcf/business-model";
 import { shareCountAlert } from "@/lib/dcf/share-count";
+import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from "@/lib/dcf/revenue-base";
+import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -202,6 +204,14 @@ export default function DcfCalculatorPage() {
   const [shareCountBasis, setShareCountBasis] = useState<
     "filings" | "implied" | undefined
   >(undefined);
+
+  /**
+   * Which revenue the projection starts from. Null until the reader
+   * chooses: the trailing twelve months whenever a quarter has been
+   * reported past the last closed year, the closed year otherwise. Clears
+   * with the ticker.
+   */
+  const [revenueBasisChoice, setRevenueBasisChoice] = useState<RevenueBasis | null>(null);
   const [sensitivityAxes, setSensitivityAxes] = useState<SensitivityAxes>("financial");
   const [isPopulated, setIsPopulated] = useState(false);
   const [isSavedMenuOpen, setIsSavedMenuOpen] = useState(false);
@@ -243,6 +253,20 @@ export default function DcfCalculatorPage() {
       ? financials
       : null;
   }, [financials, ticker]);
+
+  const bases = useMemo(() => revenueBases(companyFinancials), [companyFinancials]);
+  const revenueDivergence = useMemo(() => revenueBaseDivergence(bases), [bases]);
+  const revenueBasis: RevenueBasis = revenueBasisChoice ?? bases.recommended ?? "manual";
+  const revenueBaseRecord = useMemo(() => {
+    const option = revenueBasis === "ttm" ? bases.ttm : revenueBasis === "fiscal_year" ? bases.fiscalYear : null;
+    return {
+      basis: revenueBasis,
+      value: inputs.baseRevenue,
+      periodStart: option?.periodStart ?? null,
+      periodEnd: option?.periodEnd ?? null,
+      periods: option?.periods ?? null,
+    };
+  }, [revenueBasis, bases, inputs.baseRevenue]);
 
   /**
    * True while the inputs are travelling towards a scenario's stored values.
@@ -725,10 +749,22 @@ export default function DcfCalculatorPage() {
         }
       : generated;
 
-    setScenarios(sourced);
+    // The generator starts from the last closed fiscal year. The base in
+    // use is the trailing twelve months whenever quarters have been
+    // reported since — Celsius' closed 2025 was 21% short of the twelve
+    // months to June 2026, and every projected flow with it — on all
+    // three scenarios, so the reverse DCF and the export read the same
+    // figure as the sliders.
+    const chosen = bases.recommended === "ttm" ? bases.ttm : bases.fiscalYear;
+    const based = chosen
+      ? withCompanyFacts(sourced, { ...readCompanyFacts(sourced.base.inputs), baseRevenue: chosen.value })
+      : sourced;
+    setRevenueBasisChoice(null);
+
+    setScenarios(based);
     setActiveScenario("base");
-    setWaccEstimate(sourced.waccEstimate);
-    animateInputsTo(sourced.base.inputs, 420);
+    setWaccEstimate(based.waccEstimate);
+    animateInputsTo(based.base.inputs, 420);
     setIsPopulated(true);
 
     const annualIncome = companyFinancials.income_statement.annual
@@ -757,7 +793,28 @@ export default function DcfCalculatorPage() {
       setOcfMargin(fallbackOcfMargin);
       setCapexMargin(fallbackCapexMargin);
     }
-  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields]);
+  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields, bases]);
+
+  /** A new revenue base goes on the live inputs and on all three scenarios at once. */
+  const setRevenueBase = useCallback(
+    (basis: RevenueBasis, value: number) => {
+      setRevenueBasisChoice(basis);
+      if (!(value > 0)) return;
+      setInputs((previous) => ({ ...previous, baseRevenue: value }));
+      setScenarios((previous) =>
+        previous ? withCompanyFacts(previous, { ...liveFacts(previous[activeScenario].inputs, quote?.price), baseRevenue: value }) : previous
+      );
+    },
+    [activeScenario, quote?.price]
+  );
+
+  const handleRevenueBasisChange = useCallback(
+    (basis: RevenueBasis) => {
+      const option = basis === "ttm" ? bases.ttm : basis === "fiscal_year" ? bases.fiscalYear : null;
+      setRevenueBase(basis, option ? option.value : inputs.baseRevenue);
+    },
+    [bases, inputs.baseRevenue, setRevenueBase]
+  );
 
   const handleScenarioChange = useCallback((scenario: DCFScenarioKey) => {
     if (!scenarios) return;
@@ -866,6 +923,9 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
+    // Named after whichever basis the stored figure matches, so a set saved
+    // on the closed year says so rather than reading as a choice.
+    setRevenueBasisChoice(basisOf(selected.inputs.baseRevenue, bases));
     setAppliedSignature(null);
     // Stored with the price zeroed on every scenario, and possibly with a
     // balance sheet from an earlier session on the ones that were not active
@@ -893,7 +953,7 @@ export default function DcfCalculatorPage() {
     const baselineCapex = Math.max(0.01, Math.min(0.35, baselineOcf - selected.inputs.baseFCFMargin));
     setOcfMargin(baselineOcf);
     setCapexMargin(baselineCapex);
-  }, [animateInputsTo, quote?.price]);
+  }, [animateInputsTo, quote?.price, bases]);
 
   // The comparison price is always the live quote, never a stored snapshot.
   // Adjusted during render: the value is a pure function of the quote.
@@ -1133,9 +1193,11 @@ export default function DcfCalculatorPage() {
       stress: simulation?.stress ?? null,
       zones: simulation?.zones ?? null,
       scoreReference: simulation?.reference ?? null,
+      revenueBase: revenueBaseRecord,
       warnings: [
         // First, because it voids every per-share figure below it.
         ...(shareCountAlert(sourcedFields) ? [shareCountAlert(sourcedFields)!.message] : []),
+        ...(revenueDivergence ? [revenueDivergence.message] : []),
         ...anchorContext.warnings.map((warning) => warning.message),
         ...coherenceWarnings.map((warning) => warning.message),
       ],
@@ -1161,6 +1223,8 @@ export default function DcfCalculatorPage() {
     anchorContext.warnings,
     coherenceWarnings,
     valuationGuard,
+    revenueDivergence,
+    revenueBaseRecord,
   ]);
 
   const handleReset = useCallback(() => {
@@ -1605,6 +1669,18 @@ export default function DcfCalculatorPage() {
                   activeScenario={activeScenario}
                   onScenarioChange={handleScenarioChange}
                   onChange={setInputs}
+                  revenueBase={
+                    isPopulated ? (
+                      <RevenueBasePicker
+                        bases={bases}
+                        basis={revenueBasis}
+                        value={inputs.baseRevenue}
+                        divergence={revenueDivergence}
+                        onChange={handleRevenueBasisChange}
+                        onManualChange={(value) => setRevenueBase("manual", value)}
+                      />
+                    ) : null
+                  }
                 />
               </CardContent>
             </Card>
