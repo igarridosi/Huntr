@@ -95,6 +95,15 @@ export const SEC_CONCEPTS = {
     "UnsecuredDebtCurrent",
   ],
   /**
+   * Borrowings that were never long-term: commercial paper, revolver draws,
+   * bank loans due within the year. Filed apart from the current portion
+   * of long-term debt, and left out of "total debt" by the two halves
+   * above. FIS carried 4.2B of them on 30 June 2026 against 16.9B of
+   * long-term debt including its current portion: the report said 21.2B,
+   * the model read 16.9B, and the gap was $8 a share.
+   */
+  debtShortTerm: ["ShortTermBorrowings", "CommercialPaper", "ShortTermBankLoansAndNotesPayable"],
+  /**
    * Tags that already carry both halves. Never added to the two above - that
    * would count the current portion twice - only used in their place.
    */
@@ -132,6 +141,8 @@ export interface SECFact {
   concept: string;
   /** Days the fact covers. Zero for a balance-sheet instant. */
   durationDays: number;
+  /** Accession number of the filing the figure was read from, when the feed carried it. */
+  accession?: string;
   /**
    * True when this figure is known to be missing a component - one half of a
    * two-part total that could not be paired. The value is still the best
@@ -157,6 +168,8 @@ interface RawSECFact {
   filed?: string;
   fp?: string;
   fy?: number;
+  /** The filing's accession number, e.g. "0001136893-26-000050": the document the figure can be traced to. */
+  accn?: string;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -265,6 +278,7 @@ export function selectLatestFact(
     periodEnd: best.end as string,
     concept,
     durationDays: durationInDays(best),
+    ...(best.accn ? { accession: best.accn } : {}),
   };
 }
 
@@ -715,30 +729,52 @@ export interface SECFundamentals {
  *    Adding them would count the current portion twice.
  */
 export async function resolveFinancialDebt(cik: string): Promise<SECFact | null> {
-  const [noncurrent, current, combined] = await Promise.all([
+  const [noncurrent, current, combined, shortTerm] = await Promise.all([
     fetchConcept(cik, SEC_CONCEPTS.debtNoncurrent),
     fetchConcept(cik, SEC_CONCEPTS.debtCurrent),
     fetchConcept(cik, SEC_CONCEPTS.debtTotalIncludingCurrent),
+    fetchConcept(cik, SEC_CONCEPTS.debtShortTerm),
   ]);
+  return composeFinancialDebt({ noncurrent, current, combined, shortTerm });
+}
 
-  const samePeriod =
-    noncurrent && current && noncurrent.periodEnd === current.periodEnd;
+/**
+ * Total borrowings from the parts the issuer files: the long-term debt,
+ * its current portion, and the short-term borrowings that were never
+ * long-term. A combined tag stands in for the first two only. Short-term
+ * borrowings are added only when they describe the same balance-sheet
+ * date, and never on top of a `DebtCurrent` figure, which already holds
+ * them.
+ */
+export function composeFinancialDebt(parts: {
+  noncurrent: SECFact | null;
+  current: SECFact | null;
+  combined: SECFact | null;
+  shortTerm: SECFact | null;
+}): SECFact | null {
+  const { noncurrent, current, combined, shortTerm } = parts;
 
+  const samePeriod = noncurrent && current && noncurrent.periodEnd === current.periodEnd;
+  let core: SECFact | null;
+  let currentHoldsShortTerm = false;
   if (samePeriod) {
     const paired = sumFacts(noncurrent, current) as SECFact;
     // A combined tag only wins if it describes a later period than the pair.
-    return combined && combined.periodEnd > paired.periodEnd ? combined : paired;
+    core = combined && combined.periodEnd > paired.periodEnd ? combined : paired;
+    currentHoldsShortTerm = core === paired && current!.concept === "DebtCurrent";
+  } else if (combined) {
+    core = combined;
+  } else {
+    const lone = pickFresher(noncurrent, current);
+    if (!lone) return null;
+    core = { ...lone, partial: true };
+    currentHoldsShortTerm = lone.concept === "DebtCurrent";
   }
 
-  if (combined) return combined;
-
-  const lone = pickFresher(noncurrent, current);
-  if (!lone) return null;
-
-  return {
-    ...lone,
-    partial: true,
-  };
+  if (shortTerm && shortTerm.value > 0 && !currentHoldsShortTerm && shortTerm.periodEnd === core.periodEnd) {
+    return { ...(sumFacts(core, shortTerm) as SECFact), ...(core.partial ? { partial: true } : {}) };
+  }
+  return core;
 }
 
 export interface SECFundamentals {
@@ -992,6 +1028,7 @@ export function sumFacts(a: SECFact | null, b: SECFact | null): SECFact | null {
   if (!b) return a;
 
   const older = a.filed <= b.filed ? a : b;
+  const accession = a.accession === b.accession ? a.accession : [a.accession, b.accession].filter(Boolean).join(" + ") || undefined;
   return {
     value: a.value + b.value,
     form: older.form,
@@ -999,5 +1036,6 @@ export function sumFacts(a: SECFact | null, b: SECFact | null): SECFact | null {
     periodEnd: older.periodEnd,
     concept: `${a.concept} + ${b.concept}`,
     durationDays: older.durationDays,
+    ...(accession ? { accession } : {}),
   };
 }

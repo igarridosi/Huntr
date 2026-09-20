@@ -80,6 +80,8 @@ import { looksLikeLender } from "@/lib/dcf/business-model";
 import { shareCountAlert } from "@/lib/dcf/share-count";
 import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from "@/lib/dcf/revenue-base";
 import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
+import { sbcTreatment } from "@/lib/dcf/sbc-treatment";
+import { statementFreeCashFlow } from "@/lib/dcf/free-cash-flow";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -212,6 +214,8 @@ export default function DcfCalculatorPage() {
    * with the ticker.
    */
   const [revenueBasisChoice, setRevenueBasisChoice] = useState<RevenueBasis | null>(null);
+  /** Set when the SBC switch found the slider already at a post-SBC margin and refused to deduct twice. */
+  const [sbcNotice, setSbcNotice] = useState<string | null>(null);
   const [sensitivityAxes, setSensitivityAxes] = useState<SensitivityAxes>("financial");
   const [isPopulated, setIsPopulated] = useState(false);
   const [isSavedMenuOpen, setIsSavedMenuOpen] = useState(false);
@@ -554,17 +558,32 @@ export default function DcfCalculatorPage() {
       setDeductSBC(next);
       const sbc = sourcedFields?.shareBasedCompensation.value ?? 0;
       if (sbc <= 0) return;
+      if (!next) setSbcNotice(null);
+
+      // The statements' own margin, before SBC: what the deduction is taken
+      // from when the slider already stands at a deducted level.
+      const latestCashFlow = [...(companyFinancials?.cash_flow.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+      const statementFcf = latestCashFlow ? statementFreeCashFlow(latestCashFlow, "annual").value : null;
 
       applyAccountingTreatment((previous) => {
         if (previous.baseRevenue <= 0) return previous;
         const sbcMargin = sbc / previous.baseRevenue;
+        if (next && statementFcf !== null) {
+          const treatment = sbcTreatment({ currentMargin: previous.baseFCFMargin, rawMargin: statementFcf / previous.baseRevenue, sbcMargin });
+          if (treatment.alreadyDeducted) {
+            // Once, from the statements, not again from a slider that has
+            // already had it taken off.
+            setSbcNotice(treatment.warning);
+            return { ...previous, baseFCFMargin: treatment.deductedMargin };
+          }
+        }
         // Deducting subtracts it once; restoring adds the same amount back, so
         // flipping the toggle twice returns to exactly where it started.
         const shift = next ? -sbcMargin : sbcMargin;
         return { ...previous, baseFCFMargin: previous.baseFCFMargin + shift };
       });
     },
-    [sourcedFields, applyAccountingTreatment]
+    [sourcedFields, applyAccountingTreatment, companyFinancials]
   );
 
   /**
@@ -889,6 +908,7 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
+    setSbcNotice(null);
     setAppliedSignature(null);
     setScenarios(null);
     setWaccEstimate(null);
@@ -1167,8 +1187,9 @@ export default function DcfCalculatorPage() {
         anchorWarnings: anchorContext.warnings,
         coherenceWarnings,
         fields: sourcedFields,
+        notices: sbcNotice ? [sbcNotice] : [],
       }),
-    [anchorContext.warnings, coherenceWarnings, sourcedFields]
+    [anchorContext.warnings, coherenceWarnings, sourcedFields, sbcNotice]
   );
 
   const handleExportScenarios = useCallback(() => {
@@ -1198,6 +1219,7 @@ export default function DcfCalculatorPage() {
         // First, because it voids every per-share figure below it.
         ...(shareCountAlert(sourcedFields) ? [shareCountAlert(sourcedFields)!.message] : []),
         ...(revenueDivergence ? [revenueDivergence.message] : []),
+        ...(sbcNotice ? [sbcNotice] : []),
         ...anchorContext.warnings.map((warning) => warning.message),
         ...coherenceWarnings.map((warning) => warning.message),
       ],
@@ -1225,6 +1247,7 @@ export default function DcfCalculatorPage() {
     valuationGuard,
     revenueDivergence,
     revenueBaseRecord,
+    sbcNotice,
   ]);
 
   const handleReset = useCallback(() => {
@@ -1234,6 +1257,7 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
+    setSbcNotice(null);
     setAppliedSignature(null);
     setEpsInputs(DEFAULT_EPS_INPUTS);
     setCapitalProjectionYears(10);
@@ -1849,6 +1873,7 @@ export default function DcfCalculatorPage() {
                     anchorWarnings={anchorContext.warnings}
                     coherenceWarnings={coherenceWarnings}
                     fields={sourcedFields}
+                    notices={sbcNotice ? [sbcNotice] : []}
                     onShareCountBasisChange={setShareCountBasis}
                     revenueBase={
                       isPopulated ? (
