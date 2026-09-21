@@ -9,6 +9,8 @@ export interface FinancialPeriod {
   period: string;   // 'FY2024' | 'Q3 2024'
   date: string;     // '2024-09-28' (fiscal year end)
   currency: string; // 'USD'
+  /** Which vendor mapped the row; what its capex field means depends on it (see lib/dcf/free-cash-flow.ts). */
+  source?: "yahoo" | "alphavantage";
 }
 
 export interface IncomeStatement extends FinancialPeriod {

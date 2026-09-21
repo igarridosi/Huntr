@@ -95,6 +95,15 @@ export const SEC_CONCEPTS = {
     "UnsecuredDebtCurrent",
   ],
   /**
+   * Borrowings that were never long-term: commercial paper, revolver draws,
+   * bank loans due within the year. Filed apart from the current portion
+   * of long-term debt, and left out of "total debt" by the two halves
+   * above. FIS carried 4.2B of them on 30 June 2026 against 16.9B of
+   * long-term debt including its current portion: the report said 21.2B,
+   * the model read 16.9B, and the gap was $8 a share.
+   */
+  debtShortTerm: ["ShortTermBorrowings", "CommercialPaper", "ShortTermBankLoansAndNotesPayable"],
+  /**
    * Tags that already carry both halves. Never added to the two above - that
    * would count the current portion twice - only used in their place.
    */
@@ -103,6 +112,14 @@ export const SEC_CONCEPTS = {
     "DebtLongtermAndShorttermCombinedAmount",
     "DebtInstrumentCarryingAmount",
     "NotesPayable",
+  ],
+
+  /** Revenue, for verifying the base the model starts from against the filings. */
+  revenue: [
+    "Revenues",
+    "RevenueFromContractWithCustomerExcludingAssessedTax",
+    "RevenueFromContractWithCustomerIncludingAssessedTax",
+    "SalesRevenueNet",
   ],
 
   operatingLeaseNoncurrent: ["OperatingLeaseLiabilityNoncurrent"],
@@ -115,6 +132,9 @@ export const SEC_CONCEPTS = {
     "OperatingLeasePayments",
   ],
   shareBasedCompensation: ["ShareBasedCompensation"],
+  /** A business bought or sold: the perimeter of the history has moved. */
+  acquisitions: ["PaymentsToAcquireBusinessesNetOfCashAcquired", "PaymentsToAcquireBusinessesGross"],
+  divestitures: ["ProceedsFromDivestitureOfBusinesses", "ProceedsFromDivestitureOfBusinessesNetOfCashDivested", "ProceedsFromSaleOfBusinessesNetOfCashDivested"],
 } as const;
 
 export type SECConceptKey = keyof typeof SEC_CONCEPTS;
@@ -132,6 +152,8 @@ export interface SECFact {
   concept: string;
   /** Days the fact covers. Zero for a balance-sheet instant. */
   durationDays: number;
+  /** Accession number of the filing the figure was read from, when the feed carried it. */
+  accession?: string;
   /**
    * True when this figure is known to be missing a component - one half of a
    * two-part total that could not be paired. The value is still the best
@@ -157,6 +179,8 @@ interface RawSECFact {
   filed?: string;
   fp?: string;
   fy?: number;
+  /** The filing's accession number, e.g. "0001136893-26-000050": the document the figure can be traced to. */
+  accn?: string;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -265,6 +289,7 @@ export function selectLatestFact(
     periodEnd: best.end as string,
     concept,
     durationDays: durationInDays(best),
+    ...(best.accn ? { accession: best.accn } : {}),
   };
 }
 
@@ -688,6 +713,13 @@ export interface SECFundamentals {
    *  count when leases are also treated as debt. */
   operatingLeaseExpense: SECFact | null;
   shareBasedCompensation: SECFact | null;
+  /** Trailing twelve months of revenue from the filings, for verifying the model's base. */
+  revenueTtm?: SECRevenueTtm | null;
+  /** Operating cash flow of the last fiscal year, from the 10-K, for verifying the margin's numerator. */
+  operatingCashFlowAnnual?: SECFact | null;
+  /** The latest business acquisition and disposal on file, whatever their age; the reader of the regime decides if they are recent. */
+  acquisitions?: SECFact | null;
+  divestitures?: SECFact | null;
 }
 
 /**
@@ -715,30 +747,52 @@ export interface SECFundamentals {
  *    Adding them would count the current portion twice.
  */
 export async function resolveFinancialDebt(cik: string): Promise<SECFact | null> {
-  const [noncurrent, current, combined] = await Promise.all([
+  const [noncurrent, current, combined, shortTerm] = await Promise.all([
     fetchConcept(cik, SEC_CONCEPTS.debtNoncurrent),
     fetchConcept(cik, SEC_CONCEPTS.debtCurrent),
     fetchConcept(cik, SEC_CONCEPTS.debtTotalIncludingCurrent),
+    fetchConcept(cik, SEC_CONCEPTS.debtShortTerm),
   ]);
+  return composeFinancialDebt({ noncurrent, current, combined, shortTerm });
+}
 
-  const samePeriod =
-    noncurrent && current && noncurrent.periodEnd === current.periodEnd;
+/**
+ * Total borrowings from the parts the issuer files: the long-term debt,
+ * its current portion, and the short-term borrowings that were never
+ * long-term. A combined tag stands in for the first two only. Short-term
+ * borrowings are added only when they describe the same balance-sheet
+ * date, and never on top of a `DebtCurrent` figure, which already holds
+ * them.
+ */
+export function composeFinancialDebt(parts: {
+  noncurrent: SECFact | null;
+  current: SECFact | null;
+  combined: SECFact | null;
+  shortTerm: SECFact | null;
+}): SECFact | null {
+  const { noncurrent, current, combined, shortTerm } = parts;
 
+  const samePeriod = noncurrent && current && noncurrent.periodEnd === current.periodEnd;
+  let core: SECFact | null;
+  let currentHoldsShortTerm = false;
   if (samePeriod) {
     const paired = sumFacts(noncurrent, current) as SECFact;
     // A combined tag only wins if it describes a later period than the pair.
-    return combined && combined.periodEnd > paired.periodEnd ? combined : paired;
+    core = combined && combined.periodEnd > paired.periodEnd ? combined : paired;
+    currentHoldsShortTerm = core === paired && current!.concept === "DebtCurrent";
+  } else if (combined) {
+    core = combined;
+  } else {
+    const lone = pickFresher(noncurrent, current);
+    if (!lone) return null;
+    core = { ...lone, partial: true };
+    currentHoldsShortTerm = lone.concept === "DebtCurrent";
   }
 
-  if (combined) return combined;
-
-  const lone = pickFresher(noncurrent, current);
-  if (!lone) return null;
-
-  return {
-    ...lone,
-    partial: true,
-  };
+  if (shortTerm && shortTerm.value > 0 && !currentHoldsShortTerm && shortTerm.periodEnd === core.periodEnd) {
+    return { ...(sumFacts(core, shortTerm) as SECFact), ...(core.partial ? { partial: true } : {}) };
+  }
+  return core;
 }
 
 export interface SECFundamentals {
@@ -920,6 +974,73 @@ export async function fetchClassDilutedShares(cik: string): Promise<SECFact | nu
   return request;
 }
 
+// ─────────────────────────────────────────────────────────
+// Revenue, trailing twelve months, from the filings
+// ─────────────────────────────────────────────────────────
+
+export interface SECRevenueTtm {
+  value: number;
+  periodStart: string;
+  periodEnd: string;
+  /** "10-K FY + 10-Q YTD − prior YTD" or "10-K FY" when no quarter has been filed since. */
+  method: string;
+  /** Every filing the figure was read from. */
+  accessions: string[];
+  concept: string;
+}
+
+const dayAfterIso = (iso: string) => new Date(Date.parse(iso) + 86_400_000).toISOString().slice(0, 10);
+const daysApart = (a: string, b: string) => Math.abs(Date.parse(b) - Date.parse(a)) / 86_400_000;
+
+/**
+ * The trailing twelve months of revenue as the filings carry it: the last
+ * 10-K's year, plus the current year-to-date from the latest 10-Q, less
+ * the same year-to-date a year earlier. A 10-K files only the year and a
+ * 10-Q files the quarter and the year-to-date, so this is the one sum
+ * that uses filed figures alone — no quarter is derived.
+ */
+export function composeRevenueTtm(rows: RawSECFact[], concept: string, now: Date = new Date()): SECRevenueTtm | null {
+  const ok = rows.filter((r) => typeof r.val === "number" && Number.isFinite(r.val) && r.start && r.end);
+  const annual = ok.filter((r) => durationInDays(r) >= 330 && (r.form ?? "10-K").startsWith("10-K"));
+  const fy = selectLatestFact(annual, "annual", concept, now);
+  if (!fy) return null;
+  const fyRow = annual.filter((r) => r.end === fy.periodEnd).sort((a, b) => (b.filed ?? "").localeCompare(a.filed ?? ""))[0];
+  const fyStart = fyRow.start as string;
+
+  const ytd = ok.filter((r) => (r.form ?? "").startsWith("10-Q") && daysApart(r.start as string, dayAfterIso(fy.periodEnd)) <= 4 && (r.end as string) > fy.periodEnd);
+  if (ytd.length === 0) {
+    return { value: fy.value, periodStart: fyStart, periodEnd: fy.periodEnd, method: "10-K FY", accessions: [fy.accession].filter((a): a is string => !!a), concept };
+  }
+  const current = ytd.sort((a, b) => (b.end as string).localeCompare(a.end as string) || (b.filed ?? "").localeCompare(a.filed ?? ""))[0];
+  const span = durationInDays(current);
+  const prior = ok
+    .filter((r) => Math.abs(durationInDays(r) - span) <= 10 && Math.abs(daysApart(r.end as string, current.end as string) - 365) <= 10)
+    .sort((a, b) => (b.filed ?? "").localeCompare(a.filed ?? ""))[0];
+  if (!prior) return null;
+  return {
+    value: fy.value + (current.val as number) - (prior.val as number),
+    periodStart: dayAfterIso(prior.end as string),
+    periodEnd: current.end as string,
+    method: "10-K FY + 10-Q YTD − prior-year YTD",
+    accessions: [...new Set([fy.accession, current.accn, prior.accn].filter((a): a is string => !!a))],
+    concept,
+  };
+}
+
+export async function resolveRevenueTtm(cik: string): Promise<SECRevenueTtm | null> {
+  const facts = await getCompanyFacts(cik);
+  const scope = facts?.["us-gaap"];
+  if (!scope) return null;
+  let best: SECRevenueTtm | null = null;
+  for (const concept of SEC_CONCEPTS.revenue) {
+    const entry = scope[concept];
+    if (!entry) continue;
+    const got = composeRevenueTtm(extractFactRows(entry), concept);
+    if (got && (!best || got.periodEnd > best.periodEnd)) best = got;
+  }
+  return best;
+}
+
 export async function getSECFundamentals(
   ticker: string
 ): Promise<SECFundamentals | null> {
@@ -950,6 +1071,12 @@ export async function getSECFundamentals(
     fetchConcept(cik, SEC_CONCEPTS.operatingLeaseExpense, "annual"),
     fetchConcept(cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
+  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures] = await Promise.all([
+    resolveRevenueTtm(cik),
+    fetchConcept(cik, ["NetCashProvidedByUsedInOperatingActivities", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"], "annual"),
+    fetchConcept(cik, SEC_CONCEPTS.acquisitions),
+    fetchConcept(cik, SEC_CONCEPTS.divestitures),
+  ]);
 
   // A multi-class issuer files its share counts by class only; the
   // filing itself is the only place the as-converted count exists.
@@ -965,6 +1092,10 @@ export async function getSECFundamentals(
     operatingLeases: sumFacts(leaseNoncurrent, leaseCurrent),
     operatingLeaseExpense,
     shareBasedCompensation,
+    revenueTtm,
+    operatingCashFlowAnnual,
+    acquisitions,
+    divestitures,
   };
 }
 
@@ -992,6 +1123,7 @@ export function sumFacts(a: SECFact | null, b: SECFact | null): SECFact | null {
   if (!b) return a;
 
   const older = a.filed <= b.filed ? a : b;
+  const accession = a.accession === b.accession ? a.accession : [a.accession, b.accession].filter(Boolean).join(" + ") || undefined;
   return {
     value: a.value + b.value,
     form: older.form,
@@ -999,5 +1131,6 @@ export function sumFacts(a: SECFact | null, b: SECFact | null): SECFact | null {
     periodEnd: older.periodEnd,
     concept: `${a.concept} + ${b.concept}`,
     durationDays: older.durationDays,
+    ...(accession ? { accession } : {}),
   };
 }

@@ -46,6 +46,42 @@ export interface DCFScenarioExport {
   currentPrice: number;
   activeScenario: DCFScenarioKey;
   /**
+   * Where the revenue the projection starts from came from: the trailing
+   * twelve months, the last closed fiscal year, or a figure entered by
+   * hand — with the period it covers and its close, so the base can be
+   * audited against the filing later. Absent from files written before
+   * the basis was recorded.
+   */
+  revenueBase?: {
+    basis: "ttm" | "fiscal_year" | "manual";
+    value: number;
+    periodStart: string | null;
+    periodEnd: string | null;
+    periods: string | null;
+  };
+  /**
+   * Where each of the five inputs came from — value, source, the filing
+   * with its accession number, the period and its close — and whether it
+   * ties to a document. Same shape for every field; a field that cannot
+   * be traced is `verified: false` with the reason in `note`.
+   */
+  provenance?: Array<{
+    field: "baseRevenue" | "fcfMargin" | "netDebt" | "sharesOutstanding" | "currentPrice";
+    value: number;
+    source: string;
+    document: { form: string; accession: string | null; filed: string | null } | null;
+    periodStart: string | null;
+    periodEnd: string | null;
+    verified: boolean;
+    note: string;
+  }>;
+  /** Whether the flows are unlevered (after-tax interest added back, net debt subtracted) or levered (as reported, no net debt subtracted). */
+  cashFlowBasis?: { basis: "unlevered" | "levered"; interestAddBackPoints: number | null; taxRate: number | null; taxRateSource: "effective" | "statutory" | null };
+  /** The five checks run before the value was shown, and whether the reader uncovered a blocked one. */
+  gate?: { checks: Array<{ id: string; label: string; status: "pass" | "fail" | "unverifiable"; detail: string }>; blocked: boolean; uncoveredByReader: boolean };
+  /** What kind of company the statements say this is, and the tab that fits. Empty when nothing stands out. */
+  regimes?: Array<{ id: string; label: string; detail: string; recommendation: string; tab: string | null }>;
+  /**
    * The unit every figure below is in, and whether they may be believed.
    *
    * A file with no currency in it is how a yen valuation reached a reader as
@@ -228,6 +264,11 @@ export function buildScenarioExport(params: {
   scoreReference?: WeightedReference | null;
   warnings?: string[];
   guard?: ValuationGuard | null;
+  revenueBase?: DCFScenarioExport["revenueBase"];
+  provenance?: DCFScenarioExport["provenance"];
+  cashFlowBasis?: DCFScenarioExport["cashFlowBasis"];
+  gate?: DCFScenarioExport["gate"];
+  regimes?: DCFScenarioExport["regimes"];
   now?: Date;
 }): DCFScenarioExport {
   const {
@@ -245,6 +286,11 @@ export function buildScenarioExport(params: {
     scoreReference = null,
     warnings = [],
     guard = null,
+    revenueBase,
+    provenance,
+    cashFlowBasis,
+    gate,
+    regimes,
     now = new Date(),
   } = params;
 
@@ -409,6 +455,11 @@ export function buildScenarioExport(params: {
           }
         : null,
     warnings,
+    ...(revenueBase ? { revenueBase } : {}),
+    ...(provenance ? { provenance } : {}),
+    ...(cashFlowBasis ? { cashFlowBasis } : {}),
+    ...(gate ? { gate } : {}),
+    ...(regimes ? { regimes } : {}),
     integrity: {
       companyFactsChecked: COMPANY_FACT_KEYS,
       divergences,

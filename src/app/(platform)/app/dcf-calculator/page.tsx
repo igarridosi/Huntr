@@ -78,6 +78,17 @@ import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-cohere
 import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
 import { looksLikeLender } from "@/lib/dcf/business-model";
 import { shareCountAlert } from "@/lib/dcf/share-count";
+import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from "@/lib/dcf/revenue-base";
+import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
+import { sbcTreatment } from "@/lib/dcf/sbc-treatment";
+import { statementFreeCashFlow } from "@/lib/dcf/free-cash-flow";
+import { engineInputsFor, interestAddBack, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
+import { buildProvenance } from "@/lib/dcf/provenance";
+import { valuationGate } from "@/lib/dcf/gate";
+import { DCFProvenance } from "@/components/dcf/dcf-provenance";
+import { ValuationCover } from "@/components/dcf/valuation-cover";
+import { DCFRegime } from "@/components/dcf/dcf-regime";
+import { debtPaydown, detectRegimes, PERIMETER_MONTHS } from "@/lib/dcf/regime";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -202,6 +213,22 @@ export default function DcfCalculatorPage() {
   const [shareCountBasis, setShareCountBasis] = useState<
     "filings" | "implied" | undefined
   >(undefined);
+
+  /**
+   * Which revenue the projection starts from. Null until the reader
+   * chooses: the trailing twelve months whenever a quarter has been
+   * reported past the last closed year, the closed year otherwise. Clears
+   * with the ticker.
+   */
+  const [revenueBasisChoice, setRevenueBasisChoice] = useState<RevenueBasis | null>(null);
+  /** Set when the SBC switch found the slider already at a post-SBC margin and refused to deduct twice. */
+  const [sbcNotice, setSbcNotice] = useState<string | null>(null);
+  /** Unlevered by default: after-tax interest added back, net debt subtracted. Levered runs without net debt. */
+  const [cashFlowBasis, setCashFlowBasis] = useState<CashFlowBasis>("unlevered");
+  /** The reader confirmed the revenue base in use describes today's perimeter (after a >10% divergence). */
+  const [perimeterConfirmed, setPerimeterConfirmed] = useState(false);
+  /** The reader read the failed checks and asked for the value anyway. */
+  const [valueUncovered, setValueUncovered] = useState(false);
   const [sensitivityAxes, setSensitivityAxes] = useState<SensitivityAxes>("financial");
   const [isPopulated, setIsPopulated] = useState(false);
   const [isSavedMenuOpen, setIsSavedMenuOpen] = useState(false);
@@ -243,6 +270,20 @@ export default function DcfCalculatorPage() {
       ? financials
       : null;
   }, [financials, ticker]);
+
+  const bases = useMemo(() => revenueBases(companyFinancials), [companyFinancials]);
+  const revenueDivergence = useMemo(() => revenueBaseDivergence(bases), [bases]);
+  const revenueBasis: RevenueBasis = revenueBasisChoice ?? bases.recommended ?? "manual";
+  const revenueBaseRecord = useMemo(() => {
+    const option = revenueBasis === "ttm" ? bases.ttm : revenueBasis === "fiscal_year" ? bases.fiscalYear : null;
+    return {
+      basis: revenueBasis,
+      value: inputs.baseRevenue,
+      periodStart: option?.periodStart ?? null,
+      periodEnd: option?.periodEnd ?? null,
+      periods: option?.periods ?? null,
+    };
+  }, [revenueBasis, bases, inputs.baseRevenue]);
 
   /**
    * True while the inputs are travelling towards a scenario's stored values.
@@ -530,17 +571,32 @@ export default function DcfCalculatorPage() {
       setDeductSBC(next);
       const sbc = sourcedFields?.shareBasedCompensation.value ?? 0;
       if (sbc <= 0) return;
+      if (!next) setSbcNotice(null);
+
+      // The statements' own margin, before SBC: what the deduction is taken
+      // from when the slider already stands at a deducted level.
+      const latestCashFlow = [...(companyFinancials?.cash_flow.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+      const statementFcf = latestCashFlow ? statementFreeCashFlow(latestCashFlow, "annual").value : null;
 
       applyAccountingTreatment((previous) => {
         if (previous.baseRevenue <= 0) return previous;
         const sbcMargin = sbc / previous.baseRevenue;
+        if (next && statementFcf !== null) {
+          const treatment = sbcTreatment({ currentMargin: previous.baseFCFMargin, rawMargin: statementFcf / previous.baseRevenue, sbcMargin });
+          if (treatment.alreadyDeducted) {
+            // Once, from the statements, not again from a slider that has
+            // already had it taken off.
+            setSbcNotice(treatment.warning);
+            return { ...previous, baseFCFMargin: treatment.deductedMargin };
+          }
+        }
         // Deducting subtracts it once; restoring adds the same amount back, so
         // flipping the toggle twice returns to exactly where it started.
         const shift = next ? -sbcMargin : sbcMargin;
         return { ...previous, baseFCFMargin: previous.baseFCFMargin + shift };
       });
     },
-    [sourcedFields, applyAccountingTreatment]
+    [sourcedFields, applyAccountingTreatment, companyFinancials]
   );
 
   /**
@@ -568,7 +624,7 @@ export default function DcfCalculatorPage() {
   const revenueHistory = useMemo(() => {
     const annual = companyFinancials?.income_statement.annual ?? [];
     if (annual.length < 2) {
-      return { cagr5: null, cagr10: null, fcfMargin5: null, marginHistory: null };
+      return { cagr5: null, cagr10: null, fcfMargin5: null, marginHistory: null, lender: false };
     }
 
     const sortedIncomeRows = annual
@@ -612,8 +668,15 @@ export default function DcfCalculatorPage() {
       cagr10: calculateCAGR(revenues, 10),
       fcfMargin5: marginHistory.median,
       marginHistory,
+      lender,
     };
   }, [companyFinancials, profile?.sector, profile?.industry]);
+
+  /** After-tax interest over revenue, from the latest annual income statement: what unlevering adds back. */
+  const addBack = useMemo(
+    () => interestAddBack([...(companyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1)),
+    [companyFinancials]
+  );
 
   // The realised ranges drawn under the sliders, and the checks that compare
   // the assumptions against them.
@@ -725,10 +788,36 @@ export default function DcfCalculatorPage() {
         }
       : generated;
 
-    setScenarios(sourced);
+    // The generator starts from the last closed fiscal year. The base in
+    // use is the trailing twelve months whenever quarters have been
+    // reported since — Celsius' closed 2025 was 21% short of the twelve
+    // months to June 2026, and every projected flow with it — on all
+    // three scenarios, so the reverse DCF and the export read the same
+    // figure as the sliders.
+    const chosen = bases.recommended === "ttm" ? bases.ttm : bases.fiscalYear;
+    const revenued = chosen
+      ? withCompanyFacts(sourced, { ...readCompanyFacts(sourced.base.inputs), baseRevenue: chosen.value })
+      : sourced;
+    setRevenueBasisChoice(null);
+    // The statements' free cash flow is levered (after interest); the model
+    // subtracts net debt, so the flows it runs on are unlevered: after-tax
+    // interest goes back on the margins of all three scenarios.
+    const points = addBack?.marginPoints ?? 0;
+    const unlever = (i: DCFInputs): DCFInputs => ({ ...i, baseFCFMargin: i.baseFCFMargin + points, terminalFCFMargin: i.terminalFCFMargin + points });
+    const based = {
+      ...revenued,
+      bear: { ...revenued.bear, inputs: unlever(revenued.bear.inputs) },
+      base: { ...revenued.base, inputs: unlever(revenued.base.inputs) },
+      bull: { ...revenued.bull, inputs: unlever(revenued.bull.inputs) },
+    };
+    setCashFlowBasis("unlevered");
+    setPerimeterConfirmed(false);
+    setValueUncovered(false);
+
+    setScenarios(based);
     setActiveScenario("base");
-    setWaccEstimate(sourced.waccEstimate);
-    animateInputsTo(sourced.base.inputs, 420);
+    setWaccEstimate(based.waccEstimate);
+    animateInputsTo(based.base.inputs, 420);
     setIsPopulated(true);
 
     const annualIncome = companyFinancials.income_statement.annual
@@ -757,7 +846,41 @@ export default function DcfCalculatorPage() {
       setOcfMargin(fallbackOcfMargin);
       setCapexMargin(fallbackCapexMargin);
     }
-  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields]);
+  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields, bases, addBack]);
+
+  /** Switching basis moves the after-tax interest on or off the margins of all three scenarios; the engine follows. */
+  const handleCashFlowBasisChange = useCallback(
+    (next: CashFlowBasis) => {
+      if (next === cashFlowBasis) return;
+      setCashFlowBasis(next);
+      const points = addBack?.marginPoints ?? 0;
+      if (points === 0) return;
+      const shift = next === "unlevered" ? points : -points;
+      applyAccountingTreatment((previous) => ({ ...previous, baseFCFMargin: previous.baseFCFMargin + shift, terminalFCFMargin: previous.terminalFCFMargin + shift }));
+    },
+    [cashFlowBasis, addBack, applyAccountingTreatment]
+  );
+
+  /** A new revenue base goes on the live inputs and on all three scenarios at once. */
+  const setRevenueBase = useCallback(
+    (basis: RevenueBasis, value: number) => {
+      setRevenueBasisChoice(basis);
+      if (!(value > 0)) return;
+      setInputs((previous) => ({ ...previous, baseRevenue: value }));
+      setScenarios((previous) =>
+        previous ? withCompanyFacts(previous, { ...liveFacts(previous[activeScenario].inputs, quote?.price), baseRevenue: value }) : previous
+      );
+    },
+    [activeScenario, quote?.price]
+  );
+
+  const handleRevenueBasisChange = useCallback(
+    (basis: RevenueBasis) => {
+      const option = basis === "ttm" ? bases.ttm : basis === "fiscal_year" ? bases.fiscalYear : null;
+      setRevenueBase(basis, option ? option.value : inputs.baseRevenue);
+    },
+    [bases, inputs.baseRevenue, setRevenueBase]
+  );
 
   const handleScenarioChange = useCallback((scenario: DCFScenarioKey) => {
     if (!scenarios) return;
@@ -832,6 +955,10 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
+    setSbcNotice(null);
+    setCashFlowBasis("unlevered");
+    setPerimeterConfirmed(false);
+    setValueUncovered(false);
     setAppliedSignature(null);
     setScenarios(null);
     setWaccEstimate(null);
@@ -866,6 +993,9 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
+    // Named after whichever basis the stored figure matches, so a set saved
+    // on the closed year says so rather than reading as a choice.
+    setRevenueBasisChoice(basisOf(selected.inputs.baseRevenue, bases));
     setAppliedSignature(null);
     // Stored with the price zeroed on every scenario, and possibly with a
     // balance sheet from an earlier session on the ones that were not active
@@ -893,7 +1023,7 @@ export default function DcfCalculatorPage() {
     const baselineCapex = Math.max(0.01, Math.min(0.35, baselineOcf - selected.inputs.baseFCFMargin));
     setOcfMargin(baselineOcf);
     setCapexMargin(baselineCapex);
-  }, [animateInputsTo, quote?.price]);
+  }, [animateInputsTo, quote?.price, bases]);
 
   // The comparison price is always the live quote, never a stored snapshot.
   // Adjusted during render: the value is a pure function of the quote.
@@ -975,10 +1105,14 @@ export default function DcfCalculatorPage() {
     });
   }, [quote, companyFinancials]);
 
+  // What the engine runs on: the live inputs, or, on the levered basis,
+  // the same with net debt at zero so flows after interest are never
+  // also charged the debt.
+  const engineInputs = useMemo(() => engineInputsFor(inputs, cashFlowBasis), [inputs, cashFlowBasis]);
   const result: DCFResult | null = useMemo(() => {
-    if (inputs.baseRevenue <= 0 || inputs.sharesOutstanding <= 0) return null;
-    return runDCF(inputs);
-  }, [inputs]);
+    if (engineInputs.baseRevenue <= 0 || engineInputs.sharesOutstanding <= 0) return null;
+    return runDCF(engineInputs);
+  }, [engineInputs]);
 
   // Switching scenario tweens every input over 420ms, which means a new inputs
   // object roughly 25 times in half a second. Everything downstream was
@@ -988,7 +1122,7 @@ export default function DcfCalculatorPage() {
   // follow it live: the sliders and the headline figure. The heavy surfaces
   // read a settled copy that lands once the values stop moving, which also
   // covers dragging a slider by hand, not just the scenario switch.
-  const settledInputs = useSettledValue(inputs, 130);
+  const settledInputs = useSettledValue(engineInputs, 130);
   const settledResult: DCFResult | null = useMemo(() => {
     if (settledInputs.baseRevenue <= 0 || settledInputs.sharesOutstanding <= 0) return null;
     return runDCF(settledInputs);
@@ -1107,8 +1241,74 @@ export default function DcfCalculatorPage() {
         anchorWarnings: anchorContext.warnings,
         coherenceWarnings,
         fields: sourcedFields,
+        notices: sbcNotice ? [sbcNotice] : [],
       }),
-    [anchorContext.warnings, coherenceWarnings, sourcedFields]
+    [anchorContext.warnings, coherenceWarnings, sourcedFields, sbcNotice]
+  );
+
+  const latestAnnualRows = useMemo(() => {
+    const byDate = <T extends { date: string }>(rows: readonly T[] | undefined) => [...(rows ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1) ?? null;
+    return { cash: byDate(companyFinancials?.cash_flow.annual), income: byDate(companyFinancials?.income_statement.annual) };
+  }, [companyFinancials]);
+
+  const provenance = useMemo(
+    () =>
+      buildProvenance({
+        inputs,
+        revenue: { basis: revenueBasis, periodStart: revenueBaseRecord.periodStart, periodEnd: revenueBaseRecord.periodEnd, source: latestAnnualRows.income?.source ?? null },
+        marginRows: latestAnnualRows,
+        fields: sourcedFields,
+        sec: secFundamentals ?? null,
+        quote: quote ? { price: quote.price, marketCap: quote.market_cap, asOf: null } : null,
+      }),
+    [inputs, revenueBasis, revenueBaseRecord, latestAnnualRows, sourcedFields, secFundamentals, quote]
+  );
+
+  const gate = useMemo(
+    () =>
+      valuationGate({
+        shares: inputs.sharesOutstanding,
+        price: inputs.currentPrice,
+        reportedMarketCap: quote?.market_cap ?? null,
+        cashFlow: { annual: companyFinancials?.cash_flow.annual ?? [], quarterly: companyFinancials?.cash_flow.quarterly ?? [] },
+        debtInUse: inputs.totalDebt,
+        debtSource: sourcedFields?.financialDebt.source ?? null,
+        filedDebt: secFundamentals?.financialDebt ?? null,
+        revenue: { basis: revenueBasis, divergence: revenueDivergence, perimeterConfirmed },
+        marginHistory: revenueHistory.marginHistory,
+        lender: revenueHistory.lender,
+      }),
+    [inputs, quote?.market_cap, companyFinancials, sourcedFields, secFundamentals, revenueBasis, revenueDivergence, perimeterConfirmed, revenueHistory]
+  );
+  const valueCovered = isPopulated && gate.blocked && !valueUncovered;
+
+  // The regime, from the statements: capex and margin off the latest
+  // fiscal year on the defined basis, leverage off EBITDA, the terminal
+  // weight off the current run, the perimeter off the filings.
+  const regimes = useMemo(() => {
+    const cash = latestAnnualRows.cash;
+    const income = latestAnnualRows.income;
+    const fcf = cash ? statementFreeCashFlow(cash, "annual").value : null;
+    // Measured from the latest statement on file, not the clock: a render
+    // is pure, and "recent" means recent relative to the history in use.
+    const asOf = latestAnnualRows.income?.date ?? latestAnnualRows.cash?.date ?? null;
+    const recent = (fact: { value: number; periodEnd: string } | null | undefined) => {
+      if (!fact || !(fact.value > 0) || !asOf) return null;
+      const ageMonths = (Date.parse(asOf) - Date.parse(fact.periodEnd)) / (30.44 * 86_400_000);
+      return ageMonths <= PERIMETER_MONTHS ? { value: fact.value, periodEnd: fact.periodEnd } : null;
+    };
+    return detectRegimes({
+      lender: revenueHistory.lender,
+      capexToRevenue: cash && income && income.revenue > 0 ? Math.abs(cash.capital_expenditures) / income.revenue : null,
+      terminalWeight: result && result.enterpriseValue > 0 ? result.pvTerminalValue / result.enterpriseValue : null,
+      debtToEbitda: income && income.ebitda > 0 ? inputs.totalDebt / income.ebitda : null,
+      fcfMargin: fcf !== null && income && income.revenue > 0 ? fcf / income.revenue : null,
+      perimeter: { divergence: revenueDivergence?.deviation ?? null, acquisitions: recent(secFundamentals?.acquisitions), divestitures: recent(secFundamentals?.divestitures) },
+    });
+  }, [latestAnnualRows, revenueHistory.lender, result, inputs.totalDebt, revenueDivergence, secFundamentals]);
+  const paydown = useMemo(
+    () => (result ? { ...debtPaydown(inputs.totalDebt, result.projections.map((p) => p.fcf)), debt: inputs.totalDebt } : null),
+    [result, inputs.totalDebt]
   );
 
   const handleExportScenarios = useCallback(() => {
@@ -1133,9 +1333,17 @@ export default function DcfCalculatorPage() {
       stress: simulation?.stress ?? null,
       zones: simulation?.zones ?? null,
       scoreReference: simulation?.reference ?? null,
+      revenueBase: revenueBaseRecord,
+      provenance,
+      cashFlowBasis: { basis: cashFlowBasis, interestAddBackPoints: addBack?.marginPoints ?? null, taxRate: addBack?.taxRate ?? null, taxRateSource: addBack?.taxRateSource ?? null },
+      gate: { checks: gate.checks, blocked: gate.blocked, uncoveredByReader: gate.blocked && valueUncovered },
+      regimes: regimes.map((r) => ({ id: r.id, label: r.label, detail: r.detail, recommendation: r.recommendation, tab: r.tab })),
       warnings: [
+        ...gate.reasons.map((r) => `Check failed — ${r}`),
         // First, because it voids every per-share figure below it.
         ...(shareCountAlert(sourcedFields) ? [shareCountAlert(sourcedFields)!.message] : []),
+        ...(revenueDivergence ? [revenueDivergence.message] : []),
+        ...(sbcNotice ? [sbcNotice] : []),
         ...anchorContext.warnings.map((warning) => warning.message),
         ...coherenceWarnings.map((warning) => warning.message),
       ],
@@ -1161,6 +1369,15 @@ export default function DcfCalculatorPage() {
     anchorContext.warnings,
     coherenceWarnings,
     valuationGuard,
+    revenueDivergence,
+    revenueBaseRecord,
+    sbcNotice,
+    provenance,
+    cashFlowBasis,
+    addBack,
+    gate,
+    valueUncovered,
+    regimes,
   ]);
 
   const handleReset = useCallback(() => {
@@ -1170,6 +1387,10 @@ export default function DcfCalculatorPage() {
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
+    setSbcNotice(null);
+    setCashFlowBasis("unlevered");
+    setPerimeterConfirmed(false);
+    setValueUncovered(false);
     setAppliedSignature(null);
     setEpsInputs(DEFAULT_EPS_INPUTS);
     setCapitalProjectionYears(10);
@@ -1658,14 +1879,18 @@ export default function DcfCalculatorPage() {
                     </div>
                   </CardHeader>
                   <CardContent>
-                    <DCFResults
-                      result={result}
-                      ticker={ticker || "STOCK"}
-                      wacc={inputs.wacc}
-                      terminalGrowthRate={inputs.terminalGrowthRate}
-                      fields={sourcedFields}
-                      guard={valuationGuard}
-                    />
+                    {valueCovered ? (
+                      <ValuationCover gate={gate} onUncover={() => setValueUncovered(true)} />
+                    ) : (
+                      <DCFResults
+                        result={result}
+                        ticker={ticker || "STOCK"}
+                        wacc={inputs.wacc}
+                        terminalGrowthRate={inputs.terminalGrowthRate}
+                        fields={sourcedFields}
+                        guard={valuationGuard}
+                      />
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="insight-enter" style={{ "--enter-delay": "50ms" } as React.CSSProperties}>
@@ -1785,7 +2010,28 @@ export default function DcfCalculatorPage() {
                     anchorWarnings={anchorContext.warnings}
                     coherenceWarnings={coherenceWarnings}
                     fields={sourcedFields}
+                    notices={sbcNotice ? [sbcNotice] : []}
                     onShareCountBasisChange={setShareCountBasis}
+                    revenueBase={
+                      isPopulated ? (
+                        <RevenueBasePicker
+                          bases={bases}
+                          basis={revenueBasis}
+                          value={inputs.baseRevenue}
+                          divergence={revenueDivergence}
+                          onChange={handleRevenueBasisChange}
+                          onManualChange={(value) => setRevenueBase("manual", value)}
+                          perimeterConfirmed={perimeterConfirmed}
+                          onConfirmPerimeter={() => setPerimeterConfirmed(true)}
+                        />
+                      ) : null
+                    }
+                    provenance={
+                      isPopulated ? (
+                        <DCFProvenance provenance={provenance} gate={gate} basis={cashFlowBasis} addBack={addBack} onBasisChange={handleCashFlowBasisChange} />
+                      ) : null
+                    }
+                    regime={isPopulated ? <DCFRegime regimes={regimes} paydown={paydown} /> : null}
                     scenarioTable={
                       scenarios ? (
                         <DCFScenarioTable

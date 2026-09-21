@@ -24,7 +24,15 @@ interface DCFDiagnosticsProps {
   coherenceWarnings: CoherenceWarning[];
   /** The sourced figures, for the share-count and freshness checks. */
   fields: SourcedDCFFields | null;
+  /** Findings raised by a control the reader used (the SBC switch refusing to deduct twice), verbatim. */
+  notices?: string[];
   onShareCountBasisChange?: (basis: "filings" | "implied") => void;
+  /** The revenue base picker: which twelve months every projection starts from, right under the checks. */
+  revenueBase?: React.ReactNode;
+  /** The five inputs with their provenance, the checks run on them, and the cash-flow basis switch. */
+  provenance?: React.ReactNode;
+  /** What kind of company this is, from its statements, and the tab that fits. */
+  regime?: React.ReactNode;
   /** The scenario comparison table, passed as content so this stays presentational. */
   scenarioTable?: React.ReactNode;
   /** The balance-sheet and sources panel. */
@@ -43,6 +51,7 @@ export function countDiagnostics(params: {
   anchorWarnings: AnchorWarning[];
   coherenceWarnings: CoherenceWarning[];
   fields: SourcedDCFFields | null;
+  notices?: string[];
 }): number {
   const capCheck = params.fields?.marketCapCheck ?? null;
   const staleBalance = [params.fields?.cash, params.fields?.financialDebt].some(
@@ -51,6 +60,7 @@ export function countDiagnostics(params: {
   return (
     params.anchorWarnings.length +
     params.coherenceWarnings.length +
+    (params.notices?.length ?? 0) +
     (capCheck !== null && !capCheck.agrees ? 1 : 0) +
     (!shareCountAlert(params.fields) && shareCountDrift(params.fields) ? 1 : 0) +
     (staleBalance ? 1 : 0)
@@ -61,7 +71,11 @@ export function DCFDiagnostics({
   anchorWarnings,
   coherenceWarnings,
   fields,
+  notices = [],
   onShareCountBasisChange,
+  revenueBase,
+  provenance,
+  regime,
   scenarioTable,
   balanceSheet,
 }: DCFDiagnosticsProps) {
@@ -80,7 +94,7 @@ export function DCFDiagnostics({
     (field) => field?.source === "sec" && field.stale
   );
 
-  const total = countDiagnostics({ anchorWarnings, coherenceWarnings, fields });
+  const total = countDiagnostics({ anchorWarnings, coherenceWarnings, fields, notices });
 
   return (
     <div className="space-y-5">
@@ -121,6 +135,9 @@ export function DCFDiagnostics({
         ))}
         {coherenceWarnings.map((warning) => (
           <DiagnosticRow key={warning.id} tone="warning" message={warning.message} />
+        ))}
+        {notices.map((notice) => (
+          <DiagnosticRow key={notice} tone="warning" message={notice} />
         ))}
 
         {staleBalance ? (
@@ -195,6 +212,18 @@ export function DCFDiagnostics({
           </div>
         ) : null}
       </div>
+
+      {regime ? (
+        <div className="border-t border-wolf-border/25 pt-4">{regime}</div>
+      ) : null}
+
+      {revenueBase ? (
+        <div className="border-t border-wolf-border/25 pt-4">{revenueBase}</div>
+      ) : null}
+
+      {provenance ? (
+        <div className="border-t border-wolf-border/25 pt-4">{provenance}</div>
+      ) : null}
 
       {scenarioTable ? (
         <div className="border-t border-wolf-border/25 pt-4">{scenarioTable}</div>

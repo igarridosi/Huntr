@@ -105,7 +105,7 @@ describe("Alpha Vantage cash flow signs", () => {
 });
 
 describe("Alpha Vantage share counts", () => {
-  it("backs shares out of net income only with the statement's own EPS, never the adjusted one from EARNINGS", () => {
+  it("never backs shares out of net income: a count the balance sheet does not carry stays 0", () => {
     const rows = [{ fiscalDateEnding: "2024-12-31", netIncome: "175689000", totalRevenue: "1", dilutedEPS: "None" }];
     const adjusted = new Map([["2024-12-31", 2.75]]);
     const [noBalance] = mapIncome(rows, "annual", adjusted, new Map(), new Map(), new Map());
@@ -114,6 +114,6 @@ describe("Alpha Vantage share counts", () => {
     const [withBalance] = mapIncome(rows, "annual", adjusted, new Map(), new Map([["2024-12-31", 82_939_467]]), new Map());
     expect(withBalance.shares_outstanding_diluted).toBe(82_939_467);
     const [gaap] = mapIncome([{ ...rows[0], dilutedEPS: "2.05" }], "annual", adjusted, new Map(), new Map(), new Map());
-    expect(Math.round(gaap.shares_outstanding_diluted)).toBe(85_701_951);
+    expect(gaap.shares_outstanding_diluted).toBe(0);
   });
 });

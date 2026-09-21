@@ -46,6 +46,8 @@ import {
 } from "./transcripts";
 import { getCachedDataState } from "./cache";
 import { repairAlphaFinancials } from "./alpha-repair";
+import { withDefinedCashFlow } from "@/lib/dcf/free-cash-flow";
+import { mapTimeSeriesFinancials } from "./mappers";
 
 const MIN_MARKET_CAP = 10_000_000_000;
 
@@ -275,6 +277,21 @@ function hasStatements(
   );
 }
 
+/**
+ * Yahoo's statements from the cache alone — no call is spent — so an
+ * Alpha Vantage bundle can carry cash flow on the defined basis (see
+ * lib/dcf/free-cash-flow.ts) wherever Yahoo has the year.
+ */
+async function cachedYahooFinancials(ticker: string): Promise<CompanyFinancials | null> {
+  const cached = await getCachedDataState<unknown>(ticker, "financials-v2", 12 * 60 * 60 * 1000, 7 * 24 * 60 * 60 * 1000);
+  if (cached.status === "miss" || !cached.data) return null;
+  try {
+    return mapTimeSeriesFinancials(ticker, cached.data as Parameters<typeof mapTimeSeriesFinancials>[1]);
+  } catch {
+    return null;
+  }
+}
+
 export async function getCompanyFinancials(
   ticker: string
 ): Promise<CompanyFinancials | null> {
@@ -293,7 +310,7 @@ export async function getCompanyFinancials(
     // populate, and repairing the fetch changed nothing because this path
     // never reached it.
     if (alphaCached.status !== "miss" && hasStatements(alphaCached.data)) {
-      return repairAlphaFinancials(alphaCached.data);
+      return withDefinedCashFlow(repairAlphaFinancials(alphaCached.data), await cachedYahooFinancials(key));
     }
 
     return yahoo.getFinancials(ticker, { preferAlphaVantage: false });
@@ -321,9 +338,10 @@ export async function getFullStockData(ticker: string) {
 
     const hasAlphaFinancials =
       alphaCached.status !== "miss" && hasStatements(alphaCached.data);
-    const financials = hasAlphaFinancials
-      ? repairAlphaFinancials(alphaCached.data)
-      : await yahoo.getFinancials(key, { preferAlphaVantage: false });
+    const financials =
+      hasAlphaFinancials && alphaCached.data
+        ? withDefinedCashFlow(repairAlphaFinancials(alphaCached.data), await cachedYahooFinancials(key))
+        : await yahoo.getFinancials(key, { preferAlphaVantage: false });
 
     return {
       profile,
