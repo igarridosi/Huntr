@@ -24,6 +24,7 @@ import { useAuthGate } from "@/providers/auth-gate-provider";
 import { SPEC_QUERY_PARAM, createSeries, createSpec, decodeSpec, encodeSpec, paletteColor, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
 import { cn } from "@/lib/utils";
 import ChartBuilderLoading from "./loading";
+import { track } from "@/lib/analytics/track";
 
 // framer-motion only rides along on phones.
 const MobileSheet = dynamic(() => import("@/components/chart-builder/mobile-sheet").then((m) => m.MobileSheet), { ssr: false });
@@ -166,6 +167,7 @@ function ChartBuilder() {
       const id = await saved.save({ id: savedRef?.id, name: name || "Untitled chart", spec });
       if (id) {
         setSavedRef({ id, encoded });
+        track("chart_saved", { props: { series: spec.series.length, granularity: spec.granularity } });
         notify(savedRef ? "Chart updated" : "Chart saved", savedRef ? undefined : "Find it under My charts.");
       } else if (saved.isSignedIn) {
         notify("Could not save", "Try again in a moment.", "error");

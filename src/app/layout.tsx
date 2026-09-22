@@ -7,6 +7,7 @@ import { SupabaseProvider } from "@/providers/supabase-provider";
 import { AuthGateProvider } from "@/providers/auth-gate-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { TallyFeedbackWidget } from "@/components/ui/tally-feedback";
+import { PageViews } from "@/components/analytics/page-views";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -180,6 +181,9 @@ export default function RootLayout({
                 <Script id="gtag-init" strategy="lazyOnload">
                   {`window.dataLayer = window.dataLayer || []; function gtag(){dataLayer.push(arguments);} gtag('js', new Date()); gtag('config', 'G-ZKVECX6NY1');`}
                 </Script>
+                {/* First-party page views, recorded server-side through a
+                    Server Action — see src/app/actions/analytics.ts. */}
+                <PageViews />
                 {children}
                 <TallyFeedbackWidget />
               </AuthGateProvider>
