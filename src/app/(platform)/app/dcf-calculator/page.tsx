@@ -90,6 +90,7 @@ import { ValuationCover } from "@/components/dcf/valuation-cover";
 import { DCFRegime } from "@/components/dcf/dcf-regime";
 import { debtPaydown, detectRegimes, PERIMETER_MONTHS } from "@/lib/dcf/regime";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
+import { track } from "@/lib/analytics/track";
 
 // None of these four is on screen before a ticker is loaded, and three of
 // them pull Recharts in. Loading them after hydration keeps that chunk off
@@ -1282,6 +1283,24 @@ export default function DcfCalculatorPage() {
   );
   const valueCovered = isPopulated && gate.blocked && !valueUncovered;
 
+  // One event per company once its valuation is on screen, and whether
+  // the checks let the value through. The ref keeps a re-render from
+  // counting the same valuation twice.
+  const countedValuation = useRef<string | null>(null);
+  useEffect(() => {
+    if (!isPopulated || !ticker) {
+      if (!isPopulated) countedValuation.current = null;
+      return;
+    }
+    const signature = `${ticker}:${gate.blocked}`;
+    if (countedValuation.current === signature) return;
+    countedValuation.current = signature;
+    track(gate.blocked ? "valuation_blocked" : "valuation_run", {
+      ticker,
+      props: gate.blocked ? { reasons: gate.reasons } : null,
+    });
+  }, [isPopulated, ticker, gate.blocked, gate.reasons]);
+
   // The regime, from the statements: capex and margin off the latest
   // fiscal year on the defined basis, leverage off EBITDA, the terminal
   // weight off the current run, the perimeter off the filings.
@@ -1358,6 +1377,7 @@ export default function DcfCalculatorPage() {
     link.download = scenarioExportFilename(ticker);
     link.click();
     URL.revokeObjectURL(url);
+    track("valuation_export", { ticker, props: { basis: cashFlowBasis, blocked: gate.blocked } });
   }, [
     ticker,
     scenarios,
@@ -1880,7 +1900,13 @@ export default function DcfCalculatorPage() {
                   </CardHeader>
                   <CardContent>
                     {valueCovered ? (
-                      <ValuationCover gate={gate} onUncover={() => setValueUncovered(true)} />
+                      <ValuationCover
+                        gate={gate}
+                        onUncover={() => {
+                          setValueUncovered(true);
+                          track("valuation_uncovered", { ticker, props: { reasons: gate.reasons } });
+                        }}
+                      />
                     ) : (
                       <DCFResults
                         result={result}

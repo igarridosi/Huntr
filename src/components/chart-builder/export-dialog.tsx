@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { copyBlobToClipboard, downloadBlob, encodeSpec, pngFileName, renderChartPng, type ChartSpec } from "@/lib/chart-builder";
+import { track } from "@/lib/analytics/track";
 
 interface ExportDialogProps {
   open: boolean;
@@ -76,6 +77,7 @@ export function ExportDialog({ open, onOpenChange, spec, getFrame, onNotify }: E
   const download = () => {
     if (!blob) return;
     downloadBlob(blob, pngFileName(spec));
+    track("chart_export", { props: { series: spec.series.length } });
     onNotify("PNG saved", pngFileName(spec));
     onOpenChange(false);
   };

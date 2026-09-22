@@ -21,4 +21,4 @@ export const config = {
 // Protected platform prefixes — keep in sync with app router groups.
 // Browsing (/app, /symbol) is open to guests; only account-specific
 // pages require a session.
-export const PROTECTED_PREFIXES = ["/app/settings"];
+export const PROTECTED_PREFIXES = ["/app/settings", "/app/admin"];
