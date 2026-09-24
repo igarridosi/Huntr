@@ -295,7 +295,7 @@ body.hud #hud { display: block; }
           <div class="slot slot1">
             <div class="layer a" id="p-scen">
               <div class="scen-head">
-                <span class="label">Margin path · 10 years</span>
+                <span class="label">Margin path · bear / base / bull</span>
               </div>
               <div class="scen-chips"><span class="chip quiet">discount <span data-ph="DISCOUNT_RATE"></span></span><span class="chip quiet">terminal <span data-ph="TERMINAL_GROWTH"></span></span></div>
               <svg id="fan-svg"></svg>
@@ -528,7 +528,8 @@ const FAN = (() => {
   const w = VERTICAL ? 432 : 456, h = 104;
   const svg = $("fan-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   for (let i = 0; i < 4; i++) svgEl("line", { x1: 0, x2: w, y1: 6 + i * (h - 26) / 3, y2: 6 + i * (h - 26) / 3, class: "s-grid" }, svg);
-  const ticks = ["Y0", "Y5", "Y10"]; ticks.forEach((t, i) => { const x = i === 0 ? 0 : i === 1 ? w / 2 : w; svgEl("text", { x, y: h - 2, "text-anchor": i === 0 ? "start" : i === 1 ? "middle" : "end" }, svg).textContent = t; });
+  svgEl("text", { x: 0, y: h - 2, "text-anchor": "start" }, svg).textContent = "today";
+  svgEl("text", { x: w, y: h - 2, "text-anchor": "end" }, svg).textContent = "terminal";
   const base = [], bear = [], bull = [];
   for (let i = 0; i <= 10; i++) { const n = 0.012 * gauss(); base.push(0.50 + 0.018 * i + n); bear.push(0.50 - 0.022 * i + n * 0.6); bull.push(0.50 + 0.046 * i + n * 1.2); }
   const all = base.concat(bear, bull), lo = Math.min(...all) - 0.03, hi = Math.max(...all) + 0.03;
