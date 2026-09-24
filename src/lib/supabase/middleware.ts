@@ -1,4 +1,5 @@
 import { createServerClient } from "@supabase/ssr";
+import { readStartPage, START_PAGE_COOKIE } from "@/lib/settings/preferences";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
@@ -42,7 +43,7 @@ export async function updateSession(request: NextRequest) {
 
   // Browsing (/app, /symbol) is open to guests; only account-specific
   // pages require a session.
-  const PROTECTED_PREFIXES = ["/app/settings"];
+  const PROTECTED_PREFIXES = ["/app/settings", "/app/admin"];
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     request.nextUrl.pathname.startsWith(prefix)
   );
@@ -55,7 +56,9 @@ export async function updateSession(request: NextRequest) {
 
   if (user && request.nextUrl.pathname === "/") {
     const url = request.nextUrl.clone();
-    url.pathname = "/app";
+    // Where the reader asked to land, validated against the routes we
+    // have — an unknown value falls back to the dashboard.
+    url.pathname = readStartPage(request.cookies.get(START_PAGE_COOKIE)?.value);
     return NextResponse.redirect(url);
   }
 

@@ -10,6 +10,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthError, AuthNotice } from "@/components/auth/auth-feedback";
 import { ROUTES } from "@/lib/constants";
+import { startPageFromCookieString } from "@/lib/settings/preferences";
 import { createClient } from "@/lib/supabase/client";
 import { humanizeAuthError } from "@/lib/auth-errors";
 
@@ -46,7 +47,8 @@ export default function LoginPage() {
 
       if (signInError) throw signInError;
 
-      router.replace(ROUTES.APP);
+      // The start page chosen in Settings, when there is one on file.
+      router.replace(startPageFromCookieString(document.cookie));
       router.refresh();
     } catch (err) {
       setError(humanizeAuthError(err, "Couldn't sign you in. Please try again."));

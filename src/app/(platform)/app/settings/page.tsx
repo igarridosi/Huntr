@@ -1,60 +1,49 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Settings, Shield, LogOut, Mail, User } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ROUTES } from "@/lib/constants";
+import { Settings } from "lucide-react";
+import { AccountCard } from "@/components/settings/account-card";
+import { AppearanceCard } from "@/components/settings/appearance-card";
+import { PrivacyCard } from "@/components/settings/privacy-card";
+import { DataCard } from "@/components/settings/data-card";
+import { DangerZone } from "@/components/settings/danger-zone";
 import { useSupabase } from "@/providers/supabase-provider";
 
+/**
+ * Two columns on a wide screen, one on a narrow one. The identity side
+ * sits on the left — who you are, what you hold — and the side that
+ * changes how the product behaves sits on the right, so a choice never
+ * has to be hunted for twice. Deleting the account spans both: it is
+ * not one column's business.
+ */
 export default function SettingsPage() {
-  const router = useRouter();
-  const { supabase, user, isLoading } = useSupabase();
+  // The route is behind the middleware, so a reader here always has an account.
+  const { user } = useSupabase();
 
   return (
-    <div className="space-y-6 w-full">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
-          <Settings className="w-5 h-5 text-sunset-orange" />
+    <div className="w-full space-y-6 pb-4">
+      <header className="flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sunset-orange/15 bg-sunset-orange/10">
+          <Settings className="h-5 w-5 text-sunset-orange" aria-hidden />
         </div>
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-snow-peak">Settings</h1>
-          <p className="text-xs text-mist mt-0.5">Manage your account and session</p>
+          <h1 className="text-2xl font-bold leading-tight tracking-[-0.02em] text-snow-peak">Settings</h1>
+          <p className="mt-0.5 text-xs text-mist">Your account, how the terminal looks, and what it records.</p>
+        </div>
+      </header>
+
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <div className="space-y-4">
+          {user ? <AccountCard /> : null}
+          {user ? <DataCard signedIn /> : null}
+          {/* Under "Your data", because exporting it is what you do before
+              deleting it — and because the column has the room. */}
+          {user ? <DangerZone email={user.email ?? null} /> : null}
+        </div>
+        <div className="space-y-4">
+          <AppearanceCard />
+          <PrivacyCard />
         </div>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <User className="w-4 h-4 text-sunset-orange" /> Account
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-sm text-snow-peak">
-              <Mail className="w-4 h-4 text-mist" />
-              <span>{isLoading ? "Loading..." : (user?.email ?? "Not available")}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-mist">
-              <Shield className="w-3.5 h-3.5" />
-              Data is now scoped to your authenticated account.
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <Button
-              variant="destructive"
-              className="gap-2"
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.push(ROUTES.LOGIN);
-              }}
-            >
-              <LogOut className="w-4 h-4" /> Sign Out
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
