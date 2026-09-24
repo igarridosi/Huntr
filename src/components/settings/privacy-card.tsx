@@ -34,7 +34,7 @@ export function PrivacyCard() {
   }, []);
 
   return (
-    <SettingsSection icon={EyeOff} title="Privacy" description="What Huntr records about how the product is used.">
+    <SettingsSection icon={EyeOff} title="Privacy" description="What Huntr records about how the product is used." className="relative z-10">
       <SettingRow
         label="Don't count my usage"
         hint="Page views and product events stop being recorded in this browser. Nothing else changes."

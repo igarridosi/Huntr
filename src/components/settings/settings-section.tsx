@@ -10,6 +10,8 @@ interface SettingsSectionProps {
   children: ReactNode;
   /** A destructive section reads as one before it is read at all. */
   tone?: "default" | "danger";
+  /** Stacking and spacing the page decides, not the card. */
+  className?: string;
 }
 
 /**
@@ -21,7 +23,7 @@ interface SettingsSectionProps {
  * `prefers-reduced-transparency` the blur drops and the background goes
  * solid, which is the whole point of that setting.
  */
-export function SettingsSection({ icon: Icon, title, description, children, tone = "default" }: SettingsSectionProps) {
+export function SettingsSection({ icon: Icon, title, description, children, tone = "default", className }: SettingsSectionProps) {
   const danger = tone === "danger";
   return (
     <section
@@ -32,6 +34,7 @@ export function SettingsSection({ icon: Icon, title, description, children, tone
         danger
           ? "ring-1 ring-inset ring-bearish/30 shadow-bearish/[0.06]"
           : "ring-1 ring-inset ring-wolf-border/60 shadow-wolf-black/40",
+        className ?? "",
       ].join(" ")}
     >
       <header className="mb-4">

@@ -35,14 +35,15 @@ export default function SettingsPage() {
         <div className="space-y-4">
           {user ? <AccountCard /> : null}
           {user ? <DataCard signedIn /> : null}
+          {/* Under "Your data", because exporting it is what you do before
+              deleting it — and because the column has the room. */}
+          {user ? <DangerZone email={user.email ?? null} /> : null}
         </div>
         <div className="space-y-4">
           <AppearanceCard />
           <PrivacyCard />
         </div>
       </div>
-
-      {user ? <DangerZone email={user.email ?? null} /> : null}
     </div>
   );
 }

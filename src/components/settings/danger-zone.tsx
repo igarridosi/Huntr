@@ -40,7 +40,7 @@ export function DangerZone({ email }: { email: string | null }) {
       icon={AlertTriangle}
       tone="danger"
       title="Delete account"
-      description="Removes the account and everything under it — watchlists, portfolios, saved valuations and charts. It cannot be undone, and nothing is kept. Export your data first if you want a copy."
+      description="Takes the account and everything under it. It cannot be undone — export your data first if you want a copy."
     >
       {open ? (
         <div className="space-y-3 rounded-xl border border-bearish/25 bg-wolf-black/25 p-4">

@@ -51,7 +51,15 @@ export function AppearanceCard() {
   const startLabel = START_PAGES.find((p) => p.value === startPage)?.label ?? "Dashboard";
 
   return (
-    <SettingsSection icon={Palette} title="Appearance" description="How the terminal looks, and where it opens.">
+    <SettingsSection
+      icon={Palette}
+      title="Appearance"
+      description="How the terminal looks, and where it opens."
+      // The start-page menu opens out of this card and must paint over
+      // the one beneath it; the backdrop blur makes each card its own
+      // stacking context, so DOM order alone would bury the menu.
+      className="relative z-20"
+    >
       <SettingRow
         label="Theme"
         hint={preference === "system" ? `Following the system, which is ${theme} right now.` : "Fixed, whatever the system does."}
