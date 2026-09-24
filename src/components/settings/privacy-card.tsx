@@ -1,10 +1,9 @@
 "use client";
 
-import { useCallback, useState, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 import { EyeOff } from "lucide-react";
 import { SettingRow, SettingsSection, Toggle } from "./settings-section";
-import { setTrackingOptOut } from "@/app/actions/account";
-import { TRACKING_COOKIE } from "@/lib/settings/preferences";
+import { TRACKING_COOKIE, TRACKING_MAX_AGE } from "@/lib/settings/preferences";
 
 const OPT_OUT_EVENT = "huntr:tracking-change";
 
@@ -21,16 +20,19 @@ function subscribeToOptOut(onChange: () => void) {
 export function PrivacyCard() {
   // The cookie is the state; the switch reads it rather than shadowing it.
   const optOut = useSyncExternalStore<boolean>(subscribeToOptOut, readOptOut, () => false);
-  const [busy, setBusy] = useState(false);
 
-  const change = useCallback(async (next: boolean) => {
-    setBusy(true);
-    try {
-      await setTrackingOptOut(next);
-    } finally {
-      setBusy(false);
-      window.dispatchEvent(new Event(OPT_OUT_EVENT));
-    }
+  /*
+   * Written here rather than through a Server Action. The cookie is not
+   * httpOnly — it is the reader's own choice, not a secret — and a
+   * Server Action would re-render the whole route on every flip, which
+   * is what made the switch jump instead of slide. This way the switch
+   * answers on the press, with nothing in between.
+   */
+  const change = useCallback((next: boolean) => {
+    document.cookie = next
+      ? `${TRACKING_COOKIE}=1; path=/; max-age=${TRACKING_MAX_AGE}; samesite=lax`
+      : `${TRACKING_COOKIE}=; path=/; max-age=0; samesite=lax`;
+    window.dispatchEvent(new Event(OPT_OUT_EVENT));
   }, []);
 
   return (
@@ -53,7 +55,6 @@ export function PrivacyCard() {
           Not recorded: your IP address, your browser, where you came from, or anything you type. Query strings are cut
           off the path before it is stored.
         </p>
-        {busy ? <p className="mt-2 text-[11px] text-mist/60">Saving…</p> : null}
       </div>
     </SettingsSection>
   );

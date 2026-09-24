@@ -10,10 +10,8 @@
  * express.
  */
 
-import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { TRACKING_COOKIE } from "@/lib/settings/preferences";
 
 /** The tables a person's account owns, in the order they are exported. */
 const OWNED_TABLES = ["user_watchlist_state", "user_portfolio_state", "user_dcf_scenarios", "user_charts"] as const;
@@ -65,22 +63,6 @@ export async function accountDataCounts(): Promise<Record<string, number>> {
     })
   );
   return counts;
-}
-
-/** Stop — or resume — first-party measurement in this browser. */
-export async function setTrackingOptOut(optOut: boolean): Promise<void> {
-  const jar = await cookies();
-  if (optOut) {
-    jar.set(TRACKING_COOKIE, "1", {
-      httpOnly: false, // The choice is the reader's; nothing here is a secret.
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 60 * 60 * 24 * 365,
-    });
-  } else {
-    jar.delete(TRACKING_COOKIE);
-  }
 }
 
 /**

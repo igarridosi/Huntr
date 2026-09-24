@@ -25,6 +25,7 @@ export function resolveTheme(preference: ThemePreference, osPrefersLight: boolea
  * is the behaviour people expect from a browser-level choice.
  */
 export const TRACKING_COOKIE = "huntr_dnt";
+export const TRACKING_MAX_AGE = 60 * 60 * 24 * 365;
 
 export function isOptedOut(cookieValue: string | null | undefined): boolean {
   return cookieValue === "1";

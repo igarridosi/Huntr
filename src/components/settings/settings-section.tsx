@@ -98,10 +98,15 @@ export function Toggle({ checked, onChange, label }: { checked: boolean; onChang
       <span
         aria-hidden
         className={[
-          "absolute top-1 h-5 w-5 rounded-full bg-snow-peak shadow-sm",
+          // `left-1` anchors it. Without an explicit left, an absolutely
+          // positioned box falls at its static position — which the
+          // button's centred text puts halfway across the track — and the
+          // translate then lands it outside the pill.
+          "absolute left-1 top-1 h-5 w-5 rounded-full bg-snow-peak shadow-sm",
           "transition-transform duration-300 [transition-timing-function:cubic-bezier(0.32,0.72,0,1)]",
           "motion-reduce:transition-none",
-          checked ? "translate-x-[26px]" : "translate-x-1",
+          // 52px track − 20px knob − 4px of padding each side = 24px of travel.
+          checked ? "translate-x-6" : "translate-x-0",
         ].join(" ")}
       />
     </button>
