@@ -1,0 +1,770 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Huntr Teaser</title>
+<!-- The only external request. If it fails the page falls back to system-ui / ui-monospace. -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<style>
+/* ── Tokens: the only colour literals in this file ─────────────────────── */
+:root {
+  --wolf-black:    #0B1416;
+  --wolf-surface:  #162225;
+  --wolf-border:   #2A3B40;
+  --sunset-orange: #FF8C42;
+  --golden-hour:   #FFBF69;
+  --snow-peak:     #F2F4F3;
+  --mist:          #8C9DA1;
+  --bullish:       #34D399;
+  --bearish:       #FF4242;
+
+  /* Derived — every one a mix of a token with transparency, never a new colour */
+  --hair:        color-mix(in srgb, var(--wolf-border) 55%, transparent);
+  --hair-strong: color-mix(in srgb, var(--wolf-border) 90%, transparent);
+  --tint:        color-mix(in srgb, var(--snow-peak) 2.5%, transparent);
+  --tint-2:      color-mix(in srgb, var(--snow-peak) 6%, transparent);
+  --mist-85:     color-mix(in srgb, var(--mist) 85%, transparent);
+  --mist-60:     color-mix(in srgb, var(--mist) 60%, transparent);
+  --mist-40:     color-mix(in srgb, var(--mist) 40%, transparent);
+  --gold-wash:   color-mix(in srgb, var(--golden-hour) 7%, transparent);
+  --gold-ring:   color-mix(in srgb, var(--golden-hour) 32%, transparent);
+  --orange-wash: color-mix(in srgb, var(--sunset-orange) 15%, transparent);
+  --shade:       color-mix(in srgb, var(--wolf-black) 45%, transparent);
+
+  --font-ui:   "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wolf-black); }
+body { color: var(--snow-peak); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
+body.record { cursor: none; }
+
+/* Fixed-size stage, scaled as a whole by one transform — the layout never reflows to fit. */
+#stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden;
+  background: var(--wolf-black); transform-origin: 0 0; }
+#stage.v { width: 1080px; height: 1920px; }
+
+/* Animated nodes start hidden; seek() owns their transform/opacity from the first frame. */
+.a { opacity: 0; }
+ul { list-style: none; margin: 0; padding: 0; }
+p { margin: 0; }
+
+/* ── Type ──────────────────────────────────────────────────────────────── */
+.mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: 0; }
+.label { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--mist-60); }
+.display { font-weight: 600; letter-spacing: -0.02em; line-height: 1.04; color: var(--snow-peak); text-wrap: balance; }
+.body { font-weight: 400; letter-spacing: 0; line-height: 1.45; color: var(--mist); }
+
+/* ── Field ─────────────────────────────────────────────────────────────── */
+.grid { position: absolute; left: 0; top: -40px; right: 0; height: calc(100% + 80px);
+  background-image: linear-gradient(var(--hair) 1px, transparent 1px), linear-gradient(90deg, var(--hair) 1px, transparent 1px);
+  background-size: 96px 96px; background-position: -1px -1px; }
+.vignette { position: absolute; inset: 0;
+  background: radial-gradient(ellipse 70% 65% at 50% 48%, transparent 0%, color-mix(in srgb, var(--wolf-black) 72%, transparent) 70%, var(--wolf-black) 100%); }
+
+/* ── Scene A: cold open ────────────────────────────────────────────────── */
+.coldA { position: absolute; inset: 0; }
+.coldA .price-pos { position: absolute; left: 0; right: 0; text-align: center; }
+.h .coldA .price-pos { top: 250px; }
+.v .coldA .price-pos { top: 560px; }
+#a-eyebrow { display: inline-block; }
+#a-price { font-size: 96px; font-weight: 500; letter-spacing: -0.02em; margin-top: 18px; color: var(--snow-peak); }
+.spark-pos { position: absolute; }
+.h .spark-pos { left: 160px; top: 470px; width: 1600px; height: 220px; }
+.v .spark-pos { left: 60px; top: 860px; width: 960px; height: 260px; }
+.spark-pos svg { display: block; overflow: visible; }
+.line-pos { position: absolute; left: 0; right: 0; text-align: center; }
+.h .line-pos { top: 760px; }
+.v .line-pos { top: 1230px; padding: 0 60px; }
+#a-line { font-size: 84px; }
+.v #a-line { font-size: 88px; }
+
+/* ── Copy column (scenes B–D) ──────────────────────────────────────────── */
+.copy-pos { position: absolute; }
+.h .copy-pos { left: 128px; top: 0; height: 1080px; width: 560px; display: flex; align-items: center; }
+.v .copy-pos { left: 60px; top: 150px; width: 960px; height: 540px; display: flex; align-items: flex-end; }
+.copy { position: absolute; }
+.h .copy { width: 560px; }
+.v .copy { width: 960px; }
+.copy .label { color: var(--sunset-orange); margin-bottom: 26px; }
+.copy .display { font-size: 60px; }
+.v .copy .display { font-size: 72px; }
+.copy .body { font-size: 24px; margin-top: 26px; }
+.v .copy .body { font-size: 28px; }
+
+/* ── Product panel ─────────────────────────────────────────────────────── */
+.panel-pos { position: absolute; }
+.h .panel-pos { left: 752px; top: 132px; width: 1040px; }
+.v .panel-pos { left: 60px; top: 760px; width: 960px; }
+.panel, .card { background: var(--wolf-surface); border: 1px solid var(--wolf-border); border-radius: 22px; }
+.panel { padding: 28px 32px 32px; }
+.p-head { display: flex; align-items: center; justify-content: space-between; height: 44px; margin-bottom: 26px; }
+.p-head .left { display: flex; align-items: center; gap: 16px; }
+.ticker { font-size: 18px; font-weight: 600; color: var(--snow-peak); padding: 6px 10px; border-radius: 8px; background: var(--tint-2); }
+.p-title { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+.chip { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
+  padding: 5px 9px; border-radius: 6px; background: var(--orange-wash); color: var(--sunset-orange); }
+.chip.quiet { background: var(--tint-2); color: var(--mist); }
+.seg { display: inline-flex; padding: 4px; border-radius: 10px; background: var(--shade); box-shadow: inset 0 0 0 1px var(--hair); }
+.seg span { font-size: 15px; font-weight: 500; padding: 7px 16px; border-radius: 7px; color: var(--mist); }
+.seg span.on { background: var(--tint-2); color: var(--snow-peak); box-shadow: inset 0 0 0 1px var(--hair-strong); }
+.seg.sm span { font-size: 13px; padding: 5px 11px; }
+
+.p-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+.col-l .label, .col-r .label { margin-bottom: 14px; display: block; }
+.rows { display: flex; flex-direction: column; gap: 12px; }
+.row { position: relative; border-radius: 14px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--hair); padding: 16px 18px 15px 22px; overflow: hidden; }
+.row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.row-name { font-size: 19px; font-weight: 500; color: var(--snow-peak); }
+.row-val { font-size: 19px; font-weight: 600; color: var(--snow-peak); }
+.stamp { margin-top: 8px; height: 20px; display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--mist-85); white-space: nowrap; transform-origin: 0 50%; }
+.v .stamp { font-size: 13px; gap: 6px; }
+.stamp .st { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; font-family: var(--font-ui); }
+.stamp svg { width: 15px; height: 15px; }
+.rule { position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; }
+.ok  { color: var(--bullish); }
+.warn { color: var(--golden-hour); }
+.dim { color: var(--mist); }
+.rule.ok { background: var(--bullish); } .rule.warn { background: var(--golden-hour); } .rule.dim { background: var(--mist-40); }
+
+.slot { position: relative; }
+.slot1 { height: 300px; }
+.slot2 { height: 322px; margin-top: 20px; }
+.layer { position: absolute; inset: 0; }
+.scen-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; white-space: nowrap; }
+.scen-head .label { margin: 0; }
+.scen-chips { display: flex; gap: 8px; margin-bottom: 10px; }
+.chips { display: flex; gap: 8px; }
+.fan-legend { display: flex; gap: 16px; font-size: 13px; margin-top: 8px; color: var(--mist); }
+.fan-legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
+svg text { font-family: var(--font-mono); font-size: 12px; fill: var(--mist-60); font-variant-numeric: tabular-nums; }
+.s-grid { stroke: var(--hair); stroke-width: 1; }
+.s-axis { stroke: var(--hair-strong); stroke-width: 1; }
+.s-line { fill: none; stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
+.s-orange { stroke: var(--sunset-orange); } .s-gold { stroke: var(--golden-hour); } .s-mist { stroke: var(--mist); }
+.s-snow { stroke: var(--snow-peak); } .s-green { stroke: var(--bullish); }
+.f-orange { fill: var(--sunset-orange); } .f-bar { fill: color-mix(in srgb, var(--sunset-orange) 55%, transparent); }
+.f-bar-dim { fill: color-mix(in srgb, var(--mist) 30%, transparent); }
+.f-wash { fill: color-mix(in srgb, var(--sunset-orange) 10%, transparent); }
+.f-black { fill: var(--wolf-black); }
+
+.value-box { height: 100%; border-radius: 16px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--hair); padding: 24px 24px; }
+#p-iv { font-size: 56px; font-weight: 600; letter-spacing: -0.02em; margin-top: 18px; color: var(--snow-peak); white-space: nowrap; }
+.v #p-iv { font-size: 48px; }
+.value-sub { margin-top: 16px; display: flex; gap: 10px; align-items: center; font-size: 15px; color: var(--mist); }
+
+.cover { border-radius: 16px; background: var(--gold-wash); box-shadow: inset 0 0 0 1px var(--gold-ring); padding: 22px 24px; }
+.cover-title { display: flex; gap: 12px; align-items: center; font-size: 23px; font-weight: 600; color: var(--golden-hour); letter-spacing: -0.01em; }
+.cover-title svg { width: 24px; height: 24px; flex: none; }
+.cover-p { font-size: 16px; line-height: 1.45; color: var(--mist-85); margin: 10px 0 0 36px; }
+.cover-reason { margin: 14px 0 0 36px; padding: 10px 12px; border-radius: 10px; background: var(--shade); font-size: 14px; line-height: 1.5; }
+.cover-reason .fail { color: var(--golden-hour); font-weight: 500; }
+.cover-reason .det { color: var(--mist); }
+.btn { display: inline-block; margin: 14px 0 0 36px; font-size: 15px; font-weight: 500; padding: 8px 13px; border-radius: 9px;
+  background: var(--tint-2); box-shadow: inset 0 0 0 1px var(--hair-strong); color: var(--snow-peak); }
+
+.checks { display: flex; flex-direction: column; gap: 6px; }
+.chk { position: relative; display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 12px; font-size: 17px; }
+.chk .hl { position: absolute; inset: 0; border-radius: 10px; background: var(--gold-wash); box-shadow: inset 0 0 0 1px var(--gold-ring); }
+.chk .ic { position: relative; width: 20px; height: 20px; flex: none; }
+.chk .ic svg { position: absolute; inset: 0; width: 20px; height: 20px; }
+.chk .txt { position: relative; flex: 1; color: var(--snow-peak); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chk .txt.warn { color: var(--golden-hour); }
+.chk .tag { position: relative; font-size: 12px; letter-spacing: 0.1em; font-weight: 500; }
+
+/* ── Scene E: breadth ──────────────────────────────────────────────────── */
+.head-pos { position: absolute; left: 0; right: 0; text-align: center; }
+.h .head-pos { top: 150px; }
+.v .head-pos { top: 170px; padding: 0 60px; }
+#e-head { font-size: 52px; }
+.v #e-head { font-size: 64px; }
+.cards { position: absolute; display: flex; gap: 40px; }
+.h .cards { left: 128px; top: 290px; width: 1664px; height: 620px; }
+.v .cards { left: 60px; top: 440px; width: 960px; flex-direction: column; gap: 36px; }
+.h .card { flex: 1; }
+.v .card { height: 404px; }
+.card { padding: 26px 28px; display: flex; flex-direction: column; overflow: hidden; }
+.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.card-title { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
+.legend { display: flex; gap: 18px; font-size: 14px; color: var(--mist); margin-bottom: 12px; flex-wrap: nowrap; }
+.legend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.bg-orange { background: var(--sunset-orange); } .bg-gold { background: var(--golden-hour); }
+.bg-green { background: var(--bullish); } .bg-snow { background: var(--snow-peak); }
+.card-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 14px; }
+.stat { font-size: 15px; color: var(--mist); white-space: nowrap; }
+.stat b { color: var(--snow-peak); font-weight: 600; display: inline-block; text-align: right; }
+.stat b.w2 { min-width: 2ch; } .stat b.w1 { min-width: 1ch; } .stat b.w4 { min-width: 4ch; }
+
+.regime { border-radius: 14px; background: var(--gold-wash); box-shadow: inset 0 0 0 1px var(--gold-ring); padding: 18px 20px; }
+.regime-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.regime-label { font-size: 21px; font-weight: 500; color: var(--golden-hour); }
+.regime-tag { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; padding: 5px 8px; border-radius: 6px; background: var(--orange-wash); color: var(--sunset-orange); white-space: nowrap; }
+.regime-detail { margin-top: 10px; font-size: 14px; line-height: 1.5; color: var(--mist); }
+.regime-rec { margin-top: 10px; font-size: 16px; line-height: 1.5; color: var(--mist-85); }
+.regime-reads { margin-top: auto; padding-top: 16px; }
+.regime-reads .label { display: block; margin-bottom: 10px; }
+.rchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.rchip { font-family: var(--font-mono); font-size: 13px; padding: 6px 10px; border-radius: 7px; background: var(--tint-2); color: var(--mist); white-space: nowrap; }
+.rchip.on { background: var(--gold-wash); color: var(--golden-hour); box-shadow: inset 0 0 0 1px var(--gold-ring); }
+
+.sc-cols { display: grid; grid-template-columns: 1.1fr 1.6fr 1fr; padding: 0 12px 10px; border-bottom: 1px solid var(--hair); }
+.sc-win { position: relative; overflow: hidden; flex: 1;
+  -webkit-mask-image: linear-gradient(transparent 0, var(--wolf-black) 14%, var(--wolf-black) 82%, transparent 100%);
+          mask-image: linear-gradient(transparent 0, var(--wolf-black) 14%, var(--wolf-black) 82%, transparent 100%); }
+.sc-row { display: grid; grid-template-columns: 1.1fr 1.6fr 1fr; align-items: center; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--hair); }
+.sk { height: 12px; border-radius: 4px; background: color-mix(in srgb, var(--snow-peak) 16%, transparent); }
+.sc-reg { font-family: var(--font-mono); font-size: 13px; color: var(--mist); white-space: nowrap; }
+.sc-reg.gold { color: var(--golden-hour); }
+.dots { display: flex; gap: 5px; }
+.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--bullish); display: block; }
+.dots i.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--golden-hour); }
+
+/* ── Scene F: resolution ───────────────────────────────────────────────── */
+.end { position: absolute; left: 0; right: 0; text-align: center; }
+.h .end { top: 330px; }
+.v .end { top: 700px; }
+#f-word { font-size: 196px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; color: var(--snow-peak); }
+.v #f-word { font-size: 208px; }
+#f-url { font-size: 38px; font-weight: 500; color: var(--sunset-orange); margin-top: 34px; letter-spacing: 0; }
+#f-line { font-size: 36px; margin-top: 30px; color: var(--mist); letter-spacing: -0.005em; }
+.v #f-line { font-size: 40px; padding: 0 80px; }
+.legal-pos { position: absolute; left: 0; right: 0; bottom: 64px; text-align: center; }
+.v .legal-pos { bottom: 110px; }
+
+#hud { position: fixed; right: 12px; bottom: 10px; font: 12px var(--font-mono); color: var(--mist); display: none; }
+body.hud #hud { display: block; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <div class="grid" id="grid"></div>
+  <div class="vignette"></div>
+
+  <!-- A · Cold open -->
+  <section class="coldA">
+    <div class="price-pos">
+      <div class="a" id="a-eyebrow"><span class="label"><span data-ph="TICKER"></span> · last price</span></div>
+      <div class="a mono" id="a-price"></div>
+    </div>
+    <div class="spark-pos a" id="a-spark"><svg id="a-svg"></svg></div>
+    <div class="line-pos"><p class="a display" id="a-line">The number is the easy part.</p></div>
+  </section>
+
+  <!-- B–D · Copy column -->
+  <div class="copy-pos">
+    <div class="copy a" id="copy-b">
+      <p class="label">DCF · bear / base / bull</p>
+      <p class="display">Any model will hand you a confident number.</p>
+      <p class="body">Revenue base, margin path, discount rate — three scenarios, and a Monte Carlo over them.</p>
+    </div>
+    <div class="copy a" id="copy-c">
+      <p class="label">Five checks · before the value</p>
+      <p class="display">When the data can’t carry it, the value is withheld.</p>
+      <p class="body">One check on the inputs fails. So there is no number on screen — only the reason.</p>
+    </div>
+    <div class="copy a" id="copy-d">
+      <p class="label">Provenance</p>
+      <p class="display">Every input shows the filing it came from.</p>
+      <p class="body">Document type and accession number, beside the figure it produced.</p>
+    </div>
+  </div>
+
+  <!-- B–D · Valuation panel -->
+  <div class="panel-pos">
+    <div class="panel a" id="panel">
+      <div class="p-head">
+        <div class="left a" id="p-head">
+          <span class="mono ticker" data-ph="TICKER"></span>
+          <span class="p-title">Valuation</span>
+          <span class="chip">DCF</span>
+        </div>
+        <div class="seg a" id="p-seg"><span>Bear</span><span class="on">Base</span><span>Bull</span></div>
+      </div>
+      <div class="p-cols">
+        <div class="col-l">
+          <span class="label a" id="p-in-label">Inputs and where they come from</span>
+          <ul class="rows" id="rows"></ul>
+        </div>
+        <div class="col-r">
+          <div class="slot slot1">
+            <div class="layer a" id="p-scen">
+              <div class="scen-head">
+                <span class="label">Margin path · 10 years</span>
+              </div>
+              <div class="scen-chips"><span class="chip quiet">discount <span data-ph="DISCOUNT_RATE"></span></span><span class="chip quiet">terminal <span data-ph="TERMINAL_GROWTH"></span></span></div>
+              <svg id="fan-svg"></svg>
+              <div class="fan-legend mono"><span><i style="background:var(--mist)"></i>bear</span><span><i style="background:var(--sunset-orange)"></i>base</span><span><i style="background:var(--golden-hour)"></i>bull</span></div>
+              <span class="label" style="margin:12px 0 8px">Monte Carlo over the three</span>
+              <svg id="hist-svg"></svg>
+            </div>
+            <div class="layer a" id="p-checks">
+              <span class="label">Checks run before the value</span>
+              <ul class="checks" id="checks"></ul>
+            </div>
+          </div>
+          <div class="slot slot2">
+            <div class="layer a" id="p-value">
+              <div class="value-box">
+                <span class="label">Intrinsic value / share</span>
+                <div class="mono" id="p-iv"></div>
+                <div class="value-sub mono a" id="p-iv-sub"><span class="chip quiet">base case</span><span>price <span data-ph="PRICE"></span></span></div>
+              </div>
+            </div>
+            <div class="layer cover a" id="p-cover">
+              <div class="cover-title a" id="cv-0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l7 2.9v5.6c0 4.6-3 7.8-7 9.9-4-2.1-7-5.3-7-9.9V5.7z"/><path d="M12 8v4.4"/><path d="M12 15.6h.01"/></svg>Intrinsic value withheld</div>
+              <p class="cover-p a" id="cv-1">One check on the inputs failed. The value would be arithmetic on a figure the checks could not stand behind.</p>
+              <div class="cover-reason mono a" id="cv-2"><div class="fail">✕ Four quarters of FCF = fiscal-year FCF</div><div class="det">Quarters to <span data-ph="FY_END"></span> sum to <span data-ph="FCF_Q_SUM"></span>; the year’s row says <span data-ph="FCF_FY"></span>.</div></div>
+              <span class="btn a" id="cv-3">I have read these — show the value</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- E · Breadth -->
+  <div class="head-pos"><p class="display a" id="e-head">The rest of the terminal reads the same way.</p></div>
+  <div class="cards">
+    <div class="card a" id="card-1">
+      <div class="card-head"><span class="card-title">Chart Builder</span><span class="seg sm"><span>Quarterly</span><span class="on">TTM</span><span>Annual</span></span></div>
+      <div class="legend mono">
+        <span><i class="bg-orange"></i><span data-ph="TICKER"></span></span>
+        <span><i class="bg-gold"></i><span data-ph="PEER_1"></span></span>
+        <span><i class="bg-green"></i><span data-ph="PEER_2"></span></span>
+        <span><i class="bg-snow"></i><span data-ph="PEER_3"></span></span>
+      </div>
+      <svg id="cb-svg"></svg>
+      <div class="card-foot">
+        <span class="stat mono"><b class="w1" id="cb-n0">4</b> companies · <b class="w2" id="cb-n1">49</b> metrics · <b class="w2" id="cb-n2">20</b> years</span>
+        <span class="chip quiet">PNG export</span>
+      </div>
+    </div>
+    <div class="card a" id="card-2">
+      <div class="card-head"><span class="card-title">Regime</span><span class="label">read off the statements</span></div>
+      <div class="regime a" id="rg-card">
+        <div class="regime-top"><span class="regime-label">Lender or insurer</span><span class="regime-tag">use EPS Multiple</span></div>
+        <p class="regime-detail mono">Thin equity against assets with interest as the business, or an unclassified balance sheet.</p>
+        <p class="regime-rec">Cash from operations moves with the loan book or the reserves, not with profitability. Value it on earnings.</p>
+      </div>
+      <div class="regime-reads">
+        <span class="label">Five regimes it reads for</span>
+        <div class="rchips" id="rchips"></div>
+      </div>
+    </div>
+    <div class="card a" id="card-3">
+      <div class="card-head"><span class="card-title">Screener</span><span class="stat mono"><b class="w4" id="sc-n">800+</b> tickers</span></div>
+      <div class="sc-cols label"><span>Ticker</span><span>Regime</span><span>Checks</span></div>
+      <div class="sc-win"><div id="sc-list"></div></div>
+    </div>
+  </div>
+
+  <!-- F · Resolution -->
+  <div class="end">
+    <div class="a" id="f-word">HUNTR</div>
+    <div class="a mono" id="f-url">huntrvalue.me</div>
+    <p class="a" id="f-line">The valuation, or the reason there isn’t one.</p>
+  </div>
+  <div class="legal-pos"><span class="label a" id="f-legal">Research tool · not investment advice</span></div>
+</div>
+<div id="hud"></div>
+
+<script>
+"use strict";
+/* ════════════════════════════════════════════════════════════════════════
+ * CONTENT — every company-specific figure is a labelled placeholder.
+ * Replace a string to fill it in. PRICE and IV_SHARE also accept a number,
+ * in which case they count to it on screen.
+ * ════════════════════════════════════════════════════════════════════════ */
+const CONFIG = {
+  TICKER: "{{TICKER}}", PEER_1: "{{PEER_1}}", PEER_2: "{{PEER_2}}", PEER_3: "{{PEER_3}}",
+  PRICE: "{{PRICE}}", IV_SHARE: "{{IV_SHARE}}",
+  REVENUE_BASE: "{{REVENUE_BASE}}", FCF_MARGIN: "{{FCF_MARGIN}}", NET_DEBT: "{{NET_DEBT}}", SHARES: "{{SHARES}}",
+  DISCOUNT_RATE: "{{DISCOUNT_RATE}}", TERMINAL_GROWTH: "{{TERMINAL_GROWTH}}",
+  FY_END: "{{FY_END}}", FCF_Q_SUM: "{{FCF_Q_SUM}}", FCF_FY: "{{FCF_FY}}",
+  ACC_REVENUE: "{{ACC_REVENUE}}", ACC_CASHFLOW: "{{ACC_CASHFLOW}}", ACC_DEBT: "{{ACC_DEBT}}", ACC_SHARES: "{{ACC_SHARES}}",
+  FORM_REVENUE: "10-K", FORM_CASHFLOW: "10-K", FORM_DEBT: "10-Q", FORM_SHARES: "10-Q",
+};
+
+const Q = new URLSearchParams(location.search);
+const VERTICAL = Q.get("format") === "vertical";
+const W = VERTICAL ? 1080 : 1920, H = VERTICAL ? 1920 : 1080;
+const DURATION = 22000;
+const stage = document.getElementById("stage");
+stage.classList.add(VERTICAL ? "v" : "h");
+const $ = (id) => document.getElementById(id);
+
+/* ── Reduced motion: same beats, no travel ─────────────────────────────── */
+const rmQuery = matchMedia("(prefers-reduced-motion: reduce)");
+let RM = rmQuery.matches || Q.get("reduced") === "1";
+rmQuery.addEventListener("change", (e) => { RM = e.matches || Q.get("reduced") === "1"; seek(current); });
+
+/* ── Easing ────────────────────────────────────────────────────────────── */
+function bezier(x1, y1, x2, y2) {
+  const cx = 3 * x1, bx = 3 * (x2 - x1) - cx, ax = 1 - cx - bx;
+  const cy = 3 * y1, by = 3 * (y2 - y1) - cy, ay = 1 - cy - by;
+  const sx = (t) => ((ax * t + bx) * t + cx) * t, sy = (t) => ((ay * t + by) * t + cy) * t;
+  const dx = (t) => (3 * ax * t + 2 * bx) * t + cx;
+  return (x) => {
+    if (x <= 0) return 0; if (x >= 1) return 1;
+    let t = x;
+    for (let i = 0; i < 8; i++) { const e = sx(t) - x; if (Math.abs(e) < 1e-7) return sy(t); const d = dx(t); if (Math.abs(d) < 1e-6) break; t -= e / d; }
+    let lo = 0, hi = 1; t = x;
+    for (let i = 0; i < 40; i++) { const v = sx(t); if (Math.abs(v - x) < 1e-7) break; if (v < x) lo = t; else hi = t; t = (lo + hi) / 2; }
+    return sy(t);
+  };
+}
+const EASE = {
+  settle: bezier(0.32, 0.72, 0, 1),   // arrives and settles, critically damped
+  depart: bezier(0.4, 0, 1, 1),       // leaves along the path it came in on
+  linear: (t) => t,                   // continuous readouts only
+};
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const seg = (ms, at, dur) => clamp((ms - at) / dur);
+
+/* ── Writers: the only places style is touched per frame ───────────────── */
+function put(el, x, y, s, o, moving) {
+  if (RM) { x = 0; y = 0; s = 1; }
+  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
+  el.style.opacity = o.toFixed(4);
+  el.style.visibility = o <= 0.0005 ? "hidden" : "visible";
+  el.style.willChange = moving ? "transform, opacity" : "auto";
+}
+/**
+ * Arrive from (dx, dy) and settle; optionally depart back to (dx, dy).
+ * The exit fades faster than it travels, so the moving surface never streaks.
+ */
+function track(el, ms, { at, dur = 700, out = null, outDur = 420, dx = 0, dy = 0, s0 = 1 }) {
+  const pIn = seg(ms, at, dur), eIn = EASE.settle(pIn);
+  const pOut = out === null ? 0 : seg(ms, out, outDur);
+  const k = (1 - eIn) + EASE.depart(pOut);
+  const o = eIn * (1 - EASE.settle(pOut));
+  put(el, dx * k, dy * k, 1 + (s0 - 1) * (1 - eIn), o, (pIn > 0 && pIn < 1) || (pOut > 0 && pOut < 1));
+}
+/** Reveal an SVG element left→right through its clip rect (a transform), linear. */
+function reveal(clipRect, target, p) {
+  clipRect.setAttribute("transform", `scale(${RM ? 1 : p.toFixed(5)} 1)`);
+  target.style.opacity = RM ? p.toFixed(4) : (p > 0 ? "1" : "0");
+}
+/** Count to an exact figure: easing on the value, final frame is the target itself. */
+function count(el, ms, at, dur, target, fmt) {
+  const p = seg(ms, at, dur);
+  el.textContent = p >= 1 ? fmt(target, true) : fmt(target * EASE.settle(p), false);
+}
+
+/* ── Seeded data: generated once, never consumed by seek() ─────────────── */
+function mulberry32(a) {
+  return () => { a |= 0; a = (a + 1831565813) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+}
+const SEED = 20260924;
+const rand = mulberry32(SEED);
+const gauss = () => { let u = 0; while (u === 0) u = rand(); const v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
+const walkMul = (n, start, drift, vol) => { const a = [start]; for (let i = 1; i < n; i++) a.push(a[i - 1] * (1 + drift + vol * gauss())); return a; };
+const walkAdd = (n, start, drift, vol) => { const a = [start]; for (let i = 1; i < n; i++) a.push(a[i - 1] + drift + vol * gauss()); return a; };
+
+const SVGNS = "http://www.w3.org/2000/svg";
+function svgEl(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+function pathOf(pts) { return pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(""); }
+function scaleSeries(series, x0, x1, y0, y1, lo, hi) {
+  return series.map((v, i) => [x0 + (x1 - x0) * i / (series.length - 1), y1 - (y1 - y0) * (v - lo) / (hi - lo)]);
+}
+let clipId = 0;
+function clipped(svg, w, h) {
+  const id = "clip" + (clipId++);
+  const cp = svgEl("clipPath", { id }, svg.querySelector("defs") || svgEl("defs", {}, svg));
+  const r = svgEl("rect", { x: 0, y: -20, width: w, height: h + 40 }, cp);
+  return { id, rect: r };
+}
+
+/* Fill placeholders once. */
+document.querySelectorAll("[data-ph]").forEach((el) => {
+  const v = CONFIG[el.dataset.ph];
+  el.textContent = typeof v === "number" ? "$" + v.toFixed(2) : v;
+});
+const money = (v) => "$" + v.toFixed(2);
+
+/* A · sparkline */
+const SPARK = (() => {
+  const w = VERTICAL ? 960 : 1600, h = VERTICAL ? 260 : 220;
+  const svg = $("a-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  const data = walkMul(150, 100, 0.0016, 0.011);
+  const lo = Math.min(...data), hi = Math.max(...data);
+  const pts = scaleSeries(data, 0, w, 16, h - 16, lo, hi);
+  for (let i = 0; i < 4; i++) svgEl("line", { x1: 0, x2: w, y1: 16 + i * (h - 32) / 3, y2: 16 + i * (h - 32) / 3, class: "s-grid" }, svg);
+  const c = clipped(svg, w, h);
+  const line = svgEl("path", { d: pathOf(pts), class: "s-line s-orange", "clip-path": `url(#${c.id})` }, svg);
+  const dot = svgEl("circle", { r: 6, cx: 0, cy: 0, class: "f-orange" }, svg);
+  return { pts, clip: c.rect, line, dot };
+})();
+
+/* B · inputs (the rows carry their provenance stamp from the start, empty until D) */
+const ICON = {
+  ok:   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="8.2"/><path d="M6.6 10.3l2.3 2.3 4.6-5"/></svg>',
+  fail: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="8.2"/><path d="M7.2 7.2l5.6 5.6M12.8 7.2l-5.6 5.6"/></svg>',
+  pend: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2.6"><circle cx="10" cy="10" r="8.2"/></svg>',
+};
+const INPUTS = [
+  { name: "Revenue base", val: CONFIG.REVENUE_BASE, status: "ok",   stamp: `<span class="st ok">${ICON.ok}verified</span><span>· sec</span><span class="mono">· ${CONFIG.FORM_REVENUE} ${CONFIG.ACC_REVENUE}</span>` },
+  { name: "FCF margin",   val: CONFIG.FCF_MARGIN,   status: "warn", stamp: `<span class="st warn">${ICON.pend}unverified</span><span class="mono">· ${CONFIG.FORM_CASHFLOW} ${CONFIG.ACC_CASHFLOW}</span>` },
+  { name: "Net debt",     val: CONFIG.NET_DEBT,     status: "ok",   stamp: `<span class="st ok">${ICON.ok}verified</span><span>· sec</span><span class="mono">· ${CONFIG.FORM_DEBT} ${CONFIG.ACC_DEBT}</span>` },
+  { name: "Shares",       val: CONFIG.SHARES,       status: "ok",   stamp: `<span class="st ok">${ICON.ok}verified</span><span>· sec</span><span class="mono">· ${CONFIG.FORM_SHARES} ${CONFIG.ACC_SHARES}</span>` },
+  { name: "Price",        val: typeof CONFIG.PRICE === "number" ? money(CONFIG.PRICE) : CONFIG.PRICE, status: "dim", stamp: `<span class="st dim">market</span><span>· quote, not a filing</span>` },
+];
+const ROWS = INPUTS.map((r, i) => {
+  const li = document.createElement("li");
+  li.className = "row a";
+  li.innerHTML = `<span class="rule ${r.status} a"></span><div class="row-top"><span class="row-name">${r.name}</span><span class="mono row-val">${r.val}</span></div><div class="stamp a">${r.stamp}</div>`;
+  $("rows").appendChild(li);
+  return { li, rule: li.querySelector(".rule"), stamp: li.querySelector(".stamp") };
+});
+
+/* B · margin fan and Monte Carlo histogram */
+const FAN = (() => {
+  const w = VERTICAL ? 432 : 456, h = 104;
+  const svg = $("fan-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  for (let i = 0; i < 4; i++) svgEl("line", { x1: 0, x2: w, y1: 6 + i * (h - 26) / 3, y2: 6 + i * (h - 26) / 3, class: "s-grid" }, svg);
+  const ticks = ["Y0", "Y5", "Y10"]; ticks.forEach((t, i) => { const x = i === 0 ? 0 : i === 1 ? w / 2 : w; svgEl("text", { x, y: h - 2, "text-anchor": i === 0 ? "start" : i === 1 ? "middle" : "end" }, svg).textContent = t; });
+  const base = [], bear = [], bull = [];
+  for (let i = 0; i <= 10; i++) { const n = 0.012 * gauss(); base.push(0.50 + 0.018 * i + n); bear.push(0.50 - 0.022 * i + n * 0.6); bull.push(0.50 + 0.046 * i + n * 1.2); }
+  const all = base.concat(bear, bull), lo = Math.min(...all) - 0.03, hi = Math.max(...all) + 0.03;
+  const lines = [["s-mist", bear], ["s-orange", base], ["s-gold", bull]].map(([cls, s]) => {
+    const c = clipped(svg, w, h);
+    return { clip: c.rect, el: svgEl("path", { d: pathOf(scaleSeries(s, 2, w - 2, 6, h - 20, lo, hi)), class: "s-line " + cls, "clip-path": `url(#${c.id})` }, svg) };
+  });
+  return { lines };
+})();
+const HIST = (() => {
+  const w = VERTICAL ? 432 : 456, h = 58, bins = 34;
+  const svg = $("hist-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+  const counts = new Array(bins).fill(0);
+  for (let i = 0; i < 4000; i++) {
+    const u = rand(); const mu = u < 0.25 ? 0.30 : u < 0.75 ? 0.50 : 0.72; const sd = u < 0.25 ? 0.07 : u < 0.75 ? 0.06 : 0.08;
+    const b = Math.floor(clamp(mu + sd * gauss(), 0, 0.9999) * bins); counts[b]++;
+  }
+  const max = Math.max(...counts), bw = w / bins;
+  const g = svgEl("g", {}, svg);
+  counts.forEach((c, i) => { const bh = (h - 2) * c / max; svgEl("rect", { x: (i * bw + 1).toFixed(1), y: (h - bh).toFixed(1), width: (bw - 2).toFixed(1), height: bh.toFixed(1), rx: 1.5, class: i >= 14 && i <= 20 ? "f-bar" : "f-bar-dim" }, g); });
+  svgEl("line", { x1: 0, x2: w, y1: h - 0.5, y2: h - 0.5, class: "s-axis" }, svg);
+  return { g, h };
+})();
+
+/* C · checks, labels verbatim from src/lib/dcf/gate.ts */
+const CHECKS = [
+  ["Market cap = shares × price", "pass"],
+  ["Four quarters of FCF = fiscal-year FCF", "fail"],
+  ["Total debt = filed debt", "pass"],
+  ["Revenue period matches today’s perimeter", "pass"],
+  ["Usable margin record", "pass"],
+].map(([label, status]) => {
+  const li = document.createElement("li");
+  li.className = "chk a";
+  li.innerHTML = `${status === "fail" ? '<span class="hl a"></span>' : ""}<span class="ic"><span class="p dim">${ICON.pend}</span><span class="r ${status === "fail" ? "warn" : "ok"} a">${status === "fail" ? ICON.fail : ICON.ok}</span></span><span class="txt">${label}</span><span class="tag mono a ${status === "fail" ? "warn" : "dim"}">${status === "fail" ? "FAIL" : "PASS"}</span>`;
+  $("checks").appendChild(li);
+  return { li, status, pend: li.querySelector(".p"), res: li.querySelector(".r"), tag: li.querySelector(".tag"), txt: li.querySelector(".txt"), hl: li.querySelector(".hl") };
+});
+CHECKS.forEach((c) => { c.pend.style.position = c.res.style.position = "absolute"; c.pend.style.inset = c.res.style.inset = "0"; });
+
+/* E · chart builder: four companies, 80 quarters (20 years) */
+const CB = (() => {
+  const w = VERTICAL ? 902 : 470, h = VERTICAL ? 196 : 318;
+  const svg = $("cb-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.style.display = "block";
+  const top = 6, bottom = h - 22;
+  for (let i = 0; i < 5; i++) svgEl("line", { x1: 0, x2: w, y1: top + i * (bottom - top) / 4, y2: top + i * (bottom - top) / 4, class: "s-grid" }, svg);
+  ["20y", "15y", "10y", "5y", "now"].forEach((t, i) => svgEl("text", { x: i * w / 4, y: h - 4, "text-anchor": i === 0 ? "start" : i === 4 ? "end" : "middle" }, svg).textContent = t);
+  const series = [walkAdd(80, 0.18, 0.0012, 0.009), walkAdd(80, 0.10, 0.0022, 0.008), walkAdd(80, 0.24, -0.0006, 0.010), walkAdd(80, 0.06, 0.0009, 0.007)];
+  const all = [].concat(...series), lo = Math.min(...all) - 0.01, hi = Math.max(...all) + 0.01;
+  const lines = ["s-orange", "s-gold", "s-green", "s-snow"].map((cls, k) => {
+    const c = clipped(svg, w, h);
+    return { clip: c.rect, el: svgEl("path", { d: pathOf(scaleSeries(series[k], 1, w - 1, top, bottom, lo, hi)), class: "s-line " + cls, "clip-path": `url(#${c.id})`, style: k === 3 ? "stroke-opacity:.7" : "" }, svg) };
+  });
+  return { lines };
+})();
+
+/* E · regime chips, labels verbatim from src/lib/dcf/regime.ts */
+const RCHIPS = ["Lender or insurer", "Capex peak", "Leveraged", "Thin margin", "Shifting perimeter"].map((t, i) => {
+  const s = document.createElement("span"); s.className = "rchip a" + (i === 0 ? " on" : ""); s.textContent = t; $("rchips").appendChild(s); return s;
+});
+
+/* E · screener rows: skeleton tickers, no figures */
+const SC_ROWS = 22, SC_ROW_H = 44;
+(() => {
+  const regs = ["operating", "operating", "Capex peak", "operating", "Leveraged", "Thin margin", "operating", "Lender or insurer", "Shifting perimeter"];
+  for (let i = 0; i < SC_ROWS; i++) {
+    const reg = regs[Math.floor(rand() * regs.length)]; const pass = rand() < 0.7 ? 5 : 4;
+    const row = document.createElement("div"); row.className = "sc-row";
+    row.innerHTML = `<span><span class="sk" style="display:block;width:${Math.round(44 + rand() * 40)}px"></span></span><span class="sc-reg${reg === "operating" ? "" : " gold"}">${reg}</span><span class="dots">${"<i></i>".repeat(pass)}${pass < 5 ? '<i class="off"></i>' : ""}</span>`;
+    $("sc-list").appendChild(row);
+  }
+})();
+
+/* ════════════════════════════════════════════════════════════════════════
+ * TIMELINE — each element is owned by exactly one beat, and every beat is
+ * rendered on every seek, so a frame depends only on the time asked for.
+ * ════════════════════════════════════════════════════════════════════════ */
+const E_ = (id) => $(id);
+const el = {
+  grid: E_("grid"), aEyebrow: E_("a-eyebrow"), aPrice: E_("a-price"), aSpark: E_("a-spark"), aLine: E_("a-line"),
+  copyB: E_("copy-b"), copyC: E_("copy-c"), copyD: E_("copy-d"),
+  panel: E_("panel"), pHead: E_("p-head"), pSeg: E_("p-seg"), pInLabel: E_("p-in-label"),
+  pScen: E_("p-scen"), pChecks: E_("p-checks"), pValue: E_("p-value"), pIv: E_("p-iv"), pIvSub: E_("p-iv-sub"), pCover: E_("p-cover"),
+  cv: [0, 1, 2, 3].map((i) => E_("cv-" + i)),
+  eHead: E_("e-head"), card1: E_("card-1"), card2: E_("card-2"), card3: E_("card-3"), rg: E_("rg-card"),
+  cbN: [E_("cb-n0"), E_("cb-n1"), E_("cb-n2")], scN: E_("sc-n"), scList: E_("sc-list"),
+  fWord: E_("f-word"), fUrl: E_("f-url"), fLine: E_("f-line"), fLegal: E_("f-legal"),
+};
+const beat = (id, start, duration, easing, fn) => ({ id, start, duration, easing, render(t) { fn(t * duration, t); } });
+
+// Seeded, decaying price ticks for a numeric PRICE; the last tick is the figure itself.
+const TICKS = Array.from({ length: 16 }, () => gauss());
+
+const TIMELINE = [
+  beat("field", 0, DURATION, "linear", (ms, t) => {
+    put(el.grid, 0, -24 * t, 1, 1, !RM && t > 0 && t < 1);
+  }),
+
+  beat("cold-open", 0, 2800, "settle", (ms) => {
+    track(el.aEyebrow, ms, { at: 120, dur: 600, out: 2280, outDur: 420, dy: 14 });
+    track(el.aPrice,   ms, { at: 200, dur: 700, out: 2300, outDur: 420, dy: 18 });
+    track(el.aSpark,   ms, { at: 0,   dur: 500, out: 2320, outDur: 420, dy: 0 });
+    track(el.aLine,    ms, { at: 900, dur: 800, out: 2340, outDur: 440, dy: 24 });
+    const p = seg(ms, 0, 2200);                                  // the line sweeps: linear
+    reveal(SPARK.clip, SPARK.line, p);
+    const pts = SPARK.pts, f = (RM ? 1 : p) * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)), u = f - i;
+    const x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, y = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u;
+    SPARK.dot.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
+    SPARK.dot.style.opacity = (RM ? p : p > 0 ? 1 : 0).toString();
+    if (typeof CONFIG.PRICE === "number") {
+      const k = Math.min(TICKS.length - 1, Math.floor(ms / 140)), decay = 1 - seg(ms, 0, 2000);
+      el.aPrice.textContent = decay <= 0 ? money(CONFIG.PRICE) : money(CONFIG.PRICE * (1 + 0.004 * TICKS[k] * decay));
+    } else el.aPrice.textContent = CONFIG.PRICE;
+  }),
+
+  beat("panel", 2600, 11350, "settle", (ms) => {
+    track(el.panel, ms, { at: 100, dur: 750, out: 10900, outDur: 450, dx: 120 });
+  }),
+
+  beat("assemble", 2500, 5500, "settle", (ms) => {
+    track(el.copyB, ms, { at: 100, dur: 750, out: 3900, outDur: 400, dy: 24 });
+    track(el.pHead, ms, { at: 380, dur: 600, dy: 10 });
+    track(el.pSeg,  ms, { at: 440, dur: 600, dy: 10 });
+    track(el.pInLabel, ms, { at: 420, dur: 600, dy: 8 });
+    ROWS.forEach((r, i) => track(r.li, ms, { at: 500 + i * 60, dur: 650, dy: 14 }));
+    track(el.pScen, ms, { at: 950, dur: 600, out: 4000, outDur: 350, dy: 10 });
+    FAN.lines.forEach((l, i) => reveal(l.clip, l.el, seg(ms, 1000 + i * 60, 900)));
+    const hp = EASE.settle(seg(ms, 1700, 700));
+    HIST.g.setAttribute("transform", RM ? "" : `translate(0 ${HIST.h}) scale(1 ${Math.max(0.0001, hp).toFixed(4)}) translate(0 ${-HIST.h})`);
+    HIST.g.style.opacity = (RM ? hp : hp > 0 ? 1 : 0).toString();
+    track(el.pValue, ms, { at: 1900, dur: 600, out: 5100, outDur: 300, dy: 10 });
+    if (typeof CONFIG.IV_SHARE === "number") count(el.pIv, ms, 2200, 1300, CONFIG.IV_SHARE, (v) => money(v));
+    else { el.pIv.textContent = CONFIG.IV_SHARE; }
+    track(el.pIvSub, ms, { at: 3100, dur: 500, dy: 6 });
+  }),
+
+  beat("withheld", 6500, 3300, "settle", (ms) => {
+    track(el.copyC, ms, { at: 150, dur: 750, out: 2900, outDur: 400, dy: 24 });
+    track(el.pChecks, ms, { at: 250, dur: 500, dy: 10 });
+    CHECKS.forEach((c, i) => {
+      track(c.li, ms, { at: 300 + i * 55, dur: 500, dy: 8 });
+      const rp = seg(ms, 650 + i * 130, 300);              // each check resolves in turn
+      c.pend.style.opacity = (1 - EASE.settle(rp)).toFixed(4);
+      track(c.res, ms, { at: 650 + i * 130, dur: 300, s0: 0.8 });
+      track(c.tag, ms, { at: 690 + i * 130, dur: 300, dx: 6 });
+      if (c.hl) { track(c.hl, ms, { at: 900, dur: 450 }); c.txt.classList.toggle("warn", ms >= 900); }
+    });
+    track(el.pCover, ms, { at: 1200, dur: 650, dy: 8, s0: 0.985 });
+    el.cv.forEach((c, i) => track(c, ms, { at: 1260 + i * 60, dur: 550, dy: 6 }));
+  }),
+
+  beat("provenance", 9500, 4100, "settle", (ms) => {
+    track(el.copyD, ms, { at: 200, dur: 750, out: 3700, outDur: 400, dy: 24 });
+    ROWS.forEach((r, i) => {                                   // stamped one by one
+      track(r.stamp, ms, { at: 500 + i * 400, dur: 420, s0: 1.04 });
+      track(r.rule,  ms, { at: 500 + i * 400, dur: 420 });
+    });
+  }),
+
+  beat("breadth", 13600, 3900, "settle", (ms) => {
+    track(el.eHead, ms, { at: 100, dur: 700, out: 3300, outDur: 400, dy: 20 });
+    track(el.card1, ms, { at: 200,  dur: 750, out: 3300, outDur: 400, dy: 48 });
+    track(el.card2, ms, { at: 1250, dur: 750, out: 3350, outDur: 400, dy: 48 });
+    track(el.card3, ms, { at: 2300, dur: 750, out: 3400, outDur: 400, dy: 48 });
+    CB.lines.forEach((l, i) => reveal(l.clip, l.el, seg(ms, 450 + i * 60, 900)));
+    count(el.cbN[0], ms, 500, 700, 4, (v) => String(Math.round(v)));
+    count(el.cbN[1], ms, 500, 900, 49, (v) => String(Math.round(v)));
+    count(el.cbN[2], ms, 500, 900, 20, (v) => String(Math.round(v)));
+    track(el.rg, ms, { at: 1450, dur: 650, dy: -20 });        // lands from above
+    RCHIPS.forEach((c, i) => track(c, ms, { at: 1650 + i * 50, dur: 450, dy: 8 }));
+    count(el.scN, ms, 2450, 900, 800, (v, done) => Math.round(v) + (done ? "+" : ""));
+    const fp = seg(ms, 2300, 1600);                            // the list flows: linear
+    const flow = VERTICAL ? 7 * SC_ROW_H : 5 * SC_ROW_H;
+    put(el.scList, 0, -flow * fp, 1, RM ? 1 : 0.9, !RM && fp > 0 && fp < 1);
+  }),
+
+  beat("resolve", 17300, 4700, "settle", (ms) => {
+    track(el.fWord,  ms, { at: 200, dur: 900, dy: 30 });
+    track(el.fUrl,   ms, { at: 380, dur: 800, dy: 20 });
+    track(el.fLine,  ms, { at: 560, dur: 800, dy: 16 });
+    track(el.fLegal, ms, { at: 900, dur: 600 });
+  }),
+];
+
+/* ── seek / play ───────────────────────────────────────────────────────── */
+let current = 0, playing = false, t0 = 0;
+function seek(timeMs) {
+  current = clamp(+timeMs || 0, 0, DURATION);
+  for (const b of TIMELINE) b.render(clamp((current - b.start) / b.duration));
+  if (document.body.classList.contains("hud")) $("hud").textContent = (current / 1000).toFixed(3) + "s" + (RM ? " · reduced" : "");
+  return current;
+}
+function frame(now) {
+  if (!playing) return;
+  seek(now - t0);
+  if (current >= DURATION) { playing = false; return; }
+  requestAnimationFrame(frame);
+}
+function play() { if (current >= DURATION) current = 0; playing = true; t0 = performance.now() - current; requestAnimationFrame(frame); }
+function pause() { playing = false; }
+function step(delta) { seek(current + delta); if (playing) t0 = performance.now() - current; }
+
+/* ── Letterbox: one transform on the fixed stage ───────────────────────── */
+function fit() {
+  const s = Math.min(innerWidth / W, innerHeight / H);
+  stage.style.transform = `translate(${((innerWidth - W * s) / 2).toFixed(2)}px, ${((innerHeight - H * s) / 2).toFixed(2)}px) scale(${s})`;
+}
+addEventListener("resize", fit);
+fit();
+
+addEventListener("keydown", (e) => {
+  if (e.code === "Space") { e.preventDefault(); playing ? pause() : play(); }
+  else if (e.code === "ArrowRight") step(1000);
+  else if (e.code === "ArrowLeft") step(-1000);
+  else if (e.key === "r" || e.key === "R") { seek(0); play(); }
+});
+
+const RECORD = Q.get("record") === "1";
+const START = Q.has("t") ? +Q.get("t") : null;
+if (RECORD) document.body.classList.add("record");
+if (Q.get("hud") === "1") document.body.classList.add("hud");
+
+// Fonts change glyph widths, so nothing plays until they are in or have failed.
+const ready = Promise.race([document.fonts.ready, new Promise((r) => setTimeout(r, 2500))]);
+
+window.teaser = {
+  seek, play, pause, duration: DURATION, fps: 60,
+  beats: TIMELINE.map(({ id, start, duration, easing }) => ({ id, start, end: start + duration, duration, easing })),
+  frame: (n) => seek(n / 60 * 1000),
+  frames: Math.round(DURATION / 1000 * 60) + 1,
+  get time() { return current; }, get playing() { return playing; }, get reducedMotion() { return RM; },
+  ready,
+};
+
+seek(START ?? 0);
+ready.then(() => { seek(current); if (!RECORD && START === null) play(); });
+</script>
+</body>
+</html>
