@@ -7,7 +7,7 @@
 <!-- The only external request. If it fails the page falls back to system-ui / ui-monospace. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 <style>
 /* ── Tokens: the only colour literals in this file ─────────────────────── */
 :root {
@@ -23,16 +23,18 @@
 
   /* Derived — every one a mix of a token with transparency, never a new colour */
   --hair:        color-mix(in srgb, var(--wolf-border) 55%, transparent);
-  --hair-strong: color-mix(in srgb, var(--wolf-border) 90%, transparent);
+  --hair-strong: color-mix(in srgb, var(--wolf-border) 95%, transparent);
   --tint:        color-mix(in srgb, var(--snow-peak) 2.5%, transparent);
-  --tint-2:      color-mix(in srgb, var(--snow-peak) 6%, transparent);
+  --tint-2:      color-mix(in srgb, var(--snow-peak) 7%, transparent);
   --mist-85:     color-mix(in srgb, var(--mist) 85%, transparent);
   --mist-60:     color-mix(in srgb, var(--mist) 60%, transparent);
   --mist-40:     color-mix(in srgb, var(--mist) 40%, transparent);
-  --gold-wash:   color-mix(in srgb, var(--golden-hour) 7%, transparent);
-  --gold-ring:   color-mix(in srgb, var(--golden-hour) 32%, transparent);
+  --gold-wash:   color-mix(in srgb, var(--golden-hour) 9%, transparent);
+  --gold-ring:   color-mix(in srgb, var(--golden-hour) 38%, transparent);
   --orange-wash: color-mix(in srgb, var(--sunset-orange) 15%, transparent);
-  --shade:       color-mix(in srgb, var(--wolf-black) 45%, transparent);
+  --green-wash:  color-mix(in srgb, var(--bullish) 14%, transparent);
+  --red-wash:    color-mix(in srgb, var(--bearish) 14%, transparent);
+  --shade:       color-mix(in srgb, var(--wolf-black) 50%, transparent);
 
   --font-ui:   "Outfit", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", "Geist Mono", ui-monospace, "SF Mono", "Cascadia Mono", Consolas, monospace;
@@ -42,200 +44,214 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: var(--wolf-black); }
 body { color: var(--snow-peak); font-family: var(--font-ui); -webkit-font-smoothing: antialiased; }
 body.record { cursor: none; }
+ul { list-style: none; margin: 0; padding: 0; }
+p { margin: 0; }
 
 /* Fixed-size stage, scaled as a whole by one transform — the layout never reflows to fit. */
 #stage { position: absolute; left: 0; top: 0; width: 1920px; height: 1080px; overflow: hidden;
-  background: var(--wolf-black); transform-origin: 0 0; }
+  background: var(--wolf-black); transform-origin: 0 0; font-size: 30px; }
 #stage.v { width: 1080px; height: 1920px; }
 
 /* Animated nodes start hidden; seek() owns their transform/opacity from the first frame. */
 .a { opacity: 0; }
-ul { list-style: none; margin: 0; padding: 0; }
-p { margin: 0; }
 
-/* ── Type ──────────────────────────────────────────────────────────────── */
+/* ── Type. Nothing that must be read is under 28px on the stage. ───────── */
 .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; letter-spacing: 0; }
-.label { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.1em; color: var(--mist-60); }
-.display { font-weight: 600; letter-spacing: -0.02em; line-height: 1.04; color: var(--snow-peak); text-wrap: balance; }
-.body { font-weight: 400; letter-spacing: 0; line-height: 1.45; color: var(--mist); }
+.label { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 28px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.1em; color: var(--mist-85); display: block; white-space: nowrap; }
+.display { font-weight: 600; letter-spacing: -0.02em; line-height: 1.06; color: var(--snow-peak); text-wrap: balance; }
+.chip { display: inline-block; font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: 0.06em;
+  padding: 6px 14px; border-radius: 10px; background: var(--orange-wash); color: var(--sunset-orange); white-space: nowrap; }
+.chip.quiet { background: var(--tint-2); color: var(--mist); }
+.chip.up { background: var(--green-wash); color: var(--bullish); }
+.chip.down { background: var(--red-wash); color: var(--bearish); }
+.chip.gold { background: var(--gold-wash); color: var(--golden-hour); box-shadow: inset 0 0 0 1px var(--gold-ring); }
 
 /* ── Field ─────────────────────────────────────────────────────────────── */
-.grid { position: absolute; left: 0; top: -40px; right: 0; height: calc(100% + 80px);
+.grid { position: absolute; left: 0; top: -48px; right: 0; height: calc(100% + 96px);
   background-image: linear-gradient(var(--hair) 1px, transparent 1px), linear-gradient(90deg, var(--hair) 1px, transparent 1px);
   background-size: 96px 96px; background-position: -1px -1px; }
 .vignette { position: absolute; inset: 0;
-  background: radial-gradient(ellipse 70% 65% at 50% 48%, transparent 0%, color-mix(in srgb, var(--wolf-black) 72%, transparent) 70%, var(--wolf-black) 100%); }
+  background: radial-gradient(ellipse 72% 66% at 50% 48%, transparent 0%, color-mix(in srgb, var(--wolf-black) 70%, transparent) 72%, var(--wolf-black) 100%); }
+
+/* ── Company mark: the app's fallback — initials on a rounded tile ─────── */
+.tile { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 60px; height: 60px; border-radius: 14px;
+  font-family: var(--font-ui); font-size: 28px; font-weight: 700; letter-spacing: -0.01em; background: var(--snow-peak); color: var(--wolf-black); overflow: hidden; }
+.tile img { width: 100%; height: 100%; object-fit: contain; }
+.tile.c-orange { background: color-mix(in srgb, var(--sunset-orange) 20%, transparent); color: var(--sunset-orange); }
+.tile.c-gold   { background: color-mix(in srgb, var(--golden-hour) 20%, transparent); color: var(--golden-hour); }
+.tile.c-green  { background: color-mix(in srgb, var(--bullish) 18%, transparent); color: var(--bullish); }
+.tile.c-snow   { background: color-mix(in srgb, var(--snow-peak) 16%, transparent); color: var(--snow-peak); }
+
+/* ── Persistent mark ───────────────────────────────────────────────────── */
+.mark-pos { position: absolute; }
+.h .mark-pos { right: 64px; top: 40px; }
+.v .mark-pos { left: 48px; top: 52px; }
+#mark { display: flex; align-items: baseline; gap: 16px; }
+#mark b { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; }
+#mark span { font-size: 28px; color: var(--mist); }
 
 /* ── Scene A: cold open ────────────────────────────────────────────────── */
-.coldA { position: absolute; inset: 0; }
-.coldA .price-pos { position: absolute; left: 0; right: 0; text-align: center; }
-.h .coldA .price-pos { top: 250px; }
-.v .coldA .price-pos { top: 560px; }
-#a-eyebrow { display: inline-block; }
-#a-price { font-size: 96px; font-weight: 500; letter-spacing: -0.02em; margin-top: 18px; color: var(--snow-peak); }
-.spark-pos { position: absolute; }
-.h .spark-pos { left: 160px; top: 470px; width: 1600px; height: 220px; }
-.v .spark-pos { left: 60px; top: 860px; width: 960px; height: 260px; }
-.spark-pos svg { display: block; overflow: visible; }
+.cold { position: absolute; left: 0; right: 0; text-align: center; }
+.h .cold { top: 220px; }
+.v .cold { top: 520px; }
+#c-num { font-size: 184px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; margin-top: 24px; }
+.v #c-num { font-size: 160px; }
+.tape-pos { position: absolute; left: 0; right: 0; overflow: hidden;
+  -webkit-mask-image: linear-gradient(90deg, transparent, var(--wolf-black) 18%, var(--wolf-black) 82%, transparent);
+          mask-image: linear-gradient(90deg, transparent, var(--wolf-black) 18%, var(--wolf-black) 82%, transparent); }
+.h .tape-pos { top: 560px; height: 90px; }
+.v .tape-pos { top: 860px; height: 90px; }
+#c-tape-row { display: flex; gap: 40px; padding-left: 120px; width: max-content; }
+.tape-item { display: flex; align-items: center; gap: 14px; font-size: 28px; color: var(--mist); }
 .line-pos { position: absolute; left: 0; right: 0; text-align: center; }
 .h .line-pos { top: 760px; }
-.v .line-pos { top: 1230px; padding: 0 60px; }
-#a-line { font-size: 84px; }
-.v #a-line { font-size: 88px; }
+.v .line-pos { top: 1180px; padding: 0 60px; }
+#c-line { font-size: 84px; }
+.v #c-line { font-size: 88px; }
 
-/* ── Copy column (scenes B–D) ──────────────────────────────────────────── */
-.copy-pos { position: absolute; }
-.h .copy-pos { left: 128px; top: 0; height: 1080px; width: 560px; display: flex; align-items: center; }
-.v .copy-pos { left: 60px; top: 150px; width: 960px; height: 540px; display: flex; align-items: flex-end; }
-.copy { position: absolute; }
-.h .copy { width: 560px; }
-.v .copy { width: 960px; }
-.copy .label { color: var(--sunset-orange); margin-bottom: 26px; }
-.copy .display { font-size: 60px; }
-.v .copy .display { font-size: 72px; }
-.copy .body { font-size: 24px; margin-top: 26px; }
-.v .copy .body { font-size: 28px; }
+/* ── Captions (one per scene) ──────────────────────────────────────────── */
+.cap { position: absolute; font-size: 60px; }
+.h .cap { left: 128px; top: 96px; width: 1400px; }
+.v .cap { left: 48px; top: 150px; width: 984px; }
 
-/* ── Product panel ─────────────────────────────────────────────────────── */
+/* ── Panels ────────────────────────────────────────────────────────────── */
 .panel-pos { position: absolute; }
-.h .panel-pos { left: 752px; top: 132px; width: 1040px; }
-.v .panel-pos { left: 60px; top: 760px; width: 960px; }
-.panel, .card { background: var(--wolf-surface); border: 1px solid var(--wolf-border); border-radius: 22px; }
-.panel { padding: 28px 32px 32px; }
-.p-head { display: flex; align-items: center; justify-content: space-between; height: 44px; margin-bottom: 26px; }
-.p-head .left { display: flex; align-items: center; gap: 16px; }
-.ticker { font-size: 18px; font-weight: 600; color: var(--snow-peak); padding: 6px 10px; border-radius: 8px; background: var(--tint-2); }
-.p-title { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
-.chip { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: 0.1em; text-transform: uppercase;
-  padding: 5px 9px; border-radius: 6px; background: var(--orange-wash); color: var(--sunset-orange); }
-.chip.quiet { background: var(--tint-2); color: var(--mist); }
-.seg { display: inline-flex; padding: 4px; border-radius: 10px; background: var(--shade); box-shadow: inset 0 0 0 1px var(--hair); }
-.seg span { font-size: 15px; font-weight: 500; padding: 7px 16px; border-radius: 7px; color: var(--mist); }
-.seg span.on { background: var(--tint-2); color: var(--snow-peak); box-shadow: inset 0 0 0 1px var(--hair-strong); }
-.seg.sm span { font-size: 13px; padding: 5px 11px; }
+.h .panel-pos { left: 128px; top: 208px; width: 1664px; }
+.v .panel-pos { left: 0; top: 340px; width: 1080px; }
+.panel { background: var(--wolf-surface); border: 1px solid var(--wolf-border); border-radius: 28px; padding: 32px; }
+/* A phone crop: the panel is the frame, its sides run off the edge. */
+.v .panel { border-radius: 0; border-left: 0; border-right: 0; padding: 40px 48px; }
+.p-head { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 24px; }
+.v .p-head { flex-direction: column; align-items: flex-start; gap: 20px; }
+.who { display: flex; align-items: center; gap: 18px; }
+.who-t { font-family: var(--font-mono); font-size: 36px; font-weight: 600; }
+.who-n { font-size: 32px; font-weight: 500; color: var(--mist); white-space: nowrap; }
 
-.p-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-.col-l .label, .col-r .label { margin-bottom: 14px; display: block; }
-.rows { display: flex; flex-direction: column; gap: 12px; }
-.row { position: relative; border-radius: 14px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--hair); padding: 16px 18px 15px 22px; overflow: hidden; }
-.row-top { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
-.row-name { font-size: 19px; font-weight: 500; color: var(--snow-peak); }
-.row-val { font-size: 19px; font-weight: 600; color: var(--snow-peak); }
-.stamp { margin-top: 8px; height: 20px; display: flex; gap: 8px; align-items: center; font-size: 14px; color: var(--mist-85); white-space: nowrap; transform-origin: 0 50%; }
-.v .stamp { font-size: 13px; gap: 6px; }
-.stamp .st { display: inline-flex; gap: 6px; align-items: center; font-weight: 500; font-family: var(--font-ui); }
-.stamp svg { width: 15px; height: 15px; }
-.rule { position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px; border-radius: 0 3px 3px 0; }
-.ok  { color: var(--bullish); }
-.warn { color: var(--golden-hour); }
-.dim { color: var(--mist); }
-.rule.ok { background: var(--bullish); } .rule.warn { background: var(--golden-hour); } .rule.dim { background: var(--mist-40); }
+/* Segmented control with a travelling knob; equal columns so the knob's
+ * position is index × width, no measuring. */
+.seg { position: relative; display: grid; grid-template-columns: repeat(3, var(--w)); padding: 6px; border-radius: 16px;
+  background: var(--shade); box-shadow: inset 0 0 0 1px var(--hair); flex: none; }
+.seg span { position: relative; z-index: 1; text-align: center; font-size: 28px; font-weight: 500; padding: 10px 0; color: var(--mist); }
+.seg span.on { color: var(--snow-peak); }
+.knob { position: absolute; left: 6px; top: 6px; bottom: 6px; width: var(--w); border-radius: 11px;
+  background: var(--tint-2); box-shadow: inset 0 0 0 1px var(--hair-strong); }
 
-.slot { position: relative; }
-.slot1 { height: 300px; }
-.slot2 { height: 322px; margin-top: 20px; }
-.layer { position: absolute; inset: 0; }
-.scen-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; white-space: nowrap; }
-.scen-head .label { margin: 0; }
-.scen-chips { display: flex; gap: 8px; margin-bottom: 10px; }
-.chips { display: flex; gap: 8px; }
-.fan-legend { display: flex; gap: 16px; font-size: 13px; margin-top: 8px; color: var(--mist); }
-.fan-legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 1px; }
-svg text { font-family: var(--font-mono); font-size: 12px; fill: var(--mist-60); font-variant-numeric: tabular-nums; }
+/* SVG */
+svg { display: block; overflow: visible; }
+svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85); font-variant-numeric: tabular-nums; }
 .s-grid { stroke: var(--hair); stroke-width: 1; }
-.s-axis { stroke: var(--hair-strong); stroke-width: 1; }
-.s-line { fill: none; stroke-width: 2.25; stroke-linejoin: round; stroke-linecap: round; }
-.s-orange { stroke: var(--sunset-orange); } .s-gold { stroke: var(--golden-hour); } .s-mist { stroke: var(--mist); }
-.s-snow { stroke: var(--snow-peak); } .s-green { stroke: var(--bullish); }
-.f-orange { fill: var(--sunset-orange); } .f-bar { fill: color-mix(in srgb, var(--sunset-orange) 55%, transparent); }
-.f-bar-dim { fill: color-mix(in srgb, var(--mist) 30%, transparent); }
-.f-wash { fill: color-mix(in srgb, var(--sunset-orange) 10%, transparent); }
-.f-black { fill: var(--wolf-black); }
+.s-zero { stroke: var(--hair-strong); stroke-width: 1.5; }
+.s-line { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+.s-orange { stroke: var(--sunset-orange); } .s-gold { stroke: var(--golden-hour); } .s-green { stroke: var(--bullish); }
+.s-snow { stroke: var(--snow-peak); } .s-mist { stroke: var(--mist); }
+.f-orange { fill: var(--sunset-orange); } .f-gold { fill: var(--golden-hour); } .f-green { fill: var(--bullish); }
+.f-snow { fill: var(--snow-peak); } .f-mist { fill: var(--mist); }
+.f-bar { fill: color-mix(in srgb, var(--sunset-orange) 62%, transparent); }
+.s-price { stroke: var(--snow-peak); stroke-width: 2; stroke-dasharray: 6 6; }
 
-.value-box { height: 100%; border-radius: 16px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--hair); padding: 24px 24px; }
-#p-iv { font-size: 56px; font-weight: 600; letter-spacing: -0.02em; margin-top: 18px; color: var(--snow-peak); white-space: nowrap; }
-.v #p-iv { font-size: 48px; }
-.value-sub { margin-top: 16px; display: flex; gap: 10px; align-items: center; font-size: 15px; color: var(--mist); }
+/* ── Scene B: Chart Builder ────────────────────────────────────────────── */
+.cb { display: grid; gap: 32px; }
+.h .cb { grid-template-columns: 400px 1166px; }
+.v .cb { grid-template-columns: 984px; gap: 28px; }
+.cb-side .label { margin-bottom: 14px; }
+.rail { display: grid; gap: 8px; margin-bottom: 26px; }
+.v .rail { grid-template-columns: 1fr 1fr; column-gap: 24px; }
+.rail li { display: flex; align-items: center; gap: 16px; height: 64px; }
+.rail .tk { font-family: var(--font-mono); font-size: 32px; font-weight: 600; width: 104px; }
+.rail .nm { font-size: 28px; color: var(--mist); white-space: nowrap; }
+.metrics { position: relative; display: grid; gap: 4px; }
+.v .metrics { grid-template-columns: 1fr 1fr; column-gap: 24px; }
+.metric { position: relative; z-index: 1; height: 52px; display: flex; align-items: center; padding: 0 18px; font-size: 28px; color: var(--mist); white-space: nowrap; }
+.metric.on { color: var(--snow-peak); }
+.hold { position: absolute; left: 0; top: 0; width: 100%; height: 52px; border-radius: 12px; background: var(--orange-wash); box-shadow: inset 3px 0 0 var(--sunset-orange); }
+.v .hold { width: calc(50% - 12px); }
+.cb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.cb-title { font-size: 40px; font-weight: 600; letter-spacing: -0.01em; }
+.plot { position: relative; }
+.pills { position: absolute; left: 0; top: 0; }
+.pill { position: absolute; left: 0; top: 0; height: 46px; display: flex; align-items: center; gap: 10px; padding: 0 14px 0 12px;
+  border-radius: 12px; background: var(--wolf-black); box-shadow: inset 0 0 0 1.5px var(--pc); font-family: var(--font-mono);
+  font-size: 28px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; color: var(--snow-peak); }
+.pill i { width: 12px; height: 12px; border-radius: 50%; background: var(--pc); display: block; }
+.cb-foot { margin-top: 18px; font-size: 28px; color: var(--mist); white-space: nowrap; }
+.cb-foot b { color: var(--snow-peak); font-weight: 600; display: inline-block; text-align: right; }
+.w1 { min-width: 1ch; } .w2 { min-width: 2ch; } .w4 { min-width: 4ch; }
 
-.cover { border-radius: 16px; background: var(--gold-wash); box-shadow: inset 0 0 0 1px var(--gold-ring); padding: 22px 24px; }
-.cover-title { display: flex; gap: 12px; align-items: center; font-size: 23px; font-weight: 600; color: var(--golden-hour); letter-spacing: -0.01em; }
-.cover-title svg { width: 24px; height: 24px; flex: none; }
-.cover-p { font-size: 16px; line-height: 1.45; color: var(--mist-85); margin: 10px 0 0 36px; }
-.cover-reason { margin: 14px 0 0 36px; padding: 10px 12px; border-radius: 10px; background: var(--shade); font-size: 14px; line-height: 1.5; }
-.cover-reason .fail { color: var(--golden-hour); font-weight: 500; }
-.cover-reason .det { color: var(--mist); }
-.btn { display: inline-block; margin: 14px 0 0 36px; font-size: 15px; font-weight: 500; padding: 8px 13px; border-radius: 9px;
-  background: var(--tint-2); box-shadow: inset 0 0 0 1px var(--hair-strong); color: var(--snow-peak); }
+/* ── Scene C: valuation ────────────────────────────────────────────────── */
+.vcols { display: grid; gap: 32px; }
+.h .vcols { grid-template-columns: 820px 746px; }
+.v .vcols { grid-template-columns: 984px; gap: 28px; }
+.v .v-right { order: -1; }
+.vcols .label { margin-bottom: 12px; }
+#v-num { font-size: 136px; font-weight: 600; letter-spacing: -0.02em; line-height: 1.02; white-space: nowrap; }
+.v-chips { display: flex; gap: 14px; margin: 14px 0 34px; }
+.v .v-chips { margin-bottom: 8px; }
+.v .v-hist-wrap { margin-top: 28px; }
 
-.checks { display: flex; flex-direction: column; gap: 6px; }
-.chk { position: relative; display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 12px; font-size: 17px; }
-.chk .hl { position: absolute; inset: 0; border-radius: 10px; background: var(--gold-wash); box-shadow: inset 0 0 0 1px var(--gold-ring); }
-.chk .ic { position: relative; width: 20px; height: 20px; flex: none; }
-.chk .ic svg { position: absolute; inset: 0; width: 20px; height: 20px; }
-.chk .txt { position: relative; flex: 1; color: var(--snow-peak); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* ── Scene D/E: the failing check and its filings ──────────────────────── */
+.jcols { display: grid; gap: 32px; }
+.h .jcols { grid-template-columns: 700px 866px; }
+.v .jcols { grid-template-columns: 984px; gap: 28px; }
+.figs { display: grid; gap: 14px; }
+.fig { border-radius: 18px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--hair); padding: 18px 22px; position: relative; overflow: hidden; }
+.fig-top { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; }
+.fig-name { font-size: 30px; font-weight: 500; white-space: nowrap; }
+.fig-val { font-size: 48px; font-weight: 600; white-space: nowrap; }
+.fig-sub { font-size: 28px; color: var(--mist); margin-top: 2px; white-space: nowrap; }
+.stamp { margin-top: 10px; height: 36px; width: max-content; display: flex; align-items: center; gap: 12px; font-size: 28px; color: var(--bullish); white-space: nowrap; transform-origin: 0 50%; }
+.stamp svg { width: 28px; height: 28px; flex: none; }
+.rule { position: absolute; left: 0; top: 14px; bottom: 14px; width: 4px; border-radius: 0 4px 4px 0; background: var(--bullish); }
+.checks { display: grid; gap: 2px; margin-bottom: 22px; }
+.chk { position: relative; display: flex; align-items: center; gap: 16px; height: 54px; padding: 0 14px; }
+.chk .hl { position: absolute; inset: 0; border-radius: 12px; background: var(--gold-wash); box-shadow: inset 0 0 0 1.5px var(--gold-ring); }
+.chk .ic { position: relative; width: 30px; height: 30px; flex: none; }
+.chk .ic > span { position: absolute; inset: 0; }
+.chk .ic svg { width: 30px; height: 30px; }
+.chk .txt { position: relative; flex: 1; font-size: 28px; white-space: nowrap; }
 .chk .txt.warn { color: var(--golden-hour); }
-.chk .tag { position: relative; font-size: 12px; letter-spacing: 0.1em; font-weight: 500; }
+.chk .tag { position: relative; font-family: var(--font-mono); font-size: 28px; font-weight: 500; letter-spacing: 0.04em; white-space: nowrap; }
+.ok { color: var(--bullish); } .warn { color: var(--golden-hour); } .dim { color: var(--mist); } .pend { color: var(--mist-40); }
+.vslot { border-radius: 18px; background: var(--tint); box-shadow: inset 0 0 0 1px var(--hair); padding: 20px 24px; }
+.vs-body { position: relative; height: 104px; }
+.vs-body > * { position: absolute; left: 0; top: 0; }
+#j-pend { font-size: 56px; color: var(--mist-60); line-height: 104px; }
+#j-with { font-size: 96px; font-weight: 600; letter-spacing: -0.02em; color: var(--golden-hour); line-height: 104px; }
+.vs-foot { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-top: 8px; }
+#j-line { font-size: 30px; color: var(--mist); }
 
-/* ── Scene E: breadth ──────────────────────────────────────────────────── */
-.head-pos { position: absolute; left: 0; right: 0; text-align: center; }
-.h .head-pos { top: 150px; }
-.v .head-pos { top: 170px; padding: 0 60px; }
-#e-head { font-size: 52px; }
-.v #e-head { font-size: 64px; }
-.cards { position: absolute; display: flex; gap: 40px; }
-.h .cards { left: 128px; top: 290px; width: 1664px; height: 620px; }
-.v .cards { left: 60px; top: 440px; width: 960px; flex-direction: column; gap: 36px; }
-.h .card { flex: 1; }
-.v .card { height: 404px; }
-.card { padding: 26px 28px; display: flex; flex-direction: column; overflow: hidden; }
-.card-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.card-title { font-size: 24px; font-weight: 600; letter-spacing: -0.01em; }
-.legend { display: flex; gap: 18px; font-size: 14px; color: var(--mist); margin-bottom: 12px; flex-wrap: nowrap; }
-.legend span { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
-.legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
-.bg-orange { background: var(--sunset-orange); } .bg-gold { background: var(--golden-hour); }
-.bg-green { background: var(--bullish); } .bg-snow { background: var(--snow-peak); }
-.card-foot { margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 14px; }
-.stat { font-size: 15px; color: var(--mist); white-space: nowrap; }
-.stat b { color: var(--snow-peak); font-weight: 600; display: inline-block; text-align: right; }
-.stat b.w2 { min-width: 2ch; } .stat b.w1 { min-width: 1ch; } .stat b.w4 { min-width: 4ch; }
+/* ── Scene F: screener ─────────────────────────────────────────────────── */
+.sc-head { display: flex; align-items: center; gap: 24px; margin-bottom: 18px; }
+.sc-title { font-size: 40px; font-weight: 600; }
+#sc-n { color: var(--snow-peak); font-weight: 600; }
+.sc-cols, .sc-row { display: grid; align-items: center; gap: 20px; }
+.h .sc-cols, .h .sc-row { grid-template-columns: 60px 120px 1fr 200px 330px; }
+.v .sc-cols, .v .sc-row { grid-template-columns: 60px 110px 1fr 140px 190px; gap: 16px; }
+.sc-cols { padding: 0 16px 12px; border-bottom: 1px solid var(--hair); }
+.sc-cols .label { grid-column: span 3; }
+.sc-cols .label.r { grid-column: auto; text-align: right; }
+.sc-cols .label.c { grid-column: span 2; }
+.sc-win { position: relative; overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent 0, var(--wolf-black) 10%, var(--wolf-black) 86%, transparent 100%);
+          mask-image: linear-gradient(transparent 0, var(--wolf-black) 10%, var(--wolf-black) 86%, transparent 100%); }
+.h .sc-win { height: 506px; }
+.v .sc-win { height: 760px; }
+.sc-row { height: 84px; padding: 0 16px; border-bottom: 1px solid var(--hair); }
+.sc-row .tk { font-family: var(--font-mono); font-size: 32px; font-weight: 600; }
+.sc-row .nm { font-size: 28px; color: var(--mist); white-space: nowrap; overflow: hidden; }
+.sc-row .val { font-family: var(--font-mono); font-size: 34px; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
 
-.regime { border-radius: 14px; background: var(--gold-wash); box-shadow: inset 0 0 0 1px var(--gold-ring); padding: 18px 20px; }
-.regime-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.regime-label { font-size: 21px; font-weight: 500; color: var(--golden-hour); }
-.regime-tag { font-family: var(--font-mono); font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; padding: 5px 8px; border-radius: 6px; background: var(--orange-wash); color: var(--sunset-orange); white-space: nowrap; }
-.regime-detail { margin-top: 10px; font-size: 14px; line-height: 1.5; color: var(--mist); }
-.regime-rec { margin-top: 10px; font-size: 16px; line-height: 1.5; color: var(--mist-85); }
-.regime-reads { margin-top: auto; padding-top: 16px; }
-.regime-reads .label { display: block; margin-bottom: 10px; }
-.rchips { display: flex; flex-wrap: wrap; gap: 8px; }
-.rchip { font-family: var(--font-mono); font-size: 13px; padding: 6px 10px; border-radius: 7px; background: var(--tint-2); color: var(--mist); white-space: nowrap; }
-.rchip.on { background: var(--gold-wash); color: var(--golden-hour); box-shadow: inset 0 0 0 1px var(--gold-ring); }
-
-.sc-cols { display: grid; grid-template-columns: 1.1fr 1.6fr 1fr; padding: 0 12px 10px; border-bottom: 1px solid var(--hair); }
-.sc-win { position: relative; overflow: hidden; flex: 1;
-  -webkit-mask-image: linear-gradient(transparent 0, var(--wolf-black) 14%, var(--wolf-black) 82%, transparent 100%);
-          mask-image: linear-gradient(transparent 0, var(--wolf-black) 14%, var(--wolf-black) 82%, transparent 100%); }
-.sc-row { display: grid; grid-template-columns: 1.1fr 1.6fr 1fr; align-items: center; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--hair); }
-.sk { height: 12px; border-radius: 4px; background: color-mix(in srgb, var(--snow-peak) 16%, transparent); }
-.sc-reg { font-family: var(--font-mono); font-size: 13px; color: var(--mist); white-space: nowrap; }
-.sc-reg.gold { color: var(--golden-hour); }
-.dots { display: flex; gap: 5px; }
-.dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--bullish); display: block; }
-.dots i.off { background: transparent; box-shadow: inset 0 0 0 1.5px var(--golden-hour); }
-
-/* ── Scene F: resolution ───────────────────────────────────────────────── */
+/* ── End card ──────────────────────────────────────────────────────────── */
 .end { position: absolute; left: 0; right: 0; text-align: center; }
-.h .end { top: 330px; }
-.v .end { top: 700px; }
-#f-word { font-size: 196px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; color: var(--snow-peak); }
-.v #f-word { font-size: 208px; }
-#f-url { font-size: 38px; font-weight: 500; color: var(--sunset-orange); margin-top: 34px; letter-spacing: 0; }
-#f-line { font-size: 36px; margin-top: 30px; color: var(--mist); letter-spacing: -0.005em; }
-.v #f-line { font-size: 40px; padding: 0 80px; }
-.legal-pos { position: absolute; left: 0; right: 0; bottom: 64px; text-align: center; }
+.h .end { top: 300px; }
+.v .end { top: 690px; }
+#f-word { font-size: 220px; font-weight: 800; letter-spacing: -0.02em; line-height: 1; }
+#f-url { font-size: 44px; font-weight: 500; color: var(--sunset-orange); margin-top: 38px; }
+#f-line { font-size: 42px; margin-top: 30px; color: var(--mist); letter-spacing: -0.005em; }
+.v #f-line { padding: 0 80px; }
+.legal-pos { position: absolute; left: 0; right: 0; bottom: 60px; text-align: center; }
 .v .legal-pos { bottom: 110px; }
+#f-legal { display: inline-block; color: var(--mist-60); }
 
 #hud { position: fixed; right: 12px; bottom: 10px; font: 12px var(--font-mono); color: var(--mist); display: none; }
 body.hud #hud { display: block; }
@@ -246,125 +262,89 @@ body.hud #hud { display: block; }
   <div class="grid" id="grid"></div>
   <div class="vignette"></div>
 
+  <!-- Persistent mark -->
+  <div class="mark-pos"><div class="a" id="mark"><b>HUNTR</b><span class="mono">huntrvalue.me</span></div></div>
+
   <!-- A · Cold open -->
-  <section class="coldA">
-    <div class="price-pos">
-      <div class="a" id="a-eyebrow"><span class="label"><span data-ph="TICKER"></span> · last price</span></div>
-      <div class="a mono" id="a-price"></div>
-    </div>
-    <div class="spark-pos a" id="a-spark"><svg id="a-svg"></svg></div>
-    <div class="line-pos"><p class="a display" id="a-line">The number is the easy part.</p></div>
-  </section>
-
-  <!-- B–D · Copy column -->
-  <div class="copy-pos">
-    <div class="copy a" id="copy-b">
-      <p class="label">DCF · bear / base / bull</p>
-      <p class="display">Any model will hand you a confident number.</p>
-      <p class="body">Revenue base, margin path, discount rate — three scenarios, and a Monte Carlo over them.</p>
-    </div>
-    <div class="copy a" id="copy-c">
-      <p class="label">Five checks · before the value</p>
-      <p class="display">When the data can’t carry it, the value is withheld.</p>
-      <p class="body">One check on the inputs fails. So there is no number on screen — only the reason.</p>
-    </div>
-    <div class="copy a" id="copy-d">
-      <p class="label">Provenance</p>
-      <p class="display">Every input shows the filing it came from.</p>
-      <p class="body">Document type and accession number, beside the figure it produced.</p>
-    </div>
+  <div class="cold">
+    <span class="label a" id="c-label" style="display:inline-block">Intrinsic value / share</span>
+    <div class="mono a" id="c-num"></div>
   </div>
+  <div class="tape-pos a" id="c-tape"><div id="c-tape-row"></div></div>
+  <div class="line-pos"><p class="display a" id="c-line">The number is the easy part.</p></div>
 
-  <!-- B–D · Valuation panel -->
-  <div class="panel-pos">
-    <div class="panel a" id="panel">
-      <div class="p-head">
-        <div class="left a" id="p-head">
-          <span class="mono ticker" data-ph="TICKER"></span>
-          <span class="p-title">Valuation</span>
-          <span class="chip">DCF</span>
-        </div>
-        <div class="seg a" id="p-seg"><span>Bear</span><span class="on">Base</span><span>Bull</span></div>
+  <!-- Captions -->
+  <p class="cap display a" id="cap-chart">Put four companies on one chart.</p>
+  <p class="cap display a" id="cap-val">Move the scenario. The value follows.</p>
+  <p class="cap display a" id="cap-check">On a real filing, it checks before it prints.</p>
+  <p class="cap display a" id="cap-prov">Every figure points back to its filing.</p>
+  <p class="cap display a" id="cap-scr">Then screen 800+ tickers the same way.</p>
+
+  <!-- B · Chart Builder -->
+  <div class="panel-pos"><div class="panel a" id="p-chart">
+    <div class="cb">
+      <div class="cb-side">
+        <span class="label a" id="cb-l1">Companies</span>
+        <ul class="rail" id="rail"></ul>
+        <span class="label a" id="cb-l2">Metric</span>
+        <div class="metrics" id="metrics"><div class="hold a" id="hold"></div></div>
       </div>
-      <div class="p-cols">
-        <div class="col-l">
-          <span class="label a" id="p-in-label">Inputs and where they come from</span>
-          <ul class="rows" id="rows"></ul>
+      <div class="cb-main">
+        <div class="cb-head">
+          <span class="cb-title a" id="cb-title">FCF margin</span>
+          <div class="seg a" id="cb-seg" style="--w:190px"><i class="knob" id="cb-knob"></i><span>Quarterly</span><span>TTM</span><span>Annual</span></div>
         </div>
-        <div class="col-r">
-          <div class="slot slot1">
-            <div class="layer a" id="p-scen">
-              <div class="scen-head">
-                <span class="label">Margin path · bear / base / bull</span>
-              </div>
-              <div class="scen-chips"><span class="chip quiet">discount <span data-ph="DISCOUNT_RATE"></span></span><span class="chip quiet">terminal <span data-ph="TERMINAL_GROWTH"></span></span></div>
-              <svg id="fan-svg"></svg>
-              <div class="fan-legend mono"><span><i style="background:var(--mist)"></i>bear</span><span><i style="background:var(--sunset-orange)"></i>base</span><span><i style="background:var(--golden-hour)"></i>bull</span></div>
-              <span class="label" style="margin:12px 0 8px">Monte Carlo over the three</span>
-              <svg id="hist-svg"></svg>
-            </div>
-            <div class="layer a" id="p-checks">
-              <span class="label">Checks run before the value</span>
-              <ul class="checks" id="checks"></ul>
-            </div>
-          </div>
-          <div class="slot slot2">
-            <div class="layer a" id="p-value">
-              <div class="value-box">
-                <span class="label">Intrinsic value / share</span>
-                <div class="mono" id="p-iv"></div>
-                <div class="value-sub mono a" id="p-iv-sub"><span class="chip quiet">base case</span><span>price <span data-ph="PRICE"></span></span></div>
-              </div>
-            </div>
-            <div class="layer cover a" id="p-cover">
-              <div class="cover-title a" id="cv-0"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8l7 2.9v5.6c0 4.6-3 7.8-7 9.9-4-2.1-7-5.3-7-9.9V5.7z"/><path d="M12 8v4.4"/><path d="M12 15.6h.01"/></svg>Intrinsic value withheld</div>
-              <p class="cover-p a" id="cv-1">One check on the inputs failed. The value would be arithmetic on a figure the checks could not stand behind.</p>
-              <div class="cover-reason mono a" id="cv-2"><div class="fail">✕ Four quarters of FCF = fiscal-year FCF</div><div class="det">Quarters to <span data-ph="FY_END"></span> sum to <span data-ph="FCF_Q_SUM"></span>; the year’s row says <span data-ph="FCF_FY"></span>.</div></div>
-              <span class="btn a" id="cv-3">I have read these — show the value</span>
-            </div>
-          </div>
+        <div class="plot"><svg id="cb-svg"></svg><div class="pills" id="pills"></div></div>
+        <div class="cb-foot mono a" id="cb-foot"><b class="w1" id="cbf0">4</b> companies · <b class="w2" id="cbf1">49</b> metrics · <b class="w2" id="cbf2">20</b> years · PNG export</div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- C · Valuation and the scenario switch -->
+  <div class="panel-pos"><div class="panel a" id="p-val">
+    <div class="p-head">
+      <div class="who a" id="v-who"><span class="tile c-snow" id="v-tile"></span><span class="who-n" id="v-name"></span><span class="chip">Illustrative figures</span></div>
+      <div class="seg a" id="v-seg" style="--w:170px"><i class="knob" id="v-knob"></i><span>Bear</span><span>Base</span><span>Bull</span></div>
+    </div>
+    <div class="vcols">
+      <div class="v-left"><span class="label a" id="v-l1">FCF margin path</span><svg class="a" id="fan-svg"></svg></div>
+      <div class="v-right">
+        <span class="label a" id="v-l2">Intrinsic value / share</span>
+        <div class="mono a" id="v-num"></div>
+        <div class="v-chips a" id="v-chips"><span class="chip quiet" id="v-case">base case</span><span class="chip up" id="v-delta"></span></div>
+        <div class="v-hist-wrap"><span class="label a" id="v-l3">Monte Carlo over the three</span><svg class="a" id="hist-svg"></svg></div>
+      </div>
+    </div>
+  </div></div>
+
+  <!-- D/E · A real filing: the check that fails, then the filings behind the figures -->
+  <div class="panel-pos"><div class="panel a" id="p-jpm">
+    <div class="p-head a" id="j-head">
+      <div class="who" id="j-who"><span class="tile" id="j-tile"></span><span class="who-t" id="j-t"></span><span class="who-n" id="j-name"></span></div>
+      <span class="chip quiet" id="j-form"></span>
+    </div>
+    <div class="jcols">
+      <div class="figs" id="figs"></div>
+      <div>
+        <span class="label a" id="j-cl" style="margin-bottom:10px">Checks run before the value</span>
+        <ul class="checks a" id="checks"></ul>
+        <div class="vslot a" id="j-vslot">
+          <span class="label">Intrinsic value / share</span>
+          <div class="vs-body"><div class="mono a" id="j-pend">checking…</div><div class="a" id="j-with">Withheld</div></div>
+          <div class="vs-foot"><p class="a" id="j-line"></p><span class="chip gold a" id="j-reg">Lender or insurer → use EPS Multiple</span></div>
         </div>
       </div>
     </div>
-  </div>
+  </div></div>
 
-  <!-- E · Breadth -->
-  <div class="head-pos"><p class="display a" id="e-head">The rest of the terminal reads the same way.</p></div>
-  <div class="cards">
-    <div class="card a" id="card-1">
-      <div class="card-head"><span class="card-title">Chart Builder</span><span class="seg sm"><span>Quarterly</span><span class="on">TTM</span><span>Annual</span></span></div>
-      <div class="legend mono">
-        <span><i class="bg-orange"></i><span data-ph="TICKER"></span></span>
-        <span><i class="bg-gold"></i><span data-ph="PEER_1"></span></span>
-        <span><i class="bg-green"></i><span data-ph="PEER_2"></span></span>
-        <span><i class="bg-snow"></i><span data-ph="PEER_3"></span></span>
-      </div>
-      <svg id="cb-svg"></svg>
-      <div class="card-foot">
-        <span class="stat mono"><b class="w1" id="cb-n0">4</b> companies · <b class="w2" id="cb-n1">49</b> metrics · <b class="w2" id="cb-n2">20</b> years</span>
-        <span class="chip quiet">PNG export</span>
-      </div>
-    </div>
-    <div class="card a" id="card-2">
-      <div class="card-head"><span class="card-title">Regime</span><span class="label">read off the statements</span></div>
-      <div class="regime a" id="rg-card">
-        <div class="regime-top"><span class="regime-label">Lender or insurer</span><span class="regime-tag">use EPS Multiple</span></div>
-        <p class="regime-detail mono">Thin equity against assets with interest as the business, or an unclassified balance sheet.</p>
-        <p class="regime-rec">Cash from operations moves with the loan book or the reserves, not with profitability. Value it on earnings.</p>
-      </div>
-      <div class="regime-reads">
-        <span class="label">Five regimes it reads for</span>
-        <div class="rchips" id="rchips"></div>
-      </div>
-    </div>
-    <div class="card a" id="card-3">
-      <div class="card-head"><span class="card-title">Screener</span><span class="stat mono"><b class="w4" id="sc-n">800+</b> tickers</span></div>
-      <div class="sc-cols label"><span>Ticker</span><span>Regime</span><span>Checks</span></div>
-      <div class="sc-win"><div id="sc-list"></div></div>
-    </div>
-  </div>
+  <!-- F · Screener -->
+  <div class="panel-pos"><div class="panel a" id="p-scr">
+    <div class="sc-head a" id="sc-head"><span class="sc-title">Screener</span><span class="chip quiet mono"><span class="w4" id="sc-n" style="display:inline-block;text-align:right">800+</span> tickers</span></div>
+    <div class="sc-cols a" id="sc-cols"><span class="label">Company</span><span class="label c">FCF margin TTM</span></div>
+    <div class="sc-win"><div id="sc-list"></div></div>
+  </div></div>
 
-  <!-- F · Resolution -->
+  <!-- G · End card -->
   <div class="end">
     <div class="a" id="f-word">HUNTR</div>
     <div class="a mono" id="f-url">huntrvalue.me</div>
@@ -377,24 +357,78 @@ body.hud #hud { display: block; }
 <script>
 "use strict";
 /* ════════════════════════════════════════════════════════════════════════
- * CONTENT — every company-specific figure is a labelled placeholder.
- * Replace a string to fill it in. PRICE and IV_SHARE also accept a number,
- * in which case they count to it on screen.
+ * CONTENT. Every figure on screen comes from here. The real ones are
+ * reproducible from the SEC accessions listed in the comment at the end of
+ * the file; the valuation scene is an illustrative company on purpose — a
+ * promo that published a value per share for a real ticker would contradict
+ * the film. See teaser/README.md for how to change any of it.
  * ════════════════════════════════════════════════════════════════════════ */
 const CONFIG = {
-  TICKER: "{{TICKER}}", PEER_1: "{{PEER_1}}", PEER_2: "{{PEER_2}}", PEER_3: "{{PEER_3}}",
-  PRICE: "{{PRICE}}", IV_SHARE: "{{IV_SHARE}}",
-  REVENUE_BASE: "{{REVENUE_BASE}}", FCF_MARGIN: "{{FCF_MARGIN}}", NET_DEBT: "{{NET_DEBT}}", SHARES: "{{SHARES}}",
-  DISCOUNT_RATE: "{{DISCOUNT_RATE}}", TERMINAL_GROWTH: "{{TERMINAL_GROWTH}}",
-  FY_END: "{{FY_END}}", FCF_Q_SUM: "{{FCF_Q_SUM}}", FCF_FY: "{{FCF_FY}}",
-  ACC_REVENUE: "{{ACC_REVENUE}}", ACC_CASHFLOW: "{{ACC_CASHFLOW}}", ACC_DEBT: "{{ACC_DEBT}}", ACC_SHARES: "{{ACC_SHARES}}",
-  FORM_REVENUE: "10-K", FORM_CASHFLOW: "10-K", FORM_DEBT: "10-Q", FORM_SHARES: "10-Q",
+  // Ticker → image URL. Empty by default: the film stays self-contained and uses
+  // the app's own monogram fallback. A real company's logo is a deliberate choice.
+  LOGOS: {},
+
+  // Scene C — illustrative, not a listed company.
+  ILLUSTRATIVE: { ticker: "EX", name: "Example Co.", price: 100.00, bear: 78.40, base: 112.60, bull: 151.30 },
+
+  // Scene B — FCF margin (operating cash flow − capex, over revenue), in %, 40 quarters.
+  // q: each quarter on its own. ttm: the ratio of the four-quarter sums, as the
+  // Chart Builder computes a ratio's TTM (src/lib/chart-builder/resolve.ts).
+  CHART: [
+    { t: "MSFT", name: "Microsoft", color: "orange", from: "2016-09-30", to: "2026-06-30",
+      q:   [42.8,16.67,38.62,45.94,42.01,18.29,34.37,24.72,34.57,15.99,35.83,35.76,31.56,19.33,39.23,36.62,38.83,19.37,40.98,35.23,41.33,16.65,40.61,34.24,33.75,9.29,33.74,35.29,36.57,14.7,33.89,36.03,29.36,9.32,28.97,33.45,33.04,7.24,19.07,21.82],
+      ttm: [30.91,31,31.08,34.88,34.9,34.8,33.79,29.22,27.85,26.93,27.53,30.4,29.76,30.23,31.26,31.63,33.46,32.9,33.62,33.39,34.28,32.82,33.05,32.86,31.19,29.21,27.65,28.07,28.96,29.64,29.83,30.22,28.59,26.75,25.69,25.42,26.55,25.34,22.91,20.19] },
+    { t: "AAPL", name: "Apple", color: "gold", from: "2015-12-26", to: "2025-09-27",
+      q:   [31.44,18.33,18.47,25.93,30.5,18.14,14.08,22.6,28.86,17.89,21.07,26.2,27.68,15.15,17.91,26.75,30.94,19.65,24.64,29.05,31.64,24.24,23.33,20.37,35.63,26.37,25.06,23.12,25.79,27.04,29.69,21.72,31.36,22.8,31.14,25.18,21.72,21.9,25.95,25.85],
+      ttm: [26.97,24.58,23.06,24.62,24.36,24.25,23.28,22.59,22.31,22.11,23.32,24.14,23.69,23.15,22.49,22.64,23.9,24.87,26.18,26.73,27.27,27.8,27.3,25.41,26.92,27.41,27.76,28.26,25.16,25.32,26.3,25.98,27.71,26.71,27.06,27.83,24.84,24.6,23.54,23.73] },
+    { t: "V", name: "Visa", color: "green", from: "2015-12-31", to: "2025-09-30",
+      q:   [51.98,19.75,4.71,54.24,52.39,5.58,73.21,55.22,54.96,53.28,68.07,60.38,56.97,34.73,54.62,61.81,60.85,21.37,58.73,37.8,58.96,55.35,69.09,57.37,57.5,44.82,68.96,71.67,49.42,45.71,67.73,76.92,38.77,48.51,53.19,66.08,53.11,45.53,62.02,54.54],
+      ttm: [45.27,43.43,30.13,33.49,34.64,30.12,46.39,46.9,47.68,58.89,58.03,59.31,59.7,54.87,51.7,52.35,53.45,49.9,50.56,44.42,43.64,52.88,56.02,60.24,59.77,56.72,57.19,61,58.77,58.65,58.61,60.32,57.33,57.78,54.3,52.03,55.42,54.51,56.78,53.94] },
+    { t: "COST", name: "Costco", color: "snow", from: "2015-11-22", to: "2025-08-31",
+      q:   [0.35,0.59,5.22,-2.78,7.57,-0.08,3.69,2.49,3.73,-1.21,4.7,1.12,4.13,-2.28,4.12,2.7,3.74,0.19,3.22,6.35,4.06,-1.2,5.09,2.95,4.37,-0.62,0.71,1.73,2.85,4.17,1.34,2.75,6.25,-0.51,3.31,1.73,3.21,2.53,3.68,2.21],
+      ttm: [1.21,1.1,1.6,0.54,2.23,2.05,1.74,3.27,2.47,2.14,2.41,1.98,2.12,1.81,1.72,2.2,2.13,2.64,2.45,3.63,3.71,3.25,3.7,2.74,2.87,2.87,1.88,1.54,1.23,2.34,2.47,2.78,3.58,2.49,2.92,2.61,1.94,2.62,2.72,2.85] },
+  ],
+
+  // Scene D/E — JPMorgan Chase, 10-K for fiscal 2025. The lender test in
+  // src/lib/dcf/business-model.ts, reproduced from that filing.
+  REAL: {
+    ticker: "JPM", name: "JPMorgan Chase & Co.", form: "10-K · FY2025", accession: "0001628280-26-008131",
+    figures: [
+      { name: "Equity / total assets", value: "8.2%", sub: "$362.4B of $4,424.9B" },
+      { name: "Interest expense / revenue", value: "53.7%", sub: "$97.9B of $182.4B" },
+      { name: "Current assets", value: "not filed", sub: "an unclassified balance sheet" },
+    ],
+    // The product's own result for JPM, read off huntrvalue.me on 2026-09-25.
+    checks: [
+      ["Market cap = shares × price", "fail"],
+      ["Four quarters of FCF = fiscal-year FCF", "unverifiable"],
+      ["Total debt = filed debt", "pass"],
+      ["Revenue period matches today’s perimeter", "pass"],
+      ["Usable margin record", "fail"],
+    ],
+    failedLine: "2 checks on the inputs failed.",
+  },
+
+  // Scene F — latest TTM FCF margin, and the twelve TTM values before it.
+  SCREENER: [
+    ["V", "Visa", [58.77,58.65,58.61,60.32,57.33,57.78,54.3,52.03,55.42,54.51,56.78,53.94]],
+    ["ADBE", "Adobe", [40.66,40.28,40.38,35.77,32.54,31.17,31.27,36.61,41.71,41.75,41.41,41.45]],
+    ["AAPL", "Apple", [25.16,25.32,26.3,25.98,27.71,26.71,27.06,27.83,24.84,24.6,23.54,23.73]],
+    ["META", "Meta Platforms", [15.19,20.23,29.91,32.67,34.85,33.22,33.49,32.87,30.71,28.04,23.67,22.94]],
+    ["JNJ", "Johnson & Johnson", [20,19.41,18.8,21.43,21.84,23.45,23.66,22.34,22.8,20.47,21.27,20.91]],
+    ["MSFT", "Microsoft", [28.96,29.64,29.83,30.22,28.59,26.75,25.69,25.42,26.55,25.34,22.91,20.19]],
+    ["GOOGL", "Alphabet", [21.75,24.55,26.12,22.61,21.72,18.52,16.43,20.79,20.82,17.97,19.08,18.19]],
+    ["KO", "Coca-Cola", [20.72,21.5,22.58,21.3,21.75,19.49,7.36,10.07,-1.98,-1.53,11.69,11.05]],
+    ["PEP", "PepsiCo", [6.05,6.35,7.58,8.66,7.88,7.64,6.75,7.83,7.94,7.7,7.35,8.17]],
+    ["COST", "Costco", [1.23,2.34,2.47,2.78,3.58,2.49,2.92,2.61,1.94,2.62,2.72,2.85]],
+    ["AMZN", "Amazon", [-1.63,0.6,3.05,5.61,7.74,8,6.93,5.15,3.2,2.01,1.53,1.07]],
+  ],
 };
 
 const Q = new URLSearchParams(location.search);
 const VERTICAL = Q.get("format") === "vertical";
 const W = VERTICAL ? 1080 : 1920, H = VERTICAL ? 1920 : 1080;
-const DURATION = 22000;
+const DURATION = 27900;
 const stage = document.getElementById("stage");
 stage.classList.add(VERTICAL ? "v" : "h");
 const $ = (id) => document.getElementById(id);
@@ -426,15 +460,19 @@ const EASE = {
 };
 const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
 const seg = (ms, at, dur) => clamp((ms - at) / dur);
+const lerp = (a, b, t) => a + (b - a) * t;
 
 /* ── Writers: the only places style is touched per frame ───────────────── */
-function put(el, x, y, s, o, moving) {
-  if (RM) { x = 0; y = 0; s = 1; }
+function write(el, x, y, s, o, moving) {
   el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${s.toFixed(4)})`;
   el.style.opacity = o.toFixed(4);
   el.style.visibility = o <= 0.0005 ? "hidden" : "visible";
   el.style.willChange = moving ? "transform, opacity" : "auto";
 }
+/** Entrance/exit offsets: dropped under reduced motion. */
+function put(el, x, y, s, o, moving) { RM ? write(el, 0, 0, 1, o, false) : write(el, x, y, s, o, moving); }
+/** A position that is the element's state (a knob, a pill, a list), not an entrance: kept as is. */
+const place = (el, x, y, o, moving) => write(el, x, y, 1, o, moving && !RM);
 /**
  * Arrive from (dx, dy) and settle; optionally depart back to (dx, dy).
  * The exit fades faster than it travels, so the moving surface never streaks.
@@ -447,8 +485,8 @@ function track(el, ms, { at, dur = 700, out = null, outDur = 420, dx = 0, dy = 0
   put(el, dx * k, dy * k, 1 + (s0 - 1) * (1 - eIn), o, (pIn > 0 && pIn < 1) || (pOut > 0 && pOut < 1));
 }
 /** Reveal an SVG element left→right through its clip rect (a transform), linear. */
-function reveal(clipRect, target, p) {
-  clipRect.setAttribute("transform", `scale(${RM ? 1 : p.toFixed(5)} 1)`);
+function reveal(clipRect, target, p, x0 = 0) {
+  clipRect.setAttribute("transform", RM ? "" : `translate(${x0} 0) scale(${p.toFixed(5)} 1) translate(${-x0} 0)`);
   target.style.opacity = RM ? p.toFixed(4) : (p > 0 ? "1" : "0");
 }
 /** Count to an exact figure: easing on the value, final frame is the target itself. */
@@ -456,6 +494,8 @@ function count(el, ms, at, dur, target, fmt) {
   const p = seg(ms, at, dur);
   el.textContent = p >= 1 ? fmt(target, true) : fmt(target * EASE.settle(p), false);
 }
+/** Under reduced motion a travelling state swaps at the midpoint behind a dip in opacity. */
+const swap = (p) => ({ p: p < 0.5 ? 0 : 1, o: Math.abs(2 * p - 1) });
 
 /* ── Seeded data: generated once, never consumed by seek() ─────────────── */
 function mulberry32(a) {
@@ -464,249 +504,357 @@ function mulberry32(a) {
 const SEED = 20260924;
 const rand = mulberry32(SEED);
 const gauss = () => { let u = 0; while (u === 0) u = rand(); const v = rand(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); };
-const walkMul = (n, start, drift, vol) => { const a = [start]; for (let i = 1; i < n; i++) a.push(a[i - 1] * (1 + drift + vol * gauss())); return a; };
-const walkAdd = (n, start, drift, vol) => { const a = [start]; for (let i = 1; i < n; i++) a.push(a[i - 1] + drift + vol * gauss()); return a; };
 
 const SVGNS = "http://www.w3.org/2000/svg";
 function svgEl(tag, attrs, parent) { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
-function pathOf(pts) { return pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join(""); }
-function scaleSeries(series, x0, x1, y0, y1, lo, hi) {
-  return series.map((v, i) => [x0 + (x1 - x0) * i / (series.length - 1), y1 - (y1 - y0) * (v - lo) / (hi - lo)]);
-}
+const pathOf = (pts) => pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1)).join("");
+function sizeSvg(svg, w, h) { svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`); }
 let clipId = 0;
-function clipped(svg, w, h) {
+function clipRect(svg, x, w, h) {
   const id = "clip" + (clipId++);
   const cp = svgEl("clipPath", { id }, svg.querySelector("defs") || svgEl("defs", {}, svg));
-  const r = svgEl("rect", { x: 0, y: -20, width: w, height: h + 40 }, cp);
-  return { id, rect: r };
+  return { id, rect: svgEl("rect", { x, y: -30, width: w, height: h + 60 }, cp) };
 }
-
-/* Fill placeholders once. */
-document.querySelectorAll("[data-ph]").forEach((el) => {
-  const v = CONFIG[el.dataset.ph];
-  el.textContent = typeof v === "number" ? "$" + v.toFixed(2) : v;
-});
+const tile = (t, cls = "") => `<span class="tile ${cls}">${CONFIG.LOGOS[t] ? `<img src="${CONFIG.LOGOS[t]}" alt="">` : t.slice(0, 2)}</span>`;
 const money = (v) => "$" + v.toFixed(2);
-
-/* A · sparkline */
-const SPARK = (() => {
-  const w = VERTICAL ? 960 : 1600, h = VERTICAL ? 260 : 220;
-  const svg = $("a-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  const data = walkMul(150, 100, 0.0016, 0.011);
-  const lo = Math.min(...data), hi = Math.max(...data);
-  const pts = scaleSeries(data, 0, w, 16, h - 16, lo, hi);
-  for (let i = 0; i < 4; i++) svgEl("line", { x1: 0, x2: w, y1: 16 + i * (h - 32) / 3, y2: 16 + i * (h - 32) / 3, class: "s-grid" }, svg);
-  const c = clipped(svg, w, h);
-  const line = svgEl("path", { d: pathOf(pts), class: "s-line s-orange", "clip-path": `url(#${c.id})` }, svg);
-  const dot = svgEl("circle", { r: 6, cx: 0, cy: 0, class: "f-orange" }, svg);
-  return { pts, clip: c.rect, line, dot };
-})();
-
-/* B · inputs (the rows carry their provenance stamp from the start, empty until D) */
+const pct1 = (v) => v.toFixed(1) + "%";
 const ICON = {
   ok:   '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="8.2"/><path d="M6.6 10.3l2.3 2.3 4.6-5"/></svg>',
   fail: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="10" cy="10" r="8.2"/><path d="M7.2 7.2l5.6 5.6M12.8 7.2l-5.6 5.6"/></svg>',
   pend: '<svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-dasharray="2.6 2.6"><circle cx="10" cy="10" r="8.2"/></svg>',
 };
-const INPUTS = [
-  { name: "Revenue base", val: CONFIG.REVENUE_BASE, status: "ok",   stamp: `<span class="st ok">${ICON.ok}verified</span><span>· sec</span><span class="mono">· ${CONFIG.FORM_REVENUE} ${CONFIG.ACC_REVENUE}</span>` },
-  { name: "FCF margin",   val: CONFIG.FCF_MARGIN,   status: "warn", stamp: `<span class="st warn">${ICON.pend}unverified</span><span class="mono">· ${CONFIG.FORM_CASHFLOW} ${CONFIG.ACC_CASHFLOW}</span>` },
-  { name: "Net debt",     val: CONFIG.NET_DEBT,     status: "ok",   stamp: `<span class="st ok">${ICON.ok}verified</span><span>· sec</span><span class="mono">· ${CONFIG.FORM_DEBT} ${CONFIG.ACC_DEBT}</span>` },
-  { name: "Shares",       val: CONFIG.SHARES,       status: "ok",   stamp: `<span class="st ok">${ICON.ok}verified</span><span>· sec</span><span class="mono">· ${CONFIG.FORM_SHARES} ${CONFIG.ACC_SHARES}</span>` },
-  { name: "Price",        val: typeof CONFIG.PRICE === "number" ? money(CONFIG.PRICE) : CONFIG.PRICE, status: "dim", stamp: `<span class="st dim">market</span><span>· quote, not a filing</span>` },
-];
-const ROWS = INPUTS.map((r, i) => {
-  const li = document.createElement("li");
-  li.className = "row a";
-  li.innerHTML = `<span class="rule ${r.status} a"></span><div class="row-top"><span class="row-name">${r.name}</span><span class="mono row-val">${r.val}</span></div><div class="stamp a">${r.stamp}</div>`;
-  $("rows").appendChild(li);
-  return { li, rule: li.querySelector(".rule"), stamp: li.querySelector(".stamp") };
-});
 
-/* B · margin fan and Monte Carlo histogram */
+/* A · the tape of company marks */
+const TAPE = ["MSFT", "AAPL", "V", "COST", "JPM", "GOOGL", "AMZN", "META", "KO", "JNJ", "PEP", "ADBE"];
+$("c-tape-row").innerHTML = TAPE.map((t) => `<span class="tape-item">${tile(t)}<span class="mono">${t}</span></span>`).join("");
+const COLD_TICKS = Array.from({ length: 18 }, () => gauss());
+
+/* B · Chart Builder */
+const CB = (() => {
+  const colors = { orange: "var(--sunset-orange)", gold: "var(--golden-hour)", green: "var(--bullish)", snow: "var(--snow-peak)" };
+  $("rail").innerHTML = CONFIG.CHART.map((s) => `<li class="a">${tile(s.t, "c-" + s.color)}<span class="tk">${s.t}</span><span class="nm">${s.name}</span></li>`).join("");
+  const METRICS = ["Revenue", "FCF margin", "Return on equity", "Net debt", "Shares outstanding (diluted)"];
+  $("metrics").insertAdjacentHTML("beforeend", METRICS.map((m) => `<div class="metric a">${m}</div>`).join(""));
+  const w = VERTICAL ? 984 : 1166, h = VERTICAL ? 720 : 520;
+  const x0 = 92, x1 = w - 236, y0 = 18, y1 = h - 52, lo = -10, hi = 80;
+  const svg = $("cb-svg"); sizeSvg(svg, w, h);
+  const T0 = Date.parse("2015-11-01"), T1 = Date.parse("2026-07-01");
+  const xAt = (ms) => x0 + (x1 - x0) * (ms - T0) / (T1 - T0);
+  const yAt = (v) => y1 - (y1 - y0) * (v - lo) / (hi - lo);
+  const grid = svgEl("g", { class: "a" }, svg);
+  [0, 20, 40, 60].forEach((v) => {
+    svgEl("line", { x1: x0, x2: x1, y1: yAt(v), y2: yAt(v), class: v === 0 ? "s-zero" : "s-grid" }, grid);
+    svgEl("text", { x: x0 - 16, y: yAt(v) + 10, "text-anchor": "end" }, grid).textContent = v + "%";
+  });
+  [2016, 2019, 2022, 2025].forEach((yr) => svgEl("text", { x: xAt(Date.parse(yr + "-01-01")), y: h - 6, "text-anchor": "middle" }, grid).textContent = yr);
+  const series = CONFIG.CHART.map((s, k) => {
+    const a = Date.parse(s.from), b = Date.parse(s.to), n = s.q.length;
+    const xs = s.q.map((_, i) => xAt(a + (b - a) * i / (n - 1)));
+    const c = clipRect(svg, x0, x1 - x0 + 8, h);
+    const path = svgEl("path", { class: "s-line s-" + s.color, "clip-path": `url(#${c.id})` }, svg);
+    const pathT = svgEl("path", { class: "s-line s-" + s.color, d: pathOf(xs.map((x, i) => [x, yAt(s.ttm[i])])), "clip-path": `url(#${c.id})` }, svg);
+    const tip = svgEl("circle", { r: 7, class: "f-" + s.color }, svg);
+    const end = svgEl("circle", { r: 7, class: "f-" + s.color }, svg);
+    [pathT, tip, end].forEach((e) => { e.style.opacity = "0"; });   // through the CSSOM, so every write serialises the same way
+    const pill = document.createElement("div");
+    pill.className = "pill a"; pill.style.setProperty("--pc", colors[s.color]);
+    pill.innerHTML = `<i></i><span>${s.t}</span><span class="pv"></span>`;
+    $("pills").appendChild(pill);
+    return { s, xs, yq: s.q.map(yAt), yt: s.ttm.map(yAt), path, pathT, clip: c.rect, tip, end, pill, pv: pill.querySelector(".pv"), endFrac: (xs[n - 1] - x0) / (x1 - x0) };
+  });
+  return { series, grid, x0, x1, y0, y1, rows: [...$("metrics").querySelectorAll(".metric")], rail: [...$("rail").children], rowH: 56 };
+})();
+/** Pill labels keep a minimum gap, top to bottom; the order of the ends never changes in this data. */
+function relax(ys, gap, top, bottom) {
+  const idx = ys.map((_, i) => i).sort((a, b) => ys[a] - ys[b]), out = ys.slice();
+  for (let k = 1; k < idx.length; k++) { const a = idx[k - 1], b = idx[k]; if (out[b] - out[a] < gap) out[b] = out[a] + gap; }
+  const last = idx[idx.length - 1];
+  if (out[last] > bottom) { out[last] = bottom; for (let k = idx.length - 2; k >= 0; k--) { const a = idx[k], b = idx[k + 1]; if (out[b] - out[a] < gap) out[a] = out[b] - gap; } }
+  for (const i of idx) out[i] = Math.max(out[i], top);
+  return out;
+}
+
+/* C · the illustrative valuation */
+const IL = CONFIG.ILLUSTRATIVE;
+$("v-tile").innerHTML = CONFIG.LOGOS[IL.ticker] ? `<img src="${CONFIG.LOGOS[IL.ticker]}" alt="">` : IL.ticker;
+$("v-name").textContent = IL.name;
+const CASES = [IL.bear, IL.base, IL.bull], CASE_NAMES = ["bear case", "base case", "bull case"];
 const FAN = (() => {
-  const w = VERTICAL ? 432 : 456, h = 104;
-  const svg = $("fan-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  for (let i = 0; i < 4; i++) svgEl("line", { x1: 0, x2: w, y1: 6 + i * (h - 26) / 3, y2: 6 + i * (h - 26) / 3, class: "s-grid" }, svg);
-  svgEl("text", { x: 0, y: h - 2, "text-anchor": "start" }, svg).textContent = "today";
-  svgEl("text", { x: w, y: h - 2, "text-anchor": "end" }, svg).textContent = "terminal";
-  const base = [], bear = [], bull = [];
-  for (let i = 0; i <= 10; i++) { const n = 0.012 * gauss(); base.push(0.50 + 0.018 * i + n); bear.push(0.50 - 0.022 * i + n * 0.6); bull.push(0.50 + 0.046 * i + n * 1.2); }
-  const all = base.concat(bear, bull), lo = Math.min(...all) - 0.03, hi = Math.max(...all) + 0.03;
-  const lines = [["s-mist", bear], ["s-orange", base], ["s-gold", bull]].map(([cls, s]) => {
-    const c = clipped(svg, w, h);
-    return { clip: c.rect, el: svgEl("path", { d: pathOf(scaleSeries(s, 2, w - 2, 6, h - 20, lo, hi)), class: "s-line " + cls, "clip-path": `url(#${c.id})` }, svg) };
+  const w = VERTICAL ? 984 : 820, h = VERTICAL ? 420 : 470;
+  const svg = $("fan-svg"); sizeSvg(svg, w, h);
+  const px1 = w - 96, py0 = 12, py1 = h - 46;
+  for (let i = 0; i < 4; i++) svgEl("line", { x1: 0, x2: px1, y1: py0 + i * (py1 - py0) / 3, y2: py0 + i * (py1 - py0) / 3, class: "s-grid" }, svg);
+  svgEl("text", { x: 0, y: h - 6 }, svg).textContent = "today";
+  svgEl("text", { x: px1, y: h - 6, "text-anchor": "end" }, svg).textContent = "terminal";
+  const paths = [[], [], []];
+  for (let i = 0; i <= 10; i++) { const n = 0.012 * gauss(); paths[1].push(0.50 + 0.018 * i + n); paths[0].push(0.50 - 0.024 * i + n * 0.6); paths[2].push(0.50 + 0.048 * i + n * 1.2); }
+  const all = [].concat(...paths), lo = Math.min(...all) - 0.03, hi = Math.max(...all) + 0.03;
+  const cls = ["s-mist", "s-orange", "s-gold"], names = ["bear", "base", "bull"];
+  const lines = paths.map((p, k) => {
+    const pts = p.map((v, i) => [px1 * i / 10, py1 - (py1 - py0) * (v - lo) / (hi - lo)]);
+    const c = clipRect(svg, 0, w, h);
+    const g = svgEl("g", { "clip-path": `url(#${c.id})` }, svg);
+    const el = svgEl("path", { d: pathOf(pts), class: "s-line " + cls[k] }, g);
+    const lab = svgEl("text", { x: px1 + 14, y: pts[10][1] + 10 }, g); lab.textContent = names[k];
+    return { el, g, lab, clip: c.rect };
   });
   return { lines };
 })();
 const HIST = (() => {
-  const w = VERTICAL ? 432 : 456, h = 58, bins = 34;
-  const svg = $("hist-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-  const counts = new Array(bins).fill(0);
-  for (let i = 0; i < 4000; i++) {
-    const u = rand(); const mu = u < 0.25 ? 0.30 : u < 0.75 ? 0.50 : 0.72; const sd = u < 0.25 ? 0.07 : u < 0.75 ? 0.06 : 0.08;
-    const b = Math.floor(clamp(mu + sd * gauss(), 0, 0.9999) * bins); counts[b]++;
-  }
-  const max = Math.max(...counts), bw = w / bins;
-  const g = svgEl("g", {}, svg);
-  counts.forEach((c, i) => { const bh = (h - 2) * c / max; svgEl("rect", { x: (i * bw + 1).toFixed(1), y: (h - bh).toFixed(1), width: (bw - 2).toFixed(1), height: bh.toFixed(1), rx: 1.5, class: i >= 14 && i <= 20 ? "f-bar" : "f-bar-dim" }, g); });
-  svgEl("line", { x1: 0, x2: w, y1: h - 0.5, y2: h - 0.5, class: "s-axis" }, svg);
-  return { g, h };
+  const w = VERTICAL ? 984 : 746, h = VERTICAL ? 250 : 262, base = h - 44, top = 44, bins = 40, $lo = 40, $hi = 200;
+  const svg = $("hist-svg"); sizeSvg(svg, w, h);
+  const xAt = (v) => w * (v - $lo) / ($hi - $lo);
+  const Z = Array.from({ length: 3000 }, () => gauss());      // one sampler, three centres
+  const sds = [13, 15, 20];
+  const counts = CASES.map((c, s) => { const a = new Array(bins).fill(0); for (const z of Z) { const v = c + sds[s] * z; const b = Math.floor((v - $lo) / ($hi - $lo) * bins); if (b >= 0 && b < bins) a[b]++; } return a; });
+  const max = Math.max(...counts.flat()), bw = w / bins;
+  const bars = [];
+  for (let b = 0; b < bins; b++) { const g = svgEl("g", {}, svg); svgEl("rect", { x: 1, y: 0, width: (bw - 3).toFixed(1), height: 1, rx: 0, class: "f-bar" }, g); bars.push(g); }
+  svgEl("line", { x1: 0, x2: w, y1: base + 0.5, y2: base + 0.5, class: "s-zero" }, svg);
+  svgEl("line", { x1: xAt(IL.price), x2: xAt(IL.price), y1: top - 4, y2: base, class: "s-price" }, svg);
+  svgEl("text", { x: xAt(IL.price) + 10, y: top - 12 }, svg).textContent = "price " + money(IL.price);
+  [60, 100, 140, 180].forEach((v) => svgEl("text", { x: xAt(v), y: h - 4, "text-anchor": "middle" }, svg).textContent = "$" + v);
+  return { counts, bars, bw, base, span: base - top - 8, max };
 })();
+// The scenario the knob sits on over time: Base → Bear → Bull → Base.
+const KNOB_KEYS = [[0, 1], [1900, 1], [2500, 0], [2900, 0], [3700, 2], [4000, 2], [4600, 1]];
+function knobPos(ms) {
+  for (let i = 1; i < KNOB_KEYS.length; i++) {
+    const [ta, va] = KNOB_KEYS[i - 1], [tb, vb] = KNOB_KEYS[i];
+    if (ms <= tb) return lerp(va, vb, EASE.settle(seg(ms, ta, tb - ta)));
+  }
+  return KNOB_KEYS[KNOB_KEYS.length - 1][1];
+}
+const valueAt = (pos) => (pos <= 1 ? lerp(CASES[0], CASES[1], pos) : lerp(CASES[1], CASES[2], pos - 1));
+const weightsAt = (pos) => (pos <= 1 ? [1 - pos, pos, 0] : [0, 2 - pos, pos - 1]);
 
-/* C · checks, labels verbatim from src/lib/dcf/gate.ts */
-const CHECKS = [
-  ["Market cap = shares × price", "pass"],
-  ["Four quarters of FCF = fiscal-year FCF", "fail"],
-  ["Total debt = filed debt", "pass"],
-  ["Revenue period matches today’s perimeter", "pass"],
-  ["Usable margin record", "pass"],
-].map(([label, status]) => {
-  const li = document.createElement("li");
-  li.className = "chk a";
-  li.innerHTML = `${status === "fail" ? '<span class="hl a"></span>' : ""}<span class="ic"><span class="p dim">${ICON.pend}</span><span class="r ${status === "fail" ? "warn" : "ok"} a">${status === "fail" ? ICON.fail : ICON.ok}</span></span><span class="txt">${label}</span><span class="tag mono a ${status === "fail" ? "warn" : "dim"}">${status === "fail" ? "FAIL" : "PASS"}</span>`;
+/* D/E · the real filing */
+const RE = CONFIG.REAL;
+$("j-tile").innerHTML = CONFIG.LOGOS[RE.ticker] ? `<img src="${CONFIG.LOGOS[RE.ticker]}" alt="">` : RE.ticker.slice(0, 2);
+$("j-t").textContent = RE.ticker; $("j-name").textContent = RE.name; $("j-form").textContent = RE.form; $("j-line").textContent = RE.failedLine;
+const FIGS = RE.figures.map((f) => {
+  const d = document.createElement("div"); d.className = "fig a";
+  d.innerHTML = `<span class="rule a"></span><div class="fig-top"><span class="fig-name">${f.name}</span><span class="fig-val mono">${f.value}</span></div><div class="fig-sub mono">${f.sub}</div><div class="stamp mono a">${ICON.ok}<span>${RE.form.split(" ")[0]} · ${RE.accession}</span></div>`;
+  $("figs").appendChild(d);
+  return { el: d, stamp: d.querySelector(".stamp"), rule: d.querySelector(".rule") };
+});
+const TAG = { pass: ["PASS", "dim"], fail: ["FAIL", "warn"], unverifiable: ["NOT VERIFIABLE", "dim"] };
+const RESICON = { pass: ["ok", "ok"], fail: ["fail", "warn"], unverifiable: ["pend", "dim"] };
+const CHECKS = RE.checks.map(([label, status], i) => {
+  const li = document.createElement("li"); li.className = "chk";
+  const last = i === RE.checks.length - 1;
+  li.innerHTML = `${last ? '<span class="hl a"></span>' : ""}<span class="ic"><span class="p pend">${ICON.pend}</span><span class="r ${RESICON[status][1]} a">${ICON[RESICON[status][0]]}</span></span><span class="txt">${label}</span><span class="tag a ${TAG[status][1]}">${TAG[status][0]}</span>`;
   $("checks").appendChild(li);
-  return { li, status, pend: li.querySelector(".p"), res: li.querySelector(".r"), tag: li.querySelector(".tag"), txt: li.querySelector(".txt"), hl: li.querySelector(".hl") };
-});
-CHECKS.forEach((c) => { c.pend.style.position = c.res.style.position = "absolute"; c.pend.style.inset = c.res.style.inset = "0"; });
-
-/* E · chart builder: four companies, 80 quarters (20 years) */
-const CB = (() => {
-  const w = VERTICAL ? 902 : 470, h = VERTICAL ? 196 : 318;
-  const svg = $("cb-svg"); svg.setAttribute("width", w); svg.setAttribute("height", h); svg.setAttribute("viewBox", `0 0 ${w} ${h}`); svg.style.display = "block";
-  const top = 6, bottom = h - 22;
-  for (let i = 0; i < 5; i++) svgEl("line", { x1: 0, x2: w, y1: top + i * (bottom - top) / 4, y2: top + i * (bottom - top) / 4, class: "s-grid" }, svg);
-  ["20y", "15y", "10y", "5y", "now"].forEach((t, i) => svgEl("text", { x: i * w / 4, y: h - 4, "text-anchor": i === 0 ? "start" : i === 4 ? "end" : "middle" }, svg).textContent = t);
-  const series = [walkAdd(80, 0.18, 0.0012, 0.009), walkAdd(80, 0.10, 0.0022, 0.008), walkAdd(80, 0.24, -0.0006, 0.010), walkAdd(80, 0.06, 0.0009, 0.007)];
-  const all = [].concat(...series), lo = Math.min(...all) - 0.01, hi = Math.max(...all) + 0.01;
-  const lines = ["s-orange", "s-gold", "s-green", "s-snow"].map((cls, k) => {
-    const c = clipped(svg, w, h);
-    return { clip: c.rect, el: svgEl("path", { d: pathOf(scaleSeries(series[k], 1, w - 1, top, bottom, lo, hi)), class: "s-line " + cls, "clip-path": `url(#${c.id})`, style: k === 3 ? "stroke-opacity:.7" : "" }, svg) };
-  });
-  return { lines };
-})();
-
-/* E · regime chips, labels verbatim from src/lib/dcf/regime.ts */
-const RCHIPS = ["Lender or insurer", "Capex peak", "Leveraged", "Thin margin", "Shifting perimeter"].map((t, i) => {
-  const s = document.createElement("span"); s.className = "rchip a" + (i === 0 ? " on" : ""); s.textContent = t; $("rchips").appendChild(s); return s;
+  return { li, status, last, pend: li.querySelector(".p"), res: li.querySelector(".r"), tag: li.querySelector(".tag"), txt: li.querySelector(".txt"), hl: li.querySelector(".hl") };
 });
 
-/* E · screener rows: skeleton tickers, no figures */
-const SC_ROWS = 22, SC_ROW_H = 44;
+/* F · screener rows: marks, tickers, and each company's own TTM history */
+const SC_ROW_H = 84;
 (() => {
-  const regs = ["operating", "operating", "Capex peak", "operating", "Leveraged", "Thin margin", "operating", "Lender or insurer", "Shifting perimeter"];
-  for (let i = 0; i < SC_ROWS; i++) {
-    const reg = regs[Math.floor(rand() * regs.length)]; const pass = rand() < 0.7 ? 5 : 4;
-    const row = document.createElement("div"); row.className = "sc-row";
-    row.innerHTML = `<span><span class="sk" style="display:block;width:${Math.round(44 + rand() * 40)}px"></span></span><span class="sc-reg${reg === "operating" ? "" : " gold"}">${reg}</span><span class="dots">${"<i></i>".repeat(pass)}${pass < 5 ? '<i class="off"></i>' : ""}</span>`;
-    $("sc-list").appendChild(row);
-  }
+  const sw = VERTICAL ? 190 : 330, sh = 52;
+  $("sc-list").innerHTML = CONFIG.SCREENER.map(([t, name, hist]) => {
+    const lo = Math.min(...hist), hi = Math.max(...hist), span = hi - lo || 1;
+    const pts = hist.map((v, i) => [4 + (sw - 12) * i / (hist.length - 1), 4 + (sh - 8) * (1 - (v - lo) / span)]);
+    const last = pts[pts.length - 1];
+    return `<div class="sc-row">${tile(t)}<span class="tk">${t}</span><span class="nm">${name}</span><span class="val">${pct1(hist[hist.length - 1])}</span>` +
+      `<svg width="${sw}" height="${sh}" viewBox="0 0 ${sw} ${sh}"><path d="${pathOf(pts)}" class="s-line s-mist" style="stroke-width:2.5"/><circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="5" class="f-orange"/></svg></div>`;
+  }).join("");
 })();
 
 /* ════════════════════════════════════════════════════════════════════════
  * TIMELINE — each element is owned by exactly one beat, and every beat is
  * rendered on every seek, so a frame depends only on the time asked for.
  * ════════════════════════════════════════════════════════════════════════ */
-const E_ = (id) => $(id);
 const el = {
-  grid: E_("grid"), aEyebrow: E_("a-eyebrow"), aPrice: E_("a-price"), aSpark: E_("a-spark"), aLine: E_("a-line"),
-  copyB: E_("copy-b"), copyC: E_("copy-c"), copyD: E_("copy-d"),
-  panel: E_("panel"), pHead: E_("p-head"), pSeg: E_("p-seg"), pInLabel: E_("p-in-label"),
-  pScen: E_("p-scen"), pChecks: E_("p-checks"), pValue: E_("p-value"), pIv: E_("p-iv"), pIvSub: E_("p-iv-sub"), pCover: E_("p-cover"),
-  cv: [0, 1, 2, 3].map((i) => E_("cv-" + i)),
-  eHead: E_("e-head"), card1: E_("card-1"), card2: E_("card-2"), card3: E_("card-3"), rg: E_("rg-card"),
-  cbN: [E_("cb-n0"), E_("cb-n1"), E_("cb-n2")], scN: E_("sc-n"), scList: E_("sc-list"),
-  fWord: E_("f-word"), fUrl: E_("f-url"), fLine: E_("f-line"), fLegal: E_("f-legal"),
+  grid: $("grid"), mark: $("mark"),
+  cLabel: $("c-label"), cNum: $("c-num"), cTape: $("c-tape"), cTapeRow: $("c-tape-row"), cLine: $("c-line"),
+  capChart: $("cap-chart"), capVal: $("cap-val"), capCheck: $("cap-check"), capProv: $("cap-prov"), capScr: $("cap-scr"),
+  pChart: $("p-chart"), cbL1: $("cb-l1"), cbL2: $("cb-l2"), hold: $("hold"), cbTitle: $("cb-title"), cbSeg: $("cb-seg"), cbKnob: $("cb-knob"), cbFoot: $("cb-foot"),
+  cbf: [$("cbf0"), $("cbf1"), $("cbf2")], cbSegLabels: [...$("cb-seg").querySelectorAll("span")],
+  pVal: $("p-val"), vWho: $("v-who"), vSeg: $("v-seg"), vKnob: $("v-knob"), vSegLabels: [...$("v-seg").querySelectorAll("span")],
+  vL1: $("v-l1"), vL2: $("v-l2"), vL3: $("v-l3"), fan: $("fan-svg"), hist: $("hist-svg"), vNum: $("v-num"), vChips: $("v-chips"), vCase: $("v-case"), vDelta: $("v-delta"),
+  pJpm: $("p-jpm"), jHead: $("j-head"), jChecks: $("checks"), jCl: $("j-cl"), jVslot: $("j-vslot"), jPend: $("j-pend"), jWith: $("j-with"), jLine: $("j-line"), jReg: $("j-reg"),
+  pScr: $("p-scr"), scHead: $("sc-head"), scCols: $("sc-cols"), scN: $("sc-n"), scList: $("sc-list"),
+  fWord: $("f-word"), fUrl: $("f-url"), fLine: $("f-line"), fLegal: $("f-legal"),
 };
 const beat = (id, start, duration, easing, fn) => ({ id, start, duration, easing, render(t) { fn(t * duration, t); } });
 
-// Seeded, decaying price ticks for a numeric PRICE; the last tick is the figure itself.
-const TICKS = Array.from({ length: 16 }, () => gauss());
+// The stillness before the failing check, in film time. The field's drift is
+// paused across it so that nothing on screen moves.
+const STILL = [16030, 16330];
+const driftPhase = (t) => (t <= STILL[0] ? t : t <= STILL[1] ? STILL[0] : t - (STILL[1] - STILL[0]));
+const DRIFT_SPAN = DURATION - (STILL[1] - STILL[0]);
 
 const TIMELINE = [
-  beat("field", 0, DURATION, "linear", (ms, t) => {
-    put(el.grid, 0, -24 * t, 1, 1, !RM && t > 0 && t < 1);
+  // Out and back on a sine over the whole film: the last frame's field is the first frame's.
+  beat("field", 0, DURATION, "sine", (ms) => {
+    const y = -26 * Math.sin(2 * Math.PI * driftPhase(ms) / DRIFT_SPAN);
+    put(el.grid, 0, y, 1, 1, !RM && !(ms >= STILL[0] && ms <= STILL[1]) && ms > 0 && ms < DURATION);
   }),
 
-  beat("cold-open", 0, 2800, "settle", (ms) => {
-    track(el.aEyebrow, ms, { at: 120, dur: 600, out: 2280, outDur: 420, dy: 14 });
-    track(el.aPrice,   ms, { at: 200, dur: 700, out: 2300, outDur: 420, dy: 18 });
-    track(el.aSpark,   ms, { at: 0,   dur: 500, out: 2320, outDur: 420, dy: 0 });
-    track(el.aLine,    ms, { at: 900, dur: 800, out: 2340, outDur: 440, dy: 24 });
-    const p = seg(ms, 0, 2200);                                  // the line sweeps: linear
-    reveal(SPARK.clip, SPARK.line, p);
-    const pts = SPARK.pts, f = (RM ? 1 : p) * (pts.length - 1), i = Math.min(pts.length - 2, Math.floor(f)), u = f - i;
-    const x = pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, y = pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u;
-    SPARK.dot.setAttribute("transform", `translate(${x.toFixed(2)} ${y.toFixed(2)})`);
-    SPARK.dot.style.opacity = (RM ? p : p > 0 ? 1 : 0).toString();
-    if (typeof CONFIG.PRICE === "number") {
-      const k = Math.min(TICKS.length - 1, Math.floor(ms / 140)), decay = 1 - seg(ms, 0, 2000);
-      el.aPrice.textContent = decay <= 0 ? money(CONFIG.PRICE) : money(CONFIG.PRICE * (1 + 0.004 * TICKS[k] * decay));
-    } else el.aPrice.textContent = CONFIG.PRICE;
+  beat("cold-open", 0, 2700, "settle", (ms) => {
+    track(el.cLabel, ms, { at: 150, dur: 600, out: 2180, outDur: 440, dy: 14 });
+    track(el.cNum,   ms, { at: 200, dur: 700, out: 2200, outDur: 440, dy: 18 });
+    track(el.cTape,  ms, { at: 0,   dur: 600, out: 2220, outDur: 440 });
+    track(el.cLine,  ms, { at: 1000, dur: 800, out: 2240, outDur: 440, dy: 24 });
+    place(el.cTapeRow, RM ? 0 : -170 * seg(ms, 0, 2700), 0, 1, !RM && ms > 0 && ms < 2700);   // the tape runs: linear
+    const k = Math.min(COLD_TICKS.length - 1, Math.floor(ms / 110)), decay = 1 - seg(ms, 0, 1900);
+    el.cNum.textContent = decay <= 0 ? money(IL.base) : money(IL.base * (1 + 0.18 * COLD_TICKS[k] * decay));
   }),
 
-  beat("panel", 2600, 11350, "settle", (ms) => {
-    track(el.panel, ms, { at: 100, dur: 750, out: 10900, outDur: 450, dx: 120 });
+  beat("mark", 2400, 22300, "settle", (ms) => {
+    track(el.mark, ms, { at: 0, dur: 500, out: 21900, outDur: 400 });
   }),
 
-  beat("assemble", 2500, 5500, "settle", (ms) => {
-    track(el.copyB, ms, { at: 100, dur: 750, out: 3900, outDur: 400, dy: 24 });
-    track(el.pHead, ms, { at: 380, dur: 600, dy: 10 });
-    track(el.pSeg,  ms, { at: 440, dur: 600, dy: 10 });
-    track(el.pInLabel, ms, { at: 420, dur: 600, dy: 8 });
-    ROWS.forEach((r, i) => track(r.li, ms, { at: 500 + i * 60, dur: 650, dy: 14 }));
-    track(el.pScen, ms, { at: 950, dur: 600, out: 4000, outDur: 350, dy: 10 });
-    FAN.lines.forEach((l, i) => reveal(l.clip, l.el, seg(ms, 1000 + i * 60, 900)));
-    const hp = EASE.settle(seg(ms, 1700, 700));
-    HIST.g.setAttribute("transform", RM ? "" : `translate(0 ${HIST.h}) scale(1 ${Math.max(0.0001, hp).toFixed(4)}) translate(0 ${-HIST.h})`);
-    HIST.g.style.opacity = (RM ? hp : hp > 0 ? 1 : 0).toString();
-    track(el.pValue, ms, { at: 1900, dur: 600, out: 5100, outDur: 300, dy: 10 });
-    if (typeof CONFIG.IV_SHARE === "number") count(el.pIv, ms, 2200, 1300, CONFIG.IV_SHARE, (v) => money(v));
-    else { el.pIv.textContent = CONFIG.IV_SHARE; }
-    track(el.pIvSub, ms, { at: 3100, dur: 500, dy: 6 });
+  beat("chart-builder", 2700, 6000, "settle", (ms) => {
+    track(el.capChart, ms, { at: 0,   dur: 700, out: 5600, outDur: 400, dy: 20 });
+    track(el.pChart,   ms, { at: 100, dur: 750, out: 5600, outDur: 400, dx: 120 });
+    track(el.cbL1, ms, { at: 350, dur: 500, dy: 8 });
+    CB.rail.forEach((r, i) => track(r, ms, { at: 450 + i * 70, dur: 600, dx: -20, s0: 0.97 }));   // the rail lands one by one
+    track(el.cbL2, ms, { at: 800, dur: 500, dy: 8 });
+    CB.rows.forEach((r, i) => track(r, ms, { at: 850 + i * 50, dur: 500, dy: 8 }));
+    // The hold arrives under Revenue, then slides under FCF margin.
+    const hp = seg(ms, 1450, 500), step = VERTICAL ? { x: (984 + 24) / 2, y: 0 } : { x: 0, y: CB.rowH };
+    const hs = RM ? swap(hp) : { p: EASE.settle(hp), o: 1 };
+    place(el.hold, step.x * hs.p, step.y * hs.p, EASE.settle(seg(ms, 1250, 300)) * hs.o, hp > 0 && hp < 1);
+    CB.rows.forEach((r, i) => r.classList.toggle("on", (i === 0 && ms >= 1250 && ms < 1700) || (i === 1 && ms >= 1700)));
+    track(el.cbTitle, ms, { at: 1700, dur: 500, dy: 8 });
+    track(el.cbSeg,   ms, { at: 1750, dur: 500, dy: 8 });
+    track(CB.grid,    ms, { at: 1800, dur: 400 });
+    track(el.cbFoot,  ms, { at: 2300, dur: 500, dy: 8 });
+    count(el.cbf[0], ms, 2300, 700, 4, (v) => String(Math.round(v)));
+    count(el.cbf[1], ms, 2300, 900, 49, (v) => String(Math.round(v)));
+    count(el.cbf[2], ms, 2300, 900, 20, (v) => String(Math.round(v)));
+    // Granularity: the knob travels Quarterly → TTM.
+    const kp = seg(ms, 3500, 500), ks = RM ? swap(kp) : { p: EASE.settle(kp), o: 1 };
+    place(el.cbKnob, 190 * ks.p, 0, ks.o, kp > 0 && kp < 1);
+    el.cbSegLabels.forEach((s, i) => s.classList.toggle("on", i === (ks.p >= 0.5 ? 1 : 0)));
+    // Four series draw in, then smooth into their TTM shape point by point.
+    const morphAt = (j) => EASE.settle(seg(ms, 3650 + j * 18, 520));
+    const ends = [], vals = [];
+    CB.series.forEach((c, i) => {
+      const at = 2000 + i * 70, p = seg(ms, at, 1100);
+      reveal(c.clip, c.path, p, CB.x0);
+      const n = c.xs.length;
+      if (RM) {
+        const m = seg(ms, 3650, 1220);
+        c.path.setAttribute("d", pathOf(c.xs.map((x, j) => [x, c.yq[j]])));
+        c.path.style.opacity = (p * (1 - m)).toFixed(4); c.pathT.style.opacity = (p * m).toFixed(4);
+      } else {
+        c.path.setAttribute("d", pathOf(c.xs.map((x, j) => [x, lerp(c.yq[j], c.yt[j], morphAt(j))])));
+        c.pathT.style.opacity = "0";
+      }
+      // the tip rides the reveal until the line reaches its own last quarter
+      const xTip = CB.x0 + p * (CB.x1 - CB.x0), riding = !RM && p > 0 && xTip < c.xs[n - 1] && xTip >= c.xs[0];
+      let tx = c.xs[0], ty = c.yq[0];
+      if (riding) { let j = 0; while (j < n - 2 && c.xs[j + 1] < xTip) j++; const u = (xTip - c.xs[j]) / (c.xs[j + 1] - c.xs[j]); tx = xTip; ty = lerp(c.yq[j], c.yq[j + 1], u); }
+      c.tip.setAttribute("transform", `translate(${tx.toFixed(2)} ${ty.toFixed(2)})`);
+      c.tip.style.opacity = riding ? "1" : "0";
+      const mEnd = RM ? seg(ms, 3650, 1220) : morphAt(n - 1);
+      const yEnd = RM ? (mEnd < 0.5 ? c.yq[n - 1] : c.yt[n - 1]) : lerp(c.yq[n - 1], c.yt[n - 1], mEnd);
+      c.end.setAttribute("transform", `translate(${c.xs[n - 1].toFixed(2)} ${yEnd.toFixed(2)})`);
+      const landed = at + c.endFrac * 1100;
+      c.end.style.opacity = EASE.settle(seg(ms, landed, 250)).toFixed(4);
+      ends.push(yEnd);
+      const v = mEnd >= 1 ? c.s.ttm[n - 1] : lerp(c.s.q[n - 1], c.s.ttm[n - 1], mEnd);
+      vals.push({ v, landed, mEnd });
+    });
+    const ys = relax(ends, 54, CB.y0 + 23, CB.y1 - 23);
+    CB.series.forEach((c, i) => {
+      const { v, landed, mEnd } = vals[i], n = c.xs.length;
+      c.pv.textContent = pct1(v);
+      const pIn = seg(ms, landed, 350), e = EASE.settle(pIn);
+      const o = e * (RM ? (mEnd > 0 && mEnd < 1 ? Math.abs(2 * mEnd - 1) : 1) : 1);
+      place(c.pill, c.xs[n - 1] + 18 + (RM ? 0 : -12 * (1 - e)), ys[i] - 23, o, (pIn > 0 && pIn < 1) || (mEnd > 0 && mEnd < 1));
+    });
   }),
 
-  beat("withheld", 6500, 3300, "settle", (ms) => {
-    track(el.copyC, ms, { at: 150, dur: 750, out: 2900, outDur: 400, dy: 24 });
-    track(el.pChecks, ms, { at: 250, dur: 500, dy: 10 });
+  beat("valuation", 8700, 5500, "settle", (ms) => {
+    track(el.capVal, ms, { at: 0,   dur: 700, out: 5100, outDur: 400, dy: 20 });
+    track(el.pVal,   ms, { at: 100, dur: 750, out: 5100, outDur: 400, dx: 120 });
+    track(el.vWho, ms, { at: 350, dur: 550, dy: 8 });
+    track(el.vSeg, ms, { at: 420, dur: 550, dy: 8 });
+    track(el.vL1,  ms, { at: 500, dur: 500, dy: 8 });
+    track(el.fan,  ms, { at: 500, dur: 400 });
+    track(el.vL2,  ms, { at: 600, dur: 500, dy: 8 });
+    track(el.vNum, ms, { at: 650, dur: 600, dy: 10 });
+    track(el.vChips, ms, { at: 1400, dur: 500, dy: 8 });
+    track(el.vL3,  ms, { at: 700, dur: 500, dy: 8 });
+    track(el.hist, ms, { at: 700, dur: 400 });
+    const pos = knobPos(ms);
+    const kp = RM ? Math.round(pos) : pos;           // reduced motion: the knob jumps, the value still counts
+    const moving = !RM && ms > KNOB_KEYS[0][0] && ms < KNOB_KEYS[KNOB_KEYS.length - 1][0] && Math.abs(pos - Math.round(pos)) > 1e-4;
+    place(el.vKnob, 170 * kp, 0, 1, moving);
+    const near = Math.round(pos);
+    el.vSegLabels.forEach((s, i) => s.classList.toggle("on", i === near));
+    // The value: counts up to the base case on arrival, then follows the knob continuously.
+    const arrive = seg(ms, 700, 800), v = arrive < 1 ? valueAt(pos) * EASE.settle(arrive) : valueAt(pos);
+    el.vNum.textContent = money(Math.abs(pos - Math.round(pos)) < 1e-9 && arrive >= 1 ? CASES[near] : v);
+    el.vCase.textContent = CASE_NAMES[near];
+    const d = v / IL.price - 1;
+    el.vDelta.textContent = (d >= 0 ? "+" : "−") + Math.abs(d * 100).toFixed(1) + "% vs price";
+    el.vDelta.className = "chip " + (d >= 0 ? "up" : "down");
+    // The fan holds the live path; the other two recede — stroke width and opacity.
+    FAN.lines.forEach((l, k) => {
+      reveal(l.clip, l.g, seg(ms, 550 + k * 70, 900));
+      const w = clamp(1 - Math.abs(pos - k));
+      l.el.style.strokeWidth = (2 + 3.5 * w).toFixed(3);
+      l.el.style.opacity = (0.28 + 0.72 * w).toFixed(4);
+      l.lab.style.opacity = (0.4 + 0.6 * w).toFixed(4);
+    });
+    // Monte Carlo: one sampler, three centres; the mass moves between them.
+    const wts = weightsAt(pos), grow = EASE.settle(seg(ms, 800, 700));
+    HIST.bars.forEach((g, b) => {
+      const c = wts[0] * HIST.counts[0][b] + wts[1] * HIST.counts[1][b] + wts[2] * HIST.counts[2][b];
+      const hgt = Math.max(0.0001, HIST.span * c / HIST.max * grow);
+      g.setAttribute("transform", `translate(${(b * HIST.bw).toFixed(2)} ${HIST.base}) scale(1 ${(-hgt).toFixed(3)})`);
+    });
+  }),
+
+  beat("failing-check", 14200, 4300, "settle", (ms) => {
+    track(el.capCheck, ms, { at: 0, dur: 700, out: 3900, outDur: 400, dy: 20 });
+    track(el.jHead, ms, { at: 300, dur: 550, dy: 8 });
+    FIGS.forEach((f, i) => track(f.el, ms, { at: 400 + i * 60, dur: 600, dy: 14 }));
+    track(el.jCl, ms, { at: 450, dur: 500, dy: 8 });
+    track(el.jChecks, ms, { at: 520, dur: 550, dy: 8 });
     CHECKS.forEach((c, i) => {
-      track(c.li, ms, { at: 300 + i * 55, dur: 500, dy: 8 });
-      const rp = seg(ms, 650 + i * 130, 300);              // each check resolves in turn
-      c.pend.style.opacity = (1 - EASE.settle(rp)).toFixed(4);
-      track(c.res, ms, { at: 650 + i * 130, dur: 300, s0: 0.8 });
-      track(c.tag, ms, { at: 690 + i * 130, dur: 300, dx: 6 });
-      if (c.hl) { track(c.hl, ms, { at: 900, dur: 450 }); c.txt.classList.toggle("warn", ms >= 900); }
+      // The first four resolve in a run; then 300ms of stillness; then the last, on a longer beat.
+      const at = c.last ? 2130 : 1300 + i * 90, dur = c.last ? 700 : 260;
+      c.pend.style.opacity = (1 - EASE.settle(seg(ms, at, Math.min(dur, 300)))).toFixed(4);
+      track(c.res, ms, { at, dur, s0: c.last ? 0.6 : 0.8 });
+      track(c.tag, ms, { at: at + (c.last ? 120 : 0), dur: c.last ? 600 : 260, dx: 8 });
+      if (c.hl) { track(c.hl, ms, { at: 2130, dur: 700 }); c.txt.classList.toggle("warn", ms > 2130); }
     });
-    track(el.pCover, ms, { at: 1200, dur: 650, dy: 8, s0: 0.985 });
-    el.cv.forEach((c, i) => track(c, ms, { at: 1260 + i * 60, dur: 550, dy: 6 }));
+    track(el.jVslot, ms, { at: 620, dur: 550, dy: 10 });
+    track(el.jPend, ms, { at: 700, dur: 400, out: 2400, outDur: 250 });
+    track(el.jWith, ms, { at: 2500, dur: 650, dy: 10 });
+    track(el.jLine, ms, { at: 2560, dur: 550, dy: 8 });
+    track(el.jReg,  ms, { at: 2620, dur: 550, dy: 8 });
   }),
 
-  beat("provenance", 9500, 4100, "settle", (ms) => {
-    track(el.copyD, ms, { at: 200, dur: 750, out: 3700, outDur: 400, dy: 24 });
-    ROWS.forEach((r, i) => {                                   // stamped one by one
-      track(r.stamp, ms, { at: 500 + i * 400, dur: 420, s0: 1.04 });
-      track(r.rule,  ms, { at: 500 + i * 400, dur: 420 });
+  beat("real-panel", 14200, 6900, "settle", (ms) => {
+    track(el.pJpm, ms, { at: 100, dur: 750, out: 6500, outDur: 400, dx: 120 });
+  }),
+
+  beat("provenance", 18100, 3000, "settle", (ms) => {
+    track(el.capProv, ms, { at: 200, dur: 700, out: 2600, outDur: 400, dy: 20 });
+    FIGS.forEach((f, i) => {                                   // three stamps, landing under figures already on screen
+      track(f.stamp, ms, { at: 400 + i * 500, dur: 420, s0: 1.04 });
+      track(f.rule,  ms, { at: 400 + i * 500, dur: 420 });
     });
   }),
 
-  beat("breadth", 13600, 3900, "settle", (ms) => {
-    track(el.eHead, ms, { at: 100, dur: 700, out: 3300, outDur: 400, dy: 20 });
-    track(el.card1, ms, { at: 200,  dur: 750, out: 3300, outDur: 400, dy: 48 });
-    track(el.card2, ms, { at: 1250, dur: 750, out: 3350, outDur: 400, dy: 48 });
-    track(el.card3, ms, { at: 2300, dur: 750, out: 3400, outDur: 400, dy: 48 });
-    CB.lines.forEach((l, i) => reveal(l.clip, l.el, seg(ms, 450 + i * 60, 900)));
-    count(el.cbN[0], ms, 500, 700, 4, (v) => String(Math.round(v)));
-    count(el.cbN[1], ms, 500, 900, 49, (v) => String(Math.round(v)));
-    count(el.cbN[2], ms, 500, 900, 20, (v) => String(Math.round(v)));
-    track(el.rg, ms, { at: 1450, dur: 650, dy: -20 });        // lands from above
-    RCHIPS.forEach((c, i) => track(c, ms, { at: 1650 + i * 50, dur: 450, dy: 8 }));
-    count(el.scN, ms, 2450, 900, 800, (v, done) => Math.round(v) + (done ? "+" : ""));
-    const fp = seg(ms, 2300, 1600);                            // the list flows: linear
-    const flow = VERTICAL ? 7 * SC_ROW_H : 5 * SC_ROW_H;
-    put(el.scList, 0, -flow * fp, 1, RM ? 1 : 0.9, !RM && fp > 0 && fp < 1);
+  beat("screener", 21100, 3400, "settle", (ms) => {
+    track(el.capScr, ms, { at: 100, dur: 700, out: 2800, outDur: 400, dy: 20 });
+    track(el.pScr,   ms, { at: 150, dur: 750, out: 2800, outDur: 400, dy: 48 });
+    track(el.scHead, ms, { at: 350, dur: 500, dy: 8 });
+    track(el.scCols, ms, { at: 420, dur: 500, dy: 8 });
+    count(el.scN, ms, 450, 900, 800, (v, done) => Math.round(v) + (done ? "+" : ""));
+    const fp = seg(ms, 300, 2900), flow = (VERTICAL ? 2 : 3) * SC_ROW_H;          // the list flows: linear
+    place(el.scList, 0, RM ? 0 : -flow * fp, RM ? 1 : 0.94, fp > 0 && fp < 1);
   }),
 
-  beat("resolve", 17300, 4700, "settle", (ms) => {
+  beat("resolve", 24300, 3600, "settle", (ms) => {
     track(el.fWord,  ms, { at: 200, dur: 900, dy: 30 });
     track(el.fUrl,   ms, { at: 380, dur: 800, dy: 20 });
     track(el.fLine,  ms, { at: 560, dur: 800, dy: 16 });
@@ -725,7 +873,7 @@ function seek(timeMs) {
 function frame(now) {
   if (!playing) return;
   seek(now - t0);
-  if (current >= DURATION) { playing = false; return; }
+  if (current >= DURATION) { if (LOOP) { t0 = now; seek(0); } else { playing = false; return; } }
   requestAnimationFrame(frame);
 }
 function play() { if (current >= DURATION) current = 0; playing = true; t0 = performance.now() - current; requestAnimationFrame(frame); }
@@ -748,6 +896,7 @@ addEventListener("keydown", (e) => {
 });
 
 const RECORD = Q.get("record") === "1";
+const LOOP = Q.get("loop") === "1";
 const START = Q.has("t") ? +Q.get("t") : null;
 if (RECORD) document.body.classList.add("record");
 if (Q.get("hud") === "1") document.body.classList.add("hud");
@@ -760,6 +909,7 @@ window.teaser = {
   beats: TIMELINE.map(({ id, start, duration, easing }) => ({ id, start, end: start + duration, duration, easing })),
   frame: (n) => seek(n / 60 * 1000),
   frames: Math.round(DURATION / 1000 * 60) + 1,
+  still: STILL.slice(),
   get time() { return current; }, get playing() { return playing; }, get reducedMotion() { return RM; },
   ready,
 };
@@ -769,3 +919,102 @@ ready.then(() => { seek(current); if (!RECORD && START === null) play(); });
 </script>
 </body>
 </html>
+<!--
+SOURCES — every real figure on screen, and how to reproduce it.
+All data from SEC EDGAR XBRL (https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json),
+retrieved 2026-09-25. Values are us-gaap facts in USD as filed; the latest-filed value is used
+where a period was restated in a later filing.
+
+FCF margin = (NetCashProvidedByUsedInOperatingActivities − capex) / revenue, per fiscal quarter.
+10-Q cash-flow statements are year-to-date, so each quarter is the difference of two YTD facts
+with the same fiscal-year start; Q4 is the 10-K year less the nine-month YTD.
+TTM = sum of four quarters of FCF / sum of four quarters of revenue (the ratio of the sums, as
+src/lib/chart-builder/resolve.ts computes a ratio's TTM).
+
+  Revenue concepts, first present per fiscal year: Revenues, RevenueFromContractWithCustomerExcludingAssessedTax,
+  SalesRevenueNet, SalesRevenueGoodsNet.
+  Capex concepts, first present per fiscal year: PaymentsToAcquirePropertyPlantAndEquipment,
+  PaymentsToAcquireProductiveAssets.
+
+CHART BUILDER — 40 quarters each (plus the 3 before, for the first TTM).
+  MSFT  CIK 789019   quarters to 2016-09-30 … 2026-06-30
+        last four (the pills): 0001193125-25-256321 (10-Q, 2025-09-30) 0001193125-26-027207 (10-Q, 2025-12-31)
+                               0001193125-26-191507 (10-Q, 2026-03-31) 0001193125-26-323660 (10-K, 2026-06-30)
+        last quarter: OCF 55,441 − capex 35,802 over revenue 90,007 ($M) = 21.8%; TTM 20.2%
+        all accessions: 0001564590-17-000654 0001564590-17-007547 0001564590-17-014900 0001564590-17-020171
+          0001564590-18-024893 0001564590-19-001392 0001564590-19-012709 0001564590-19-037549 0001564590-20-002450
+          0001564590-20-019706 0001564590-20-034944 0001564590-20-047996 0001564590-21-002316 0001564590-21-020891
+          0001564590-21-039151 0001564590-21-051992 0001564590-22-002324 0001564590-22-015675 0001564590-22-026876
+          0001564590-22-035087 0001564590-23-000733 0000950170-23-014423 0000950170-23-035122 0000950170-23-054855
+          0000950170-24-008814 0000950170-24-048288 0000950170-24-087843 0000950170-24-118967 0000950170-25-010491
+          0000950170-25-061046 0000950170-25-100235 0001193125-25-256321 0001193125-26-027207 0001193125-26-191507
+          0001193125-26-323660
+  AAPL  CIK 320193   quarters to 2015-12-26 … 2025-09-27
+        last four: 0000320193-26-000006 (10-Q, 2024-12-28 comparative) 0000320193-26-000013 (10-Q, 2025-03-29 comparative)
+                   0000320193-26-000020 (10-Q, 2025-06-28 comparative) 0000320193-25-000079 (10-K, 2025-09-27)
+        last quarter: OCF 29,728 − capex 3,242 over revenue 102,466 ($M) = 25.85% (shown 25.9%); TTM 98,767 / 416,161 = 23.7%
+        all accessions: 0001193125-16-559625 0001628280-16-017809 0001628280-16-020309 0001628280-17-000717
+          0000320193-18-000007 0000320193-18-000070 0000320193-18-000100 0000320193-19-000010 0000320193-19-000066
+          0000320193-19-000076 0000320193-19-000119 0000320193-20-000010 0000320193-20-000052 0000320193-20-000062
+          0000320193-20-000096 0000320193-21-000010 0000320193-21-000056 0000320193-21-000065 0000320193-21-000105
+          0000320193-22-000007 0000320193-22-000059 0000320193-22-000070 0000320193-22-000108 0000320193-23-000006
+          0000320193-23-000064 0000320193-23-000077 0000320193-23-000106 0000320193-24-000006 0000320193-24-000069
+          0000320193-24-000081 0000320193-24-000123 0000320193-25-000008 0000320193-25-000057 0000320193-25-000073
+          0000320193-25-000079 0000320193-26-000006 0000320193-26-000013 0000320193-26-000020
+  V     CIK 1403161  quarters to 2015-12-31 … 2025-09-30
+        last four: 0001403161-26-000045 (10-Q, 2024-12-31 comparative) 0001403161-26-000079 (10-Q, 2025-03-31 comparative)
+                   0001403161-25-000052 (10-Q, 2025-06-30) 0001403161-25-000089 (10-K, 2025-09-30)
+        last quarter: OCF 6,238 − capex 389 over revenue 10,724 ($M) = 54.5%; TTM 53.9%
+        all accessions: 0001403161-16-000022 0001403161-16-000039 0001403161-17-000011 0001403161-17-000028
+          0001403161-17-000037 0001403161-17-000044 0001403161-18-000009 0001403161-18-000020 0001403161-18-000034
+          0001403161-18-000055 0001403161-19-000005 0001403161-19-000017 0001403161-19-000030 0001403161-19-000050
+          0001403161-20-000012 0001403161-20-000028 0001403161-20-000048 0001403161-20-000070 0001403161-21-000012
+          0001403161-21-000029 0001403161-21-000042 0001403161-21-000060 0001403161-22-000013 0001403161-22-000027
+          0001403161-22-000058 0001403161-22-000081 0001403161-23-000013 0001403161-23-000031 0001403161-23-000072
+          0001403161-23-000099 0001403161-24-000016 0001403161-24-000030 0001403161-24-000041 0001403161-24-000058
+          0001403161-25-000017 0001403161-25-000037 0001403161-25-000052 0001403161-25-000089 0001403161-26-000045
+          0001403161-26-000079
+  COST  CIK 909832   quarters to 2015-11-22 … 2025-08-31
+        last four: 0000909832-25-000169 (10-Q, 2024-11-24 comparative) 0000909832-26-000029 (10-Q, 2025-02-16 comparative)
+                   0000909832-26-000051 (10-Q, 2025-05-11 comparative) 0000909832-25-000101 (10-K, 2025-08-31)
+        last quarter: OCF 3,867 − capex 1,966 over revenue 86,156 ($M) = 2.2%; TTM 2.9%
+        all accessions: 0000909832-16-000023 0000909832-16-000028 0000909832-16-000040 0000909832-17-000004
+          0000909832-17-000009 0000909832-17-000014 0000909832-17-000022 0000909832-18-000002 0000909832-18-000008
+          0000909832-18-000013 0000909832-18-000022 0000909832-19-000003 0000909832-19-000013 0000909832-19-000033
+          0000909832-20-000004 0000909832-20-000009 0000909832-20-000026 0000909832-21-000003 0000909832-21-000008
+          0000909832-21-000014 0000909832-21-000021 0000909832-22-000005 0000909832-22-000014 0000909832-22-000021
+          0000909832-22-000035 0000909832-23-000014 0000909832-23-000028 0000909832-23-000042 0000909832-23-000065
+          0000909832-24-000017 0000909832-24-000029 0000909832-24-000049 0000909832-24-000079 0000909832-25-000015
+          0000909832-25-000033 0000909832-25-000101 0000909832-25-000169 0000909832-26-000029 0000909832-26-000051
+
+SCREENER — latest TTM FCF margin, from the four quarters' accessions:
+  V     53.9%  to 2025-09-30  0001403161-26-000045 0001403161-26-000079 0001403161-25-000052 0001403161-25-000089
+  ADBE  41.5%  to 2025-11-28  0000796343-26-000056 0000796343-26-000112 0000796343-26-000156 0000796343-26-000003
+  AAPL  23.7%  to 2025-09-27  0000320193-26-000006 0000320193-26-000013 0000320193-26-000020 0000320193-25-000079
+  META  22.9%  to 2025-12-31  0001628280-26-028526 0001628280-26-050705 0001628280-25-047240 0001628280-26-003942
+  JNJ   20.9%  to 2025-12-28  0000200406-26-000087 0000200406-26-000153 0000200406-25-000209 0000200406-26-000016
+  MSFT  20.2%  to 2026-06-30  0001193125-25-256321 0001193125-26-027207 0001193125-26-191507 0001193125-26-323660
+  GOOGL 18.2%  to 2025-12-31  0001652044-26-000048 0001652044-26-000071 0001652044-25-000091 0001652044-26-000018
+  KO    11.1%  to 2025-12-31  0001628280-26-028802 0000021344-25-000061 0001628280-25-046054 0001628280-26-010047
+  PEP    8.2%  to 2025-12-27  0000077476-26-000017 0000077476-26-000035 0000077476-25-000053 0000077476-26-000007
+  COST   2.9%  to 2025-08-31  0000909832-25-000169 0000909832-26-000029 0000909832-26-000051 0000909832-25-000101
+  AMZN   1.1%  to 2025-12-31  0001018724-26-000014 0001018724-26-000026 0001018724-25-000123 0001018724-26-000004
+  The sparklines are the twelve TTM values ending at those quarters, computed the same way.
+
+THE FAILING CHECK — JPMorgan Chase & Co., CIK 19617, 10-K for fiscal 2025, accession 0001628280-26-008131
+  (filed 2026-02-13, period ending 2025-12-31):
+  Assets                                 4,424,900  ($M)
+  StockholdersEquity                       362,438  → equity / assets 8.19%, at or below LENDER_EQUITY_RATIO 0.30
+  InterestExpenseOperating                  97,898
+  RevenuesNetOfInterestExpense (Revenues)  182,447  → interest / revenue 53.66%, at or above LENDER_INTEREST_RATIO 0.08
+  AssetsCurrent                          not reported in any JPM filing → an unclassified balance sheet
+  Either leg with thin equity makes looksLikeLender() true (src/lib/dcf/business-model.ts), and a lender
+  fails "Usable margin record" (src/lib/dcf/gate.ts).
+  The five check results are the product's own, read on huntrvalue.me (DCF Calculator → JPM → Auto-Populate)
+  on 2026-09-25: market cap FAIL, four quarters of FCF not verifiable, total debt PASS, revenue perimeter PASS,
+  usable margin record FAIL — "2 checks on the inputs failed." The market-cap result depends on the day's
+  price and is shown as a status only, without its figure.
+
+ILLUSTRATIVE — Example Co.: price, bear/base/bull values, the margin fan and the Monte Carlo are
+invented, labelled "Illustrative figures" on screen, and not a valuation of any listed security.
+-->
