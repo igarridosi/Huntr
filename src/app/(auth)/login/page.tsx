@@ -10,7 +10,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthError, AuthNotice } from "@/components/auth/auth-feedback";
 import { ROUTES } from "@/lib/constants";
-import { readStartPage, START_PAGE_KEY } from "@/lib/settings/preferences";
+import { startPageFromCookieString } from "@/lib/settings/preferences";
 import { createClient } from "@/lib/supabase/client";
 import { humanizeAuthError } from "@/lib/auth-errors";
 
@@ -48,13 +48,7 @@ export default function LoginPage() {
       if (signInError) throw signInError;
 
       // The start page chosen in Settings, when there is one on file.
-      let destination: string = ROUTES.APP;
-      try {
-        destination = readStartPage(localStorage.getItem(START_PAGE_KEY));
-      } catch {
-        // Storage can be blocked; the dashboard is the default anyway.
-      }
-      router.replace(destination);
+      router.replace(startPageFromCookieString(document.cookie));
       router.refresh();
     } catch (err) {
       setError(humanizeAuthError(err, "Couldn't sign you in. Please try again."));

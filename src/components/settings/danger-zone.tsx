@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Trash2 } from "lucide-react";
+import { SettingsSection } from "./settings-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deleteAccount } from "@/app/actions/account";
@@ -35,18 +36,14 @@ export function DangerZone({ email }: { email: string | null }) {
   };
 
   return (
-    <div className="rounded-xl border border-bearish/30 bg-bearish/[0.04] p-5">
-      <div className="flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4 text-bearish" aria-hidden />
-        <h2 className="text-base font-semibold text-snow-peak">Delete account</h2>
-      </div>
-      <p className="mt-1 text-xs leading-relaxed text-mist">
-        Removes the account and everything under it — watchlists, portfolios, saved valuations and charts. It cannot be
-        undone, and nothing is kept. Export your data first if you want a copy.
-      </p>
-
+    <SettingsSection
+      icon={AlertTriangle}
+      tone="danger"
+      title="Delete account"
+      description="Removes the account and everything under it — watchlists, portfolios, saved valuations and charts. It cannot be undone, and nothing is kept. Export your data first if you want a copy."
+    >
       {open ? (
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3 rounded-xl border border-bearish/25 bg-wolf-black/25 p-4">
           <div className="space-y-1.5">
             <label htmlFor="delete-confirm" className="text-xs text-mist">
               Type <span className="font-mono text-snow-peak">{email ?? "your email"}</span> to confirm
@@ -80,12 +77,15 @@ export function DangerZone({ email }: { email: string | null }) {
           </div>
         </div>
       ) : (
-        <div className="mt-4">
-          <Button variant="outline" size="sm" className="gap-2 border-bearish/40 text-bearish hover:bg-bearish/10" onClick={() => setOpen(true)}>
-            <Trash2 className="h-3.5 w-3.5" /> Delete my account
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="gap-2 border-bearish/40 text-bearish transition-transform duration-150 hover:bg-bearish/10 active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100"
+          onClick={() => setOpen(true)}
+        >
+          <Trash2 className="h-3.5 w-3.5" /> Delete my account
+        </Button>
       )}
-    </div>
+    </SettingsSection>
   );
 }
