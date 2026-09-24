@@ -42,7 +42,7 @@ export async function updateSession(request: NextRequest) {
 
   // Browsing (/app, /symbol) is open to guests; only account-specific
   // pages require a session.
-  const PROTECTED_PREFIXES = ["/app/settings"];
+  const PROTECTED_PREFIXES = ["/app/settings", "/app/admin"];
   const isProtected = PROTECTED_PREFIXES.some((prefix) =>
     request.nextUrl.pathname.startsWith(prefix)
   );

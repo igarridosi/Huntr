@@ -1,60 +1,35 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { Settings, Shield, LogOut, Mail, User } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ROUTES } from "@/lib/constants";
+import { Settings } from "lucide-react";
+import { AccountCard } from "@/components/settings/account-card";
+import { AppearanceCard } from "@/components/settings/appearance-card";
+import { PrivacyCard } from "@/components/settings/privacy-card";
+import { DataCard } from "@/components/settings/data-card";
+import { DangerZone } from "@/components/settings/danger-zone";
 import { useSupabase } from "@/providers/supabase-provider";
 
 export default function SettingsPage() {
-  const router = useRouter();
-  const { supabase, user, isLoading } = useSupabase();
+  // The route is behind the middleware, so a reader here always has an account.
+  const { user } = useSupabase();
 
   return (
-    <div className="space-y-6 w-full">
+    <div className="w-full max-w-3xl space-y-5">
       <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
-          <Settings className="w-5 h-5 text-sunset-orange" />
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-sunset-orange/15 bg-sunset-orange/10">
+          <Settings className="h-5 w-5 text-sunset-orange" aria-hidden />
         </div>
         <div>
           <h1 className="text-xl font-bold tracking-tight text-snow-peak">Settings</h1>
-          <p className="text-xs text-mist mt-0.5">Manage your account and session</p>
+          <p className="mt-0.5 text-xs text-mist">Your account, how the terminal looks, and what it records.</p>
         </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <User className="w-4 h-4 text-sunset-orange" /> Account
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-4 space-y-3">
-            <div className="flex items-center gap-2 text-sm text-snow-peak">
-              <Mail className="w-4 h-4 text-mist" />
-              <span>{isLoading ? "Loading..." : (user?.email ?? "Not available")}</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs text-mist">
-              <Shield className="w-3.5 h-3.5" />
-              Data is now scoped to your authenticated account.
-            </div>
-          </div>
 
-          <div className="flex justify-end">
-            <Button
-              variant="destructive"
-              className="gap-2"
-              onClick={async () => {
-                await supabase.auth.signOut();
-                router.push(ROUTES.LOGIN);
-              }}
-            >
-              <LogOut className="w-4 h-4" /> Sign Out
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      {user ? <AccountCard /> : null}
+      <AppearanceCard />
+      <PrivacyCard />
+      {user ? <DataCard signedIn /> : null}
+      {user ? <DangerZone email={user.email ?? null} /> : null}
     </div>
   );
 }

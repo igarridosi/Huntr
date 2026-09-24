@@ -8,23 +8,31 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { readThemePreference, resolveTheme, type Theme, type ThemePreference } from "@/lib/settings/preferences";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type Theme = "dark" | "light";
+export type { Theme, ThemePreference };
 
 interface ThemeContextValue {
+  /** The theme in force right now. */
   theme: Theme;
+  /** What the reader asked for: a fixed theme, or whatever the OS says. */
+  preference: ThemePreference;
   toggleTheme: () => void;
   setTheme: (t: Theme) => void;
+  /** "system" follows the OS from here on, and keeps following it. */
+  setPreference: (p: ThemePreference) => void;
 }
 
 // ─── Context ──────────────────────────────────────────────────────────────────
 
 const ThemeContext = createContext<ThemeContextValue>({
   theme: "dark",
+  preference: "system",
   toggleTheme: () => {},
   setTheme: () => {},
+  setPreference: () => {},
 });
 
 // ─── Provider ─────────────────────────────────────────────────────────────────
@@ -33,15 +41,19 @@ const STORAGE_KEY = "huntr-theme";
 const CHANGE_EVENT = "huntr:theme-change";
 const LIGHT_QUERY = "(prefers-color-scheme: light)";
 
+/** The explicit choice on file, or "system" when there is none. */
+function readPreference(): ThemePreference {
+  try {
+    return readThemePreference(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    // Storage can be blocked; that reads as no preference.
+    return "system";
+  }
+}
+
 /** localStorage preference, then the OS setting, then the product default. */
 function readTheme(): Theme {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "light" || stored === "dark") return stored;
-  } catch {
-    // Storage can be blocked; fall through to the OS preference.
-  }
-  return window.matchMedia(LIGHT_QUERY).matches ? "light" : "dark";
+  return resolveTheme(readPreference(), window.matchMedia(LIGHT_QUERY).matches);
 }
 
 function subscribeToTheme(onChange: () => void) {
@@ -77,6 +89,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
    * is the resolved preference from the first client render onwards.
    */
   const theme = useSyncExternalStore<Theme>(subscribeToTheme, readTheme, () => "dark");
+  // The choice itself, so the settings screen can show "System" as chosen
+  // rather than as whichever theme the OS happens to be on today.
+  const preference = useSyncExternalStore<ThemePreference>(subscribeToTheme, readPreference, () => "system");
 
   // Applying the class is a side effect on <html>, which is exactly what an
   // effect is for. It only writes the DOM; it does not set state.
@@ -84,16 +99,24 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     applyTheme(theme);
   }, [theme]);
 
-  const setTheme = useCallback((t: Theme) => {
-    localStorage.setItem(STORAGE_KEY, t);
+  const setPreference = useCallback((p: ThemePreference) => {
+    try {
+      // No key means no preference, which is what "system" is.
+      if (p === "system") localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, p);
+    } catch {
+      // A blocked store still gets the class applied for this session.
+    }
     // `storage` only fires on other tabs, so this one is told directly.
     window.dispatchEvent(new Event(CHANGE_EVENT));
   }, []);
 
+  const setTheme = useCallback((t: Theme) => setPreference(t), [setPreference]);
+
   const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+    <ThemeContext.Provider value={{ theme, preference, toggleTheme, setTheme, setPreference }}>
       {children}
     </ThemeContext.Provider>
   );

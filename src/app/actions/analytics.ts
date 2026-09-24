@@ -16,6 +16,7 @@ import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isCountedPath, parseEvent } from "@/lib/analytics/events";
+import { isOptedOut, TRACKING_COOKIE } from "@/lib/settings/preferences";
 
 const VISITOR_COOKIE = "huntr_vid";
 const VISITOR_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
@@ -63,6 +64,11 @@ export async function recordEvent(raw: unknown): Promise<void> {
   if (row.path && !isCountedPath(row.path)) return;
 
   try {
+    // A reader who has opted out in Settings is not counted at all — no
+    // row, and no visitor cookie handed out either.
+    const jar = await cookies();
+    if (isOptedOut(jar.get(TRACKING_COOKIE)?.value)) return;
+
     const [visitor_id, user_id] = await Promise.all([visitorId(), currentUserId()]);
     const supabase = createAdminClient();
     await supabase.from("analytics_events").insert({
