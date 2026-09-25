@@ -90,7 +90,18 @@ export function TeaserDialog() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-6xl overflow-hidden rounded-2xl border border-wolf-border/60 bg-wolf-black shadow-2xl shadow-wolf-black/80 animate-huntr-sheet"
+            /*
+             * As large as the screen allows, in both directions: the width is
+             * capped by the viewport, by 1600px, and by the height left once
+             * the bar under it is accounted for.
+             *
+             * Size is the only lever we have on quality. YouTube picks the
+             * stream from the bandwidth and the player's rendered size — `vq`
+             * is ignored and `setPlaybackQuality` is a deprecated no-op — so a
+             * bigger frame is what makes it reach for 1440p instead of 1080p.
+             */
+            style={{ width: "min(94vw, 1600px, calc((100vh - 9rem) * 16 / 9))" }}
+            className="relative overflow-hidden rounded-2xl border border-wolf-border/60 bg-wolf-black shadow-2xl shadow-wolf-black/80 animate-huntr-sheet"
           >
             <div className="aspect-video w-full bg-wolf-black">
               <iframe
