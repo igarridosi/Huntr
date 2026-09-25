@@ -1,6 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import type {
   StockProfile,
@@ -28,6 +29,8 @@ import {
   fetchAllProfiles,
   fetchCompanyFinancials,
   fetchSearchTickers,
+  fetchInsiderActivity,
+  fetchInsiderFeed,
   fetchTranscriptPeriods,
   fetchTranscriptDocument,
   fetchScreenerMetrics,
@@ -245,6 +248,67 @@ export function useSearch(query: string, limit = 10) {
     staleTime: STALE_TIMES.SEARCH,
     // Search is always enabled — returns popular results for empty query
     enabled: true,
+  });
+}
+
+// ---------- Insiders ----------
+
+/**
+ * Insider activity for one ticker. A cold ticker costs a burst of SEC
+ * requests on the server, so the result is held for the same six hours
+ * the server caches it and never refetched on focus.
+ */
+export function useInsiderActivity(ticker: string, enabled: boolean = true) {
+  const t = ticker.trim().toUpperCase();
+  const key = QUERY_KEYS.INSIDERS(t);
+  const queryClient = useQueryClient();
+  const query = useQuery({
+    queryKey: key,
+    queryFn: () => fetchInsiderActivity(t),
+    staleTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: enabled && t.length > 0,
+  });
+
+  /*
+   * A first read returns after one step of filings, so the page has
+   * something to show within seconds. The rest is asked for here, a step
+   * at a time, and each step replaces the data so the view fills in as it
+   * goes. A step that reads nothing new ends the run: a filing that will
+   * not load must not turn into a loop.
+   */
+  const pending = Boolean(query.data && query.data.progress.read < query.data.progress.total);
+  useEffect(() => {
+    if (!pending || !enabled) return;
+    let alive = true;
+    (async () => {
+      let read = queryClient.getQueryData<Awaited<ReturnType<typeof fetchInsiderActivity>>>(key)?.progress.read ?? 0;
+      for (;;) {
+        const next = await fetchInsiderActivity(t).catch(() => null);
+        if (!alive || !next) return;
+        queryClient.setQueryData(key, next);
+        if (next.progress.read >= next.progress.total || next.progress.read <= read) return;
+        read = next.progress.read;
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+    // `key` is derived from `t`; listing it would restart the run every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t, pending, enabled, queryClient]);
+
+  return query;
+}
+
+export function useInsiderFeed(tickers: string[], enabled: boolean = true) {
+  const normalized = Array.from(new Set(tickers.map((t) => t.toUpperCase()).filter(Boolean))).sort();
+  return useQuery({
+    queryKey: QUERY_KEYS.INSIDER_FEED(normalized.join(",")),
+    queryFn: () => fetchInsiderFeed(normalized),
+    staleTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: enabled && normalized.length > 0,
   });
 }
 

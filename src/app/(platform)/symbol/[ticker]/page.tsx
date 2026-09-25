@@ -23,6 +23,7 @@ import { Check, LineChart } from "lucide-react";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
 import { ChartErrorBoundary } from "@/components/ui/chart-error-boundary";
 import { QualityScorecard, QualityScorecardSkeleton } from "@/components/stock/quality-scorecard";
+import { InsiderCard } from "@/components/tracks/insider-card";
 import { calculateQualityScore } from "@/lib/calculations/quality-score";
 import { fetchAlphaFinancials, getAlphaAvailability } from "@/app/actions/stock";
 import { useSupabase } from "@/providers/supabase-provider";
@@ -983,6 +984,9 @@ export default function OverviewPage() {
           )}
         />
       ) : null}
+
+      {/* Insider activity — loads from EDGAR only once scrolled into view */}
+      <InsiderCard ticker={ticker} />
 
       {/* Company Description */}
       {profile?.description && (

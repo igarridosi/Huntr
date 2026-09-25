@@ -72,6 +72,11 @@ const nextConfig: NextConfig = {
   // keyed on that.
   output: process.env.VERCEL ? undefined : "standalone",
   reactCompiler: true,
+  // Transcripts became Tracks — insiders now, transcripts later, same
+  // section. Old links keep working.
+  async redirects() {
+    return [{ source: "/app/transcripts", destination: "/app/tracks", permanent: true }];
+  },
   async headers() {
     return [
       {
