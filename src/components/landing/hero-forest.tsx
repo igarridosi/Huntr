@@ -8,6 +8,7 @@ import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion
 import { Search, ArrowRight, Radio, FileText, BarChart3 } from "lucide-react";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { KoFiSupport } from "@/components/ui/kofi-support";
+import { TeaserDialog } from "@/components/landing/teaser-dialog";
 import { ROUTES } from "@/lib/constants";
 
 // cmdk only matters once the palette opens, and it renders nothing while
@@ -315,6 +316,10 @@ export function HeroForest() {
                 <span className="font-mono text-[10px] text-snow-peak/75">{label}</span>
               </div>
             ))}
+          </div>
+
+          <div className="hero-copy-enter mt-5 flex justify-center">
+            <TeaserDialog />
           </div>
 
           {/* Mobile only — desktop gets this in the nav next to "Start Free"

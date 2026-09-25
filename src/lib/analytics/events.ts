@@ -23,6 +23,8 @@ export const ANALYTICS_EVENTS = [
   "chart_export",
   /** A ticker was opened from the search box. */
   "search_open",
+  /** The landing page teaser was opened. */
+  "teaser_open",
 ] as const;
 
 export type AnalyticsEvent = (typeof ANALYTICS_EVENTS)[number];
