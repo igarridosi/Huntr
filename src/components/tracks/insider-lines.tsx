@@ -36,16 +36,19 @@ export function InsiderLines({ rows, cik }: { rows: InsiderRow[]; cik: string })
   );
   const scrolls = shown.length > VISIBLE_ROWS;
   const scroller = useRef<HTMLDivElement | null>(null);
-  useRowWindow(scroller, [shown]);
+  useRowWindow(scroller, [shown], true);
 
   return (
     <div className="flex min-h-0 flex-col gap-3">
       <SegmentedTabs items={FILTERS} value={filter} onChange={(f) => { setFilter(f); setOpen(null); }} ariaLabel="Which transactions" size="sm" />
 
+      {/* One window for every filter, so switching does not move the page. */}
       {shown.length === 0 ? (
-        <p className="rounded-xl bg-wolf-black/25 px-4 py-10 text-center text-xs text-mist">
-          {filter === "market" ? "No open-market trades in the filings read." : "Nothing in this view."}
-        </p>
+        <div ref={scroller} className="flex items-center justify-center rounded-xl bg-wolf-black/25">
+          <p className="px-4 text-center text-xs text-mist">
+            {filter === "market" ? "No open-market trades in the filings read." : "Nothing in this view."}
+          </p>
+        </div>
       ) : (
         <div
           ref={scroller}

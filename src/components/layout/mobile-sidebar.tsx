@@ -7,7 +7,7 @@ import {
   Lightbulb,
   Star,
   CalendarClock,
-  Footprints,
+  Landmark,
   Calculator,
   ChartColumnStacked,
   BriefcaseBusiness,
@@ -39,7 +39,7 @@ const navItems = [
   { label: "Chart Builder", href: ROUTES.APP_CHART_BUILDER, icon: ChartColumnStacked },
   { label: "Watchlists", href: ROUTES.APP_WATCHLISTS, icon: Star },
   { label: "Earnings", href: ROUTES.APP_EARNINGS, icon: CalendarClock },
-  { label: "Tracks", href: ROUTES.APP_TRACKS, icon: Footprints },
+  { label: "Tracks", href: ROUTES.APP_TRACKS, icon: Landmark },
   { label: "DCF Calculator", href: ROUTES.APP_DCF_CALCULATOR, icon: Calculator },
   { label: "Portfolios", href: ROUTES.APP_PORTFOLIOS, icon: BriefcaseBusiness },
 ];

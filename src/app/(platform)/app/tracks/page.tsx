@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Footprints, MessageSquareText, UserRoundSearch } from "lucide-react";
+import { Landmark, MessageSquareText, UserRoundSearch } from "lucide-react";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { InsidersPanel } from "@/components/tracks/insiders-panel";
 import { TranscriptsPanel } from "@/components/tracks/transcripts-panel";
@@ -48,7 +48,7 @@ function Tracks() {
       <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sunset-orange/15 bg-sunset-orange/10">
-            <Footprints className="h-5 w-5 text-sunset-orange" aria-hidden />
+            <Landmark className="h-5 w-5 text-sunset-orange" aria-hidden />
           </div>
           <div>
             <h1 className="text-2xl font-bold leading-tight tracking-[-0.02em] text-snow-peak">Tracks</h1>
