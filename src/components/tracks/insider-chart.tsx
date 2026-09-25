@@ -1,9 +1,34 @@
 "use client";
 
 import { useMemo } from "react";
-import { CartesianGrid, ComposedChart, Line, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
+import { Area, CartesianGrid, ComposedChart, Line, ResponsiveContainer, Scatter, Tooltip, XAxis, YAxis } from "recharts";
 import type { InsiderRow } from "@/lib/insiders/activity";
 import { formatCompactNumber, formatCurrency } from "@/lib/utils";
+
+/**
+ * A trade marker sitting exactly on the price. Decisions are solid with a
+ * soft halo so they carry across the chart; plan trades are rings, present
+ * but quieter. A dark rim separates either from the line under it.
+ */
+function markerShape(key: "buy" | "sell" | "planBuy" | "planSell", colour: string, solid: boolean) {
+  function Marker(props: unknown) {
+    const { cx, cy, payload } = props as { cx?: number; cy?: number; payload?: Point };
+    // Recharts calls the shape for every point in the series, trade or not;
+    // only a day that carries this kind of trade gets a mark.
+    if (cx === undefined || cy === undefined || payload?.[key] === undefined) return <g />;
+    return solid ? (
+      <g>
+        <circle cx={cx} cy={cy} r={11} fill={colour} fillOpacity={0.18} />
+        <circle cx={cx} cy={cy} r={6} fill={colour} stroke="var(--color-wolf-black)" strokeWidth={2} />
+      </g>
+    ) : (
+      <g>
+        <circle cx={cx} cy={cy} r={6} fill="var(--color-wolf-black)" stroke={colour} strokeWidth={2} />
+      </g>
+    );
+  }
+  return Marker;
+}
 
 interface Point {
   date: string;
@@ -82,18 +107,26 @@ export function InsiderChart({ prices, rows, loading = false }: { prices: Array<
               );
             }}
           />
-          <Line type="linear" dataKey="close" stroke="var(--color-mist)" strokeWidth={1.5} dot={false} isAnimationActive={false} />
-          <Scatter dataKey="buy" fill="var(--color-bullish)" shape="triangle" isAnimationActive={false} />
-          <Scatter dataKey="sell" fill="var(--color-bearish)" shape="triangle" isAnimationActive={false} />
-          <Scatter dataKey="planBuy" fill="none" stroke="var(--color-bullish)" shape="circle" isAnimationActive={false} />
-          <Scatter dataKey="planSell" fill="none" stroke="var(--color-bearish)" shape="circle" isAnimationActive={false} />
+          <defs>
+            <linearGradient id="insider-price-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--color-snow-peak)" stopOpacity={0.10} />
+              <stop offset="100%" stopColor="var(--color-snow-peak)" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          {/* The price is the ground the trades stand on: a clear line over a faint wash. */}
+          <Area type="linear" dataKey="close" stroke="none" fill="url(#insider-price-fill)" isAnimationActive={false} />
+          <Line type="linear" dataKey="close" stroke="var(--color-snow-peak)" strokeOpacity={0.85} strokeWidth={2} dot={false} activeDot={{ r: 4, fill: "var(--color-snow-peak)", stroke: "var(--color-wolf-black)", strokeWidth: 2 }} isAnimationActive={false} />
+          <Scatter dataKey="planBuy" shape={markerShape("planBuy", "var(--color-bullish)", false)} isAnimationActive={false} />
+          <Scatter dataKey="planSell" shape={markerShape("planSell", "var(--color-bearish)", false)} isAnimationActive={false} />
+          <Scatter dataKey="buy" shape={markerShape("buy", "var(--color-bullish)", true)} isAnimationActive={false} />
+          <Scatter dataKey="sell" shape={markerShape("sell", "var(--color-bearish)", true)} isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex flex-wrap gap-4 font-mono text-[11px] text-mist">
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-2 rotate-45 bg-bullish" /> open-market buy</span>
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-2 rotate-45 bg-bearish" /> open-market sale</span>
-        <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-2 rounded-full ring-1 ring-mist" /> under a 10b5-1 plan</span>
+      <div className="mt-3 flex flex-wrap gap-5 text-[11px] text-mist">
+        <span className="inline-flex items-center gap-2"><i className="inline-block h-2.5 w-2.5 rounded-full bg-bullish ring-4 ring-bullish/20" /> Open-market buy</span>
+        <span className="inline-flex items-center gap-2"><i className="inline-block h-2.5 w-2.5 rounded-full bg-bearish ring-4 ring-bearish/20" /> Open-market sale</span>
+        <span className="inline-flex items-center gap-2"><i className="inline-block h-2.5 w-2.5 rounded-full ring-2 ring-inset ring-mist" /> Under a 10b5-1 plan</span>
       </div>
     </div>
   );

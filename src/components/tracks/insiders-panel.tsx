@@ -3,6 +3,7 @@
 import { AlertTriangle, FileSearch } from "lucide-react";
 import { MaterialPanel } from "@/components/ui/material-panel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { TickerLogo } from "@/components/ui/ticker-logo";
 import { TickerPicker } from "./ticker-picker";
 import { InsiderSummary } from "./insider-summary";
 import { InsiderChart } from "./insider-chart";
@@ -60,9 +61,12 @@ export function InsidersPanel({ ticker, onTicker }: InsidersPanelProps) {
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
           <MaterialPanel className="flex flex-col gap-5 lg:col-span-2">
-            <header className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-              <h2 className="text-lg font-semibold tracking-[-0.015em] text-snow-peak">
-                {profile.data?.name ?? ticker} <span className="font-mono text-sm font-medium text-sunset-orange">{ticker}</span>
+            <header className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+              <h2 className="flex items-center gap-3 text-lg font-semibold tracking-[-0.015em] text-snow-peak">
+                <TickerLogo ticker={ticker} className="h-9 w-9 rounded-xl" />
+                <span>
+                  {profile.data?.name ?? ticker} <span className="font-mono text-sm font-medium text-sunset-orange">{ticker}</span>
+                </span>
               </h2>
               <span className="font-mono text-[11px] tabular-nums text-mist">
                 {a.summary.from} to {a.summary.to}
