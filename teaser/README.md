@@ -1,6 +1,6 @@
 # Huntr teaser
 
-`huntr-teaser.html` is a 35.4-second release film in one self-contained file: no build step, no
+`huntr-teaser.html` is a 46-second release film in one self-contained file: no build step, no
 dependencies. Google Fonts is the only request, and it falls back to system fonts offline. Open it
 in Chrome over any static server:
 
@@ -64,18 +64,21 @@ update it when you change them.
 
 ## Beats
 
+The film is authored in film time and plays `STRETCH` (1.3×) slower; the times below, `teaser.beats`
+and `seek()` are all real, played time. Change `STRETCH` to change the pace of the whole film at once.
+
 | Beat | Time (s) | What happens |
 |---|---|---|
-| `field` | 0.00–35.40 | Grid drifts out and back on a sine; ends where it started |
-| `cold-open` | 0.00–2.40 | Two tapes of company logos; "For people who invest in companies, not funds." |
-| `brand-mark` | 0.00–35.40 | The wolf lands at 0.1, is carried into the sidebar at 2.1–2.95, out to the end card at 31.6–32.5 |
-| `window` | 2.05–32.05 | The app window; its highlight follows the section (Insights → AAPL 6.5 → Chart Builder 14.0 → Earnings 22.0 → DCF 26.8) |
-| `insights` | 2.50–7.10 | Six cards cascade with prices counting; Radar gainers/losers; the AAPL card is picked at 5.4 |
-| `ticker-page` | 6.30–14.00 | The AAPL logo flies into the header; 1Y price draws (7.65–8.95); Financials at 9.6: revenue, FCF, net income, then EBITDA, EPS, capex at 11.75 — each in its own colour, never more than three |
-| `chart-builder` | 14.00–22.00 | Annual FCF margin for MSFT, META, GOOGL as smooth curves (15.15); the hold slides to Return on equity and the companies become KO, PEP, MNST (16.9); then Visa alone, TTM, capital allocation — stacked capex, dividends, buybacks with operating cash flow drawn over (19.2–21.25) |
-| `earnings` | 22.00–26.80 | Five days of logos pop in by session; MSFT picked 23.75; quick view slides in 24.1; EPS estimate → reported |
-| `dcf` | 26.80–32.10 | Adobe: sliders sweep in; the Monte Carlo grows at 27.95, red below the price, green above; Base → Bear 28.5–29.1 → Bull 29.5–30.3 → Base 30.6–31.2, a white line riding the distribution |
-| `resolve` | 31.70–35.40 | Wordmark, URL, one line; settled by 33.22, held 2.2 s |
+| `field` | 0.00–46.02 | Grid drifts out and back on a sine; ends where it started |
+| `cold-open` | 0.00–3.12 | Two tapes of company logos; "For people who invest in companies, not funds." |
+| `brand-mark` | 0.00–46.02 | The wolf lands at 0.13, is carried into the sidebar at 2.73–3.84, out to the end card at 41.08–42.25 |
+| `window` | 2.67–41.66 | The app window; its highlight follows the section (Insights → AAPL 8.45 → Chart Builder 18.2 → Earnings 28.6 → DCF 34.84) |
+| `insights` | 3.25–9.23 | Six cards cascade with prices counting; Radar gainers/losers; the AAPL card is picked at 7.02 |
+| `ticker-page` | 8.19–18.20 | The AAPL logo flies into the header (8.19–9.23); 1Y price draws (9.95–11.64); Financials at 12.48: revenue, FCF, net income, then EBITDA, EPS, capex at 15.28 |
+| `chart-builder` | 18.20–28.60 | Annual FCF margin for MSFT, META, GOOGL (19.7); Return on equity for KO, PEP, MNST (21.97); Visa alone on TTM, capital allocation (24.96–27.63). Values read out beside each company |
+| `earnings` | 28.60–34.84 | Five days of logos pop in by session; MSFT picked 30.88; quick view slides in 31.33; EPS estimate → reported |
+| `dcf` | 34.84–41.73 | Adobe: sliders sweep in; the Monte Carlo grows at 36.34; Base → Bear 37.05–37.83 → Bull 38.35–39.39 → Base 39.78–40.56 |
+| `resolve` | 41.21–46.02 | Wordmark, URL, one line; settled by 43.19, held 2.8 s |
 
 ## Recording to MP4 at 60 fps
 
@@ -88,7 +91,7 @@ On a 1920×1080 display at 100% scaling, open the film full screen and paused:
 Start a lossless capture, then click into Chrome and press **R**:
 
 ```bash
-ffmpeg -f gdigrab -framerate 60 -draw_mouse 0 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop -t 38 -c:v libx264rgb -preset ultrafast -crf 0 raw.mkv
+ffmpeg -f gdigrab -framerate 60 -draw_mouse 0 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop -t 49 -c:v libx264rgb -preset ultrafast -crf 0 raw.mkv
 ```
 
 Find the start. Paused at 0 the frame is already film frame 0 (the empty field), so look for
@@ -98,10 +101,10 @@ where the picture stops being frozen; the tape of marks moves from the first fra
 ffmpeg -i raw.mkv -vf "freezedetect=n=0.0003:d=0.5" -an -f null -
 ```
 
-Trim to 35.4 s and encode, with `START` = the first `freeze_end` minus 0.017 (one frame):
+Trim to 46.02 s and encode, with `START` = the first `freeze_end` minus 0.017 (one frame):
 
 ```bash
-ffmpeg -ss START -i raw.mkv -t 35.4 -vf fps=60 -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart huntr-teaser-1080p60.mp4
+ffmpeg -ss START -i raw.mkv -t 46.02 -vf fps=60 -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart huntr-teaser-1080p60.mp4
 ```
 
 For the vertical cut add `&format=vertical` and capture `-video_size 1080x1920`, which needs a

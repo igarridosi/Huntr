@@ -186,22 +186,22 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .f-bear { fill: color-mix(in srgb, var(--bearish) 62%, transparent); } .f-bull { fill: color-mix(in srgb, var(--bullish) 70%, transparent); }
 
 /* ── Insights ──────────────────────────────────────────────────────────── */
-.ins-grid { display: grid; gap: 18px; margin-bottom: 30px; }
+.ins-grid { display: grid; gap: 26px; margin: 12px 0 42px; }
 .h .ins-grid { grid-template-columns: repeat(3, 1fr); }
 .v .ins-grid { grid-template-columns: repeat(2, 1fr); }
-.icard { position: relative; height: 104px; display: flex; align-items: center; gap: 18px; padding: 0 22px; }
+.icard { position: relative; height: 132px; display: flex; align-items: center; gap: 22px; padding: 0 30px; }
 .icard .who { flex: 1; min-width: 0; }
 .icard .tk { font-family: var(--font-mono); font-size: 30px; font-weight: 600; }
 .icard .nm { font-size: 28px; color: var(--mist); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .icard .px { text-align: right; }
-.icard .p { font-family: var(--font-mono); font-size: 32px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.icard .p { font-family: var(--font-mono); font-size: 34px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .icard .c { font-family: var(--font-mono); font-size: 28px; font-variant-numeric: tabular-nums; }
 .ring { position: absolute; inset: -3px; border-radius: 23px; box-shadow: 0 0 0 3px var(--sunset-orange), 0 0 0 10px var(--orange-wash); pointer-events: none; }
-.radar { display: grid; gap: 16px; margin-top: 12px; }
+.radar { display: grid; gap: 26px; }
 .h .radar { grid-template-columns: 1fr 1fr; }
-.rcard { padding: 18px 22px; }
-.rcard .label { margin-bottom: 8px; }
-.rrow { display: grid; grid-template-columns: 40px 110px 1fr 120px; gap: 16px; align-items: center; height: 54px; }
+.rcard { padding: 26px 30px; }
+.rcard .label { margin-bottom: 14px; }
+.rrow { display: grid; grid-template-columns: 40px 110px 1fr 120px; gap: 18px; align-items: center; height: 62px; }
 .rrow .tk { font-family: var(--font-mono); font-size: 30px; font-weight: 600; }
 .rbar { height: 10px; border-radius: 5px; transform-origin: 0 50%; }
 .rbar.up { background: color-mix(in srgb, var(--bullish) 70%, transparent); }
@@ -243,6 +243,8 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .rail li { display: flex; align-items: center; gap: 16px; height: 64px; }
 .rail .sw { width: 12px; height: 12px; border-radius: 50%; flex: none; }
 .rail .tk { font-family: var(--font-mono); font-size: 32px; font-weight: 600; width: 110px; }
+.rail .rv { margin-left: auto; font-family: var(--font-mono); font-size: 30px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.v .rail .rv { margin-left: 18px; }
 .rail .nm { font-size: 28px; color: var(--mist); white-space: nowrap; }
 .metrics { position: relative; display: grid; gap: 4px; }
 .v .metrics { grid-template-columns: 1fr 1fr; column-gap: 24px; }
@@ -595,7 +597,11 @@ const CONFIG = {
 const Q = new URLSearchParams(location.search);
 const VERTICAL = Q.get("format") === "vertical";
 const W = VERTICAL ? 1080 : 1920, H = VERTICAL ? 1920 : 1080;
-const DURATION = 35400;
+// The film is authored in film time; it plays STRETCH times slower, so every
+// entrance, hold and transition has room to be read. seek() takes real time.
+const STRETCH = 1.3;
+const FILM = 35400;
+const DURATION = Math.round(FILM * STRETCH);
 const stage = document.getElementById("stage");
 stage.classList.add(VERTICAL ? "v" : "h");
 const $ = (id) => document.getElementById(id);
@@ -783,16 +789,18 @@ function smoothPath(pts) {
   return out;
 }
 const CB = (() => {
-  const railOf = (host, list) => { $(host).innerHTML = list.map(([t, c]) => `<li class="a">${logo(t, "s48")}<span class="tk">${t}</span><i class="sw" style="background:${COLOR[c]}"></i></li>`).join(""); return [...$(host).children]; };
-  const railA = railOf("rail-a", CONFIG.CHART_A.series.map((x) => [x.t, x.color]));
-  const railB = railOf("rail-b", CONFIG.CHART_B.series.map((x) => [x.t, x.color]));
+  // The legend reads each series' last value out beside its company, as the Chart Builder does on hover.
+  const railOf = (host, list) => { $(host).innerHTML = list.map(([t, c, v]) => `<li class="a">${logo(t, "s48")}<span class="tk">${t}</span><i class="sw" style="background:${COLOR[c]}"></i>${v ? `<span class="rv" style="color:${COLOR[c]}">${v}</span>` : ""}</li>`).join(""); return [...$(host).children]; };
+  const lastOf = (x) => pct1(x.pts[x.pts.length - 1][1]);
+  const railA = railOf("rail-a", CONFIG.CHART_A.series.map((x) => [x.t, x.color, lastOf(x)]));
+  const railB = railOf("rail-b", CONFIG.CHART_B.series.map((x) => [x.t, x.color, lastOf(x)]));
   const railV = railOf("rail-v", [["V", "orange"]]);
   const METRICS = ["Revenue", "FCF margin", "Return on equity", "Net debt", "Shares outstanding (diluted)"];
   $("metrics").insertAdjacentHTML("beforeend", METRICS.map((m) => `<div class="metric a">${m}</div>`).join(""));
   const MC_ = [["Capital expenditures", "indigo"], ["Dividends paid", "gold"], ["Share repurchases", "orange"], ["Operating cash flow", "snow"]];
   $("metrics-c").innerHTML = MC_.map(([m, c]) => `<div class="metric a"><i class="sw" style="background:${COLOR[c]}"></i>${m}</div>`).join("");
   const w = VERTICAL ? 984 : 936, h = VERTICAL ? 640 : 600;
-  const x0 = 92, x1 = w - 236, y0 = 18, y1 = h - 52;
+  const x0 = 92, x1 = w - 28, y0 = 18, y1 = h - 52;
   const svg = $("cb-svg"); sizeSvg(svg, w, h);
   const layer = (lo, hi, ticks, fmt) => {
     const g = svgEl("g", {}, svg), yAt = (v) => y1 - (y1 - y0) * (v - lo) / (hi - lo);
@@ -810,12 +818,8 @@ const CB = (() => {
       const path = svgEl("path", { d: smoothPath(pts), class: "s-line s-" + sr.color, "clip-path": `url(#${c.id})`, style: "stroke-width:3.5" }, svg);
       const end = svgEl("circle", { r: 7, class: "f-" + sr.color, cx: pts[pts.length - 1][0], cy: pts[pts.length - 1][1] }, svg);
       [path, end].forEach((e) => { e.style.opacity = "0"; });
-      const pill = document.createElement("div"); pill.className = "pill a"; pill.style.setProperty("--pc", COLOR[sr.color]);
-      pill.innerHTML = `<i></i><span>${sr.t}</span><span>${pct1(sr.pts[sr.pts.length - 1][1])}</span>`; $("pills").appendChild(pill);
-      return { path, end, pill, clip: c.rect, last: pts[pts.length - 1], endFrac: (pts[pts.length - 1][0] - x0) / (x1 - x0) };
+      return { path, end, clip: c.rect, last: pts[pts.length - 1], endFrac: (pts[pts.length - 1][0] - x0) / (x1 - x0) };
     });
-    const ys = relax(lines.map((l) => l.last[1]), 54, y0 + 23, y1 - 23);
-    lines.forEach((l, i) => { l.pillY = ys[i] - 23; });
     return { layer: L, lines };
   };
   const A = group(CONFIG.CHART_A), B = group(CONFIG.CHART_B);
@@ -836,11 +840,8 @@ const CB = (() => {
     [ocf, end].forEach((e) => { e.style.opacity = "0"; });
     const qs = svgEl("g", {}, svg); [2019, 2021, 2023, 2025].forEach((y) => { const i = rows.length - 1 - (2026 - y) * 4 + 1; svgEl("text", { x: xs[Math.max(0, Math.min(n - 1, i))], y: h - 6, "text-anchor": "middle" }, qs).textContent = y; }); qs.style.opacity = "0";
     const last = rows[n - 1], total = last[0] + last[1] + last[2];
-    const mk = (label, v, color) => { const pill = document.createElement("div"); pill.className = "pill a"; pill.style.setProperty("--pc", COLOR[color]); pill.innerHTML = `<i></i><span>${label}</span><span>$${v.toFixed(1)}B</span>`; $("pills").appendChild(pill); return pill; };
-    const pills = [mk("total", total, "orange"), mk("OCF", last[3], "snow")];
-    const ys = relax([L.yAt(total), L.yAt(last[3])], 54, y0 + 23, y1 - 23);
     $("cb-legend").innerHTML = [["indigo", "CapEx", last[0]], ["gold", "Div", last[1]], ["orange", "Buyback", last[2]], ["snow", "OCF", last[3]]].map(([c, l, v]) => `<span><i style="background:${COLOR[c]}"></i>${l} <b>$${v.toFixed(1)}B</b></span>`).join("");
-    return { layer: L, bars, ocf, end, clip: c.rect, qs, pills, pillX: xs[n - 1] + 22, pillY: ys.map((y) => y - 23) };
+    return { layer: L, bars, ocf, end, clip: c.rect, qs };
   })();
   return { railA, railB, railV, rows: [...$("metrics").querySelectorAll(".metric")], rowsC: [...$("metrics-c").children], A, B, V, years, x0, x1, rowH: 56 };
 })();
@@ -978,8 +979,8 @@ function carry(node, from, to, p, baseW) {
 
 const TIMELINE = [
   // Out and back on a sine over the whole film: the last frame's field is the first frame's.
-  beat("field", 0, DURATION, "sine", (ms) => {
-    put(el.grid, 0, -26 * Math.sin(2 * Math.PI * ms / DURATION), 1, 1, ms > 0 && ms < DURATION);
+  beat("field", 0, FILM, "sine", (ms) => {
+    put(el.grid, 0, -26 * Math.sin(2 * Math.PI * ms / FILM), 1, 1, ms > 0 && ms < FILM);
   }),
 
   beat("cold-open", 0, 2400, "settle", (ms) => {
@@ -992,7 +993,7 @@ const TIMELINE = [
   }),
 
   // The brand mark: lands in the cold open, carried into the window's sidebar, carried out to the end card.
-  beat("brand-mark", 0, DURATION, "glide", (ms) => {
+  beat("brand-mark", 0, FILM, "glide", (ms) => {
     const w0 = 300;
     if (ms < 2100) {
       const p = EASE.settle(seg(ms, 100, 800));
@@ -1116,9 +1117,10 @@ const TIMELINE = [
         reveal(l.clip, l.path, p, CB.x0); l.path.style.opacity = ((RM ? p : p > 0 ? 1 : 0) * off).toFixed(4);
         const landed = a + l.endFrac * 800, e = EASE.settle(seg(ms, landed, 300));
         l.end.style.opacity = (e * off).toFixed(4);
-        place(l.pill, l.last[0] + 18 + (RM ? 0 : -12 * (1 - e)), l.pillY, e * off, (e > 0 && e < 1) || (off > 0 && off < 1));
+        G.rv[i].style.opacity = e.toFixed(4);          // the company's value appears as its line lands
       });
     };
+    CB.A.rv = CB.railA.map((r) => r.querySelector(".rv")); CB.B.rv = CB.railB.map((r) => r.querySelector(".rv"));
     lines(CB.A, 1150, 2950);
     lines(CB.B, 3300, 5200);
     // Visa: bars grow left to right; the cash flow line draws over them.
@@ -1127,7 +1129,6 @@ const TIMELINE = [
     V.bars.forEach((g, i) => { const p = EASE.settle(seg(ms, 5850 + i * 24, 520)); const t = g.getAttribute("transform").split(" scale")[0]; g.setAttribute("transform", `${t} scale(1 ${Math.max(0.0001, RM ? 1 : p).toFixed(4)})`); g.style.opacity = RM ? p.toFixed(4) : (p > 0 ? "1" : "0"); });
     const op = seg(ms, 6200, 1100); reveal(V.clip, V.ocf, op, CB.x0);
     V.end.style.opacity = EASE.settle(seg(ms, 7250, 250)).toFixed(4);
-    V.pills.forEach((pl, i) => { const e = EASE.settle(seg(ms, 6950 + i * 120, 350)); place(pl, V.pillX + (RM ? 0 : -12 * (1 - e)), V.pillY[i], e, e > 0 && e < 1); });
     track(el.cbLegend, ms, { at: 6650, dur: 500, dy: 8 });
   }),
 
@@ -1195,7 +1196,8 @@ const TIMELINE = [
 let current = 0, playing = false, t0 = 0;
 function seek(timeMs) {
   current = clamp(+timeMs || 0, 0, DURATION);
-  for (const b of TIMELINE) b.render(clamp((current - b.start) / b.duration));
+  const film = current / STRETCH;
+  for (const b of TIMELINE) b.render(clamp((film - b.start) / b.duration));
   if (document.body.classList.contains("hud")) $("hud").textContent = (current / 1000).toFixed(3) + "s" + (RM ? " · reduced" : "");
   return current;
 }
@@ -1235,7 +1237,9 @@ const ready = Promise.race([document.fonts.ready, new Promise((r) => setTimeout(
 
 window.teaser = {
   seek, play, pause, duration: DURATION, fps: 60,
-  beats: TIMELINE.map(({ id, start, duration, easing }) => ({ id, start, end: start + duration, duration, easing })),
+  // real (played) time, in ms
+  beats: TIMELINE.map(({ id, start, duration, easing }) => ({ id, start: Math.round(start * STRETCH), end: Math.round((start + duration) * STRETCH), duration: Math.round(duration * STRETCH), easing })),
+  stretch: STRETCH,
   frame: (n) => seek(n / 60 * 1000),
   frames: Math.round(DURATION / 1000 * 60) + 1,
   get time() { return current; }, get playing() { return playing; }, get reducedMotion() { return RM; },
