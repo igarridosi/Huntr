@@ -2,14 +2,13 @@
 
 import { AlertTriangle, FileSearch } from "lucide-react";
 import { MaterialPanel } from "@/components/ui/material-panel";
-import { Skeleton } from "@/components/ui/skeleton";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { TickerPicker } from "./ticker-picker";
 import { InsiderSummary } from "./insider-summary";
 import { InsiderChart } from "./insider-chart";
 import { InsiderLines } from "./insider-lines";
-import { VISIBLE_ROWS } from "./use-row-window";
 import { InsiderFeed } from "./insider-feed";
+import { InsiderLoader, ReadingProgress } from "./insider-loader";
 import { useBatchDailyHistory, useInsiderActivity, useStockProfile } from "@/hooks/use-stock-data";
 
 interface InsidersPanelProps {
@@ -42,7 +41,7 @@ export function InsidersPanel({ ticker, onTicker }: InsidersPanelProps) {
           </div>
         </MaterialPanel>
       ) : activity.isLoading ? (
-        <LoadingLayout ticker={ticker} />
+        <InsiderLoader ticker={ticker} name={profile.data?.name} />
       ) : !a ? (
         <MaterialPanel className="flex flex-col items-center gap-2 py-12 text-center">
           <AlertTriangle className="h-5 w-5 text-golden-hour" aria-hidden />
@@ -73,9 +72,11 @@ export function InsidersPanel({ ticker, onTicker }: InsidersPanelProps) {
               </span>
             </header>
 
-            {/* The filing cap cut inside the window: the totals are real but
-                partial, and the reader has to know which part. */}
-            {a.coverage.truncated && a.coverage.from && a.coverage.from > a.summary.from ? (
+            {/* While steps are still landing, the bar says the totals are not
+                final. Once complete, the cap notice says what they cover. */}
+            {a.progress.read < a.progress.total ? (
+              <ReadingProgress read={a.progress.read} total={a.progress.total} />
+            ) : a.coverage.truncated && a.coverage.from && a.coverage.from > a.summary.from ? (
               <p className="flex items-start gap-2 rounded-xl bg-golden-hour/[0.07] px-3 py-2.5 text-xs text-golden-hour ring-1 ring-inset ring-golden-hour/25">
                 <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden />
                 Partial year. This company files so many Form 4s that the 60 read reach back only to {a.coverage.from}, so the totals
@@ -99,33 +100,6 @@ export function InsidersPanel({ ticker, onTicker }: InsidersPanelProps) {
           </MaterialPanel>
         </div>
       )}
-    </div>
-  );
-}
-
-/** The shape of the result while it loads, so nothing jumps when it lands. */
-function LoadingLayout({ ticker }: { ticker: string }) {
-  return (
-    <div className="grid items-start gap-4 lg:grid-cols-3" aria-busy="true">
-      <MaterialPanel className="space-y-5 lg:col-span-2">
-        <div className="flex items-baseline justify-between">
-          <Skeleton className="h-6 w-56" />
-          <Skeleton className="h-4 w-40" />
-        </div>
-        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-[92px] rounded-xl" />)}
-        </div>
-        <Skeleton className="h-[300px] rounded-xl" />
-        <p className="text-xs text-mist">
-          Reading {ticker}&apos;s Form 4s from EDGAR. The first read of a company fetches two years of filings at the pace the SEC
-          allows, which takes a few seconds. After that it is on file.
-        </p>
-      </MaterialPanel>
-      <MaterialPanel className="space-y-3 lg:col-span-1">
-        <Skeleton className="h-5 w-24" />
-        <Skeleton className="h-8 w-56 rounded-xl" />
-        {Array.from({ length: VISIBLE_ROWS }).map((_, i) => <Skeleton key={i} className="h-[60px] rounded-xl" />)}
-      </MaterialPanel>
     </div>
   );
 }

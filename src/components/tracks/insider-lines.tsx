@@ -119,6 +119,12 @@ export function InsiderLines({ rows, cik }: { rows: InsiderRow[]; cik: string })
                             {r.price !== null ? formatCurrency(r.price) : "not filed"}
                             {r.priceFootnoted ? <span className="ml-1 text-golden-hour">weighted avg.</span> : null}
                           </dd>
+                          {r.fills > 1 ? (
+                            <>
+                              <dt className="text-mist/70">Executed in</dt>
+                              <dd className="text-right text-snow-peak">{r.fills} fills</dd>
+                            </>
+                          ) : null}
                           <dt className="text-mist/70">Holds after</dt>
                           <dd className="text-right text-snow-peak">{r.sharesAfter !== null ? formatNumber(r.sharesAfter) : "not filed"}</dd>
                           <dt className="text-mist/70">Held</dt>

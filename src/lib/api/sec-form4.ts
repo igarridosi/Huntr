@@ -23,12 +23,22 @@ const CACHE_KEY = "insiders-v1";
 const FRESH_MS = 6 * 60 * 60 * 1000;
 /** A stale copy is served while it refreshes, for up to a month. */
 const STALE_MS = 30 * 24 * 60 * 60 * 1000;
-/** Two years of filings — twice the window the summary reads. */
-const LOOKBACK_DAYS = 730;
-/** The most filings read for one company. A cold load costs this many requests. */
+/**
+ * Thirteen months: the twelve the summary reads, and a month of margin.
+ * Two years doubled the cost of a first read for a window nothing used.
+ */
+const LOOKBACK_DAYS = 400;
+/** The most filings read for one company. */
 export const MAX_FILINGS = 60;
-const BATCH = 5;
-const BATCH_GAP_MS = 1_100;
+/**
+ * Filings read per call. A first read returns after one step, so the page
+ * shows something in a couple of seconds; the client asks for the next
+ * step until the record is complete, and shows how far it has got.
+ */
+export const STEP = 16;
+/** Eight at a time, a second apart: under the ten a second the SEC allows. */
+const BATCH = 8;
+const BATCH_GAP_MS = 1_000;
 
 export interface InsiderActivity {
   ticker: string;
@@ -43,6 +53,8 @@ export interface InsiderActivity {
     /** More Form 4s exist in the lookback than were read. */
     truncated: boolean;
   };
+  /** Filings read so far of those listed; equal when the record is complete. */
+  progress: { read: number; total: number };
   fetchedAt: string;
 }
 
@@ -50,6 +62,8 @@ interface CachedPayload {
   cik: string;
   filings: Form4Filing[];
   truncated: boolean;
+  /** Filings listed in the window, after the cap. Absent in payloads written before steps existed. */
+  listed?: number;
   fetchedAt: string;
 }
 
@@ -99,7 +113,7 @@ async function fetchFiling(l: Listing): Promise<Form4Filing | null> {
   return parseForm4(await r.text(), { accession: l.accession, filingDate: l.filingDate });
 }
 
-async function refresh(ticker: string, previous: CachedPayload | null): Promise<CachedPayload | null> {
+async function refresh(ticker: string, previous: CachedPayload | null, budget: number): Promise<CachedPayload | null> {
   const cik = previous?.cik ?? (await resolveCIK(ticker));
   if (!cik) return null;
 
@@ -110,7 +124,8 @@ async function refresh(ticker: string, previous: CachedPayload | null): Promise<
   const { listings, truncated } = listingsFrom(await feed.json(), cik, since);
 
   const known = new Map((previous?.filings ?? []).map((f) => [f.accession, f]));
-  const wanted = listings.filter((l) => !known.has(l.accession));
+  // Newest first, so the first step already covers the most recent months.
+  const wanted = listings.filter((l) => !known.has(l.accession)).slice(0, budget);
 
   const fresh: Form4Filing[] = [];
   for (let i = 0; i < wanted.length; i += BATCH) {
@@ -122,7 +137,7 @@ async function refresh(ticker: string, previous: CachedPayload | null): Promise<
   // Keep only what is still inside the lookback, known or new.
   const keep = new Set(listings.map((l) => l.accession));
   const filings = [...fresh, ...[...known.values()].filter((f) => keep.has(f.accession))];
-  return { cik, filings, truncated, fetchedAt: new Date().toISOString() };
+  return { cik, filings, truncated, listed: listings.length, fetchedAt: new Date().toISOString() };
 }
 
 function present(ticker: string, p: CachedPayload): InsiderActivity {
@@ -134,6 +149,7 @@ function present(ticker: string, p: CachedPayload): InsiderActivity {
     rows,
     summary: summarize(rows, p.fetchedAt),
     coverage: { from: dates[0] ?? null, filings: p.filings.length, truncated: p.truncated },
+    progress: { read: p.filings.length, total: Math.max(p.listed ?? p.filings.length, p.filings.length) },
     fetchedAt: p.fetchedAt,
   };
 }
@@ -143,13 +159,14 @@ function present(ticker: string, p: CachedPayload): InsiderActivity {
  * (not an SEC registrant) or EDGAR could not be reached and nothing is
  * cached. An issuer with no Form 4s returns an empty activity, not null.
  */
-export async function getInsiderActivity(ticker: string): Promise<InsiderActivity | null> {
+export async function getInsiderActivity(ticker: string, budget: number = STEP): Promise<InsiderActivity | null> {
   const t = ticker.toUpperCase();
   const cached = await getCachedDataState<CachedPayload>(t, CACHE_KEY, FRESH_MS, STALE_MS);
-  if (cached.status === "fresh" && cached.data) return present(t, cached.data);
+  const complete = cached.data ? cached.data.filings.length >= (cached.data.listed ?? cached.data.filings.length) : false;
+  if (cached.status === "fresh" && cached.data && complete) return present(t, cached.data);
 
   const next = await withSingleFlight(`insiders:${t}`, async () => {
-    const p = await refresh(t, cached.data ?? null);
+    const p = await refresh(t, cached.data ?? null, budget);
     // An issuer with no Form 4s is a real answer, but an empty payload is
     // refused by the cache by design; only non-empty results are stored.
     if (p && p.filings.length > 0) await setCachedData(t, CACHE_KEY, p);

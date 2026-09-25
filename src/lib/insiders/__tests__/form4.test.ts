@@ -83,6 +83,27 @@ describe("toRows", () => {
     expect(rows.map((r) => r.kind).sort()).toEqual(["exercise", "sell", "tax"]);
   });
 
+  it("folds the fills of one order into one row, exactly (Tesla director, plan sales through a trust)", () => {
+    const f = tsla();
+    const sold = f.transactions.filter((t) => t.code === "S");
+    const rows = toRows([f]);
+    const sale = rows.find((r) => r.code === "S")!;
+    // Every fill that day is the same instruction: one row.
+    expect(rows.filter((r) => r.code === "S")).toHaveLength(1);
+    expect(sale.fills).toBe(sold.length);
+    expect(sale.shares).toBe(sold.reduce((s, t) => s + t.shares, 0));
+    const value = sold.reduce((s, t) => s + t.shares * (t.price as number), 0);
+    expect(sale.value).toBeCloseTo(value, 6);
+    expect(sale.price).toBeCloseTo(value / sale.shares, 6);
+    // The holding after is the one filed after the last fill.
+    expect(sale.sharesAfter).toBe(sold[sold.length - 1].sharesAfter);
+    expect(sale).toMatchObject({ plan: "line", direct: false, nature: "By JRM Rev. Trust", priceFootnoted: true });
+  });
+
+  it("keeps different orders apart even inside one filing (Apple: sale, exercise, tax)", () => {
+    expect(toRows([aapl()]).map((r) => r.code).sort()).toEqual(["F", "M", "S"]);
+  });
+
   it("gives no value to a line that filed no price", () => {
     const rows = toRows([yetiGrant()]);
     expect(rows.every((r) => r.price === null ? r.value === null : true)).toBe(true);
@@ -106,7 +127,7 @@ describe("summarize and findCluster", () => {
   const row = (over: Partial<InsiderRow>): InsiderRow => ({
     accession: "a", filingDate: "2026-06-01", amended: false, date: "2026-06-01", owner: "A", ownerCik: "1", role: "Director",
     code: "P", kind: "buy", shares: 100, price: 10, priceFootnoted: false, value: 1_000, acquired: true, sharesAfter: 1_000,
-    direct: true, nature: null, plan: null, discretionary: true, footnotes: [], ...over,
+    direct: true, nature: null, plan: null, discretionary: true, footnotes: [], fills: 1, ...over,
   });
 
   it("splits discretionary trades from plan trades and keeps the unpriced ones out of value", () => {

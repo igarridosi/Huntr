@@ -52,7 +52,16 @@ export function InsiderFeed({ onOpen }: { onOpen: (ticker: string) => void }) {
     for (let i = 0; i < queue.length; i++) {
       if (cancelled.current) break;
       const t = queue[i];
-      await queryClient.fetchQuery({ queryKey: QUERY_KEYS.INSIDERS(t), queryFn: () => fetchInsiderActivity(t), staleTime: 6 * 60 * 60 * 1000 }).catch(() => null);
+      // Step through the company's filings until its record is complete,
+      // or a step reads nothing new.
+      let read = -1;
+      for (;;) {
+        const next = await fetchInsiderActivity(t).catch(() => null);
+        if (!next) break;
+        queryClient.setQueryData(QUERY_KEYS.INSIDERS(t), next);
+        if (next.progress.read >= next.progress.total || next.progress.read <= read) break;
+        read = next.progress.read;
+      }
       // The feed grows company by company rather than all at the end: the
       // re-read is cache-only, so it costs no SEC request.
       await feed.refetch();

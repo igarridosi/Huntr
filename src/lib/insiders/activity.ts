@@ -64,6 +64,11 @@ export interface InsiderRow {
   /** An open-market trade taken on the day, outside any plan. */
   discretionary: boolean;
   footnotes: string[];
+  /**
+   * How many lines of the filing this row stands for. An order executed in
+   * many small fills is filed one line per fill; it is one decision.
+   */
+  fills: number;
 }
 
 export function roleOf(o: InsiderOwner): string {
@@ -94,35 +99,67 @@ export function supersedeAmendments(filings: Form4Filing[]): Form4Filing[] {
   return filings.filter((f) => !replaced.has(f.accession));
 }
 
+/**
+ * Lines of one filing that are the same order: same person, same day, same
+ * code, same plan, same holding. A CEO selling under a plan can file thirty
+ * fills of 4 to 78 shares for one instruction; they are one row here.
+ *
+ * Shares add up exactly. The price is the share-weighted average of the
+ * fills, and only when every fill filed one — a missing price is never
+ * filled in, so the value is then left out rather than estimated. The
+ * holding after is the one filed after the last fill.
+ */
+function orderKey(t: Form4Filing["transactions"][number]): string {
+  return [t.date, t.code, t.plan ?? "", t.acquired ? "A" : "D", t.direct ? "D" : `I:${t.nature ?? ""}`, t.security].join("|");
+}
+
 export function toRows(filings: Form4Filing[]): InsiderRow[] {
   const rows: InsiderRow[] = [];
   for (const f of supersedeAmendments(filings)) {
     const owner = f.owners[0];
     if (!owner) continue;
     const name = f.owners.length > 1 ? `${owner.name} +${f.owners.length - 1}` : owner.name;
+
+    // Filing order is kept, so "holds after" comes from the last fill.
+    const orders = new Map<string, Form4Filing["transactions"]>();
     for (const t of f.transactions) {
-      const kind = kindOf(t.code);
+      const k = orderKey(t);
+      const list = orders.get(k);
+      if (list) list.push(t);
+      else orders.set(k, [t]);
+    }
+
+    for (const fills of orders.values()) {
+      const first = fills[0];
+      const last = fills[fills.length - 1];
+      const kind = kindOf(first.code);
+      const shares = fills.reduce((sum, t) => sum + t.shares, 0);
+      const allPriced = fills.every((t) => t.price !== null);
+      const value = allPriced ? fills.reduce((sum, t) => sum + t.shares * (t.price as number), 0) : null;
+      const footnotes = [...new Set(fills.flatMap((t) => t.footnotes))];
       rows.push({
         accession: f.accession,
         filingDate: f.filingDate,
         amended: f.form === "4/A",
-        date: t.date,
+        date: first.date,
         owner: name,
         ownerCik: owner.cik,
         role: roleOf(owner),
-        code: t.code,
+        code: first.code,
         kind,
-        shares: t.shares,
-        price: t.price,
-        priceFootnoted: t.priceFootnoted,
-        value: t.price !== null ? t.shares * t.price : null,
-        acquired: t.acquired,
-        sharesAfter: t.sharesAfter,
-        direct: t.direct,
-        nature: t.nature,
-        plan: t.plan,
-        discretionary: (kind === "buy" || kind === "sell") && t.plan === null,
-        footnotes: t.footnotes,
+        shares,
+        price: value !== null && shares > 0 ? value / shares : null,
+        // An average of several fills is an average, whatever the filing says.
+        priceFootnoted: fills.length > 1 || fills.some((t) => t.priceFootnoted),
+        value,
+        acquired: first.acquired,
+        sharesAfter: last.sharesAfter,
+        direct: first.direct,
+        nature: first.nature,
+        plan: first.plan,
+        discretionary: (kind === "buy" || kind === "sell") && first.plan === null,
+        footnotes,
+        fills: fills.length,
       });
     }
   }

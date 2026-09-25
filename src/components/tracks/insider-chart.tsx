@@ -97,12 +97,15 @@ export function InsiderChart({ prices, rows, loading = false }: { prices: Array<
               return (
                 <div className="max-w-xs rounded-lg border border-wolf-border/60 bg-wolf-surface/95 px-3 py-2 text-xs shadow-xl backdrop-blur-md">
                   <p className="font-mono text-mist">{p.date} · {formatCurrency(p.close)}</p>
-                  {(p.trades ?? []).map((t, i) => (
+                  {(p.trades ?? []).slice(0, 4).map((t, i) => (
                     <p key={i} className={`mt-1 ${t.kind === "buy" ? "text-bullish" : "text-bearish"}`}>
                       {t.owner} {t.kind === "buy" ? "bought" : "sold"} {formatCompactNumber(t.shares)} sh
                       {t.plan ? <span className="text-mist"> · 10b5-1 plan</span> : null}
                     </p>
                   ))}
+                  {(p.trades?.length ?? 0) > 4 ? (
+                    <p className="mt-1 text-mist">and {(p.trades?.length ?? 0) - 4} more that day</p>
+                  ) : null}
                 </div>
               );
             }}
