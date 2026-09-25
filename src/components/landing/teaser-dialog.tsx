@@ -5,14 +5,19 @@ import { createPortal } from "react-dom";
 import { Play, X } from "lucide-react";
 import { track } from "@/lib/analytics/track";
 
-const SRC = "/screenshots/09254K.mp4";
+const VIDEO_ID = "JDOcCHxHlqU";
+const WATCH_URL = `https://youtu.be/${VIDEO_ID}`;
+/* youtube-nocookie, so nothing is written until the film is actually played. */
+const EMBED_URL = `https://www.youtube-nocookie.com/embed/${VIDEO_ID}?autoplay=1&rel=0&modestbranding=1&playsinline=1`;
 
 /**
  * The teaser, behind one button.
  *
- * The file is large, so nothing about it is fetched until someone asks:
- * the <video> is not in the tree at all until the dialog opens, and the
- * poster frame is the page's own art rather than a second download.
+ * The film is hosted on YouTube rather than shipped with the site: a 4K
+ * file in the repository costs every clone and every deploy, and the
+ * embed costs a visitor nothing until they ask for it — the iframe is
+ * not in the tree at all until the dialog opens, so no request reaches
+ * YouTube and no cookie is set on a page view.
  *
  * The surface arrives as a material — blur and scale together — and
  * leaves the way it came. Escape and the backdrop both close it, and
@@ -70,7 +75,7 @@ export function TeaserDialog() {
           />
           <Play className="relative h-3.5 w-3.5 fill-current" />
         </span>
-        <span className="text-sm font-semibold text-snow-peak">See the hunt in 28 seconds</span>
+        <span className="text-sm font-semibold text-snow-peak">See the hunt in 50 seconds</span>
       </button>
 
       {open && typeof document !== "undefined"
@@ -87,26 +92,41 @@ export function TeaserDialog() {
             onClick={(e) => e.stopPropagation()}
             className="relative w-full max-w-6xl overflow-hidden rounded-2xl border border-wolf-border/60 bg-wolf-black shadow-2xl shadow-wolf-black/80 animate-huntr-sheet"
           >
-            <video
-              className="block h-auto w-full"
-              src={SRC}
-              autoPlay
-              controls
-              playsInline
-              // Muted, because a browser will refuse to autoplay anything else.
-              muted
-              preload="auto"
-            />
-            <button
-              ref={closeRef}
-              type="button"
-              onClick={close}
-              aria-label="Close the teaser"
-              className="absolute right-3 top-3 inline-flex h-9 w-9 items-center justify-center rounded-full border border-wolf-border/60 bg-wolf-black/70 text-mist backdrop-blur-md transition-[transform,color] duration-150 hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="aspect-video w-full bg-wolf-black">
+              <iframe
+                className="h-full w-full"
+                src={EMBED_URL}
+                title="Huntr — release teaser"
+                allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                allowFullScreen
+                referrerPolicy="strict-origin-when-cross-origin"
+              />
+            </div>
+            {/* Our own bar, under the frame: the player owns its top-right
+                corner and its bottom edge, so nothing of ours goes there. */}
+            <div className="flex items-center justify-between gap-4 border-t border-wolf-border/50 px-4 py-2.5">
+              <span className="font-mono text-[11px] uppercase tracking-[0.1em] text-mist/60">Release teaser · 50 seconds</span>
+              <a
+                href={WATCH_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="font-mono text-[11px] text-mist underline-offset-2 transition-colors hover:text-snow-peak hover:underline"
+              >
+                watch on YouTube
+              </a>
+            </div>
           </div>
+
+          {/* Clear of the player, which owns its own top-right corner. */}
+          <button
+            ref={closeRef}
+            type="button"
+            onClick={close}
+            aria-label="Close the teaser"
+            className="absolute right-4 top-4 inline-flex h-10 w-10 items-center justify-center rounded-full border border-wolf-border/60 bg-wolf-black/70 text-mist backdrop-blur-md transition-[transform,color] duration-150 hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange sm:right-6 sm:top-6"
+          >
+            <X className="h-4 w-4" />
+          </button>
           </div>,
             document.body
           )

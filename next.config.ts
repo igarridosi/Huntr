@@ -53,8 +53,9 @@ const securityHeaders = [
         "https://www.allinvestview.com",
         "https://tally.so",
       ].join(" "),
-      // Ko-fi and Tally both open their widgets in an iframe
-      "frame-src 'self' https://ko-fi.com https://storage.ko-fi.com https://tally.so",
+      // Ko-fi and Tally open their widgets in an iframe; the landing teaser
+      // plays from YouTube's no-cookie host, and only once someone opens it.
+      "frame-src 'self' https://ko-fi.com https://storage.ko-fi.com https://tally.so https://www.youtube-nocookie.com https://www.youtube.com",
       "frame-ancestors 'none'",
     ].join("; "),
   },
