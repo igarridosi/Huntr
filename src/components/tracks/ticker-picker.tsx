@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Search } from "lucide-react";
 import { useSearch } from "@/hooks/use-stock-data";
+import { TickerLogo } from "@/components/ui/ticker-logo";
 import { cn } from "@/lib/utils";
 
 interface TickerPickerProps {
@@ -79,12 +80,17 @@ export function TickerPicker({ value, onPick, placeholder = "Search a company or
                 onMouseEnter={() => setActive(i)}
                 onClick={() => pick(r.ticker)}
                 className={cn(
-                  "flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
+                  "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors",
                   i === active ? "bg-snow-peak/[0.06] text-snow-peak" : "text-mist"
                 )}
               >
-                <span className="truncate">{r.name}</span>
-                <span className="font-mono text-xs text-sunset-orange">{r.ticker}</span>
+                {/* The mark and the symbol are what a reader scans for; the full
+                    name stays available to assistive tech and on hover. */}
+                <span className="flex items-center gap-2.5" title={r.name}>
+                  <TickerLogo ticker={r.ticker} className="h-6 w-6 rounded-md" />
+                  <span className="font-mono text-[13px] font-medium text-snow-peak">{r.ticker}</span>
+                  <span className="sr-only">{r.name}</span>
+                </span>
               </button>
             </li>
           ))}
