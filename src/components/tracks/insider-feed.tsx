@@ -9,6 +9,7 @@ import { useInsiderFeed } from "@/hooks/use-stock-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { labelOf, type InsiderRow } from "@/lib/insiders/activity";
 import { QUERY_KEYS } from "@/lib/constants";
+import { EDGE_FADE, useRowWindow, VISIBLE_ROWS } from "./use-row-window";
 import { cn, formatCompactNumber, formatCurrency } from "@/lib/utils";
 
 /**
@@ -29,14 +30,17 @@ export function InsiderFeed({ onOpen }: { onOpen: (ticker: string) => void }) {
   const queryClient = useQueryClient();
   const [loading, setLoading] = useState<{ done: number; total: number; stopping: boolean } | null>(null);
   const cancelled = useRef(false);
+  const scroller = useRef<HTMLDivElement | null>(null);
 
   const trades = useMemo(() => {
     const out: Array<InsiderRow & { ticker: string }> = [];
     for (const a of feed.data?.activities ?? []) {
       for (const r of a.rows) if (r.kind === "buy" || r.kind === "sell") out.push({ ...r, ticker: a.ticker });
     }
-    return out.sort((x, y) => y.date.localeCompare(x.date)).slice(0, 15);
+    return out.sort((x, y) => y.date.localeCompare(x.date)).slice(0, 40);
   }, [feed.data]);
+
+  useRowWindow(scroller, [trades]);
 
   const clusters = (feed.data?.activities ?? []).filter((a) => a.summary.cluster);
   const missing = feed.data?.missing ?? [];
@@ -77,7 +81,7 @@ export function InsiderFeed({ onOpen }: { onOpen: (ticker: string) => void }) {
               key={a.ticker}
               type="button"
               onClick={() => onOpen(a.ticker)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-bullish/10 px-2.5 py-1.5 text-xs font-medium text-bullish ring-1 ring-inset ring-bullish/25 transition-transform active:scale-[0.97]"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-bullish/10 px-2.5 py-1.5 text-xs font-medium text-bullish ring-1 ring-inset ring-bullish/25 transition-transform active:scale-[0.97] motion-reduce:active:scale-100"
             >
               <Users className="h-3.5 w-3.5" aria-hidden />
               {a.ticker}: {a.summary.cluster!.insiders.length} insiders buying
@@ -93,13 +97,14 @@ export function InsiderFeed({ onOpen }: { onOpen: (ticker: string) => void }) {
       ) : trades.length === 0 ? (
         <p className="text-xs text-mist">No open-market trades on file for the companies loaded so far.</p>
       ) : (
-        <ul className="divide-y divide-wolf-border/30 overflow-hidden rounded-xl border border-wolf-border/40">
+        <div ref={scroller} className="overflow-y-auto overscroll-contain" style={trades.length > VISIBLE_ROWS ? EDGE_FADE : undefined}>
+        <ul className={cn("flex flex-col gap-1", trades.length > VISIBLE_ROWS && "pb-9")}>
           {trades.map((r, i) => (
             <li key={`${r.accession}-${i}`}>
               <button
                 type="button"
                 onClick={() => onOpen(r.ticker)}
-                className="grid w-full grid-cols-[5.5rem_3.5rem_1fr_auto] items-center gap-3 px-3 py-2.5 text-left text-xs transition-colors hover:bg-snow-peak/[0.03]"
+                className="grid w-full grid-cols-[5.5rem_3.5rem_1fr_auto] items-center gap-3 rounded-xl px-3 py-2.5 text-left text-xs transition-[background-color,transform] duration-150 hover:bg-snow-peak/[0.04] active:scale-[0.99] motion-reduce:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange"
               >
                 <span className="font-mono tabular-nums text-mist">{r.date}</span>
                 <span className="font-mono font-semibold text-sunset-orange">{r.ticker}</span>
@@ -117,10 +122,11 @@ export function InsiderFeed({ onOpen }: { onOpen: (ticker: string) => void }) {
             </li>
           ))}
         </ul>
+        </div>
       )}
 
       {missing.length > 0 ? (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-wolf-border/40 bg-wolf-black/20 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-wolf-black/25 px-4 py-3 ring-1 ring-inset ring-wolf-border/40">
           <p className="text-xs text-mist">
             {missing.length} watchlist compan{missing.length === 1 ? "y" : "ies"} not read yet:{" "}
             <span className="font-mono text-snow-peak/80">{missing.slice(0, 8).join(", ")}{missing.length > 8 ? "…" : ""}</span>

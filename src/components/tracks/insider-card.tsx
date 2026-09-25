@@ -61,13 +61,13 @@ export function InsiderCard({ ticker }: { ticker: string }) {
               <span>
                 <span className="text-mist">Open-market buys </span>
                 <span className={s.buys.count ? "text-bullish" : "text-mist/60"}>
-                  {s.buys.count} · {s.buys.value > 0 ? formatCurrency(s.buys.value, { compact: true, decimals: 1 }) : "—"}
+                  {s.buys.count}{s.buys.value > 0 ? `, ${formatCurrency(s.buys.value, { compact: true, decimals: 1 })}` : ""}
                 </span>
               </span>
               <span>
                 <span className="text-mist">Open-market sells </span>
                 <span className={s.sells.count ? "text-bearish" : "text-mist/60"}>
-                  {s.sells.count} · {s.sells.value > 0 ? formatCurrency(s.sells.value, { compact: true, decimals: 1 }) : "—"}
+                  {s.sells.count}{s.sells.value > 0 ? `, ${formatCurrency(s.sells.value, { compact: true, decimals: 1 })}` : ""}
                 </span>
               </span>
               <span className="text-mist">
@@ -81,7 +81,7 @@ export function InsiderCard({ ticker }: { ticker: string }) {
             </div>
 
             {market.length === 0 ? (
-              <p className="text-xs text-mist">No open-market trades in the filings read — only routine grants, exercises and tax withholding.</p>
+              <p className="text-xs text-mist">No open-market trades in the filings read. Only routine grants, exercises and tax withholding.</p>
             ) : (
               <ul className="divide-y divide-wolf-border/30">
                 {market.map((r, i) => (

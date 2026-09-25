@@ -48,14 +48,17 @@ export function InsiderChart({ prices, rows, loading = false }: { prices: Array<
   if (data.length === 0) {
     // Loading and missing are different states and say different things.
     return (
-      <div className="flex h-[280px] items-center justify-center text-xs text-mist">
+      <div className="flex min-h-[300px] flex-1 items-center justify-center text-xs text-mist">
         {loading ? "Loading the price history…" : "No price history to plot the trades against."}
       </div>
     );
   }
 
   return (
-    <div className="h-[280px] w-full">
+    // Fills the height the panel gives it, with a floor on narrow screens:
+    // beside the list it grows until both columns end on the same line.
+    <div className="flex min-h-[300px] w-full flex-1 flex-col">
+      <div className="min-h-0 flex-1">
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data} margin={{ top: 10, right: 8, bottom: 0, left: -8 }}>
           <CartesianGrid stroke="var(--color-wolf-border)" strokeOpacity={0.35} vertical={false} />
@@ -86,6 +89,7 @@ export function InsiderChart({ prices, rows, loading = false }: { prices: Array<
           <Scatter dataKey="planSell" fill="none" stroke="var(--color-bearish)" shape="circle" isAnimationActive={false} />
         </ComposedChart>
       </ResponsiveContainer>
+      </div>
       <div className="mt-2 flex flex-wrap gap-4 font-mono text-[11px] text-mist">
         <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-2 rotate-45 bg-bullish" /> open-market buy</span>
         <span className="inline-flex items-center gap-1.5"><i className="inline-block h-2 w-2 rotate-45 bg-bearish" /> open-market sale</span>

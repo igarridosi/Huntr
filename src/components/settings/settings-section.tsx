@@ -2,6 +2,7 @@
 
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
+import { MaterialPanel } from "@/components/ui/material-panel";
 
 interface SettingsSectionProps {
   icon: LucideIcon;
@@ -26,26 +27,18 @@ interface SettingsSectionProps {
 export function SettingsSection({ icon: Icon, title, description, children, tone = "default", className }: SettingsSectionProps) {
   const danger = tone === "danger";
   return (
-    <section
-      className={[
-        "rounded-2xl p-5 shadow-xl backdrop-blur-xl motion-reduce:transition-none",
-        "supports-[backdrop-filter]:bg-wolf-surface/60 bg-wolf-surface",
-        "[@media(prefers-reduced-transparency:reduce)]:bg-wolf-surface [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
-        danger
-          ? "ring-1 ring-inset ring-bearish/30 shadow-bearish/[0.06]"
-          : "ring-1 ring-inset ring-wolf-border/60 shadow-wolf-black/40",
-        className ?? "",
-      ].join(" ")}
-    >
-      <header className="mb-4">
-        <h2 className="flex items-center gap-2 text-[0.95rem] font-semibold leading-tight tracking-[-0.01em] text-snow-peak">
-          <Icon className={`h-4 w-4 ${danger ? "text-bearish" : "text-sunset-orange"}`} aria-hidden />
-          {title}
-        </h2>
-        <p className="mt-1 text-xs leading-relaxed text-mist">{description}</p>
-      </header>
-      <div className="space-y-3">{children}</div>
-    </section>
+    <MaterialPanel tone={tone} className={className}>
+      <section>
+        <header className="mb-4">
+          <h2 className="flex items-center gap-2 text-[0.95rem] font-semibold leading-tight tracking-[-0.01em] text-snow-peak">
+            <Icon className={`h-4 w-4 ${danger ? "text-bearish" : "text-sunset-orange"}`} aria-hidden />
+            {title}
+          </h2>
+          <p className="mt-1 text-xs leading-relaxed text-mist">{description}</p>
+        </header>
+        <div className="space-y-3">{children}</div>
+      </section>
+    </MaterialPanel>
   );
 }
 
