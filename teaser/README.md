@@ -1,6 +1,6 @@
 # Huntr teaser
 
-`huntr-teaser.html` is a 46-second release film in one self-contained file: no build step, no
+`huntr-teaser.html` is a 50-second release film in one self-contained file: no build step, no
 dependencies. Google Fonts is the only request, and it falls back to system fonts offline. Open it
 in Chrome over any static server:
 
@@ -69,16 +69,17 @@ and `seek()` are all real, played time. Change `STRETCH` to change the pace of t
 
 | Beat | Time (s) | What happens |
 |---|---|---|
-| `field` | 0.00–46.02 | Grid drifts out and back on a sine; ends where it started |
+| `field` | 0.00–50.31 | Grid drifts out and back on a sine; ends where it started |
 | `cold-open` | 0.00–3.12 | Two tapes of company logos; "For people who invest in companies, not funds." |
-| `brand-mark` | 0.00–46.02 | The wolf lands at 0.13, is carried into the sidebar at 2.73–3.84, out to the end card at 41.08–42.25 |
-| `window` | 2.67–41.66 | The app window; its highlight follows the section (Insights → AAPL 8.45 → Chart Builder 18.2 → Earnings 28.6 → DCF 34.84) |
+| `brand-mark` | 0.00–50.31 | The wolf lands at 0.13, is carried into the sidebar (2.73–3.84), to the top-right as the window leaves (41.08–42.25), and into the end card (45.37–46.54) |
+| `window` | 2.67–41.66 | The app window; its highlight follows the section. The AAPL entry opens under Insights at 8.3 and closes as the Chart Builder opens at 18.2 |
 | `insights` | 3.25–9.23 | Six cards cascade with prices counting; Radar gainers/losers; the AAPL card is picked at 7.02 |
-| `ticker-page` | 8.19–18.20 | The AAPL logo flies into the header (8.19–9.23); 1Y price draws (9.95–11.64); Financials at 12.48: revenue, FCF, net income, then EBITDA, EPS, capex at 15.28 |
-| `chart-builder` | 18.20–28.60 | Annual FCF margin for MSFT, META, GOOGL (19.7); Return on equity for KO, PEP, MNST (21.97); Visa alone on TTM, capital allocation (24.96–27.63). Values read out beside each company |
+| `ticker-page` | 8.19–18.20 | The AAPL logo flies into the header; the 1Y price draws, its value counting in the chart header (9.95–11.64); Financials at 12.48: revenue, FCF, net income, then EBITDA, EPS, capex at 15.28 |
+| `chart-builder` | 18.20–28.60 | Annual FCF margin for MSFT, META, GOOGL (19.7); Return on equity for KO, PEP, MNST (21.97); Visa alone on TTM, its four metrics with their values beside the chart (25.2–27.6) |
 | `earnings` | 28.60–34.84 | Five days of logos pop in by session; MSFT picked 30.88; quick view slides in 31.33; EPS estimate → reported |
-| `dcf` | 34.84–41.73 | Adobe: sliders sweep in; the Monte Carlo grows at 36.34; Base → Bear 37.05–37.83 → Bull 38.35–39.39 → Base 39.78–40.56 |
-| `resolve` | 41.21–46.02 | Wordmark, URL, one line; settled by 43.19, held 2.8 s |
+| `dcf` | 34.84–41.73 | Adobe: sliders sweep in; the Monte Carlo grows at 36.34; Base → Bear → Bull → Base (37.05–40.56) |
+| `more` | 41.47–45.89 | "There's more to discover." Six tiles: Screener, Portfolios, Watchlists, Transcripts, Reverse DCF, JSON export |
+| `resolve` | 45.50–50.31 | Wordmark, URL, "Made for the investor in you."; settled by 47.48, held 2.8 s |
 
 ## Recording to MP4 at 60 fps
 
@@ -91,7 +92,7 @@ On a 1920×1080 display at 100% scaling, open the film full screen and paused:
 Start a lossless capture, then click into Chrome and press **R**:
 
 ```bash
-ffmpeg -f gdigrab -framerate 60 -draw_mouse 0 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop -t 49 -c:v libx264rgb -preset ultrafast -crf 0 raw.mkv
+ffmpeg -f gdigrab -framerate 60 -draw_mouse 0 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop -t 53 -c:v libx264rgb -preset ultrafast -crf 0 raw.mkv
 ```
 
 Find the start. Paused at 0 the frame is already film frame 0 (the empty field), so look for
@@ -101,10 +102,10 @@ where the picture stops being frozen; the tape of marks moves from the first fra
 ffmpeg -i raw.mkv -vf "freezedetect=n=0.0003:d=0.5" -an -f null -
 ```
 
-Trim to 46.02 s and encode, with `START` = the first `freeze_end` minus 0.017 (one frame):
+Trim to 50.31 s and encode, with `START` = the first `freeze_end` minus 0.017 (one frame):
 
 ```bash
-ffmpeg -ss START -i raw.mkv -t 46.02 -vf fps=60 -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart huntr-teaser-1080p60.mp4
+ffmpeg -ss START -i raw.mkv -t 50.31 -vf fps=60 -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart huntr-teaser-1080p60.mp4
 ```
 
 For the vertical cut add `&format=vertical` and capture `-video_size 1080x1920`, which needs a
