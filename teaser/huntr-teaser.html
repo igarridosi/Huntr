@@ -134,10 +134,11 @@ p { margin: 0; }
 .nav-i { position: relative; z-index: 1; display: flex; align-items: center; gap: 14px; font-size: 28px; color: var(--mist); white-space: nowrap; }
 .h .nav-i { height: 58px; padding: 0 16px; }
 .h .nav-i.sub { padding-left: 34px; }
-.nav-i.on { color: var(--snow-peak); }
+.nav-i.on { color: var(--snow-peak); font-weight: 500; }
 .nav-i .mono { font-weight: 600; }
 .nav-knob { position: absolute; left: 0; top: 0; }
-.h .nav-knob { width: 100%; height: 58px; border-radius: 12px; background: var(--tint-2); box-shadow: inset 3px 0 0 var(--sunset-orange); }
+.h .nav-knob { width: 100%; height: 58px; border-radius: 29px; background: var(--tint-2); }
+.h .nav-knob::after { content: ""; position: absolute; right: 20px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--sunset-orange); box-shadow: 0 0 0 5px var(--orange-wash); }
 .v .nav-knob { top: auto; bottom: 0; height: 4px; width: 100px; border-radius: 2px; background: var(--sunset-orange); transform-origin: 0 0; }
 .side-foot { position: absolute; left: 28px; bottom: 28px; font-size: 28px; color: var(--mist); }
 .v .side-foot { display: none; }
@@ -171,10 +172,10 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .f-wolf { fill: var(--wolf-black); }
 
 /* ── Insights ──────────────────────────────────────────────────────────── */
-.ins-grid { display: grid; gap: 16px; margin-bottom: 26px; }
+.ins-grid { display: grid; gap: 18px; margin-bottom: 30px; }
 .h .ins-grid { grid-template-columns: repeat(3, 1fr); }
 .v .ins-grid { grid-template-columns: repeat(2, 1fr); }
-.icard { position: relative; height: 112px; display: flex; align-items: center; gap: 18px; padding: 0 22px; }
+.icard { position: relative; height: 104px; display: flex; align-items: center; gap: 18px; padding: 0 22px; }
 .icard .who { flex: 1; min-width: 0; }
 .icard .tk { font-family: var(--font-mono); font-size: 30px; font-weight: 600; }
 .icard .nm { font-size: 28px; color: var(--mist); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -194,33 +195,29 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .rrow .v { font-family: var(--font-mono); font-size: 28px; text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ── Ticker page ───────────────────────────────────────────────────────── */
-.sym-top { display: flex; align-items: center; gap: 24px; }
-.sym-name { display: flex; align-items: center; gap: 18px; font-size: 46px; font-weight: 600; letter-spacing: -0.01em; }
-.sym-meta { font-size: 28px; color: var(--mist); margin-top: 4px; white-space: nowrap; }
-.sym-mid { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 22px; gap: 24px; }
-.v .sym-mid { flex-direction: column; align-items: flex-start; }
-.sym-price { font-size: 84px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
-.sym-chg { font-size: 28px; margin-top: 8px; }
-.w52 { display: flex; align-items: center; gap: 16px; font-size: 28px; color: var(--mist); }
-.w52-track { position: relative; width: 320px; height: 8px; border-radius: 4px; background: var(--tint-2); }
-.w52-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 100%; border-radius: 4px; background: var(--sunset-orange); transform-origin: 0 50%; }
-.w52-dot { position: absolute; left: -9px; top: -6px; width: 20px; height: 20px; border-radius: 50%; background: var(--snow-peak); box-shadow: 0 0 0 4px var(--wolf-surface); }
-.stats { display: flex; gap: 52px; margin-top: 24px; }
-.v .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 18px 24px; }
-.stat b { display: block; font-size: 32px; font-weight: 600; margin-top: 2px; }
-.tabs5 { position: relative; display: flex; gap: 44px; margin-top: 26px; border-bottom: 1px solid var(--hair); height: 56px; }
+.sym-top { display: flex; align-items: center; gap: 26px; }
+.sym-name { font-size: 48px; font-weight: 600; letter-spacing: -0.01em; line-height: 1.05; }
+.sym-meta { font-size: 28px; color: var(--mist); margin-top: 6px; white-space: nowrap; }
+.sym-mid { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 34px; gap: 40px; }
+.v .sym-mid { flex-direction: column; align-items: flex-start; gap: 30px; }
+.sym-price { font-size: 88px; font-weight: 600; letter-spacing: -0.02em; line-height: 1; }
+.sym-chg { font-size: 28px; margin-top: 14px; }
+.stats { display: flex; gap: 56px; }
+.v .stats { gap: 48px; }
+.stat b { display: block; font-size: 34px; font-weight: 600; margin-top: 8px; }
+.tabs5 { position: relative; display: flex; gap: 48px; margin-top: 40px; border-bottom: 1px solid var(--hair); height: 58px; }
 .tabs5 span { font-size: 28px; color: var(--mist); }
-.tabs5 span.on { color: var(--sunset-orange); }
+.tabs5 span.on { color: var(--snow-peak); }
 .uline { position: absolute; left: 0; bottom: -1px; width: 100px; height: 3px; border-radius: 2px; background: var(--sunset-orange); transform-origin: 0 0; }
-.sym-area { position: relative; margin-top: 20px; }
-.pcard { position: absolute; left: 0; right: 0; top: 0; padding: 18px 22px; }
-.pc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.sym-area { position: relative; margin-top: 30px; }
+.pcard { position: absolute; left: 0; right: 0; top: 0; padding: 22px 26px; }
+.pc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .tip-pill { position: absolute; left: 0; top: 0; height: 44px; display: flex; align-items: center; padding: 0 14px; border-radius: 12px;
   background: var(--wolf-black); box-shadow: inset 0 0 0 1.5px var(--sunset-orange); font-family: var(--font-mono); font-size: 28px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.fins { position: absolute; left: 0; right: 0; top: 0; display: grid; gap: 16px; }
+.fins { position: absolute; left: 0; right: 0; top: 0; display: grid; gap: 20px; }
 .h .fins { grid-template-columns: repeat(3, 1fr); }
-.fcard { padding: 18px 22px; }
-.fc-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.fcard { padding: 22px 26px; }
+.fc-val { display: block; font-family: var(--font-mono); font-size: 36px; font-weight: 600; margin: 8px 0 14px; font-variant-numeric: tabular-nums; }
 
 /* ── Chart Builder ─────────────────────────────────────────────────────── */
 .cb { display: grid; gap: 32px; }
@@ -231,13 +228,14 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .v .rail { grid-template-columns: 1fr 1fr; column-gap: 24px; }
 .rail li { display: flex; align-items: center; gap: 16px; height: 64px; }
 .rail .sw { width: 12px; height: 12px; border-radius: 50%; flex: none; }
-.rail .tk { font-family: var(--font-mono); font-size: 32px; font-weight: 600; width: 100px; }
+.rail .tk { font-family: var(--font-mono); font-size: 32px; font-weight: 600; width: 110px; }
 .rail .nm { font-size: 28px; color: var(--mist); white-space: nowrap; }
 .metrics { position: relative; display: grid; gap: 4px; }
 .v .metrics { grid-template-columns: 1fr 1fr; column-gap: 24px; }
 .metric { position: relative; z-index: 1; height: 52px; display: flex; align-items: center; padding: 0 18px; font-size: 28px; color: var(--mist); white-space: nowrap; }
-.metric.on { color: var(--snow-peak); }
-.hold { position: absolute; left: 0; top: 0; width: 100%; height: 52px; border-radius: 12px; background: var(--orange-wash); box-shadow: inset 3px 0 0 var(--sunset-orange); }
+.metric.on { color: var(--sunset-orange); }
+.hold { position: absolute; left: 0; top: 0; width: 100%; height: 52px; border-radius: 26px; background: var(--orange-wash); }
+.hold::after { content: ""; position: absolute; right: 18px; top: 50%; width: 10px; height: 10px; margin-top: -5px; border-radius: 50%; background: var(--sunset-orange); }
 .v .hold { width: calc(50% - 12px); }
 .cb-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
 .cb-title { font-size: 40px; font-weight: 600; letter-spacing: -0.01em; }
@@ -277,7 +275,12 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .qv-top { display: flex; gap: 18px; align-items: center; }
 .qv-t { font-family: var(--font-mono); font-size: 36px; font-weight: 700; }
 .qv-p { font-family: var(--font-mono); font-size: 28px; }
-.qv-next { font-size: 28px; color: var(--mist); margin-top: 8px; }
+.qv-next { margin-top: 18px; }
+.qv-label { margin-top: 30px; }
+.qv-legend { display: flex; gap: 34px; margin-top: 18px; font-size: 28px; color: var(--mist); }
+.qv-legend span { display: inline-flex; align-items: center; gap: 12px; }
+.qv-legend i { width: 18px; height: 18px; border-radius: 50%; display: block; }
+.lg-e { box-shadow: inset 0 0 0 3px var(--mist); } .lg-r { background: var(--bullish); }
 .qv-stats { display: flex; gap: 24px; margin: 10px 0 10px; }
 .qv-stats .label { letter-spacing: 0.05em; }
 .qv-stats b { display: block; font-family: var(--font-mono); font-size: 32px; font-weight: 600; }
@@ -307,6 +310,11 @@ svg text { font-family: var(--font-mono); font-size: 28px; fill: var(--mist-85);
 .mini2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 24px; }
 .mini2 .card { padding: 16px 20px; }
 .mini2 b { display: block; font-family: var(--font-mono); font-size: 36px; font-weight: 600; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.mc { margin-top: 30px; }
+.mc svg { margin-top: 14px; }
+.mc-stats { display: flex; justify-content: space-between; margin-top: 12px; font-size: 28px; color: var(--mist); }
+.mc-stats b { color: var(--snow-peak); font-weight: 600; }
+.s-now { stroke: var(--sunset-orange); stroke-width: 3; }
 .chkrow { display: flex; align-items: center; gap: 10px; margin-top: 24px; font-size: 28px; color: var(--mist); }
 .chkrow svg { width: 30px; height: 30px; }
 
@@ -340,11 +348,11 @@ body.hud #hud { display: block; }
   <div class="line-pos"><p class="display a" id="c-line">For people who invest in companies, not funds.</p></div>
 
   <!-- Captions, one per section -->
-  <div class="cap a" id="cap-ins"><span class="label">Insights</span><p class="display">Find it.</p></div>
-  <div class="cap a" id="cap-sym"><span class="label">Ticker page · /symbol/AAPL</span><p class="display">Study it.</p></div>
-  <div class="cap a" id="cap-cb"><span class="label">Chart Builder</span><p class="display">Compare it.</p></div>
-  <div class="cap a" id="cap-ear"><span class="label">Earnings calendar</span><p class="display">Time it.</p></div>
-  <div class="cap a" id="cap-dcf"><span class="label">DCF Calculator</span><p class="display">Value it.</p></div>
+  <div class="cap a" id="cap-ins"><p class="display">Find it.</p></div>
+  <div class="cap a" id="cap-sym"><p class="display">Study it.</p></div>
+  <div class="cap a" id="cap-cb"><p class="display">Compare it.</p></div>
+  <div class="cap a" id="cap-ear"><p class="display">Time it.</p></div>
+  <div class="cap a" id="cap-dcf"><p class="display">Value it.</p></div>
 
   <!-- The app window -->
   <div class="win-pos"><div class="win a" id="win">
@@ -365,32 +373,31 @@ body.hud #hud { display: block; }
       <!-- Insights -->
       <section class="scene a" id="s-ins">
         <div class="s-head a" id="ins-head">
-          <div><p class="s-title">Insights</p><p class="s-sub">Market ideas and trending opportunities</p></div>
+          <p class="s-title">Insights</p>
           <div class="tabs"><span class="on">S&amp;P 500</span><span>Most Trending</span><span>Growth</span><span>Dividend</span></div>
         </div>
         <div class="ins-grid" id="ins-grid"></div>
-        <span class="label a" id="ins-rl">Opportunity radar · 1D</span>
-        <div class="radar" id="radar"></div>
+                <div class="radar" id="radar"></div>
       </section>
 
       <!-- Ticker page -->
       <section class="scene a" id="s-sym">
         <div class="sym-top">
           <span class="a" id="sym-logo-wrap"><span class="logo s96" id="sym-logo"></span></span>
-          <div class="a" id="sym-id"><div class="sym-name">Apple Inc. <span class="chip quiet">NasdaqGS</span></div><div class="sym-meta">AAPL · Information Technology · Consumer Electronics</div></div>
+          <div class="a" id="sym-id"><div class="sym-name">Apple Inc.</div><div class="sym-meta mono">AAPL</div></div>
         </div>
         <div class="sym-mid">
           <div class="a" id="sym-pw"><div class="sym-price mono" id="sym-price"></div><div class="sym-chg mono down-t" id="sym-chg"></div></div>
-          <div class="w52 a" id="sym-52"><span class="mono">$243</span><div class="w52-track"><i class="w52-fill" id="w52-fill"></i><i class="w52-dot" id="w52-dot"></i></div><span class="mono">$345</span><span class="label">52W</span></div>
+          <div class="stats" id="sym-stats"></div>
         </div>
-        <div class="stats" id="sym-stats"></div>
         <div class="tabs5 a" id="sym-tabs"><span>Overview</span><span>Financials</span><span>Valuation</span><span>Dividends</span><span>Earnings</span><i class="uline" id="sym-uline"></i></div>
         <div class="sym-area">
           <div class="pcard card a" id="sym-chart">
             <div class="pc-head"><span class="label">Stock price · 1Y</span><span class="chip up a" id="sym-1y"></span></div>
             <div class="plot"><svg id="px-svg"></svg><div class="tip-pill a" id="px-pill"></div></div>
           </div>
-          <div class="fins" id="fins"></div>
+          <div class="fins" id="fins-a"></div>
+          <div class="fins" id="fins-b"></div>
         </div>
       </section>
 
@@ -409,7 +416,6 @@ body.hud #hud { display: block; }
               <div class="seg a" id="cb-seg" style="--w:170px"><i class="knob" id="cb-knob"></i><span>Quarterly</span><span>TTM</span><span>Annual</span></div>
             </div>
             <div class="plot"><svg id="cb-svg"></svg><div class="pills" id="pills"></div></div>
-            <div class="cb-foot mono a" id="cb-foot"><b class="w1" id="cbf0">4</b> companies · <b class="w2" id="cbf1">49</b> metrics · <b class="w2" id="cbf2">20</b> years · PNG export</div>
           </div>
         </div>
       </section>
@@ -417,29 +423,24 @@ body.hud #hud { display: block; }
       <!-- Earnings -->
       <section class="scene a" id="s-ear">
         <div class="s-head a" id="ear-head">
-          <div><p class="s-title">Earnings</p><p class="s-sub">Weekly calendar, curated for fast scanning</p></div>
+          <p class="s-title">Earnings</p>
           <div class="week mono"><i>‹</i>Oct 26 – Oct 30<i>›</i></div>
         </div>
         <div class="ear-body">
           <div class="cols" id="cols"></div>
           <div class="qv card a" id="qv">
             <div class="qv-top"><span class="logo s64" id="qv-logo"></span><div><div class="qv-t" id="qv-t"></div><div class="qv-p" id="qv-p"></div></div></div>
-            <div class="qv-next" id="qv-next"></div>
-            <div class="qv-body">
-              <div>
-                <div class="qv-stats" id="qv-stats"></div>
-                <span class="label">EPS by quarter</span>
-                <svg id="eps-svg"></svg>
-              </div>
-              <div class="qv-tbl a" id="qv-tbl"></div>
-            </div>
+            <div class="qv-next"><span class="chip quiet" id="qv-next"></span></div>
+            <span class="label qv-label">EPS by quarter</span>
+            <svg id="eps-svg"></svg>
+            <div class="qv-legend"><span><i class="lg-e"></i>estimate</span><span><i class="lg-r"></i>reported</span></div>
           </div>
         </div>
       </section>
 
       <!-- DCF Calculator -->
       <section class="scene a" id="s-dcf">
-        <div class="sym-top a" id="dcf-top"><span class="logo s64" id="dcf-logo"></span><div><div class="sym-name" style="font-size:40px">Adobe Inc.</div><div class="sym-meta" id="dcf-meta"></div></div></div>
+        <div class="sym-top a" id="dcf-top"><span class="logo s64" id="dcf-logo"></span><div><div class="sym-name" style="font-size:40px">Adobe Inc.</div><div class="sym-meta mono" id="dcf-meta"></div></div></div>
         <div class="dcf-cols">
           <div class="card dcard a" id="dcf-left">
             <span class="label">Scenario</span>
@@ -450,8 +451,7 @@ body.hud #hud { display: block; }
             <span class="label">Intrinsic value · ADBE · USD</span>
             <div class="mono" id="dcf-num"></div>
             <div class="dcf-chips"><span class="chip up" id="dcf-delta"></span><span class="chip quiet" id="dcf-case"></span></div>
-            <div class="mini2"><div class="card"><span class="label">Margin of safety</span><b id="dcf-mos"></b></div><div class="card"><span class="label">Enterprise value</span><b id="dcf-ev"></b></div></div>
-            <div class="chkrow a" id="dcf-chk"></div>
+            <div class="mc a" id="dcf-mc"><span class="label">Monte Carlo · 1,000 runs</span><svg id="mc-svg"></svg><div class="mc-stats mono" id="mc-stats"></div></div>
           </div>
         </div>
       </section>
@@ -497,7 +497,7 @@ const CONFIG = {
   },
   SYMBOL: {
     ticker: "AAPL", price: 335.92, dayChange: -1.10, dayPct: -0.33, low52: 243, high52: 345,
-    stats: [["Next earnings", "Oct 29, 2026"], ["Market cap", "4.9T"], ["P/E", "38.6"], ["Beta", "1.08"]],
+    stats: [["Market cap", "4.9T"], ["P/E", "38.6"], ["Next earnings", "Oct 29"]],
     oneYear: "+$83.61 (+33.14%)",
     // The product's 1Y price line, resampled to 86 points (Sep 24, 2025 → Sep 24, 2026).
     prices: [252.31,254.3,256.98,253.0,247.45,251.87,262.27,264.17,271.02,270.15,272.66,271.8,266.95,276.56,283.32,279.94,278.56,274.4,271.19,273.79,267.99,258.89,259.32,247.71,250.05,256.55,267.47,276.48,273.7,265.3,259.49,261.4,272.58,265.65,261.14,260.71,250.05,249.36,251.44,246.84,255.6,254.64,259.23,264.87,272.92,272.92,268.68,276.04,281.76,291.03,298.57,298.48,308.79,312.78,313.3,310.09,296.49,295.88,298.66,297.01,285.92,279.08,286.96,300.65,312.69,315.9,321.01,334.18,328.2,328.12,340.68,329.68,314.51,306.28,313.82,302.64,307.93,313.65,311.31,319.19,325.52,319.88,322.4,333.75,337.39,335.92],
@@ -506,6 +506,13 @@ const CONFIG = {
       ["Revenue", "orange", [215.64,229.23,265.60,260.17,274.51,365.82,394.33,383.29,391.04,416.16]],
       ["Free cash flow", "green", [53.50,51.77,64.12,58.90,73.36,92.95,111.44,99.58,108.81,98.77]],
       ["Net income", "gold", [45.69,48.35,59.53,55.26,57.41,94.68,99.80,97.00,93.74,112.01]],
+    ],
+    // The second set, after the first: EBITDA (operating income + D&A), diluted EPS (FY16–17 restated for the
+    // 2020 four-for-one split), capital expenditures.
+    financials2: [
+      ["EBITDA", "orange", [70.53,71.50,81.80,76.48,77.34,120.23,130.54,125.82,134.66,144.75]],
+      ["EPS (diluted)", "snow", [2.08,2.30,2.98,2.97,3.28,5.61,6.11,6.13,6.08,7.46], "eps"],
+      ["Capex", "gold", [12.73,12.45,13.31,10.49,7.31,11.09,10.71,10.96,9.45,12.71]],
     ],
   },
   // FCF margin (OCF − capex, over revenue), %, 40 quarters. TTM is the ratio of the four-quarter sums.
@@ -541,23 +548,26 @@ const CONFIG = {
   },
   // Adobe in the DCF calculator, the product's own three scenarios.
   DCF: {
-    ticker: "ADBE", price: 238.93, meta: "Information Technology · NasdaqGS · $238.93",
+    ticker: "ADBE", price: 238.93, meta: "ADBE · $238.93",
     // Bear, Base, Bull
-    value: [225.55, 315.04, 588.97], mos: [-5.9, 24.2, 59.4], ev: [91.21, 126.6, 234.94],
+    value: [225.55, 315.04, 588.97],
+    // The product's own Monte Carlo (runMonteCarlo: 1,000 runs, seed 42, 25/50/25 over the three scenarios),
+    // bucketed as dcf-monte-carlo.tsx draws it: 30 buckets from P10 × 0.8 to P90 × 1.2.
+    mc: { min: 186.40, max: 657.03, p10: 232.99, median: 379.04, p90: 547.52,
+      counts: [13,35,51,57,36,26,17,25,34,37,63,79,99,78,56,45,24,8,10,19,23,33,27,31,20,17,16,10,4,3] },
     sliders: [
       ["Phase 1 growth", -10, 50, [1.0, 10.5, 12.5], 1],
       ["FCF margin", -20, 70, [36.5, 39.0, 42.5], 1],
       ["WACC", 4, 20, [12.5, 11.5, 10.75], 2],
       ["Terminal growth", 0, 5, [2.0, 2.5, 2.75], 2],
     ],
-    checks: ["pass", "unverifiable", "pass", "pass", "pass"],
   },
 };
 
 const Q = new URLSearchParams(location.search);
 const VERTICAL = Q.get("format") === "vertical";
 const W = VERTICAL ? 1080 : 1920, H = VERTICAL ? 1920 : 1080;
-const DURATION = 31200;
+const DURATION = 32800;
 const stage = document.getElementById("stage");
 stage.classList.add(VERTICAL ? "v" : "h");
 const $ = (id) => document.getElementById(id);
@@ -674,12 +684,12 @@ $("c-row-b").innerHTML = tapeB.concat(tapeB).map((t) => logo(t)).join("");
 // Insights
 const INS = CONFIG.INSIGHTS.map(([t, name, price, chg]) => {
   const d = document.createElement("div"); d.className = "icard card a";
-  d.innerHTML = `<span class="lw">${logo(t, "s64")}</span><div class="who"><div class="tk">${t}</div><div class="nm">${name}</div></div>` +
+  d.innerHTML = `<span class="lw">${logo(t, "s64")}</span><div class="who"><div class="tk">${t}</div></div>` +
     `<div class="px"><div class="p"></div><div class="c ${chg >= 0 ? "up-t" : "down-t"}">${signed(chg)}</div></div>` + (t === "AAPL" ? '<span class="ring a"></span>' : "");
   $("ins-grid").appendChild(d);
   return { el: d, t, price, p: d.querySelector(".p"), c: d.querySelector(".c"), lw: d.querySelector(".lw"), ring: d.querySelector(".ring") };
 });
-const RADAR = [["Top gainers", CONFIG.RADAR.gainers], ["Top losers", CONFIG.RADAR.losers]].map(([title, rows]) => {
+const RADAR = [["Top gainers · 1D", CONFIG.RADAR.gainers], ["Top losers · 1D", CONFIG.RADAR.losers]].map(([title, rows]) => {
   const c = document.createElement("div"); c.className = "rcard card a";
   c.innerHTML = `<span class="label">${title}</span>` + rows.map(([t, v]) =>
     `<div class="rrow a">${logo(t, "s36")}<span class="tk">${t}</span><span><i class="rbar ${v >= 0 ? "up" : "down"}" style="display:block;width:${(Math.abs(v) / 8 * 100).toFixed(1)}%"></i></span><span class="v ${v >= 0 ? "up-t" : "down-t"}">${signed(v)}</span></div>`).join("");
@@ -696,7 +706,7 @@ $("sym-chg").textContent = `−$${Math.abs(SY.dayChange).toFixed(2)} (${signed(S
 $("sym-1y").textContent = SY.oneYear + " 1Y";
 $("sym-stats").innerHTML = SY.stats.map(([l, v]) => `<div class="stat a"><span class="label">${l}</span><b class="mono">${v}</b></div>`).join("");
 const PX = (() => {
-  const w = CW - 44, h = VERTICAL ? 380 : 262, x0 = 104, x1 = w - 8, y0 = 10, y1 = h - 44, lo = 230, hi = 360;
+  const w = CW - 52, h = VERTICAL ? 420 : 250, x0 = 104, x1 = w - 8, y0 = 10, y1 = h - 44, lo = 230, hi = 360;
   const svg = $("px-svg"); sizeSvg(svg, w, h);
   const yAt = (v) => y1 - (y1 - y0) * (v - lo) / (hi - lo);
   [240, 270, 300, 330, 360].forEach((v) => { svgEl("line", { x1: x0, x2: x1, y1: yAt(v), y2: yAt(v), class: "s-grid" }, svg); svgEl("text", { x: x0 - 14, y: yAt(v) + 10, "text-anchor": "end" }, svg).textContent = "$" + v; });
@@ -711,28 +721,32 @@ const PX = (() => {
   svgEl("path", { d: pathOf(pts) + `L${x1} ${y1}L${x0} ${y1}Z`, fill: "url(#pxfill)" }, g);
   svgEl("path", { d: pathOf(pts), class: "s-line s-orange" }, g);
   const dot = svgEl("circle", { r: 8, class: "f-orange" }, svg); dot.style.opacity = "0";
-  return { pts, x0, x1, clip: c.rect, g, dot, n };
+  return { pts, x0, x1, y1, clip: c.rect, g, dot, n };
 })();
-const FINS = SY.financials.map(([name, color, vals]) => {
-  const d = document.createElement("div"); d.className = "fcard card a";
-  d.innerHTML = `<div class="fc-head"><span class="label">${name}</span><span class="chip quiet">$${vals[vals.length - 1].toFixed(1)}B</span></div><svg></svg>`;
-  $("fins").appendChild(d);
-  const svg = d.querySelector("svg"), w = VERTICAL ? CW - 44 : (CW - 32) / 3 - 44, h = VERTICAL ? 150 : 240;
-  sizeSvg(svg, w, h);
-  const max = Math.max(...vals), bw = (w - 8) / vals.length, base = h - 38;
-  svgEl("line", { x1: 0, x2: w, y1: base + 0.5, y2: base + 0.5, class: "s-zero" }, svg);
-  svgEl("text", { x: 0, y: h - 4 }, svg).textContent = "FY16";
-  svgEl("text", { x: w, y: h - 4, "text-anchor": "end" }, svg).textContent = "FY25";
-  const bars = vals.map((v, i) => { const bh = (base - 6) * v / max; const g = svgEl("g", { transform: `translate(${(i * bw + 4).toFixed(1)} ${base})` }, svg); const r = svgEl("rect", { x: 0, y: -bh, width: (bw - 8).toFixed(1), height: bh, rx: 3, class: "f-" + color }, g); return { g, x: i * bw + 4 }; });
-  return { el: d, bars, base };
-});
+function buildFins(host, sets) {
+  return sets.map(([name, color, vals, kind]) => {
+    const d = document.createElement("div"); d.className = "fcard card a";
+    const last = vals[vals.length - 1];
+    d.innerHTML = `<span class="label">${name}</span><span class="fc-val">${kind === "eps" ? "$" + last.toFixed(2) : "$" + last.toFixed(1) + "B"}</span><svg></svg>`;
+    host.appendChild(d);
+    const svg = d.querySelector("svg"), w = VERTICAL ? CW - 52 : (CW - 40) / 3 - 52, h = VERTICAL ? 120 : 190;
+    sizeSvg(svg, w, h);
+    const max = Math.max(...vals), bw = w / vals.length, base = h - 38;
+    svgEl("line", { x1: 0, x2: w, y1: base + 0.5, y2: base + 0.5, class: "s-zero" }, svg);
+    svgEl("text", { x: 0, y: h - 4 }, svg).textContent = "FY16";
+    svgEl("text", { x: w, y: h - 4, "text-anchor": "end" }, svg).textContent = "FY25";
+    const bars = vals.map((v, i) => { const bh = (base - 4) * v / max; const g = svgEl("g", { transform: `translate(${(i * bw + 3).toFixed(1)} ${base})` }, svg); svgEl("rect", { x: 0, y: -bh, width: (bw - 8).toFixed(1), height: bh, rx: 4, class: "f-" + color }, g); return { g, x: i * bw + 3 }; });
+    return { el: d, bars, base };
+  });
+}
+const FINS_A = buildFins($("fins-a"), SY.financials), FINS_B = buildFins($("fins-b"), SY.financials2);
 
 // Chart Builder
 const CB = (() => {
-  $("rail").innerHTML = CONFIG.CHART.map((s) => `<li class="a">${logo(s.t, "s48")}<span class="tk">${s.t}</span><i class="sw" style="background:${COLOR[s.color]}"></i><span class="nm">${s.name}</span></li>`).join("");
+  $("rail").innerHTML = CONFIG.CHART.map((s) => `<li class="a">${logo(s.t, "s48")}<span class="tk">${s.t}</span><i class="sw" style="background:${COLOR[s.color]}"></i></li>`).join("");
   const METRICS = ["Revenue", "FCF margin", "Return on equity", "Net debt", "Shares outstanding (diluted)"];
   $("metrics").insertAdjacentHTML("beforeend", METRICS.map((m) => `<div class="metric a">${m}</div>`).join(""));
-  const w = VERTICAL ? 984 : 936, h = VERTICAL ? 620 : 520;
+  const w = VERTICAL ? 984 : 936, h = VERTICAL ? 660 : 600;
   const x0 = 92, x1 = w - 236, y0 = 18, y1 = h - 52, lo = -10, hi = 80;
   const svg = $("cb-svg"); sizeSvg(svg, w, h);
   const T0 = Date.parse("2015-11-01"), T1 = Date.parse("2026-07-01");
@@ -780,7 +794,7 @@ const COLS = EA.days.map(([d, n], ci) => {
     const b = document.createElement("div"); b.className = "blk a";
     b.innerHTML = `<div class="blk-h">${si === 0 ? ICON.sun : ICON.moon}<span class="mono cnt"></span></div>` +
       tickers.map((t) => `<div class="tl">${logo(t, "s48")}<span class="tk">${t}</span>${t === EA.focus && si === 1 ? '<span class="ring a"></span>' : ""}</div>`).join("") +
-      (total > tickers.length ? `<div class="more">+${total - tickers.length}</div>` : "");
+      "";
     col.appendChild(b);
     const ring = b.querySelector(".ring"); if (ring) focusTile = ring;
     return { el: b, cnt: b.querySelector(".cnt"), total };
@@ -792,12 +806,9 @@ const QV = EA.quick;
 $("qv-logo").innerHTML = LOGO_DATA[QV.ticker] ? `<img src="${LOGO_DATA[QV.ticker]}" alt="">` : QV.ticker.slice(0, 2);
 $("qv-t").textContent = QV.ticker;
 $("qv-p").innerHTML = `${money(QV.price)} <span class="${QV.pct >= 0 ? "up-t" : "down-t"}">${signed(QV.pct)}</span>`;
-$("qv-next").textContent = "Next earnings: " + QV.next;
-$("qv-stats").innerHTML = `<div><span class="label">Mkt cap</span><b>${QV.mktCap}</b></div><div><span class="label">P/E</span><b>${QV.pe}</b></div><div><span class="label">Next est.</span><b>$${QV.nextEps.toFixed(2)}</b></div>`;
-$("qv-tbl").innerHTML = `<div class="hd"><span>QTR</span><span>EST</span><span>REP</span><span>SURP</span></div>` +
-  QV.quarters.map(([q, e, r, s]) => `<div class="qr"><span>${q}</span><span>${e.toFixed(2)}</span><span>${r.toFixed(2)}</span><span class="up-t">+${s.toFixed(1)}%</span></div>`).join("");
+$("qv-next").textContent = "Reports " + QV.next.replace(", 2026", "");
 const EPS = (() => {
-  const w = VERTICAL ? 440 : 412, h = VERTICAL ? 250 : 176, x0 = 100, x1 = w - 20, y0 = 14, y1 = h - 44, lo = 3.5, hi = 4.9;
+  const w = VERTICAL ? 888 : 412, h = 300, x0 = 100, x1 = w - 20, y0 = 44, y1 = h - 44, lo = 3.5, hi = 4.9;
   const svg = $("eps-svg"); sizeSvg(svg, w, h); svg.style.marginTop = "10px";
   const yAt = (v) => y1 - (y1 - y0) * (v - lo) / (hi - lo);
   [3.6, 4.2, 4.8].forEach((v) => { svgEl("line", { x1: x0, x2: x1, y1: yAt(v), y2: yAt(v), class: "s-grid" }, svg); svgEl("text", { x: x0 - 14, y: yAt(v) + 10, "text-anchor": "end" }, svg).textContent = "$" + v.toFixed(2); });
@@ -809,8 +820,9 @@ const EPS = (() => {
     rep.push(svgEl("circle", { cx: xs[i], cy: yAt(r), r: 11, class: "f-green" }, svg));
   });
   const next = svgEl("circle", { cx: xs[4], cy: yAt(QV.nextEps), r: 11, fill: "none", class: "s-orange", "stroke-width": 3 }, svg);
-  [...est, ...rep, next].forEach((c) => { c.style.opacity = "0"; c.style.transformBox = "fill-box"; c.style.transformOrigin = "center"; });
-  return { est, rep, next };
+  const nextLab = svgEl("text", { x: xs[4], y: yAt(QV.nextEps) - 24, "text-anchor": "middle" }, svg); nextLab.textContent = "$" + QV.nextEps.toFixed(2); nextLab.style.fill = "var(--sunset-orange)";
+  [...est, ...rep, next, nextLab].forEach((c) => { c.style.opacity = "0"; c.style.transformBox = "fill-box"; c.style.transformOrigin = "center"; });
+  return { est, rep, next, nextLab };
 })();
 
 // DCF
@@ -819,9 +831,23 @@ $("dcf-logo").innerHTML = LOGO_DATA[DC.ticker] ? `<img src="${LOGO_DATA[DC.ticke
 $("dcf-meta").textContent = DC.meta;
 $("sliders").innerHTML = DC.sliders.map(([name]) => `<div class="sl a"><div class="sl-h"><span>${name}</span><b></b></div><div class="sl-track"><i class="sl-fill"></i><i class="sl-thumb"></i></div></div>`).join("");
 const SLIDERS = [...$("sliders").children].map((el, i) => ({ el, val: el.querySelector("b"), fill: el.querySelector(".sl-fill"), thumb: el.querySelector(".sl-thumb"), track: el.querySelector(".sl-track"), def: DC.sliders[i] }));
-const passN = DC.checks.filter((c) => c === "pass").length, nvN = DC.checks.length - passN;
-$("dcf-chk").innerHTML = DC.checks.map((c) => `<span class="${c === "pass" ? "up-t" : ""}" style="${c === "pass" ? "" : "color:var(--mist)"}">${c === "pass" ? ICON.ok : ICON.pend}</span>`).join("") +
-  `<span style="margin-left:8px">${DC.checks.length} checks · ${passN} pass · ${nvN} not verifiable</span>`;
+const MC = (() => {
+  const m = DC.mc, w = VERTICAL ? CW - 56 : 704, h = 170, base = h - 4;
+  const svg = $("mc-svg"); sizeSvg(svg, w, h);
+  const xAt = (v) => w * (v - m.min) / (m.max - m.min), bw = w / m.counts.length, top = Math.max(...m.counts);
+  svgEl("line", { x1: 0, x2: w, y1: base + 0.5, y2: base + 0.5, class: "s-zero" }, svg);
+  const bars = m.counts.map((c, i) => {
+    const g = svgEl("g", { transform: `translate(${(i * bw + 1.5).toFixed(1)} ${base})` }, svg);
+    const bh = (base - 10) * c / top;
+    svgEl("rect", { x: 0, y: -bh, width: (bw - 4).toFixed(1), height: bh, rx: 3, class: "f-orange", style: "fill-opacity:.55" }, g);
+    return { g, x: i * bw + 1.5 };
+  });
+  svgEl("line", { x1: xAt(DC.price), x2: xAt(DC.price), y1: 0, y2: base, style: "stroke:var(--snow-peak);stroke-width:2;stroke-dasharray:6 6;opacity:.7" }, svg);
+  const now = svgEl("line", { x1: 0, x2: 0, y1: -6, y2: base, class: "s-now" }, svg);
+  now.style.opacity = "0";
+  $("mc-stats").innerHTML = `<span>P10 <b>${money(m.p10)}</b></span><span>median <b>${money(m.median)}</b></span><span>P90 <b>${money(m.p90)}</b></span>`;
+  return { bars, now, xAt, base };
+})();
 const CASE_NAMES = ["bear case", "base case", "bull case"];
 
 /* ── Geometry measured from the layout (transform-free offsets) ────────── */
@@ -833,7 +859,6 @@ function measure() {
   G.flyFrom = offsetIn(INS.find((c) => c.t === SY.ticker).lw, content); G.flyTo = offsetIn($("sym-logo-wrap"), content);
   G.nav = [...$("nav").querySelectorAll(".nav-i")].map((n) => ({ x: n.offsetLeft, y: n.offsetTop, w: n.offsetWidth }));
   const tabs = [...$("sym-tabs").querySelectorAll("span")]; G.tabs = tabs.map((t) => ({ x: t.offsetLeft, w: t.offsetWidth }));
-  G.w52 = $("sym-52").querySelector(".w52-track").offsetWidth;
   G.sliderW = SLIDERS[0].track.offsetWidth;
   G.pxW = PX.x1 - PX.x0;
 }
@@ -846,20 +871,20 @@ const el = {
   grid: $("grid"), tapeA: $("c-tape-a"), tapeB: $("c-tape-b"), rowA: $("c-row-a"), rowB: $("c-row-b"), cLine: $("c-line"), wolf: $("wolf"),
   win: $("win"), knob: $("nav-knob"), navSym: $("nav-sym"), navItems: [...$("nav").querySelectorAll(".nav-i")],
   caps: { ins: $("cap-ins"), sym: $("cap-sym"), cb: $("cap-cb"), ear: $("cap-ear"), dcf: $("cap-dcf") },
-  sIns: $("s-ins"), insHead: $("ins-head"), insRl: $("ins-rl"),
-  sSym: $("s-sym"), symLogo: $("sym-logo-wrap"), symId: $("sym-id"), symPw: $("sym-pw"), symPrice: $("sym-price"), sym52: $("sym-52"), w52Fill: $("w52-fill"), w52Dot: $("w52-dot"),
+  sIns: $("s-ins"), insHead: $("ins-head"),
+  sSym: $("s-sym"), symLogo: $("sym-logo-wrap"), symId: $("sym-id"), symPw: $("sym-pw"), symPrice: $("sym-price"), 
   symStats: [...$("sym-stats").children], symTabs: $("sym-tabs"), symTabLabels: [...$("sym-tabs").querySelectorAll("span")], uline: $("sym-uline"), symChart: $("sym-chart"), sym1y: $("sym-1y"), pxPill: $("px-pill"), fly: $("fly"),
-  sCb: $("s-cb"), cbL1: $("cb-l1"), cbL2: $("cb-l2"), hold: $("hold"), cbTitle: $("cb-title"), cbSeg: $("cb-seg"), cbKnob: $("cb-knob"), cbFoot: $("cb-foot"),
-  cbf: [$("cbf0"), $("cbf1"), $("cbf2")], cbSegLabels: [...$("cb-seg").querySelectorAll("span")],
-  sEar: $("s-ear"), earHead: $("ear-head"), qv: $("qv"), qvTbl: $("qv-tbl"),
+  sCb: $("s-cb"), cbL1: $("cb-l1"), cbL2: $("cb-l2"), hold: $("hold"), cbTitle: $("cb-title"), cbSeg: $("cb-seg"), cbKnob: $("cb-knob"),
+  cbSegLabels: [...$("cb-seg").querySelectorAll("span")],
+  sEar: $("s-ear"), earHead: $("ear-head"), qv: $("qv"),
   sDcf: $("s-dcf"), dcfTop: $("dcf-top"), dcfLeft: $("dcf-left"), dcfRight: $("dcf-right"), dcfKnob: $("dcf-knob"), dcfSegLabels: [...$("dcf-seg").querySelectorAll("span")],
-  dcfNum: $("dcf-num"), dcfDelta: $("dcf-delta"), dcfCase: $("dcf-case"), dcfMos: $("dcf-mos"), dcfEv: $("dcf-ev"), dcfChk: $("dcf-chk"),
+  dcfNum: $("dcf-num"), dcfDelta: $("dcf-delta"), dcfCase: $("dcf-case"), dcfMc: $("dcf-mc"),
   fWord: $("f-word"), fUrl: $("f-url"), fLine: $("f-line"), fLegal: $("f-legal"),
 };
 const beat = (id, start, duration, easing, fn) => ({ id, start, duration, easing, render(t) { fn(t * duration, t); } });
 
 // The section the window shows, by film time; the sidebar highlight follows it.
-const NAV_KEYS = [[0, 0], [6500, 0], [7000, 1], [12400, 1], [12900, 2], [17800, 2], [18300, 3], [22600, 3], [23100, 4]];
+const NAV_KEYS = [[0, 0], [6500, 0], [7000, 1], [14000, 1], [14500, 2], [19400, 2], [19900, 3], [24200, 3], [24700, 4]];
 function navPos(ms) {
   for (let i = 1; i < NAV_KEYS.length; i++) { const [ta, va] = NAV_KEYS[i - 1], [tb, vb] = NAV_KEYS[i]; if (ms <= tb) return { a: va, b: vb, p: va === vb ? 0 : EASE.settle(seg(ms, ta, tb - ta)) }; }
   const v = NAV_KEYS[NAV_KEYS.length - 1][1]; return { a: v, b: v, p: 0 };
@@ -901,16 +926,16 @@ const TIMELINE = [
     if (ms < 2100) {
       const p = EASE.settle(seg(ms, 100, 800));
       place(el.wolf, G.cold.x, G.cold.y + (RM ? 0 : 18 * (1 - p)), p, p > 0 && p < 1, RM ? 1 : 0.94 + 0.06 * p);
-    } else if (ms < 27400) {
+    } else if (ms < 29000) {
       el.wolf.style.opacity = "1";
       carry(el.wolf, G.cold, G.slot, seg(ms, 2100, 850), w0);
     } else {
-      carry(el.wolf, G.slot, G.end, seg(ms, 27400, 900), w0);
+      carry(el.wolf, G.slot, G.end, seg(ms, 29000, 900), w0);
     }
   }),
 
-  beat("window", 2050, 25800, "settle", (ms) => {
-    track(el.win, ms, { at: 0, dur: 850, out: 25350, outDur: 450, dy: 34, s0: 0.985 });
+  beat("window", 2050, 27400, "settle", (ms) => {
+    track(el.win, ms, { at: 0, dur: 850, out: 26950, outDur: 450, dy: 34, s0: 0.985 });
     const n = navPos(ms + 2050), ia = G.nav[n.a], ib = G.nav[n.b];
     const moving = n.p > 0 && n.p < 1;
     if (VERTICAL) {
@@ -943,7 +968,6 @@ const TIMELINE = [
       if (c.ring) track(c.ring, ms, { at: 2900, dur: 420, s0: 1.03 });
       if (c.t === SY.ticker) c.lw.style.opacity = ms >= 3800 ? "0" : "1";   // the flying mark takes over
     });
-    track(el.insRl, ms, { at: 1100, dur: 500, dy: 8 });
     RADAR.forEach((r, k) => {
       track(r.el, ms, { at: 1180 + k * 60, dur: 600, dy: 14 });
       r.rows.forEach((row, i) => track(row, ms, { at: 1420 + k * 120 + i * 50, dur: 500, dx: -14 }));
@@ -951,23 +975,18 @@ const TIMELINE = [
     });
   }),
 
-  beat("ticker-page", 6300, 6100, "settle", (ms) => {
-    track(el.caps.sym, ms, { at: 250, dur: 700, out: 5650, outDur: 400, dy: 20 });
-    sceneIn(el.sSym, ms, 250, 5700);
+  beat("ticker-page", 6300, 7700, "settle", (ms) => {
+    track(el.caps.sym, ms, { at: 250, dur: 700, out: 7250, outDur: 400, dy: 20 });
+    sceneIn(el.sSym, ms, 250, 7300);
     // The AAPL mark leaves its card and becomes the page's header.
     const fp = seg(ms, 0, 800);
-    el.fly.style.opacity = fp > 0 && fp < 1 ? "1" : "0"; el.fly.style.visibility = fp > 0 && fp < 1 ? "visible" : "hidden";
     carry(el.fly, G.flyFrom, G.flyTo, fp, 96);
-    el.fly.style.opacity = fp > 0 && fp < 1 ? "1" : "0";
+    el.fly.style.opacity = fp > 0 && fp < 1 ? "1" : "0"; el.fly.style.visibility = fp > 0 && fp < 1 ? "visible" : "hidden";
     el.symLogo.style.opacity = fp >= 1 ? "1" : "0";
     track(el.symId, ms, { at: 450, dur: 600, dx: -14 });
     track(el.symPw, ms, { at: 600, dur: 600, dy: 12 });
     count(el.symPrice, ms, 650, 900, SY.price, money, SY.price * 0.97);
-    track(el.sym52, ms, { at: 700, dur: 600, dy: 12 });
-    const f52 = (SY.price - SY.low52) / (SY.high52 - SY.low52), wp = EASE.settle(seg(ms, 850, 900));
-    el.w52Fill.style.transform = `scaleX(${Math.max(0.0001, RM ? f52 : f52 * wp).toFixed(4)})`;
-    place(el.w52Dot, (RM ? f52 : f52 * wp) * G.w52, 0, 1, !RM && wp > 0 && wp < 1);
-    el.symStats.forEach((s, i) => track(s, ms, { at: 800 + i * 55, dur: 550, dy: 10 }));
+    el.symStats.forEach((s, i) => track(s, ms, { at: 780 + i * 60, dur: 550, dy: 10 }));
     track(el.symTabs, ms, { at: 1000, dur: 550, dy: 8 });
     // Overview → Financials: the underline travels.
     const up = seg(ms, 3300, 500), us = RM ? swap(up) : { p: EASE.settle(up), o: 1 };
@@ -975,7 +994,7 @@ const TIMELINE = [
     el.uline.style.transform = `translate3d(${lerp(ta.x, tb.x, us.p).toFixed(2)}px, 0, 0) scale(${(lerp(ta.w, tb.w, us.p) / 100).toFixed(4)}, 1)`;
     el.uline.style.opacity = us.o.toFixed(4);
     el.symTabLabels.forEach((s, i) => s.classList.toggle("on", i === (us.p >= 0.5 ? 1 : 0)));
-    // The 1Y price line draws; its value rides the tip.
+    // The 1Y price line draws; its value rides below the tip.
     track(el.symChart, ms, { at: 1100, dur: 600, out: 3300, outDur: 350, dy: 14 });
     const dp = seg(ms, 1350, 1300);
     reveal(PX.clip, PX.g, dp, PX.x0);
@@ -983,18 +1002,16 @@ const TIMELINE = [
     const tx = lerp(PX.pts[j][0], PX.pts[j + 1][0], u), ty = lerp(PX.pts[j][1], PX.pts[j + 1][1], u);
     PX.dot.setAttribute("transform", `translate(${tx.toFixed(2)} ${ty.toFixed(2)})`);
     PX.dot.style.opacity = dp > 0 ? "1" : "0";
-    const tipV = dp >= 1 ? SY.price : lerp(SY.prices[j], SY.prices[j + 1], u);
-    el.pxPill.textContent = money(tipV);
-    place(el.pxPill, Math.min(tx + 22, PX.x1 - 150), ty - 60, EASE.settle(seg(ms, 1350, 300)), dp > 0 && dp < 1);
+    el.pxPill.textContent = money(dp >= 1 ? SY.price : lerp(SY.prices[j], SY.prices[j + 1], u));
+    place(el.pxPill, tx > PX.x0 + 220 ? tx - 176 : tx + 22, Math.min(ty + 22, PX.y1 - 52), EASE.settle(seg(ms, 1350, 300)), dp > 0 && dp < 1);
     track(el.sym1y, ms, { at: 2650, dur: 500, dx: 10 });
-    // Financials: ten fiscal years of bars.
-    FINS.forEach((c, i) => {
-      track(c.el, ms, { at: 3500 + i * 70, dur: 600, dy: 16 });
-      c.bars.forEach((b, k) => { const p = EASE.settle(seg(ms, 3650 + i * 70 + k * 35, 600)); b.g.setAttribute("transform", `translate(${b.x.toFixed(1)} ${c.base}) scale(1 ${Math.max(0.0001, RM ? 1 : p).toFixed(4)})`); b.g.style.opacity = RM ? p.toFixed(4) : (p > 0 ? "1" : "0"); });
-    });
+    // Financials, three charts at a time: revenue, FCF, net income; then EBITDA, EPS, capex.
+    const bars = (c, i, at) => c.bars.forEach((b, k) => { const p = EASE.settle(seg(ms, at + i * 70 + k * 35, 600)); b.g.setAttribute("transform", `translate(${b.x.toFixed(1)} ${c.base}) scale(1 ${Math.max(0.0001, RM ? 1 : p).toFixed(4)})`); b.g.style.opacity = RM ? p.toFixed(4) : (p > 0 ? "1" : "0"); });
+    FINS_A.forEach((c, i) => { track(c.el, ms, { at: 3500 + i * 70, dur: 600, out: 5150 + i * 60, outDur: 380, dy: 16 }); bars(c, i, 3650); });
+    FINS_B.forEach((c, i) => { track(c.el, ms, { at: 5450 + i * 70, dur: 600, dy: 16 }); bars(c, i, 5600); });
   }),
 
-  beat("chart-builder", 12400, 5400, "settle", (ms) => {
+  beat("chart-builder", 14000, 5400, "settle", (ms) => {
     track(el.caps.cb, ms, { at: 0, dur: 700, out: 4950, outDur: 400, dy: 20 });
     sceneIn(el.sCb, ms, 100, 5000);
     track(el.cbL1, ms, { at: 200, dur: 500, dy: 8 });
@@ -1008,10 +1025,6 @@ const TIMELINE = [
     track(el.cbTitle, ms, { at: 1300, dur: 500, dy: 8 });
     track(el.cbSeg,   ms, { at: 1350, dur: 500, dy: 8 });
     track(CB.grid,    ms, { at: 1400, dur: 400 });
-    track(el.cbFoot,  ms, { at: 1900, dur: 500, dy: 8 });
-    count(el.cbf[0], ms, 1900, 700, 4, (v) => String(Math.round(v)));
-    count(el.cbf[1], ms, 1900, 900, 49, (v) => String(Math.round(v)));
-    count(el.cbf[2], ms, 1900, 900, 20, (v) => String(Math.round(v)));
     const kp = seg(ms, 3000, 500), ks = RM ? swap(kp) : { p: EASE.settle(kp), o: 1 };
     place(el.cbKnob, 170 * ks.p, 0, ks.o, kp > 0 && kp < 1);
     el.cbSegLabels.forEach((s, i) => s.classList.toggle("on", i === (ks.p >= 0.5 ? 1 : 0)));
@@ -1051,7 +1064,7 @@ const TIMELINE = [
     });
   }),
 
-  beat("earnings", 17800, 4800, "settle", (ms) => {
+  beat("earnings", 19400, 4800, "settle", (ms) => {
     track(el.caps.ear, ms, { at: 0, dur: 700, out: 4350, outDur: 400, dy: 20 });
     sceneIn(el.sEar, ms, 100, 4400);
     track(el.earHead, ms, { at: 150, dur: 600, dy: 10 });
@@ -1067,11 +1080,10 @@ const TIMELINE = [
     track(el.qv, ms, { at: 2100, dur: 700, dx: 48 });                 // the quick view slides in from the side
     EPS.est.forEach((c, i) => { const p = EASE.settle(seg(ms, 2450 + i * 70, 450)); c.style.opacity = p.toFixed(4); c.style.transform = RM ? "" : `scale(${(0.6 + 0.4 * p).toFixed(4)})`; });
     EPS.rep.forEach((c, i) => { const p = EASE.settle(seg(ms, 2600 + i * 70, 500)); c.style.opacity = p.toFixed(4); c.style.transform = RM ? "" : `translate(0px, ${(-14 * (1 - p)).toFixed(2)}px)`; });
-    { const p = EASE.settle(seg(ms, 2950, 500)); EPS.next.style.opacity = p.toFixed(4); EPS.next.style.transform = RM ? "" : `scale(${(0.6 + 0.4 * p).toFixed(4)})`; }
-    track(el.qvTbl, ms, { at: 2750, dur: 550, dy: 10 });
+    { const p = EASE.settle(seg(ms, 2950, 500)); EPS.next.style.opacity = p.toFixed(4); EPS.next.style.transform = RM ? "" : `scale(${(0.6 + 0.4 * p).toFixed(4)})`; EPS.nextLab.style.opacity = EASE.settle(seg(ms, 3100, 400)).toFixed(4); }
   }),
 
-  beat("dcf", 22600, 5300, "settle", (ms) => {
+  beat("dcf", 24200, 5300, "settle", (ms) => {
     track(el.caps.dcf, ms, { at: 0, dur: 700, out: 4800, outDur: 400, dy: 20 });
     sceneIn(el.sDcf, ms, 100, null);
     track(el.dcfTop, ms, { at: 150, dur: 600, dy: 10 });
@@ -1097,12 +1109,14 @@ const TIMELINE = [
     el.dcfDelta.textContent = `${signed(dlt, 1)} vs ${money(DC.price)}`;
     el.dcfDelta.className = "chip " + (dlt >= 0 ? "up" : "down");
     el.dcfCase.textContent = CASE_NAMES[near];
-    el.dcfMos.textContent = signed(settled ? DC.mos[near] : byCase(DC.mos, pos), 1).replace("+", "");
-    el.dcfEv.textContent = "$" + (settled ? DC.ev[near] : byCase(DC.ev, pos)).toFixed(1) + "B";
-    track(el.dcfChk, ms, { at: 1150, dur: 550, dy: 8 });
+    // The Monte Carlo is drawn once over all three scenarios; the orange line is where the knob sits in it.
+    track(el.dcfMc, ms, { at: 1000, dur: 600, dy: 12 });
+    MC.bars.forEach((b, i) => { const p = EASE.settle(seg(ms, 1150 + i * 14, 600)); b.g.setAttribute("transform", `translate(${b.x.toFixed(1)} ${MC.base}) scale(1 ${Math.max(0.0001, RM ? 1 : p).toFixed(4)})`); b.g.style.opacity = RM ? p.toFixed(4) : (p > 0 ? "1" : "0"); });
+    MC.now.setAttribute("transform", `translate(${clamp(MC.xAt(v), 0, MC.xAt(DC.mc.max)).toFixed(2)} 0)`);
+    MC.now.style.opacity = EASE.settle(seg(ms, 1550, 400)).toFixed(4);
   }),
 
-  beat("resolve", 27500, 3700, "settle", (ms) => {
+  beat("resolve", 29100, 3700, "settle", (ms) => {
     track(el.fWord,  ms, { at: 400, dur: 900, dy: 30 });
     track(el.fUrl,   ms, { at: 560, dur: 800, dy: 20 });
     track(el.fLine,  ms, { at: 720, dur: 800, dy: 16 });
@@ -1175,27 +1189,34 @@ MARKET DATA — read off huntrvalue.me on 2026-09-25 (the product's own Yahoo Fi
     · AMZN $249.38 +0.04% · META $777.59 +4.50%.
   Opportunity Radar, 1D: top gainers META +4.50%, INTC +3.91%, LLY +2.68%, AMD +2.38%;
     top losers ARM −7.88%, WDC −4.94%, ORCL −3.47%, SNDK −3.47%.
-  /symbol/AAPL: $335.92, −$1.10 (−0.33%) today, 52W $243–$345, next earnings Oct 29, 2026, market cap 4.9T,
-    P/E 38.6, beta 1.08, 1Y +$83.61 (+33.14%). The 1Y line is the page's own price path (Sep 24, 2025 →
+  /symbol/AAPL: $335.92, −$1.10 (−0.33%) today, next earnings Oct 29, 2026, market cap 4.9T, P/E 38.6,
+    1Y +$83.61 (+33.14%). The 1Y line is the page's own price path (Sep 24, 2025 →
     Sep 24, 2026), resampled to 86 points; its ends are the exact $252.31 and $335.92.
   Earnings, week of Oct 26 – Oct 30, 2026 (market cap 10B+): tickers and session counts as the calendar lists
-    them. MSFT quick view: $497.93 −0.53%, next earnings Oct 28, 2026, market cap 3.70T, P/E 27.8, next EPS
-    estimate $4.72; FY2026 quarters (estimate / reported / surprise): Q1 3.66/4.13/+12.73%, Q2 3.92/4.14/+5.69%,
-    Q3 4.07/4.27/+4.90%, Q4 4.24/4.74/+11.81%.
+    them. MSFT quick view: $497.93 −0.53%, next earnings Oct 28, 2026, next EPS estimate $4.72; FY2026 quarters
+    (estimate / reported): Q1 3.66/4.13, Q2 3.92/4.14, Q3 4.07/4.27, Q4 4.24/4.74.
   DCF Calculator, ADBE (auto-populated, price $238.93): Bear $225.55 (−5.6%), Base $315.04 (+31.9%),
-    Bull $588.97 (+146.5%); margin of safety −5.9% / 24.2% / 59.4%; enterprise value $91.21B / $126.6B /
-    $234.94B. Sliders per scenario (Bear / Base / Bull): phase 1 growth 1.0 / 10.5 / 12.5%, current FCF
+    Bull $588.97 (+146.5%). Sliders per scenario (Bear / Base / Bull): phase 1 growth 1.0 / 10.5 / 12.5%, current FCF
     margin 36.5 / 39.0 / 42.5%, WACC 12.5 / 11.5 / 10.75%, terminal growth 2.0 / 2.5 / 2.75%. Slider ranges
-    are the product's (src/components/dcf/dcf-assumptions.tsx). Checks: market cap, total debt, revenue
-    perimeter and margin record pass; four quarters of FCF not verifiable. The page's "Position Decision"
-    readout is left out on purpose.
+    are the product's (src/components/dcf/dcf-assumptions.tsx). The page's "Position Decision" readout is
+    left out on purpose.
+  Monte Carlo, ADBE: the product's runMonteCarlo (src/lib/calculations/dcf.ts; 1,000 runs, seed 42, weights
+    25/50/25, growth–margin correlation 0.5) run on the three scenarios above, with a revenue base of $25.87B,
+    395.5M shares, $6.36B debt and $4.36B cash — the inputs that reproduce the live Base value $315.04 and EV
+    $126.60B exactly, and Bear/Bull within 0.25% ($226.10 / $589.78). P10 $232.99, median $379.04, P90
+    $547.52; 30 buckets from $186.40 to $657.03, as dcf-monte-carlo.tsx draws them. The live panel could not be
+    read on 2026-09-25 (its server actions were aborting), so this is the product's engine, not a screenshot
+    of its output.
 
 STATEMENTS — SEC EDGAR XBRL company facts (data.sec.gov), retrieved 2026-09-25.
   AAPL (CIK 320193), fiscal 2016–2025, $B: revenue (RevenueFromContractWithCustomerExcludingAssessedTax /
     SalesRevenueNet), free cash flow (NetCashProvidedByUsedInOperatingActivities − PaymentsToAcquirePropertyPlant-
     AndEquipment), net income (NetIncomeLoss); latest-filed 10-K values: 0000320193-18-000145 (FY16),
     -19-000119 (FY17), -20-000096 (FY18), -21-000105 (FY19), -22-000108 (FY20), -23-000106 (FY21), -24-000123 (FY22),
-    0000320193-25-000079 (FY23–FY25).
+    0000320193-25-000079 (FY23–FY25). Second set: EBITDA = OperatingIncomeLoss +
+    DepreciationDepletionAndAmortization; diluted EPS (EarningsPerShareDiluted; FY16 8.31 and FY17 9.21 as
+    filed before the 2020 four-for-one split, shown ÷4 as 2.08 and 2.30); capex =
+    PaymentsToAcquirePropertyPlantAndEquipment. Same accessions.
   Chart Builder FCF margin, 40 quarters each: MSFT (CIK 789019) to 2026-06-30, AAPL (320193) to 2025-09-27,
     V (1403161) to 2025-09-30, COST (909832) to 2025-08-31. Each quarter is the difference of two year-to-date
     facts with the same fiscal-year start; Q4 is the 10-K year less the nine-month YTD. TTM = ΣFCF / Σrevenue

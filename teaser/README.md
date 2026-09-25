@@ -1,6 +1,6 @@
 # Huntr teaser
 
-`huntr-teaser.html` is a 31.2-second release film in one self-contained file: no build step, no
+`huntr-teaser.html` is a 32.8-second release film in one self-contained file: no build step, no
 dependencies. Google Fonts is the only request, and it falls back to system fonts offline. Open it
 in Chrome over any static server:
 
@@ -54,8 +54,8 @@ Everything on screen comes from `CONFIG` at the top of the script, plus two embe
   the Chart Builder computes a ratio's TTM.
 - `EARNINGS` — one week of the calendar (first two tickers per session and the session totals),
   and the quick view of `focus`.
-- `DCF` — the calculator on one company: the three scenarios' values, margins of safety,
-  enterprise values and slider settings, read by clicking Bear, Base and Bull. Read each one twice;
+- `DCF` — the calculator on one company: the three scenarios' values and slider settings, and `mc`,
+  the Monte Carlo as the product computes it, read by clicking Bear, Base and Bull. Read each one twice;
   the page updates asynchronously, so a first read can be stale.
 
 Market figures date the film. Every source is listed in the HTML comment at the end of the file;
@@ -65,16 +65,16 @@ update it when you change them.
 
 | Beat | Time (s) | What happens |
 |---|---|---|
-| `field` | 0.00–31.20 | Grid drifts out and back on a sine; ends where it started |
-| `cold-open` | 0.00–2.40 | Two tapes of company logos run in opposite directions; "For people who invest in companies, not funds." |
-| `brand-mark` | 0.00–31.20 | The wolf lands at 0.1, is carried into the sidebar at 2.1–2.95, carried out to the end card at 27.4–28.3 |
-| `window` | 2.05–27.90 | The app window; its sidebar highlight follows the section (Insights → AAPL 6.5 → Chart Builder 12.4 → Earnings 17.8 → DCF 22.6) |
+| `field` | 0.00–32.80 | Grid drifts out and back on a sine; ends where it started |
+| `cold-open` | 0.00–2.40 | Two tapes of company logos; "For people who invest in companies, not funds." |
+| `brand-mark` | 0.00–32.80 | The wolf lands at 0.1, is carried into the sidebar at 2.1–2.95, out to the end card at 29.0–29.9 |
+| `window` | 2.05–29.45 | The app window; its highlight follows the section (Insights → AAPL 6.5 → Chart Builder 14.0 → Earnings 19.4 → DCF 24.2) |
 | `insights` | 2.50–7.10 | Six cards cascade with prices counting; Radar gainers/losers with bars; the AAPL card is picked at 5.4 |
-| `ticker-page` | 6.30–12.40 | The AAPL logo flies from its card to the page header (6.3–7.1); 52W bar; 1Y price draws with its value on the tip (7.65–8.95); Overview → Financials at 9.6, ten years of bars grow |
-| `chart-builder` | 12.40–17.80 | Four companies land; hold slides to FCF margin; lines draw with a pill at each end; Quarterly → TTM at 15.4, curves smooth point by point to 16.77 |
-| `earnings` | 17.80–22.60 | Five days of logos pop in by session with counts; MSFT picked 19.55; quick view slides in 19.9; EPS dots estimate → reported |
-| `dcf` | 22.60–27.90 | Adobe: sliders sweep in; Base → Bear 24.3–24.9 (the delta turns red) → Bull 25.3–26.1 → Base 26.4–27.0 |
-| `resolve` | 27.50–31.20 | Wordmark, URL, one line; settled by 29.02, held 2.2 s |
+| `ticker-page` | 6.30–14.00 | The AAPL logo flies into the page header (6.3–7.1); 1Y price draws with its value below the tip (7.65–8.95); Financials at 9.6: revenue, FCF, net income; then EBITDA, EPS, capex at 11.75 — never more than three |
+| `chart-builder` | 14.00–19.40 | Four companies land; the hold slides to FCF margin; lines draw with a pill at each end; Quarterly → TTM at 17.0, curves smooth point by point to 18.37 |
+| `earnings` | 19.40–24.20 | Five days of logos pop in by session with counts; MSFT picked 21.15; quick view slides in 21.5; EPS estimate → reported |
+| `dcf` | 24.20–29.50 | Adobe: sliders sweep in; Monte Carlo grows at 25.35; Base → Bear 25.9–26.5 (delta turns red) → Bull 26.9–27.7 → Base 28.0–28.6, the orange line riding the distribution |
+| `resolve` | 29.10–32.80 | Wordmark, URL, one line; settled by 30.62, held 2.2 s |
 
 ## Recording to MP4 at 60 fps
 
@@ -87,7 +87,7 @@ On a 1920×1080 display at 100% scaling, open the film full screen and paused:
 Start a lossless capture, then click into Chrome and press **R**:
 
 ```bash
-ffmpeg -f gdigrab -framerate 60 -draw_mouse 0 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop -t 34 -c:v libx264rgb -preset ultrafast -crf 0 raw.mkv
+ffmpeg -f gdigrab -framerate 60 -draw_mouse 0 -offset_x 0 -offset_y 0 -video_size 1920x1080 -i desktop -t 36 -c:v libx264rgb -preset ultrafast -crf 0 raw.mkv
 ```
 
 Find the start. Paused at 0 the frame is already film frame 0 (the empty field), so look for
@@ -97,10 +97,10 @@ where the picture stops being frozen; the tape of marks moves from the first fra
 ffmpeg -i raw.mkv -vf "freezedetect=n=0.0003:d=0.5" -an -f null -
 ```
 
-Trim to 31.2 s and encode, with `START` = the first `freeze_end` minus 0.017 (one frame):
+Trim to 32.8 s and encode, with `START` = the first `freeze_end` minus 0.017 (one frame):
 
 ```bash
-ffmpeg -ss START -i raw.mkv -t 31.2 -vf fps=60 -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart huntr-teaser-1080p60.mp4
+ffmpeg -ss START -i raw.mkv -t 32.8 -vf fps=60 -c:v libx264 -preset slow -crf 16 -pix_fmt yuv420p -movflags +faststart huntr-teaser-1080p60.mp4
 ```
 
 For the vertical cut add `&format=vertical` and capture `-video_size 1080x1920`, which needs a
