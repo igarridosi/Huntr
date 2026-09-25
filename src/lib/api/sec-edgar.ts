@@ -25,7 +25,7 @@ const SEC_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts";
  * The SEC asks for a real contact address here and rate-limits anything that
  * does not identify itself. Configurable so a deployment can use its own.
  */
-const USER_AGENT =
+export const USER_AGENT =
   process.env.SEC_USER_AGENT?.trim() || "Huntr huntrvalue.me contact@huntrvalue.me";
 
 /**
@@ -866,8 +866,8 @@ export async function resolveCash(cik: string): Promise<SECFact | null> {
 // Multi-class issuers: the diluted count from the filing itself
 // ─────────────────────────────────────────────────────────
 
-const SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions";
-const SEC_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data";
+export const SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions";
+export const SEC_ARCHIVES_URL = "https://www.sec.gov/Archives/edgar/data";
 const DILUTED_SHARES_TAG = "us-gaap:WeightedAverageNumberOfDilutedSharesOutstanding";
 /** Berkshire has nothing dilutive and files the basic count only; it is the same count. */
 const BASIC_SHARES_TAG = "us-gaap:WeightedAverageNumberOfSharesOutstandingBasic";
