@@ -9,7 +9,7 @@ import {
   Search,
   Star,
   CalendarClock,
-  MessageSquareText,
+  Footprints,
   Calculator,
   ChartColumnStacked,
   BriefcaseBusiness,
@@ -71,9 +71,9 @@ const mainNav: NavItem[] = [
     icon: SlidersHorizontal,
   },
   {
-    label: "Transcripts",
-    href: ROUTES.APP_TRANSCRIPTS,
-    icon: MessageSquareText,
+    label: "Tracks",
+    href: ROUTES.APP_TRACKS,
+    icon: Footprints,
   },
   {
     label: "DCF Calculator",

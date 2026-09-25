@@ -39,6 +39,7 @@ export const START_PAGES = [
   { value: "/app/screener", label: "Screener" },
   { value: "/app/chart-builder", label: "Chart Builder" },
   { value: "/app/dcf-calculator", label: "DCF Calculator" },
+  { value: "/app/tracks", label: "Tracks" },
   { value: "/app/portfolios", label: "Portfolios" },
 ] as const;
 

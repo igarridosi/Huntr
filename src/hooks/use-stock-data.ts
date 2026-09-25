@@ -28,6 +28,8 @@ import {
   fetchAllProfiles,
   fetchCompanyFinancials,
   fetchSearchTickers,
+  fetchInsiderActivity,
+  fetchInsiderFeed,
   fetchTranscriptPeriods,
   fetchTranscriptDocument,
   fetchScreenerMetrics,
@@ -245,6 +247,35 @@ export function useSearch(query: string, limit = 10) {
     staleTime: STALE_TIMES.SEARCH,
     // Search is always enabled — returns popular results for empty query
     enabled: true,
+  });
+}
+
+// ---------- Insiders ----------
+
+/**
+ * Insider activity for one ticker. A cold ticker costs a burst of SEC
+ * requests on the server, so the result is held for the same six hours
+ * the server caches it and never refetched on focus.
+ */
+export function useInsiderActivity(ticker: string, enabled: boolean = true) {
+  const t = ticker.trim().toUpperCase();
+  return useQuery({
+    queryKey: QUERY_KEYS.INSIDERS(t),
+    queryFn: () => fetchInsiderActivity(t),
+    staleTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: enabled && t.length > 0,
+  });
+}
+
+export function useInsiderFeed(tickers: string[], enabled: boolean = true) {
+  const normalized = Array.from(new Set(tickers.map((t) => t.toUpperCase()).filter(Boolean))).sort();
+  return useQuery({
+    queryKey: QUERY_KEYS.INSIDER_FEED(normalized.join(",")),
+    queryFn: () => fetchInsiderFeed(normalized),
+    staleTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: enabled && normalized.length > 0,
   });
 }
 
