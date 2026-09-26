@@ -18,7 +18,6 @@ import {
   LogOut,
   LogIn,
   UserPlus,
-  X,
 } from "lucide-react";
 import { cn, enterDelay } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
@@ -31,19 +30,16 @@ import { useSupabase } from "@/providers/supabase-provider";
 
 interface SidebarProps {
   onSearchClick?: () => void;
-  overlay?: boolean;
-  open?: boolean;
-  onClose?: () => void;
 }
 
-interface NavItem {
+export interface NavItem {
   label: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   matchExact?: boolean;
 }
 
-const mainNav: NavItem[] = [
+export const mainNav: NavItem[] = [
   {
     label: "Insights",
     href: ROUTES.APP_INSIGHTS,
@@ -87,12 +83,8 @@ const mainNav: NavItem[] = [
   },
 ];
 
-export function Sidebar({
-  onSearchClick,
-  overlay = false,
-  open = true,
-  onClose,
-}: SidebarProps) {
+/** The full sidebar, beside the page. Insights keeps it; the other sections use the dock. */
+export function Sidebar({ onSearchClick }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { supabase, user } = useSupabase();
@@ -110,27 +102,14 @@ export function Sidebar({
     }
   }, [recentSearches, router]);
 
-  if (!open) return null;
-
   return (
-    <>
-      {overlay ? (
-        <button
-          type="button"
-          aria-label="Close desktop sidebar overlay"
-          onClick={onClose}
-          className="hidden lg:block fixed inset-0 z-40 bg-wolf-black/45 backdrop-blur-[1px]"
-        />
-      ) : null}
-
       <aside
         className={cn(
-          "fixed left-0 top-0 hidden h-screen w-64 flex-col bg-wolf-surface lg:flex",
+          "fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col bg-wolf-surface lg:flex",
           // A hairline edge rather than a border: the panel is already a
           // different surface from the page, so the divider only has to mark
           // where one ends.
-          "after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-wolf-border/40 after:content-['']",
-          overlay ? "z-50 shadow-2xl" : "z-40"
+          "after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-wolf-border/40 after:content-['']"
         )}
       >
       {/* ---- Logo / Brand ---- */}
@@ -162,16 +141,6 @@ export function Sidebar({
             Wolf of Value St.
           </p>
         </div>
-        {overlay ? (
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close sidebar"
-            className="-mr-1.5 ml-auto shrink-0 rounded-lg p-1.5 text-mist transition-[background-color,color,transform] duration-150 ease-out hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        ) : null}
       </div>
 
       {/* ---- Search Trigger ---- */}
@@ -327,6 +296,5 @@ export function Sidebar({
         </div>
       </div>
       </aside>
-    </>
   );
 }
