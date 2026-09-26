@@ -52,21 +52,12 @@ export const metadata: Metadata = {
     title: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     description:
       "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
-    images: [
-      {
-        url: "/logo/HunterLogo.png",
-        width: 1632,
-        height: 640,
-        alt: "Huntr logo",
-      },
-    ],
   },
   twitter: {
     card: "summary_large_image",
     title: "Huntr | Tactical Stock Analysis Platform for Value Investors",
     description:
       "Discover undervalued stocks with Huntr. The ultimate financial terminal offering fundamental metrics, multi-chart overviews, and smart watchlists. Join the Wolf of Value Street.",
-    images: ["/logo/HunterLogo.png"],
   },
   robots: {
     index: true,
@@ -146,10 +137,11 @@ export default function RootLayout({
             Runs synchronously before the first paint so the correct theme
             class is applied before any CSS is rendered.
             Dark is the default (no class needed); only "light" is added.
+            The landing ("/") is always dark: see DARK_ONLY_PATHS.
         ──────────────────────────────────────────────────────────────── */}
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('huntr-theme');var s=!t&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if((t||s)==='light')document.documentElement.classList.add('light');}catch(e){}})();`,
+            __html: `(function(){try{if(location.pathname==='/')return;var t=localStorage.getItem('huntr-theme');var s=!t&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark';if((t||s)==='light')document.documentElement.classList.add('light');}catch(e){}})();`,
           }}
         />
       </head>
