@@ -436,6 +436,54 @@ export function withGranularity(spec: ChartSpec, granularity: Granularity): Char
 }
 
 // ---------------------------------------------------------------------------
+// Generated title and subtitle
+// ---------------------------------------------------------------------------
+
+/** The single metric every series shares, or null when they differ. */
+function sharedMetric(spec: ChartSpec): MetricId | null {
+  const metrics = new Set(spec.series.map((s) => s.metric));
+  return metrics.size === 1 ? [...metrics][0] : null;
+}
+
+/** The title the builder writes for a chart: "MA, V — Net margin". */
+export function autoTitle(spec: ChartSpec): string | undefined {
+  const metric = sharedMetric(spec);
+  if (!metric) return undefined;
+  const tickers = [...new Set(spec.series.map((s) => s.ticker))];
+  return `${tickers.join(", ")} — ${METRICS[metric].label}`;
+}
+
+/** The subtitle the builder writes: the period, then the metric when there is one ("Quarterly net margin"). */
+export function autoSubtitle(spec: ChartSpec): string {
+  const metric = sharedMetric(spec);
+  if (!metric) return spec.granularity === "ttm" ? "Trailing twelve months" : PERIOD_WORD[spec.granularity];
+  return `${PERIOD_WORD[spec.granularity]} ${METRICS[metric].label.toLowerCase()}`;
+}
+
+/**
+ * Keeps generated text in step with the chart. A title or subtitle that is
+ * still the one the builder wrote for the previous spec is rewritten for the
+ * next, so changing a series' metric does not leave "Quarterly revenue" over
+ * a chart of margins. Text the user wrote is never touched.
+ */
+export function followAutoText(prev: ChartSpec, next: ChartSpec): ChartSpec {
+  let out = next;
+  // The period switch re-words a subtitle on its own (withGranularity), so a
+  // generated one may arrive already re-worded; it is still generated.
+  const untouched = next.subtitle === prev.subtitle || next.subtitle === periodSubtitle(prev.subtitle, next.granularity);
+  if (next.subtitle !== undefined && untouched && prev.subtitle === autoSubtitle(prev)) {
+    const subtitle = autoSubtitle(next);
+    if (subtitle !== next.subtitle) out = { ...out, subtitle };
+  }
+  const prevTitle = autoTitle(prev);
+  if (prevTitle !== undefined && next.title === prev.title && prev.title === prevTitle) {
+    const title = autoTitle(next);
+    if (title !== undefined && title !== next.title) out = { ...out, title };
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
 // Versioning
 // ---------------------------------------------------------------------------
 

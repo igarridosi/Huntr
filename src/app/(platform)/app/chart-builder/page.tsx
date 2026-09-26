@@ -21,7 +21,7 @@ import { useKeyboardShortcut } from "@/hooks/use-keyboard-shortcut";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { useSavedCharts, type SavedChart } from "@/hooks/use-saved-charts";
 import { useAuthGate } from "@/providers/auth-gate-provider";
-import { SPEC_QUERY_PARAM, createSeries, createSpec, decodeSpec, encodeSpec, paletteColor, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
+import { SPEC_QUERY_PARAM, createSeries, createSpec, decodeSpec, encodeSpec, followAutoText, paletteColor, type ChartSpec, type ChartTemplate } from "@/lib/chart-builder";
 import { cn } from "@/lib/utils";
 import ChartBuilderLoading from "./loading";
 import { track } from "@/lib/analytics/track";
@@ -103,7 +103,11 @@ function ChartBuilder() {
   useKeyboardShortcut({ key: "z", metaKey: true }, (e) => { if (!isTypingTarget(e)) undo(); });
   useKeyboardShortcut({ key: "z", metaKey: true, shiftKey: true }, (e) => { if (!isTypingTarget(e)) redo(); });
 
-  const onChange = useCallback((next: ChartSpec, coalesce?: string) => update(next, coalesce), [update]);
+  // Generated title and subtitle follow the chart; the user's own text stays.
+  const onChange = useCallback(
+    (next: ChartSpec, coalesce?: string) => update(followAutoText(spec, next), coalesce),
+    [spec, update]
+  );
 
   // Templates reshape the companies already on the chart; they never add one.
   const pickTemplate = useCallback(
