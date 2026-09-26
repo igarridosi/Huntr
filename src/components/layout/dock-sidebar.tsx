@@ -14,8 +14,8 @@ import { useRecentSearches } from "@/lib/recent-searches";
 import { useSupabase } from "@/providers/supabase-provider";
 import { mainNav } from "./sidebar";
 
-/** Recent symbols the rail has room for; the open panel lists them all. */
-const RAIL_RECENTS = 5;
+/** Recent symbols shown, open or closed: the last few, not a history. */
+const RECENTS = 5;
 
 /** Apple's sheet curve: quick to leave, soft to land. */
 const EASE = "ease-[cubic-bezier(0.32,0.72,0,1)]";
@@ -63,17 +63,18 @@ export function DockSidebar({ expanded, onExpandedChange, onSearchClick }: DockS
     return () => window.removeEventListener("keydown", onKey);
   }, [expanded, onExpandedChange]);
 
-  const recents = expanded ? recentSearches : recentSearches.slice(0, RAIL_RECENTS);
+  const recents = recentSearches.slice(0, RECENTS);
 
   return (
     <>
-      {/* Outside the panel: a light dim that closes it. Light, because the
-          panel is a parallel tool, not a modal task. */}
+      {/* Outside the panel: a dim and a blur that push the page back, so the
+          open menu is the one thing in focus. A click on it closes the menu. */}
       <div
         aria-hidden="true"
         onClick={() => onExpandedChange(false)}
         className={cn(
-          "fixed inset-0 z-40 hidden bg-wolf-black/35 transition-opacity duration-300 lg:block motion-reduce:transition-none",
+          "fixed inset-0 z-40 hidden bg-wolf-black/55 backdrop-blur-md transition-opacity duration-300 lg:block motion-reduce:transition-none",
+          "[@media(prefers-reduced-transparency:reduce)]:bg-wolf-black/75 [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
           EASE,
           expanded ? "opacity-100" : "pointer-events-none opacity-0"
         )}
