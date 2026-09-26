@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+import { BrandMark } from "@/components/ui/brand-mark";
 import Link from "next/link";
 import { useEffect, useMemo } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -121,17 +121,7 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
           which is what made it look crowded. A smaller mark, a wider gutter and
           a tagline that truncates instead of wrapping give it back its air. */}
       <div className="flex h-14 shrink-0 items-center gap-3.5 border-b border-wolf-border/40 px-5">
-        {/* Fixed dark container keeps the white wolf visible in both themes */}
-        <div className="flex shrink-0 items-center justify-center rounded-lg bg-[#162225] p-1">
-          <Image
-            src="/logo/HunterLogoCut-removebg.png"
-            alt="Huntr"
-            width={38}
-            height={29}
-            className="h-auto w-[38px] object-contain"
-            priority
-          />
-        </div>
+        <BrandMark title="Huntr" className="w-10" />
         <div className="min-w-0 flex-1">
           {/* A wordmark, not a heading: the page's h1 is its own title. */}
           <span className="block text-base font-bold leading-tight tracking-tight text-snow-peak">

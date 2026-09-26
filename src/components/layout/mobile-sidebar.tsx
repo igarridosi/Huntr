@@ -1,8 +1,8 @@
 "use client";
 
+import { BrandMark } from "@/components/ui/brand-mark";
 import { useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   Lightbulb,
   Star,
@@ -90,16 +90,7 @@ export function MobileSidebar({ open, onClose, onSearchClick }: MobileSidebarPro
         {/* Header */}
         <div className="flex h-14 shrink-0 items-center justify-between border-b border-wolf-border/40 px-5">
           <div className="flex min-w-0 items-center gap-3.5">
-            <div className="flex items-center justify-center rounded-lg bg-[#162225] p-1">
-              <Image
-                src="/logo/HunterLogoCut-removebg.png"
-                alt="Huntr"
-                width={40}
-                height={30}
-                className="h-auto w-10 object-contain"
-                priority
-              />
-            </div>
+            <BrandMark title="Huntr" className="w-10" />
             <span className="truncate text-base font-bold tracking-tight">HUNTR</span>
           </div>
           <button

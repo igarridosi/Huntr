@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { Search, Menu } from "lucide-react";
+import { BrandMark } from "@/components/ui/brand-mark";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { KoFiSupport } from "@/components/ui/kofi-support";
@@ -32,16 +32,7 @@ export function Topbar({
 
       {/* Mobile brand */}
       <div className="flex items-center gap-2 lg:hidden">
-        <div className="flex items-center justify-center rounded-lg bg-[#162225] p-1">
-          <Image
-            src="/logo/HunterLogoCut-removebg.png"
-            alt="Huntr"
-            width={36}
-            height={27}
-            className="h-auto w-9 object-contain"
-            priority
-          />
-        </div>
+        <BrandMark title="Huntr" className="w-9" />
         <span className="text-sm font-bold tracking-tight">HUNTR</span>
       </div>
 

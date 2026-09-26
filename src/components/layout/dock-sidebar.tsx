@@ -1,10 +1,10 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { LogIn, LogOut, PanelLeftClose, PanelLeftOpen, Search, Settings, UserPlus } from "lucide-react";
+import { BrandMark } from "@/components/ui/brand-mark";
 import { cn } from "@/lib/utils";
 import { ROUTES } from "@/lib/constants";
 import { TooltipContent, TooltipRoot, TooltipTrigger } from "@/components/ui/tooltip";
@@ -100,10 +100,9 @@ export function DockSidebar({ expanded, onExpandedChange, onSearchClick }: DockS
           <Link
             href={ROUTES.APP_INSIGHTS}
             aria-label="Huntr, go to Insights"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#162225] ring-1 ring-inset ring-white/[0.06] transition-transform duration-150 active:scale-[0.94] motion-reduce:active:scale-100"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-150 active:scale-[0.94] motion-reduce:active:scale-100"
           >
-            {/* Fixed dark container keeps the white wolf visible in both themes */}
-            <Image src="/logo/HunterLogoCut-removebg.png" alt="" width={30} height={23} className="h-auto w-[30px] object-contain" priority />
+            <BrandMark className="w-9" />
           </Link>
           <Reveal expanded={expanded} className="min-w-0">
             <span className="block text-[15px] font-bold leading-tight tracking-[-0.01em] text-snow-peak">HUNTR</span>

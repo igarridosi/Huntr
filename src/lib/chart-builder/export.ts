@@ -9,6 +9,7 @@
  * URIs first.
  */
 
+import { brandMarkSvg } from "@/components/ui/brand-mark";
 import { CANVAS_THEMES, seriesInk } from "./themes";
 import { seriesLabel } from "./resolve";
 import type { ChartSpec, AspectRatio } from "./spec";
@@ -230,7 +231,9 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
 
   // Watermark, always: "Powered by  [logo] HUNTR", bottom right.
   {
-    const logo = await loadImage("/logo/HunterLogoCut-removebg.png").catch(() => null);
+    // The mark in the chart's own title colour, so it reads on light exports too.
+    const mark = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(brandMarkSvg(theme.title))}`;
+    const logo = await loadImage(mark).catch(() => null);
     const wordSize = 18;
     ctx.textBaseline = "middle";
     const baseline = y + 16;
