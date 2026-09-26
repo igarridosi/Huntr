@@ -624,7 +624,8 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         </ResponsiveContainer>
       )}
       {pills.length > 0 && (
-        <svg className="pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
+        // cb-pills: the PNG export copies this layer onto the plot.
+        <svg className="cb-pills pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
           {pills.map((p) => (
             <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} theme={theme} />
           ))}
