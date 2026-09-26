@@ -8,6 +8,7 @@ import {
   useSyncExternalStore,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 import { readThemePreference, resolveTheme, type Theme, type ThemePreference } from "@/lib/settings/preferences";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -40,6 +41,13 @@ const ThemeContext = createContext<ThemeContextValue>({
 const STORAGE_KEY = "huntr-theme";
 const CHANGE_EVENT = "huntr:theme-change";
 const LIGHT_QUERY = "(prefers-color-scheme: light)";
+
+/**
+ * Pages that are dark whatever the preference: the landing is designed as a
+ * dark scene, and a visitor arriving from a shared link should see it as
+ * designed. The pre-paint script in the root layout has the same list.
+ */
+export const DARK_ONLY_PATHS = new Set(["/"]);
 
 /** The explicit choice on file, or "system" when there is none. */
 function readPreference(): ThemePreference {
@@ -88,7 +96,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
    * the server snapshot is "dark" so hydration agrees, and the client snapshot
    * is the resolved preference from the first client render onwards.
    */
-  const theme = useSyncExternalStore<Theme>(subscribeToTheme, readTheme, () => "dark");
+  const stored = useSyncExternalStore<Theme>(subscribeToTheme, readTheme, () => "dark");
+  const pathname = usePathname();
+  const theme: Theme = DARK_ONLY_PATHS.has(pathname) ? "dark" : stored;
   // The choice itself, so the settings screen can show "System" as chosen
   // rather than as whichever theme the OS happens to be on today.
   const preference = useSyncExternalStore<ThemePreference>(subscribeToTheme, readPreference, () => "system");

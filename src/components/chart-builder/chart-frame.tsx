@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { forwardRef, useCallback, useEffect, useRef, useState } from "react";
+import { BrandMark } from "@/components/ui/brand-mark";
 import { cn } from "@/lib/utils";
 import { AlertTriangle } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -131,8 +132,8 @@ export const ChartFrame = forwardRef<HTMLDivElement, ChartFrameProps>(function C
         <p className="flex shrink-0 items-center gap-2 text-xs" style={{ color: theme.tick }}>
           <span>Powered by</span>
           <span className="inline-flex items-center gap-1.5">
-            {/* eslint-disable-next-line @next/next/no-img-element -- tiny static asset, plain <img> keeps the export path simple */}
-            <img src="/logo/HunterLogoCut-removebg.png" alt="" aria-hidden className="h-[22px] w-auto object-contain" />
+            {/* Drawn inline, so the export carries it and the wolf takes the chart's title colour. */}
+            <BrandMark className="w-[29px]" style={{ color: theme.title }} />
             <span className="font-heading text-[15px] font-bold leading-none tracking-tight" style={{ color: theme.title }}>
               HUNTR
             </span>

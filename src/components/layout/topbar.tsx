@@ -1,7 +1,7 @@
 "use client";
 
-import Image from "next/image";
 import { Search, Menu } from "lucide-react";
+import { BrandMark } from "@/components/ui/brand-mark";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { KoFiSupport } from "@/components/ui/kofi-support";
@@ -11,15 +11,11 @@ import { AddTickerDialog } from "@/components/ui/add-ticker-dialog";
 interface TopbarProps {
   onSearchClick?: () => void;
   onMenuClick?: () => void;
-  onDesktopMenuClick?: () => void;
-  showDesktopMenuToggle?: boolean;
 }
 
 export function Topbar({
   onSearchClick,
   onMenuClick,
-  onDesktopMenuClick,
-  showDesktopMenuToggle = false,
 }: TopbarProps) {
   return (
     <header className="sticky top-0 z-30 flex items-center h-14 px-4 lg:px-6 bg-wolf-black/80 backdrop-blur-md border-b border-wolf-border/30">
@@ -34,30 +30,9 @@ export function Topbar({
         <Menu className="w-5 h-5" />
       </Button>
 
-      {showDesktopMenuToggle ? (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="hidden lg:inline-flex mr-2"
-          onClick={onDesktopMenuClick}
-          aria-label="Toggle desktop menu"
-        >
-          <Menu className="w-5 h-5" />
-        </Button>
-      ) : null}
-
       {/* Mobile brand */}
       <div className="flex items-center gap-2 lg:hidden">
-        <div className="flex items-center justify-center rounded-lg bg-[#162225] p-1">
-          <Image
-            src="/logo/HunterLogoCut-removebg.png"
-            alt="Huntr"
-            width={36}
-            height={27}
-            className="h-auto w-9 object-contain"
-            priority
-          />
-        </div>
+        <BrandMark title="Huntr" className="w-9" />
         <span className="text-sm font-bold tracking-tight">HUNTR</span>
       </div>
 
