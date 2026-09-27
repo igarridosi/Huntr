@@ -322,6 +322,18 @@ describe("resolveChart — market metrics", () => {
     expect(on(chart, "pe", "2024-01-01")).toBeCloseTo(465 / 4);
   });
 
+  it("normalises trailing P/E through an earnings trough, and says where", () => {
+    // Twelve quarters at EPS 1, then four at 0.1: the last year is a trough.
+    const long = quarterEnds(2021, 2024);
+    const f = fin("A", { quarterly: long.map((date, i) => ({ date, eps_diluted: i < 12 ? 1 : 0.1, shares: 10 })) });
+    const px2 = prices("2021-01-01", 1500, () => 80);
+    const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "pe", ticker: "A", metric: "pe_ttm", shape: "line" })] });
+    const chart = resolveChart(spec, { financials: { A: f }, prices: { A: px2 } });
+    // 2024-12-31: TTM EPS 0.4 against a three-year average of 4 → P/E on the average, 80 / 4.
+    expect(on(chart, "pe", "2024-12-31")).toBeCloseTo(20);
+    expect(chart.warnings.some((w) => /normalised/.test(w.message) && /Q4 2024/.test(w.message))).toBe(true);
+  });
+
   it("leaves a gap where earnings round to nothing (P/E past 300x is not meaningful)", () => {
     const thin = fin("A", { quarterly: dates.map((date) => ({ date, eps_diluted: 0.1, shares: 10 })) });
     const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "pe", ticker: "A", metric: "pe_ttm", shape: "line" })] });

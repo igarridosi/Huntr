@@ -72,6 +72,14 @@ export interface MarketContext {
   forwardEps: number | null;
   flow: (read: StatementReader) => number | null;
   stock: (read: StatementReader) => number | null;
+  /**
+   * The flow's average over the three years before the period (each a
+   * trailing twelve months, or a fiscal year on the annual view); null
+   * with fewer than two of them.
+   */
+  normalFlow: (read: StatementReader) => number | null;
+  /** Records that this period's value was worked out on normalised earnings. */
+  noteNormalised: () => void;
 }
 
 export interface MetricDef {
@@ -205,6 +213,27 @@ const multiple = (n: number | null, d: number | null): number | null => {
   const r = ratio(n, d);
   return r === null || r > MAX_MULTIPLE ? null : r;
 };
+/** Below this share of their three-year average, trailing earnings are a trough, not a level. */
+const TROUGH_SHARE = 0.5;
+/**
+ * Trailing P/E, normalised through an earnings trough. Over a loss there
+ * is no P/E, and over a collapse (Booking in 2021, twelve months of EPS
+ * at a tenth of normal) it reads 290x: neither says what the market paid
+ * for the business. Where trailing EPS is negative or under half its
+ * average of the three years before, the price is set against that
+ * average instead — the normalised P/E analysts use through a cycle —
+ * and the chart says which periods it did so for.
+ */
+function trailingPe(ctx: MarketContext): number | null {
+  const eps = ctx.flow(epsDiluted);
+  const normal = ctx.normalFlow(epsDiluted);
+  const trough = eps === null || eps <= 0 || (normal !== null && normal > 0 && eps < TROUGH_SHARE * normal);
+  if (!trough) return multiple(ctx.price, eps);
+  if (normal === null || normal <= 0) return multiple(ctx.price, eps);
+  ctx.noteNormalised();
+  return multiple(ctx.price, normal);
+}
+
 const yieldPct = (n: number | null, d: number | null): number | null => {
   const r = ratio(n, d);
   return r === null ? null : r * 100;
@@ -329,7 +358,7 @@ const defs: Record<MetricId, Omit<MetricDef, "id">> = {
   price: { label: "Price", short: "Price", group: "Market", unit: "price", kind: "price", source: "price", statements: [] },
   market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: marketCap },
   enterprise_value: { label: "Enterprise value", short: "EV", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: enterpriseValue },
-  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(ctx.price, ctx.flow(epsDiluted)) },
+  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: trailingPe },
   pe_forward: { label: "P/E (forward)", short: "Fwd P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(ctx.price, ctx.forwardEps) },
   price_to_sales: { label: "Price to sales", short: "P/S", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(revenue)) },
   price_to_book: { label: "Price to book", short: "P/B", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(marketCap(ctx), ctx.stock(equity)) },

@@ -474,7 +474,9 @@ export function followAutoText(prev: ChartSpec, next: ChartSpec): ChartSpec {
   // The period switch re-words a subtitle on its own (withGranularity), so a
   // generated one may arrive already re-worded; it is still generated.
   const untouched = next.subtitle === prev.subtitle || next.subtitle === periodSubtitle(prev.subtitle, next.granularity);
-  if (next.subtitle !== undefined && untouched && prev.subtitle === autoSubtitle(prev)) {
+  // Case-blind: subtitles written before acronyms kept their capitals ("p/e") are still generated ones.
+  const generated = prev.subtitle !== undefined && prev.subtitle.toLowerCase() === autoSubtitle(prev).toLowerCase();
+  if (next.subtitle !== undefined && untouched && generated) {
     const subtitle = autoSubtitle(next);
     if (subtitle !== next.subtitle) out = { ...out, subtitle };
   }

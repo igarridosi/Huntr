@@ -289,12 +289,30 @@ function ttmAt(bundles: BundledPeriod[], i: number, read: StatementReader): numb
   return total;
 }
 
+/**
+ * A flow's average over the three years before period `i`: the trailing
+ * twelve months a year, two and three years back (or the three prior
+ * fiscal years on the annual view). Null with fewer than two of them.
+ */
+function normalAt(bundles: BundledPeriod[], i: number, granularity: Granularity, read: StatementReader): number | null {
+  const values: number[] = [];
+  for (let y = 1; y <= 3; y++) {
+    const v = granularity === "annual" ? (i - y >= 0 ? read(bundles[i - y]) : null) : ttmAt(bundles, i - 4 * y, read);
+    if (v !== null && Number.isFinite(v)) values.push(v);
+  }
+  return values.length >= 2 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+}
+
+/** Bundle dates on which a market metric fell back to normalised earnings, per series. */
+export type NormalisedDates = Set<string>;
+
 function statementValues(
   series: ChartSeries,
   granularity: Granularity,
   bundles: BundledPeriod[],
   prices: PricePoint[],
-  forwardEps?: ForwardEpsReader
+  forwardEps?: ForwardEpsReader,
+  normalised?: NormalisedDates
 ): Keyed {
   const def = METRICS[series.metric];
   const out: Keyed = new Map();
@@ -321,6 +339,8 @@ function statementValues(
           price,
           forwardEps: forwardEps?.(b.date) ?? null,
           flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, i, read)),
+          normalFlow: (read) => normalAt(bundles, i, granularity, read),
+          noteNormalised: () => normalised?.add(b.date),
           stock: (read) => read(b),
         };
         v = def.derive(ctx);
@@ -364,7 +384,8 @@ function dailyMarketValues(
   bundles: BundledPeriod[],
   prices: PricePoint[],
   range: { from: string | null; to: string | null },
-  forwardEps?: ForwardEpsReader
+  forwardEps?: ForwardEpsReader,
+  normalised?: NormalisedDates
 ): Array<{ x: number; value: number | null }> {
   const def = METRICS[series.metric];
   if (!def.derive || bundles.length === 0) return [];
@@ -411,6 +432,8 @@ function dailyMarketValues(
       price: p.close,
       forwardEps: forward,
       flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, idx, read)),
+      normalFlow: (read) => normalAt(bundles, idx, granularity, read),
+      noteNormalised: () => normalised?.add(b.date),
       stock: (read) => read(b),
     });
     out.push({ x: t, value: v !== null && Number.isFinite(v) ? v : null });
@@ -589,6 +612,18 @@ function inRange(date: string, range: ChartSpec["range"]): boolean {
   return true;
 }
 
+/** Says which periods in view a market metric drew on normalised earnings. */
+function noteNormalisedPeriods(series: ChartSeries, dates: NormalisedDates, bundles: BundledPeriod[], spec: ChartSpec, warnings: ResolveWarning[]) {
+  const shown = bundles.filter((b) => dates.has(b.date) && inRange(b.date, spec.range));
+  if (shown.length === 0) return;
+  const span = shown.length === 1 ? shown[0].bucket.label : `${shown[0].bucket.label} – ${shown[shown.length - 1].bucket.label}`;
+  warnings.push({
+    seriesId: series.id,
+    ticker: series.ticker,
+    message: `${series.ticker}'s earnings were negative or under half their three-year average in ${span}; its ${METRICS[series.metric].label} there is on that average (normalised).`,
+  });
+}
+
 export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedChart {
   const warnings: ResolveWarning[] = [];
   // Prices and market metrics are daily, so either puts the chart on a time axis.
@@ -688,7 +723,9 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
         from: spec.range.from === null ? null : bucketStart(spec.range.from, spec.granularity),
         to: spec.range.to === null ? null : bucketEnd(spec.range.to, spec.granularity),
       };
-      const points = dailyMarketValues(series, spec.granularity, bundles, prices, dayRange, inputs.forwardEps?.[series.ticker]);
+      const normalised: NormalisedDates = new Set();
+      const points = dailyMarketValues(series, spec.granularity, bundles, prices, dayRange, inputs.forwardEps?.[series.ticker], normalised);
+      noteNormalisedPeriods(series, normalised, bundles, spec, warnings);
       if (prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
         warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown, and the per-share figures behind it.` });
       }
@@ -696,7 +733,9 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       continue;
     }
 
-    const raw = statementValues(series, spec.granularity, bundles, prices, inputs.forwardEps?.[series.ticker]);
+    const normalised: NormalisedDates = new Set();
+    const raw = statementValues(series, spec.granularity, bundles, prices, inputs.forwardEps?.[series.ticker], normalised);
+    noteNormalisedPeriods(series, normalised, bundles, spec, warnings);
     const transformed = applyTransform(raw, series.transform, spec.granularity, bundles, series.metric);
 
     if (CAPEX_BASED.has(series.metric) && spec.granularity !== "annual" && !warnedTickers.has(`c:${series.ticker}`)) {
