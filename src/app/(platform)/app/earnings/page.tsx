@@ -1430,7 +1430,10 @@ export default function EarningsPage() {
   const watchlistGroups = [{ label: "Watchlists", options: [{ value: "all", label: "All companies" }, ...lists.map((l) => ({ value: l.id, label: l.name }))] }];
 
   return (
-    <div className="flex w-full min-h-0 flex-col gap-5">
+    // At lg the page is exactly the window below the topbar (56px) and the
+    // main padding (2rem each side): nothing scrolls the page, the day columns
+    // and the detail scroll inside, and a bottom margin is always kept.
+    <div className="flex w-full min-h-0 flex-col gap-5 lg:h-[calc(100dvh-56px-4rem)]">
       {/* ── Header ─────────────────────────────────────────────────────── */}
       <header className="flex items-center gap-3">
         <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sunset-orange/15 bg-sunset-orange/10">
@@ -1518,8 +1521,8 @@ export default function EarningsPage() {
 
       {/* ── Calendar + detail: the detail column is always there at xl, so
           choosing a company never re-flows the week. ─────────────────── */}
-      <div className="grid min-h-0 grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_400px]">
-        <MaterialPanel className="min-w-0 p-3">
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:flex-1 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <MaterialPanel className="min-w-0 p-3 lg:flex lg:min-h-0 lg:flex-col">
           {quotesError || profilesError ? (
             <ErrorState
               inline
@@ -1530,7 +1533,7 @@ export default function EarningsPage() {
               }}
             />
           ) : (
-            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-5">
               {dayColumns.map(({ day, groups }, dayIndex) => {
                 const isToday = isSameDay(day, today);
                 const isPast = day < today;
@@ -1544,7 +1547,7 @@ export default function EarningsPage() {
                     key={day.toISOString()}
                     aria-label={day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
                     className={cn(
-                      "flex min-w-0 flex-col rounded-xl ring-1 ring-inset",
+                      "flex min-h-0 min-w-0 flex-col rounded-xl ring-1 ring-inset",
                       isToday ? "bg-sunset-orange/[0.04] ring-sunset-orange/30" : "bg-snow-peak/[0.02] ring-wolf-border/40"
                     )}
                   >
@@ -1563,7 +1566,7 @@ export default function EarningsPage() {
                     {/* One height for every day, loaded or not, full or empty: the
                         window's, within bounds, so the detail beside it has room
                         and nothing on the page depends on what is selected. */}
-                    <div className="scroll-quiet h-[440px] space-y-3 overflow-y-auto p-2.5 lg:h-[clamp(460px,calc(100dvh-300px),680px)]">
+                    <div className="scroll-quiet h-[440px] space-y-3 overflow-y-auto p-2.5 lg:h-auto lg:min-h-0 lg:flex-1">
                       {isLoading ? (
                         <EarningsColumnSkeleton dayIndex={dayIndex} />
                       ) : (
