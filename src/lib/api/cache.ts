@@ -15,6 +15,7 @@ import type { CompanyFinancials } from "@/types/financials";
 import type { TimeSeriesFinancialsCache } from "@/types/yahoo";
 import { mapTimeSeriesFinancials } from "@/lib/api/mappers";
 import { repairAlphaFinancials } from "./alpha-repair";
+import { toGicsSector } from "@/lib/screener/sectors";
 
 // ─────────────────────────────────────────────────────────
 // Constants
@@ -238,7 +239,23 @@ export interface ScreenerMetrics {
   quality_cash_generation: number | null;
   /** ISO timestamp of when this metrics record was last populated from the cache */
   fetched_at: string | null;
+  // From the cached quoteSummary (financialData / keyStatistics / summaryDetail),
+  // as fractions where Yahoo gives fractions (0.42 = 42%).
+  gross_margin?: number | null;
+  operating_margin?: number | null;
+  net_margin?: number | null;
+  roe?: number | null;
+  /** Total debt over equity, as a multiple (1.5 = 1.5x). */
+  debt_to_equity?: number | null;
+  current_ratio?: number | null;
+  ev_to_ebitda?: number | null;
+  price_to_sales?: number | null;
+  /** Analysts' mean target over the current price, less one; null under three analysts. */
+  target_upside?: number | null;
+  /** GICS sector name from Yahoo's asset profile, when the cached quote carries one. */
+  sector?: string | null;
 }
+
 
 /** Safely extract a number from Yahoo's normalized data or raw/fmt objects */
 function extractYahooNum(v: unknown): number | null {
@@ -584,6 +601,7 @@ export async function getBatchCachedScreenerMetrics(
         const raw = row.data as Record<string, unknown> | null;
         if (!raw) continue;
         const summaryDetail    = raw.summaryDetail            as Record<string, unknown> | null;
+        const assetProfile     = raw.assetProfile             as Record<string, unknown> | null;
         const financialData    = raw.financialData            as Record<string, unknown> | null;
         const keyStats         = raw.defaultKeyStatistics     as Record<string, unknown> | null;
 
@@ -598,12 +616,45 @@ export async function getBatchCachedScreenerMetrics(
 
         // Store the winsorized Yahoo value as-is. ADR / currency artifact detection
         // is done in Pass 2 where we can cross-check against actual NI figures.
+        // Foreign listings (ADRs) quote in dollars and report in their own
+        // currency: Telkom Indonesia's free cash flow in rupiah over a dollar
+        // market cap read as a 435,964% yield. Anything that divides a
+        // statement figure by the price is left out when the two differ.
+        const priceModule = raw.price as Record<string, unknown> | null;
+        const quoteCurrency = typeof priceModule?.currency === "string" ? priceModule.currency : null;
+        const reportCurrency = typeof financialData?.financialCurrency === "string" ? financialData.financialCurrency : null;
+        const sameCurrency = !quoteCurrency || !reportCurrency || quoteCurrency === reportCurrency;
+        const targetMean = extractYahooNum(financialData?.targetMeanPrice);
+        const analysts = extractYahooNum(financialData?.numberOfAnalystOpinions);
+        // Yahoo gives debt/equity in percent (150 = 1.5x); negative equity makes it meaningless.
+        const rawDe = extractYahooNum(financialData?.debtToEquity);
         result[row.ticker] = {
+          sector:           toGicsSector(typeof assetProfile?.sector === "string" ? assetProfile.sector : null),
+          gross_margin:     extractYahooNum(financialData?.grossMargins),
+          operating_margin: extractYahooNum(financialData?.operatingMargins),
+          net_margin:       extractYahooNum(financialData?.profitMargins),
+          roe:              extractYahooNum(financialData?.returnOnEquity),
+          debt_to_equity:   rawDe !== null && rawDe >= 0 ? rawDe / 100 : null,
+          current_ratio:    extractYahooNum(financialData?.currentRatio),
+          ev_to_ebitda:     sameCurrency ? extractYahooNum(keyStats?.enterpriseToEbitda) : null,
+          price_to_sales:   sameCurrency ? extractYahooNum(summaryDetail?.priceToSalesTrailing12Months) : null,
+          target_upside:
+            targetMean !== null && currentPrice && currentPrice > 0 && (analysts ?? 0) >= 3 ? targetMean / currentPrice - 1 : null,
           earnings_growth:      rawEarningsGrowth !== null ? winsorizeGrowth(rawEarningsGrowth) : null,
           revenue_growth:       rawRevenueGrowth,
           normalized_pe:        null,
           payout_ratio:         extractYahooNum(summaryDetail?.payoutRatio),
-          fcf_yield:            null,
+          // Trailing twelve-month free cash flow over market cap, from the same
+          // cached quote as everything above: one definition for the whole
+          // universe (the statements below are too heavy to read for 800
+          // companies at once, and only fill in where this is missing).
+          fcf_yield:
+            (() => {
+              const fcf = extractYahooNum(financialData?.freeCashflow);
+              const y = sameCurrency && fcf !== null && marketCap && marketCap > 0 ? fcf / marketCap : null;
+              // Past 100% either way it is a one-off (a merger, a deposit inflow), not a yield.
+              return y !== null && Math.abs(y) <= 1 ? y : null;
+            })(),
           quality_overall:      null,
           quality_profitability:null,
           quality_financial_health: null,
@@ -664,7 +715,7 @@ export async function getBatchCachedScreenerMetrics(
 
       if (result[ticker]) {
         if (normPe !== null)   result[ticker].normalized_pe = normPe;
-        if (fcfYield !== null) result[ticker].fcf_yield     = fcfYield;
+        if (fcfYield !== null && result[ticker].fcf_yield === null) result[ticker].fcf_yield = fcfYield;
 
         const p1Growth = result[ticker].earnings_growth;
         if (p1Growth === null) {

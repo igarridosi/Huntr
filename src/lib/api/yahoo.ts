@@ -591,6 +591,18 @@ export async function getFullStockData(ticker: string): Promise<{
  * @param tickers - Array of stock symbols
  * @returns Array of StockQuote objects (only successfully fetched ones)
  */
+/** Whether a batch quote row's price and statements are in the same currency. */
+function oneCurrency(r: Record<string, unknown>): boolean {
+  const quoted = typeof r.currency === "string" ? r.currency : null;
+  const reported = typeof r.financialCurrency === "string" ? r.financialCurrency : null;
+  return !quoted || !reported || quoted === reported;
+}
+
+/** A finite number, or null. */
+function finiteOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 export async function getBatchQuotes(
   tickers: string[]
 ): Promise<StockQuote[]> {
@@ -746,6 +758,19 @@ export async function getBatchQuotes(
           beta,
           revenue_growth,
           earnings_growth,
+          // For foreign listings Yahoo divides a dollar price by book value and
+          // forward EPS in the home currency (ASML's P/B read 1,497x, EC's
+          // 0.01x), so these are only kept when both are in one currency.
+          forward_pe: oneCurrency(r) ? finiteOrNull(r.forwardPE) : null,
+          price_to_book: oneCurrency(r) ? finiteOrNull(r.priceToBook) : null,
+          eps_ttm: finiteOrNull(r.epsTrailingTwelveMonths),
+          eps_forward: oneCurrency(r) ? finiteOrNull(r.epsForward) : null,
+          fifty_day_average: finiteOrNull(r.fiftyDayAverage),
+          two_hundred_day_average: finiteOrNull(r.twoHundredDayAverage),
+          // Yahoo sends this one in percent points.
+          fifty_two_week_change: finiteOrNull(r.fiftyTwoWeekChangePercent) === null ? null : (r.fiftyTwoWeekChangePercent as number) / 100,
+          // "1.5 - Buy" → 1.5
+          analyst_rating: typeof r.averageAnalystRating === "string" ? finiteOrNull(parseFloat(r.averageAnalystRating)) : null,
         };
       });
 
@@ -2011,4 +2036,20 @@ export async function getEpsTrend(ticker: string): Promise<YahooEpsTrend | null>
     console.error(`[Yahoo] EPS trend failed for ${key}:`, error);
     return null;
   }
+}
+
+/**
+ * Reads a ticker's quoteSummary (price, summaryDetail, keyStatistics,
+ * financialData, calendarEvents) and stores it under the "quote" cache key,
+ * the same entry `getPrice` reads. For the screener's warm-up cron: margins,
+ * returns, leverage and analyst targets live only in this entry.
+ */
+export async function refreshQuoteCache(ticker: string): Promise<boolean> {
+  const key = ticker.toUpperCase();
+  // assetProfile rides along for the sector: the tickers table has none for
+  // almost half the universe, and the screener's sector filter needs one.
+  const raw = await withSuppressedYahooWarnings(() => fetchFromYahoo(key, [...QUOTE_MODULES, "assetProfile"]));
+  if (!raw) return false;
+  await setCachedData(key, "quote", raw as unknown as Record<string, unknown>);
+  return true;
 }

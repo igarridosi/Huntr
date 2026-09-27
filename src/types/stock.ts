@@ -49,6 +49,19 @@ export interface StockQuote {
   fifty_two_week_low: number;
   avg_volume: number;
   beta: number;
+  /** Price over next-fiscal-year consensus EPS (batch quote). */
+  forward_pe?: number | null;
+  price_to_book?: number | null;
+  /** Trailing twelve-month EPS as Yahoo reports it. */
+  eps_ttm?: number | null;
+  /** Consensus EPS for the next fiscal year. */
+  eps_forward?: number | null;
+  fifty_day_average?: number | null;
+  two_hundred_day_average?: number | null;
+  /** Price change over 52 weeks, as a fraction (0.12 = +12%). */
+  fifty_two_week_change?: number | null;
+  /** Analysts' mean rating, 1 (strong buy) to 5 (sell). */
+  analyst_rating?: number | null;
 }
 
 export type EarningsInsightSource = "yahoo" | "alphavantage" | "mixed" | "none";
