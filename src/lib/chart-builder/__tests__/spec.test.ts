@@ -7,10 +7,12 @@ import {
   MAX_SERIES,
   createSeries,
   createSpec,
+  followAutoText,
   hasErrors,
   migrateSpec,
   normalizeSpec,
   validateSpec,
+  type ChartSpec,
 } from "../spec";
 import { TEMPLATES } from "../templates";
 import { CANVAS_THEMES, SERIES_PALETTE, paletteColor, seriesInk } from "../themes";
@@ -34,7 +36,7 @@ describe("metric catalogue", () => {
     for (const id of ["capex", "long_term_debt", "net_debt", "pe_ttm", "market_cap", "enterprise_value", "fcf_yield", "ev_to_ebitda"]) {
       expect(isMetricId(id)).toBe(true);
     }
-    expect(isMetricId("pe_forward")).toBe(false); // no consensus history in the data layer
+    expect(isMetricId("pe_forward")).toBe(true); // consensus: Alpha Vantage history, Yahoo today, our own snapshots
   });
 
   it("groups every metric exactly once", () => {
@@ -256,5 +258,43 @@ describe("periods", () => {
     const quarterly = createSpec({ series: [createSeries({ ticker: "A", metric: "gross_margin", transform: "ttm" })] });
     expect(validateSpec(quarterly)).toEqual([]);
     expect(validateSpec(createSpec({ series: [createSeries({ ticker: "A", metric: "total_assets", transform: "ttm" })] })).map((i) => i.code)).toEqual(["ttm_needs_flow"]);
+  });
+});
+
+describe("generated title and subtitle", () => {
+  const start = createSpec({
+    title: "MA — Revenue",
+    subtitle: "Quarterly revenue",
+    series: [createSeries({ ticker: "MA", metric: "revenue" })],
+  });
+  const toMargin = (spec: ChartSpec): ChartSpec => ({ ...spec, series: spec.series.map((s) => ({ ...s, metric: "net_margin" as const })) });
+
+  it("follows a metric change while the text is still the generated one", () => {
+    const next = followAutoText(start, toMargin(start));
+    expect(next.subtitle).toBe("Quarterly net margin");
+    expect(next.title).toBe("MA — Net margin");
+  });
+
+  it("follows a period change through withGranularity", () => {
+    const next = followAutoText(start, withGranularity(toMargin(start), "ttm"));
+    expect(next.subtitle).toBe("Trailing twelve-month net margin");
+  });
+
+  it("keeps an acronym's capitals in a generated subtitle", () => {
+    const pe = createSpec({ subtitle: "Quarterly revenue", series: [createSeries({ ticker: "MA", metric: "revenue" })] });
+    const next = followAutoText(pe, { ...pe, series: pe.series.map((s) => ({ ...s, metric: "pe_forward" as const })) });
+    expect(next.subtitle).toBe("Quarterly P/E (forward)");
+  });
+
+  it("never touches text the user wrote", () => {
+    const own = { ...start, title: "Same card, different business", subtitle: "Net margin (TTM)" };
+    const next = followAutoText(own, toMargin(own));
+    expect(next.title).toBe("Same card, different business");
+    expect(next.subtitle).toBe("Net margin (TTM)");
+  });
+
+  it("names every company in the generated title as series are added", () => {
+    const added = { ...start, series: [...start.series, createSeries({ ticker: "V", metric: "revenue" })] };
+    expect(followAutoText(start, added).title).toBe("MA, V — Revenue");
   });
 });

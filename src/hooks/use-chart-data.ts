@@ -2,10 +2,12 @@
 
 import { useMemo } from "react";
 import { useQueries, type UseQueryResult } from "@tanstack/react-query";
-import { fetchAlphaStatements, fetchCompanyFinancials } from "@/app/actions/stock";
+import { fetchAlphaStatements, fetchCompanyFinancials, fetchForwardInputs, fetchShareBases } from "@/app/actions/stock";
 import { QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import {
   METRICS,
+  buildForwardReader,
+  normalizeShareBasis,
   availableDates,
   clipToListing,
   coversStatements,
@@ -20,6 +22,8 @@ import {
   type ChartSpec,
   type ResolveInputs,
   type ResolvedChart,
+  type ForwardInputs,
+  type ShareBasis,
   type StatementKind,
 } from "@/lib/chart-builder";
 import type { CompanyFinancials } from "@/types/financials";
@@ -32,6 +36,14 @@ function combineFinancials(results: FinResult[]) {
     data: results.map((r) => r.data),
     pending: results.map((r) => r.isPending),
   };
+}
+
+// Module-level, so React Query keeps the combined result stable between renders.
+function combineBases(results: Array<UseQueryResult<ShareBasis | null>>) {
+  return { data: results.map((r) => r.data), pending: results.map((r) => r.isPending) };
+}
+function combineForward(results: Array<UseQueryResult<ForwardInputs>>) {
+  return { data: results.map((r) => r.data), pending: results.map((r) => r.isPending) };
 }
 
 /** Cache key of the deep-history overlay for one ticker and statement set. */
@@ -108,6 +120,32 @@ export function useChartData(spec: ChartSpec): ChartData {
 
   const prices = useBatchDailyHistory(priceTickers, "ALL", priceTickers.length > 0);
 
+  // Splits and today's share count per company: every share count and EPS
+  // is set on the basis of the (split-adjusted) prices before anything is
+  // divided by anything.
+  const bases = useQueries({
+    queries: statementTickers.map((ticker) => ({
+      queryKey: ["chart-builder", "share-basis", ticker] as const,
+      queryFn: async (): Promise<ShareBasis | null> => (await fetchShareBases([ticker]))[ticker] ?? null,
+      staleTime: STALE_TIMES.STATIC,
+    })),
+    combine: combineBases,
+  });
+
+  // Consensus history for the companies with a forward P/E on the chart.
+  const forwardTickers = useMemo(
+    () => statementTickers.filter((t) => spec.series.some((s) => s.ticker === t && s.metric === "pe_forward")),
+    [statementTickers, spec.series]
+  );
+  const forward = useQueries({
+    queries: forwardTickers.map((ticker) => ({
+      queryKey: ["chart-builder", "forward-eps", ticker] as const,
+      queryFn: () => fetchForwardInputs(ticker),
+      staleTime: STALE_TIMES.FINANCIALS,
+    })),
+    combine: combineForward,
+  });
+
   const { financials, deepTickers, deepWithoutEps } = useMemo(() => {
     const out: Record<string, CompanyFinancials | null | undefined> = {};
     const deepList: string[] = [];
@@ -122,12 +160,12 @@ export function useChartData(spec: ChartSpec): ChartData {
         if (lacksEps(overlay)) noEps.push(ticker);
       }
       const merged = quick.pending[i] && !covered ? undefined : mergeFinancials(quick.data[i], covered ? overlay : null);
-      out[ticker] = clipToListing(merged, firstTradeDate(prices.data?.[ticker]));
+      out[ticker] = clipToListing(normalizeShareBasis(merged, bases.data[i]), firstTradeDate(prices.data?.[ticker]));
     });
     return { financials: out, deepTickers: deepList, deepWithoutEps: noEps };
     // statementsKey stands in for the statements array's identity.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey, prices.data]);
+  }, [statementTickers, quick.data, quick.pending, deep.data, statementsKey, prices.data, bases.data]);
 
   const epsMissing = useMemo(() => (needsEps(spec) ? deepWithoutEps : []), [spec, deepWithoutEps]);
 
@@ -135,10 +173,16 @@ export function useChartData(spec: ChartSpec): ChartData {
     const pending = new Set<string>();
     statementTickers.forEach((ticker, i) => {
       if (quick.pending[i] && !deepTickers.includes(ticker)) pending.add(ticker);
+      // Shown before its basis is known, a split company's per-share
+      // figures would jump by the split ratio once it arrives.
+      if (bases.pending[i]) pending.add(ticker);
+    });
+    forwardTickers.forEach((ticker, i) => {
+      if (forward.pending[i]) pending.add(ticker);
     });
     if (prices.isPending && priceTickers.length > 0) priceTickers.forEach((t) => pending.add(t));
     return Array.from(pending);
-  }, [statementTickers, quick.pending, deepTickers, priceTickers, prices.isPending]);
+  }, [statementTickers, quick.pending, deepTickers, priceTickers, prices.isPending, bases.pending, forwardTickers, forward.pending]);
 
   const dates = useMemo(() => {
     const fromStatements = availableDates(spec, financials);
@@ -155,8 +199,20 @@ export function useChartData(spec: ChartSpec): ChartData {
     return defaultRange(dates, allDeep ? 10 : 5);
   }, [spec.range, dates, statementTickers, deepTickers]);
 
+  const forwardEps = useMemo(() => {
+    const out: NonNullable<ResolveInputs["forwardEps"]> = {};
+    forwardTickers.forEach((ticker, i) => {
+      const inputs = forward.data[i];
+      if (!inputs) return;
+      const basis = bases.data[statementTickers.indexOf(ticker)];
+      out[ticker] = buildForwardReader(inputs, basis, financials[ticker]?.income_statement?.quarterly ?? []);
+    });
+    return out;
+  }, [forwardTickers, forward.data, bases.data, statementTickers, financials]);
+
   const chart = useMemo(() => {
     const inputs: ResolveInputs = {
+      forwardEps,
       // A ticker still loading is left out entirely so the resolver does not
       // warn about "no statements" for something that is merely on its way.
       financials: Object.fromEntries(Object.entries(financials).filter(([t]) => !pendingTickers.includes(t))),
@@ -164,7 +220,7 @@ export function useChartData(spec: ChartSpec): ChartData {
     };
     const visible: ChartSpec = { ...spec, range, series: spec.series.filter((s) => !pendingTickers.includes(s.ticker)) };
     return resolveChart(visible, inputs);
-  }, [spec, range, financials, prices.data, pendingTickers]);
+  }, [spec, range, financials, prices.data, pendingTickers, forwardEps]);
 
   return {
     chart,

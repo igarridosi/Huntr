@@ -17,6 +17,7 @@ import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   CANVAS_THEMES,
+  MAX_MULTIPLE,
   METRICS,
   effectiveValueLabels,
   formatDate,
@@ -83,8 +84,24 @@ function niceCeil(v: number): number {
  * below it, ends a step above the data so nothing touches the frame, and
  * its ticks are multiples of one clean step — so a growth chart that dips
  * negative reads −10 / 0 / +10 / +20 rather than −11 / −2 / +7.
+ *
+ * `fit` drops the zero for an axis of lines only. A bar is read by its
+ * length, so it has to start at zero; a line is read by its shape, and
+ * anchored at zero a P/E between 14x and 31x is a flat band in the top
+ * half of the chart. Fitted, it spans the chart from the lowest the period
+ * saw to the highest, as Fiscal.ai and every terminal draw it.
  */
-function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] | null } {
+function niceAxis(min: number, max: number, fit = false): { domain: [number, number]; ticks: number[] | null } {
+  if (fit && min > 0 && max > min) {
+    const pad = (max - min) * 0.08;
+    const step = niceCeil((max - min + 2 * pad) / 6);
+    // Never below zero for a positive series: the floor is the data's, not a negative number.
+    const lo = Math.max(0, Math.floor((min - pad) / step) * step);
+    const hi = Math.ceil((max + pad) / step) * step;
+    const ticks: number[] = [];
+    for (let v = lo; v <= hi + step / 1000; v += step) ticks.push(Number(v.toFixed(10)));
+    return { domain: [lo, hi], ticks };
+  }
   const lo0 = min < 0 ? min * 1.08 : 0;
   const hi0 = max > 0 ? max * 1.08 : 0;
   if (!(hi0 > lo0)) return { domain: [0, 1], ticks: [0, 1] };
@@ -126,12 +143,30 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
   return [ref, width];
 }
 
-/** A value pill, already laid out in plot pixels. */
-function Pill({ left, top, w, text, theme }: { left: number; top: number; w: number; text: string; theme: CanvasTokens }) {
+/** Dark text on a light fill, white on a dark one (WCAG relative luminance). */
+function inkOn(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#FFFFFF";
+  const n = parseInt(m[1], 16);
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  // Contrast against near-black and white; take whichever is higher.
+  return (l + 0.05) / 0.06 >= 1.05 / (l + 0.05) ? "#0B1416" : "#FFFFFF";
+}
+
+/**
+ * A value pill, already laid out in plot pixels. It wears its series'
+ * colour, so which line a number belongs to reads at a glance; a stack's
+ * total, which belongs to several, keeps the neutral one.
+ */
+function Pill({ left, top, w, text, fill, theme }: { left: number; top: number; w: number; text: string; fill: string | null; theme: CanvasTokens }) {
   return (
     <g className="cb-pill">
-      <rect x={left} y={top} width={w} height={PILL_H} rx={5} fill={theme.labelBg} />
-      <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={theme.labelText} fontFamily="var(--font-mono)">
+      <rect x={left} y={top} width={w} height={PILL_H} rx={6} fill={fill ?? theme.labelBg} />
+      <text x={left + w / 2} y={top + 15.5} textAnchor="middle" fontSize={13} fontWeight={700} fill={fill ? inkOn(fill) : theme.labelText} fontFamily="var(--font-mono)">
         {text}
       </text>
     </g>
@@ -156,13 +191,13 @@ function hoverInk(hex: string, themeKey: ChartSpec["style"]["theme"]): string {
   return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
-const PILL_H = 18;
+const PILL_H = 22;
 /** Space between a point (or bar top) and its pill. */
 const PILL_GAP = 5;
 /** Recharts' default XAxis height; the plot ends this far above the bottom. */
 const X_AXIS_H = 30;
 const PLOT_TOP = 24;
-const pillWidth = (text: string) => text.length * 6.6 + 12;
+const pillWidth = (text: string) => text.length * 8 + 14;
 
 /**
  * The plot itself: one ComposedChart that covers bars, lines and areas on
@@ -312,7 +347,8 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       }
       if (!Number.isFinite(min)) return niceAxis(0, 0);
       if (logOk && min > 0) return { domain: [logFloor(min), logCeil(max)] as [number, number], ticks: null };
-      return niceAxis(min, max);
+      // Lines and areas only: fit the axis to the data (see niceAxis).
+      return niceAxis(min, max, own.length > 0 && own.every((s) => s.shape !== "bar"));
     };
     const left: { domain: [number, number]; ticks: number[] | null } = extent("left");
     const right: { domain: [number, number]; ticks: number[] | null } = extent("right");
@@ -438,7 +474,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
   const plotLeft = leftWidth;
   const plotRight = width - (hasRight ? rightWidth : 12);
   const pills = useMemo(() => {
-    type P = { key: string; left: number; top: number; w: number; text: string };
+    type P = { key: string; left: number; top: number; w: number; text: string; fill: string | null };
     if (width <= 0) return [] as P[];
     const plotW = plotRight - plotLeft;
     const plotH = height - PLOT_TOP - X_AXIS_H;
@@ -451,7 +487,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       return PLOT_TOP + ((hi - v) / (hi - lo || 1)) * plotH;
     };
 
-    const wanted: Array<{ key: string; x: number; y: number; text: string }> = [];
+    const wanted: Array<{ key: string; x: number; y: number; text: string; fill: string | null }> = [];
     for (const s of visible) {
       const rows = labelRows.get(s.id);
       if (!rows) continue;
@@ -462,7 +498,9 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         if (!row) continue;
         const raw = isBar ? stackTotal(s, row) : row[s.id];
         if (raw === null || raw === undefined) continue;
-        wanted.push({ key: `${s.id}-${i}-${raw}`, x: px(row.x, i), y: py(s.axis, raw), text: formatValue(s.unit, raw) });
+        const sharedStack = isBar && stackedBars[s.axis].length > 1 && stackedBars[s.axis].includes(s);
+        const fill = sharedStack ? null : seriesInk(s.color, spec.style.theme);
+        wanted.push({ key: `${s.id}-${i}-${raw}`, x: px(row.x, i), y: py(s.axis, raw), text: formatValue(s.unit, raw), fill });
       }
     }
     // Lowest pills first, so a higher one lifts over what is already placed.
@@ -476,12 +514,47 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         const overlapsY = top < q.top + PILL_H + 2 && top + PILL_H > q.top - 2;
         if (overlapsX && overlapsY) top = q.top - PILL_H - 3;
       }
-      out.push({ key: p.key, left, top, w, text: p.text });
+      // A pill over the highest point would leave the frame: it sits under it instead.
+      if (top < 2) top = Math.min(p.y + PILL_GAP, height - X_AXIS_H - PILL_H);
+      out.push({ key: p.key, left, top, w, text: p.text, fill: p.fill });
     }
     return out;
     // stackTotal / topOfStack derive from stackedBars, which is listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout]);
+  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout, spec.style.theme]);
+
+  // Stretches a series has no value for a reason of the company's own: a
+  // band in its colour over the whole plot, hatched so it reads as "not
+  // data" rather than as a fill, and a chip naming whose and why. Each
+  // company has its own, on its own dates.
+  const bands = useMemo(() => {
+    type B = { key: string; id: string; x1: number; x2: number; ink: string; chip: string; title: string; row: number };
+    if (width <= 0) return [] as B[];
+    const plotW = plotRight - plotLeft;
+    const n = chart.points.length;
+    const [t0, t1] = timeDomain;
+    const step = timeMode ? 0 : plotW / Math.max(1, n);
+    const at = (x: number) => (timeMode ? plotLeft + ((x - t0) / Math.max(1, t1 - t0)) * plotW : plotLeft + step * (x + 0.5));
+    const out: B[] = [];
+    let row = 0;
+    for (const s of visible) {
+      if (!s.anomalies.length) continue;
+      const ink = seriesInk(s.color, spec.style.theme);
+      s.anomalies.forEach((a, k) => {
+        const x1 = Math.max(plotLeft, at(a.from) - step / 2);
+        // A single day still gets a band a few pixels wide.
+        const x2 = Math.min(plotRight, Math.max(at(a.to) + step / 2, x1 + 4));
+        if (x2 <= plotLeft || x1 >= plotRight) return;
+        const title =
+          a.reason === "loss"
+            ? `${s.ticker} made a loss over these trailing twelve months: there is no ${METRICS[s.metric].short} on negative earnings.`
+            : `${s.ticker}'s ${METRICS[s.metric].short} was above ${MAX_MULTIPLE}x here: earnings too small for the multiple to mean anything.`;
+        out.push({ key: `${s.id}-${k}`, id: s.id, x1, x2, ink, chip: `${s.ticker} · ${a.reason === "loss" ? "loss" : `>${MAX_MULTIPLE}x`}`, title, row });
+      });
+      row++;
+    }
+    return out;
+  }, [visible, chart.points.length, width, plotLeft, plotRight, timeMode, timeDomain, spec.style.theme]);
 
   const xTickFormatter = timeMode ? (v: number) => formatMonthTick(v) : (v: number) => chart.xLabels[v] ?? "";
   const tooltipLabel = timeMode
@@ -600,7 +673,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                     strokeWidth={strokeFor(s.id)}
                     fill={`url(#${gradientPrefix}-${s.id})`}
                     dot={false}
-                    connectNulls={timeMode}
+                    connectNulls={timeMode && !s.daily}
                     activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}
                   />
                 );
@@ -614,7 +687,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                   stroke={ink}
                   strokeWidth={strokeFor(s.id)}
                   dot={false}
-                  connectNulls={timeMode}
+                  connectNulls={timeMode && !s.daily}
                   activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}
                   zIndex={LINE_Z}
                 />
@@ -623,10 +696,42 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
           </ComposedChart>
         </ResponsiveContainer>
       )}
-      {pills.length > 0 && (
-        <svg className="pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
+      {(pills.length > 0 || bands.length > 0) && (
+        // cb-pills: the PNG export copies this layer onto the plot.
+        <svg className="cb-pills pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
+          {bands.length > 0 && (
+            <defs>
+              {[...new Map(bands.map((b) => [b.id, b.ink])).entries()].map(([id, ink]) => (
+                <pattern key={id} id={`cb-hatch-${id}`} width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line x1={0} y1={0} x2={0} y2={7} stroke={ink} strokeWidth={1.5} strokeOpacity={0.28} />
+                </pattern>
+              ))}
+            </defs>
+          )}
+          {bands.map((b) => {
+            const top = PLOT_TOP;
+            const bottom = height - X_AXIS_H;
+            const chipW = b.chip.length * 6.6 + 14;
+            const chipX = Math.min(Math.max(b.x1 + (b.x2 - b.x1) / 2 - chipW / 2, plotLeft), plotRight - chipW);
+            const chipY = top + 4 + b.row * 22;
+            return (
+              <g key={b.key}>
+                <rect x={b.x1} y={top} width={b.x2 - b.x1} height={bottom - top} fill={b.ink} fillOpacity={0.07} />
+                <rect x={b.x1} y={top} width={b.x2 - b.x1} height={bottom - top} fill={`url(#cb-hatch-${b.id})`} />
+                <line x1={b.x1} y1={top} x2={b.x1} y2={bottom} stroke={b.ink} strokeOpacity={0.55} strokeDasharray="3 3" />
+                <line x1={b.x2} y1={top} x2={b.x2} y2={bottom} stroke={b.ink} strokeOpacity={0.55} strokeDasharray="3 3" />
+                <g style={{ pointerEvents: "auto" }}>
+                  <title>{b.title}</title>
+                  <rect x={chipX} y={chipY} width={chipW} height={18} rx={5} fill={theme.plot} stroke={b.ink} strokeOpacity={0.8} />
+                  <text x={chipX + chipW / 2} y={chipY + 12.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={b.ink} fontFamily="var(--font-mono)">
+                    {b.chip}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
           {pills.map((p) => (
-            <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} theme={theme} />
+            <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} fill={p.fill} theme={theme} />
           ))}
         </svg>
       )}

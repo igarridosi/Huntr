@@ -591,6 +591,18 @@ export async function getFullStockData(ticker: string): Promise<{
  * @param tickers - Array of stock symbols
  * @returns Array of StockQuote objects (only successfully fetched ones)
  */
+/** Whether a batch quote row's price and statements are in the same currency. */
+function oneCurrency(r: Record<string, unknown>): boolean {
+  const quoted = typeof r.currency === "string" ? r.currency : null;
+  const reported = typeof r.financialCurrency === "string" ? r.financialCurrency : null;
+  return !quoted || !reported || quoted === reported;
+}
+
+/** A finite number, or null. */
+function finiteOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
 export async function getBatchQuotes(
   tickers: string[]
 ): Promise<StockQuote[]> {
@@ -746,6 +758,19 @@ export async function getBatchQuotes(
           beta,
           revenue_growth,
           earnings_growth,
+          // For foreign listings Yahoo divides a dollar price by book value and
+          // forward EPS in the home currency (ASML's P/B read 1,497x, EC's
+          // 0.01x), so these are only kept when both are in one currency.
+          forward_pe: oneCurrency(r) ? finiteOrNull(r.forwardPE) : null,
+          price_to_book: oneCurrency(r) ? finiteOrNull(r.priceToBook) : null,
+          eps_ttm: finiteOrNull(r.epsTrailingTwelveMonths),
+          eps_forward: oneCurrency(r) ? finiteOrNull(r.epsForward) : null,
+          fifty_day_average: finiteOrNull(r.fiftyDayAverage),
+          two_hundred_day_average: finiteOrNull(r.twoHundredDayAverage),
+          // Yahoo sends this one in percent points.
+          fifty_two_week_change: finiteOrNull(r.fiftyTwoWeekChangePercent) === null ? null : (r.fiftyTwoWeekChangePercent as number) / 100,
+          // "1.5 - Buy" → 1.5
+          analyst_rating: typeof r.averageAnalystRating === "string" ? finiteOrNull(parseFloat(r.averageAnalystRating)) : null,
         };
       });
 
@@ -1897,4 +1922,134 @@ export async function getBatchBuybackStrength(
   }
 
   return result;
+}
+
+// ─────────────────────────────────────────────────────────
+// Share basis and consensus (Chart Builder: P/E on one basis, forward EPS)
+// ─────────────────────────────────────────────────────────
+
+export interface YahooSplit {
+  /** ISO date the split took effect. */
+  date: string;
+  /** New shares per old share: 25 for 25-for-1, 1/6 for a 1-for-6 reverse split. */
+  ratio: number;
+}
+
+export interface YahooShareBasis {
+  splits: YahooSplit[];
+  /** Shares outstanding today (market cap over price); null when unknown. */
+  sharesNow: number | null;
+  /** When this was read, ISO — also what keeps a company with no splits cacheable. */
+  checkedAt: string;
+}
+
+const SHARE_BASIS_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Every split on record and today's share count. Yahoo's closes are
+ * adjusted for these splits, so they define the basis every per-share
+ * figure on a chart has to be on. One chart() call with split events
+ * (quarterly bars keep the response small) and the cached quote.
+ */
+export async function getShareBasis(ticker: string): Promise<YahooShareBasis | null> {
+  const key = ticker.toUpperCase();
+  const cached = await getCachedData<YahooShareBasis>(key, "share-basis-v1", SHARE_BASIS_TTL_MS);
+  if (cached && Array.isArray(cached.splits)) return cached;
+
+  try {
+    const response = (await withSuppressedYahooWarnings(async () =>
+      (yahooFinance as unknown as {
+        chart: (s: string, o: Record<string, unknown>) => Promise<{ events?: { splits?: unknown } }>;
+      }).chart(key, { period1: "1970-01-01", period2: new Date().toISOString().slice(0, 10), interval: "3mo", events: "split" })
+    )) as { events?: { splits?: unknown } };
+    const raw = response?.events?.splits;
+    const list = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? Object.values(raw) : [];
+    const splits: YahooSplit[] = (list as Array<Record<string, unknown>>)
+      .map((s) => {
+        const numerator = Number(s.numerator);
+        const denominator = Number(s.denominator);
+        const when = s.date instanceof Date ? s.date : new Date(String(s.date));
+        if (!(numerator > 0) || !(denominator > 0) || Number.isNaN(when.getTime())) return null;
+        return { date: when.toISOString().slice(0, 10), ratio: numerator / denominator };
+      })
+      .filter((s): s is YahooSplit => s !== null && s.ratio !== 1)
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const quote = await getPrice(key).catch(() => null);
+    const sharesNow = quote && quote.price > 0 && quote.market_cap > 0 ? quote.market_cap / quote.price : null;
+
+    const basis: YahooShareBasis = { splits, sharesNow, checkedAt: new Date().toISOString() };
+    await setCachedData(key, "share-basis-v1", basis as unknown as Record<string, unknown>);
+    return basis;
+  } catch (error) {
+    console.error(`[Yahoo] Share basis failed for ${key}:`, error);
+    return null;
+  }
+}
+
+export interface YahooEpsTrend {
+  /** When the consensus was read, ISO day. */
+  asOf: string;
+  /** Last quarter reported, ISO; null when unknown. */
+  lastReported: string | null;
+  quarters: Array<{ end: string; eps: number }>;
+  years: Array<{ end: string; eps: number }>;
+}
+
+const EPS_TREND_TTL_MS = 12 * 60 * 60 * 1000;
+
+/** Uncached read of today's EPS consensus: current and next fiscal quarter and year. */
+export async function fetchEpsTrend(ticker: string): Promise<YahooEpsTrend | null> {
+  const key = ticker.toUpperCase();
+  const raw = (await fetchFromYahoo(key, ["earningsTrend", "defaultKeyStatistics"])) as unknown as {
+    earningsTrend?: { trend?: Array<{ period?: string; endDate?: Date | string | null; earningsEstimate?: { avg?: number | null } }> };
+    defaultKeyStatistics?: { mostRecentQuarter?: Date | string | null };
+  };
+  const iso = (d: Date | string | null | undefined) => {
+    if (!d) return null;
+    const t = d instanceof Date ? d : new Date(d);
+    return Number.isNaN(t.getTime()) ? null : t.toISOString().slice(0, 10);
+  };
+  const quarters: YahooEpsTrend["quarters"] = [];
+  const years: YahooEpsTrend["years"] = [];
+  for (const t of raw?.earningsTrend?.trend ?? []) {
+    const end = iso(t.endDate);
+    const eps = t.earningsEstimate?.avg;
+    if (!end || typeof eps !== "number" || !Number.isFinite(eps)) continue;
+    if (t.period === "0q" || t.period === "+1q") quarters.push({ end, eps });
+    else if (t.period === "0y" || t.period === "+1y") years.push({ end, eps });
+  }
+  if (years.length === 0 && quarters.length === 0) return null;
+  return { asOf: new Date().toISOString().slice(0, 10), lastReported: iso(raw?.defaultKeyStatistics?.mostRecentQuarter), quarters, years };
+}
+
+/** Today's EPS consensus, cached for half a day. */
+export async function getEpsTrend(ticker: string): Promise<YahooEpsTrend | null> {
+  const key = ticker.toUpperCase();
+  const cached = await getCachedData<YahooEpsTrend>(key, "eps-trend-v1", EPS_TREND_TTL_MS);
+  if (cached && Array.isArray(cached.years)) return cached;
+  try {
+    const trend = await withSuppressedYahooWarnings(() => fetchEpsTrend(key));
+    if (trend) await setCachedData(key, "eps-trend-v1", trend as unknown as Record<string, unknown>);
+    return trend;
+  } catch (error) {
+    console.error(`[Yahoo] EPS trend failed for ${key}:`, error);
+    return null;
+  }
+}
+
+/**
+ * Reads a ticker's quoteSummary (price, summaryDetail, keyStatistics,
+ * financialData, calendarEvents) and stores it under the "quote" cache key,
+ * the same entry `getPrice` reads. For the screener's warm-up cron: margins,
+ * returns, leverage and analyst targets live only in this entry.
+ */
+export async function refreshQuoteCache(ticker: string): Promise<boolean> {
+  const key = ticker.toUpperCase();
+  // assetProfile rides along for the sector: the tickers table has none for
+  // almost half the universe, and the screener's sector filter needs one.
+  const raw = await withSuppressedYahooWarnings(() => fetchFromYahoo(key, [...QUOTE_MODULES, "assetProfile"]));
+  if (!raw) return false;
+  await setCachedData(key, "quote", raw as unknown as Record<string, unknown>);
+  return true;
 }

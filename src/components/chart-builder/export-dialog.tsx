@@ -43,7 +43,16 @@ export function ExportDialog({ open, onOpenChange, spec, getFrame, onNotify }: E
     const frame = getFrame();
     if (!frame) return;
     let cancelled = false;
-    renderChartPng(frame, spec, { scale: Number(scale) })
+    // Opened while the chart is still mounting (a reload, a new series), the
+    // surface can be a moment away; wait for it rather than report no chart.
+    const surface = async () => {
+      for (let waited = 0; waited < 3000 && !frame.querySelector("svg.recharts-surface"); waited += 100) {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        if (cancelled) return;
+      }
+    };
+    surface()
+      .then(() => renderChartPng(frame, spec, { scale: Number(scale) }))
       .then(async (blob) => {
         const bitmap = await createImageBitmap(blob);
         const dims = `${bitmap.width} × ${bitmap.height} px · ${(blob.size / 1024).toFixed(0)} KB`;

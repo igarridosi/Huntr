@@ -141,6 +141,20 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
   clone.setAttribute("width", String(plotWidth));
   clone.setAttribute("height", String(plotHeight));
   clone.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`);
+  // The entrance animation reveals each series through a clip that grows
+  // from nothing; exported mid-way (right after a change) the picture
+  // would carry the half-drawn state. The final one is what is wanted.
+  for (const el of Array.from(clone.querySelectorAll("[clip-path]"))) {
+    if ((el.getAttribute("clip-path") ?? "").includes("animationClipPath")) el.removeAttribute("clip-path");
+  }
+  // The value pills live on an overlay of their own over the plot, in the
+  // same pixel space as the Recharts surface; the picture needs them too.
+  const pills = frame.querySelector<SVGSVGElement>("svg.cb-pills");
+  if (pills) {
+    const layer = document.createElementNS("http://www.w3.org/2000/svg", "g");
+    for (const child of Array.from(pills.childNodes)) layer.appendChild(child.cloneNode(true));
+    clone.appendChild(layer);
+  }
   const faces = await inlinedFontFaces([primaryFamily(headingFont), primaryFamily(monoFont)]);
   const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
   styleEl.textContent = faces;
@@ -190,17 +204,38 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
     y += subH;
   }
 
+  // The legend's readout as it stands on screen: the period, and each
+  // series' value beside its name.
+  const period = frame.querySelector("[data-legend-period]")?.textContent?.trim() ?? "";
+  const valueOf = (id: string) =>
+    frame.querySelector(`[data-series-id="${CSS.escape(id)}"] [data-legend-value]`)?.textContent?.trim() ?? "";
+
   const drawLegend = (top: number) => {
-    ctx.font = `500 ${legendSize}px ${monoFont}`;
     ctx.textAlign = "left";
     const gap = 22;
+    const valueGap = 8;
+    const labelFont = `500 ${legendSize}px ${monoFont}`;
+    const valueFont = `700 ${legendSize}px ${monoFont}`;
+    const measure = (font: string, text: string) => {
+      ctx.font = font;
+      return text ? ctx.measureText(text).width : 0;
+    };
+    const periodW = period ? measure(labelFont, period) : 0;
     const items = series.map((s) => {
       const label = seriesLabel(s, spec.granularity);
-      return { s, label, w: 18 + ctx.measureText(label).width };
+      const value = valueOf(s.id);
+      const valueW = measure(valueFont, value);
+      return { s, label, value, w: 18 + measure(labelFont, label) + (value ? valueGap + valueW : 0) };
     });
-    const total = items.reduce((a, i) => a + i.w, 0) + gap * (items.length - 1);
+    const total = (period ? periodW + gap : 0) + items.reduce((a, i) => a + i.w + (i.s.shape === "bar" ? 0 : 4), 0) + gap * (items.length - 1);
     let x = Math.max(PAD, (width - total) / 2);
-    for (const { s, label, w } of items) {
+    if (period) {
+      ctx.font = labelFont;
+      ctx.fillStyle = theme.tick;
+      ctx.fillText(period, x, top);
+      x += periodW + gap;
+    }
+    for (const { s, label, value, w } of items) {
       ctx.fillStyle = seriesInk(s.color, spec.style.theme);
       if (s.shape === "bar") {
         ctx.beginPath();
@@ -211,8 +246,16 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
         ctx.roundRect(x, top + 6.5, 16, 3, 1.5);
         ctx.fill();
       }
+      const textX = x + 18 + (s.shape === "bar" ? 0 : 4);
+      ctx.font = labelFont;
       ctx.fillStyle = theme.legendText;
-      ctx.fillText(label, x + 18 + (s.shape === "bar" ? 0 : 4), top);
+      ctx.fillText(label, textX, top);
+      if (value) {
+        const labelW = ctx.measureText(label).width;
+        ctx.font = valueFont;
+        ctx.fillStyle = theme.title;
+        ctx.fillText(value, textX + labelW + valueGap, top);
+      }
       x += w + gap + (s.shape === "bar" ? 0 : 4);
     }
   };

@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, Eye, EyeOff, Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button";
 import { DCFTickerInput } from "@/components/dcf/dcf-ticker-input";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
+import { METRIC_GROUP_OPTIONS, METRIC_SEARCH_PLACEHOLDER } from "./metric-options";
 import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
@@ -31,11 +32,6 @@ interface SeriesPanelProps {
   onSelect: (id: string | null) => void;
   onChange: (next: ChartSpec, coalesce?: string) => void;
 }
-
-const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GROUPS.map((group) => ({
-  label: group,
-  options: metricsInGroup(group).map((m) => ({ value: m.id, label: m.label })),
-}));
 
 /** Chip-sized versions for the row header. */
 const TRANSFORM_CHIPS: Record<SeriesTransform, string> = {
@@ -177,7 +173,7 @@ export function SeriesPanel({ spec, selectedId, onSelect, onChange }: SeriesPane
                       {perSeries && (
                         <>
                           <Field label="Metric">
-                            <SelectMenu<MetricId> groups={METRIC_GROUP_OPTIONS} value={s.metric} onChange={(m) => setMetric(s, m)} ariaLabel={`Metric for ${seriesLabel(s)}`} />
+                            <SelectMenu<MetricId> groups={METRIC_GROUP_OPTIONS} searchPlaceholder={METRIC_SEARCH_PLACEHOLDER} value={s.metric} onChange={(m) => setMetric(s, m)} ariaLabel={`Metric for ${seriesLabel(s)}`} />
                           </Field>
                           <Field label="Shape">
                             <SegmentedTabs<SeriesShape>

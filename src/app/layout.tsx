@@ -131,7 +131,15 @@ export default function RootLayout({
   return (
     /* suppressHydrationWarning: the inline FOWT script may modify className
        before React hydrates — suppressing the mismatch warning is correct here. */
-    <html lang="en" suppressHydrationWarning>
+    <html
+      lang="en"
+      suppressHydrationWarning
+      // The font variables live on <html>, not <body>: the theme defines
+      // --font-sans on :root as var(--font-satoshi), and a variable read on
+      // :root before it exists there resolves to nothing, so every page fell
+      // back to the system font.
+      className={`${outfit.variable} ${geistMono.variable}`}
+    >
       <head>
         {/* ── Anti-FOWT script ──────────────────────────────────────────────
             Runs synchronously before the first paint so the correct theme
@@ -147,7 +155,7 @@ export default function RootLayout({
       </head>
       <body
         suppressHydrationWarning
-        className={`${outfit.variable} ${geistMono.variable} antialiased bg-wolf-black text-snow-peak`}
+        className="antialiased bg-wolf-black text-snow-peak"
       >
         {/* JSON-LD lives in the body, not the head. Crawlers accept it anywhere
             in the document, while <head> is exactly where browser extensions

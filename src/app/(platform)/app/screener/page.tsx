@@ -1,1102 +1,267 @@
 "use client";
 
-import Link from "next/link";
-import {
-  ArrowUp,
-  ArrowDown,
-  Search,
-  X,
-  SlidersHorizontal,
-  ChevronLeft,
-  ChevronRight,
-  Gem,
-  Zap,
-  DollarSign,
-  TrendingUp,
-  Rocket,
-  Shield,
-  ChevronsUpDown,
-} from "lucide-react";
-import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
-import { useScreener } from "@/hooks/use-screener";
-import { useScreenerMetrics } from "@/hooks/use-stock-data";
-import { SCREENER_PRESETS } from "@/types/screener";
-import type { FilterId, ScreenerRow } from "@/types/screener";
-import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { CompactLabel } from "@/components/ui/compact-label";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Banknote, Crown, Gem, HandCoins, Rocket, Search, SlidersHorizontal, Tag, TrendingUp, X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { MaterialPanel } from "@/components/ui/material-panel";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Spinner } from "@/components/ui/spinner";
-import { Tooltip } from "@/components/ui/tooltip";
-import { TickerLogo } from "@/components/ui/ticker-logo";
-import { ROUTES } from "@/lib/constants";
-import {
-  cn,
-  formatCompactNumber,
-  formatPercent,
-  formatCurrency,
-  enterDelay,
-} from "@/lib/utils";
+import { useScreener, filtersToParam, mergeMetrics } from "@/hooks/use-screener";
+import { useScreenerMetrics } from "@/hooks/use-stock-data";
+import { SCREENER_PRESETS, type FilterId } from "@/types/screener";
+import { FILTER_BY_ID } from "@/lib/screener/filters";
+import { AddFiltersDialog } from "@/components/screener/add-filters-dialog";
+import { RangeFilterControl, SectorFilterControl } from "@/components/screener/filter-control";
+import { ResultsTable, columnsFor } from "@/components/screener/results-table";
 
-// ─── Preset icon map ──────────────────────────────────────────────────────────
+const PAGE_SIZE = 25;
 
-const PRESET_ICONS: Record<string, React.ComponentType<{ className?: string }>> = {
-  Gem, Zap, DollarSign, TrendingUp, Rocket, Shield,
-};
+const PRESET_ICONS: Record<string, React.ComponentType<{ className?: string }>> = { Gem, Crown, TrendingUp, Banknote, HandCoins, Rocket, Tag };
 
-// ─── Constants ───────────────────────────────────────────────────────────────
-
-const PAGE_SIZE = 13;
-
-// ─── Filter definitions ───────────────────────────────────────────────────────
-
-interface FilterDef {
-  id: FilterId;
-  label: string;
-  tooltip: string;
-  displayScale?: number;
-  unit: string;
-  /** Optional custom value formatter for the active-filter chip label. */
-  formatValue?: (v: number) => string;
-  presets: Array<{ label: string; min: number | null; max: number | null }>;
-}
-
-const FILTER_DEFS: FilterDef[] = [
-  {
-    id: "market_cap",
-    label: "Market Cap",
-    tooltip: "Total market capitalisation in USD (price × shares outstanding)",
-    unit: "",
-    formatValue: (v) => formatCompactNumber(v),
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: "Mega >200B", min: 200e9, max: null },
-      { label: "Large 10–200B", min: 10e9, max: 200e9 },
-      { label: "Mid <10B", min: null, max: 10e9 },
-    ],
-  },
-  {
-    id: "pe_ratio",
-    label: "P/E (TTM Adj.)",
-    tooltip: "Price ÷ annual earnings per share. We strip one-time items (asset sales, M&A) for a cleaner multiple. Under 15× = value, 15–25× = fair, above 25× = growth premium.",
-    unit: "x",
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: "<15x Value", min: null, max: 15 },
-      { label: "15–25x Fair", min: 15, max: 25 },
-      { label: ">25x Growth", min: 25, max: null },
-    ],
-  },
-  {
-    id: "dividend_yield",
-    label: "Div. Yield (TTM)",
-    tooltip: "Annual dividends paid ÷ current price (trailing 12 months)",
-    unit: "%",
-    displayScale: 100,
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: "Any", min: 0.005, max: null },
-      { label: ">2%", min: 0.02, max: null },
-      { label: ">4%", min: 0.04, max: null },
-    ],
-  },
-  {
-    id: "fcf_yield",
-    label: "FCF Yield (TTM)",
-    tooltip: "Last annual Free Cash Flow ÷ Market Cap. Higher = the stock generates more cash per dollar of market value. A classic value screen for capital-light businesses. Computed from cached financials — shows '—' until a stock page has been loaded once.",
-    unit: "%",
-    displayScale: 100,
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: ">2%", min: 0.02, max: null },
-      { label: ">4%", min: 0.04, max: null },
-      { label: ">6%", min: 0.06, max: null },
-    ],
-  },
-  {
-    id: "earnings_growth",
-    label: "EPS Growth (YoY)",
-    tooltip: "Year-over-Year EPS growth: current TTM diluted EPS vs prior TTM. Sourced from Yahoo financialData or computed from cached income statement.",
-    unit: "%",
-    displayScale: 100,
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: ">5% YoY", min: 0.05, max: null },
-      { label: ">10% YoY", min: 0.10, max: null },
-      { label: ">20% YoY", min: 0.20, max: null },
-    ],
-  },
-  {
-    id: "from_52w_high",
-    label: "Distance 52W High",
-    tooltip: "Current price ÷ 52-week high − 1. Negative = below peak. Near 0% = breakout zone.",
-    unit: "%",
-    displayScale: 100,
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: "Near high >-5%", min: -0.05, max: null },
-      { label: "Pullback -10 to -25%", min: -0.25, max: -0.10 },
-      { label: "Dip <-25%", min: null, max: -0.25 },
-    ],
-  },
-];
-
-// Quality score filter definitions — separate section in the sidebar
-const QUALITY_FILTER_DEFS: FilterDef[] = [
-  {
-    id: "quality_overall",
-    label: "Overall Quality",
-    tooltip: "Platform Quality Score (0–100) — composite of Profitability, Growth, Financial Health, Cash Generation and Capital Allocation. Sector-relative. Computed from cached financials.",
-    unit: "",
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: "Good >60", min: 60, max: null },
-      { label: "Strong >70", min: 70, max: null },
-      { label: "Elite >80", min: 80, max: null },
-    ],
-  },
-  {
-    id: "quality_profitability",
-    label: "Profitability",
-    tooltip: "Profitability dimension of the Quality Score — driven by ROIC vs WACC spread, operating margin and net margin trend vs sector peers.",
-    unit: "",
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: ">60", min: 60, max: null },
-      { label: ">70", min: 70, max: null },
-      { label: ">80", min: 80, max: null },
-    ],
-  },
-  {
-    id: "quality_financial_health",
-    label: "Financial Health",
-    tooltip: "Financial Health dimension — Net Debt/EBITDA, D/E ratio, interest coverage and current ratio, all vs sector benchmarks.",
-    unit: "",
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: ">60", min: 60, max: null },
-      { label: ">70", min: 70, max: null },
-      { label: ">80", min: 80, max: null },
-    ],
-  },
-  {
-    id: "quality_cash_generation",
-    label: "Cash Generation",
-    tooltip: "Cash Generation dimension — FCF margin, FCF yield, FCF/NI conversion ratio and FCF trend vs sector benchmarks.",
-    unit: "",
-    presets: [
-      { label: "All", min: null, max: null },
-      { label: ">60", min: 60, max: null },
-      { label: ">65", min: 65, max: null },
-      { label: ">75", min: 75, max: null },
-    ],
-  },
-];
-
-// ─── Column definitions ───────────────────────────────────────────────────────
-
-interface ColDef {
-  key: string;
-  label: string;
-  sortKey?: keyof ScreenerRow;
-  align?: "right" | "left";
-  tooltip?: string;
-  format: (row: ScreenerRow) => React.ReactNode;
-}
-
-const COLUMNS: ColDef[] = [
-  {
-    key: "name",
-    label: "Company",
-    sortKey: "ticker",
-    align: "left",
-    format: (row) => (
-      <Link
-        href={ROUTES.SYMBOL(row.ticker)}
-        className="flex items-center gap-2.5 min-w-0 group/link"
-      >
-        <TickerLogo
-          ticker={row.ticker}
-          src={row.logo_url}
-          className="h-7 w-7 shrink-0"
-          imageClassName="rounded-[6px]"
-          fallbackClassName="rounded-[6px] text-[10px]"
-        />
-        <div className="min-w-0">
-          <p className="font-mono text-xs font-semibold text-snow-peak group-hover/link:text-sunset-orange transition-colors truncate">
-            {row.ticker}
-          </p>
-          <p className="max-w-[140px] truncate text-[10px] text-mist">
-            <CompactLabel text={row.name} />
-          </p>
-        </div>
-      </Link>
-    ),
-  },
-  {
-    key: "market_cap",
-    label: "Mkt Cap",
-    sortKey: "market_cap",
-    align: "right",
-    format: (row) => (
-      <span className="font-mono text-xs text-snow-peak tabular-nums">
-        {row.market_cap > 0 ? formatCompactNumber(row.market_cap) : "—"}
-      </span>
-    ),
-  },
-  {
-    key: "price",
-    label: "Price",
-    sortKey: "price",
-    align: "right",
-    format: (row) => (
-      <span className="font-mono text-xs font-semibold text-snow-peak tabular-nums">
-        {formatCurrency(row.price)}
-      </span>
-    ),
-  },
-  {
-    key: "pe_ratio",
-    label: "P/E (TTM Adj.)",
-    sortKey: "pe_ratio",
-    align: "right",
-    tooltip: "Price ÷ annual earnings per share (last 12 months). Uses clean operating profit when available — ignores one-time items like asset sales. ⚠ = earnings included a non-recurring event; the true multiple is probably higher.",
-    format: (row) => {
-      const gaapAnomaly = row.pe_ratio !== null && row.pe_ratio < 5 && row.market_cap >= 10e9;
-      // Use normalized_pe when available; if GAAP shows anomaly and normalized is available, prefer it
-      const displayPe = gaapAnomaly && row.normalized_pe !== null
-        ? row.normalized_pe
-        : row.pe_ratio;
-      const isGaapFallback = gaapAnomaly && row.normalized_pe === null;
-      return (
-        <span
-          className={cn(
-            "font-mono text-xs tabular-nums",
-            !displayPe
-              ? "text-mist/40"
-              : isGaapFallback
-                ? "text-golden-hour"
-                : displayPe < 15
-                  ? "text-bullish"
-                  : displayPe > 40
-                    ? "text-sunset-orange/80"
-                    : "text-snow-peak"
-          )}
-        >
-          {displayPe ? `${displayPe.toFixed(1)}x` : "—"}
-          {isGaapFallback && <span className="ml-0.5 text-golden-hour/70">⚠</span>}
-        </span>
-      );
-    },
-  },
-  {
-    key: "dividend_yield",
-    label: "Yield (TTM)",
-    sortKey: "dividend_yield",
-    align: "right",
-    tooltip: "Annual dividend yield — trailing 12 months dividends ÷ current price",
-    format: (row) => (
-      <span
-        className={cn(
-          "font-mono text-xs tabular-nums",
-          row.dividend_yield && row.dividend_yield > 0.02
-            ? "text-golden-hour"
-            : row.dividend_yield
-              ? "text-snow-peak"
-              : "text-mist/40"
-        )}
-      >
-        {row.dividend_yield ? formatPercent(row.dividend_yield, 2) : "—"}
-      </span>
-    ),
-  },
-  {
-    // Rule 2 — explicit YoY window in column label
-    key: "earnings_growth",
-    label: "EPS Growth (YoY)",
-    sortKey: "earnings_growth",
-    align: "right",
-    tooltip: "Year-over-Year EPS growth: current TTM diluted EPS vs prior TTM period (GAAP).",
-    format: (row) => {
-      if (row.earnings_growth === null)
-        return (
-          <Tooltip
-            content={`Browse ${row.ticker} once to cache EPS data`}
-            side="top"
-          >
-            <span className="inline-flex items-center justify-end cursor-help">
-              <span className="font-mono text-[10px] text-mist/30 border-b border-dashed border-mist/25 leading-none pb-px">
-                —
-              </span>
-            </span>
-          </Tooltip>
-        );
-      const pos = row.earnings_growth >= 0;
-      return (
-        <span className={cn("font-mono text-xs tabular-nums", pos ? "text-bullish" : "text-bearish")}>
-          {pos ? "+" : ""}
-          {formatPercent(row.earnings_growth, 1)}
-        </span>
-      );
-    },
-  },
-  {
-    key: "fcf_yield",
-    label: "FCF Yield",
-    sortKey: "fcf_yield",
-    align: "right",
-    tooltip: "Last annual Free Cash Flow ÷ Market Cap. Shows '—' until the stock's financial data is cached (visit the stock page once to populate).",
-    format: (row) => {
-      if (row.fcf_yield === null)
-        return (
-          <Tooltip content={`Browse ${row.ticker} once to compute FCF Yield`} side="top">
-            <span className="inline-flex items-center justify-end cursor-help">
-              <span className="font-mono text-[10px] text-mist/30 border-b border-dashed border-mist/25 leading-none pb-px">
-                —
-              </span>
-            </span>
-          </Tooltip>
-        );
-      const v = row.fcf_yield;
-      // Negative FCF yield means negative FCF (loss) — show in red
-      return (
-        <span
-          className={cn(
-            "font-mono text-xs tabular-nums",
-            v < 0
-              ? "text-bearish"
-              : v >= 0.06
-                ? "text-bullish"
-                : v >= 0.03
-                  ? "text-teal-400"
-                  : "text-snow-peak"
-          )}
-        >
-          {v >= 0 ? "" : ""}
-          {formatPercent(v, 1)}
-        </span>
-      );
-    },
-  },
-  {
-    key: "from_52w_high_pct",
-    label: "vs 52W High",
-    sortKey: "from_52w_high_pct",
-    align: "right",
-    tooltip: "Current price ÷ 52-week high − 1. Negative = below peak. Near 0% = breakout zone.",
-    format: (row) => {
-      if (row.from_52w_high_pct === null)
-        return <span className="text-mist/40 text-xs">—</span>;
-      const v = row.from_52w_high_pct;
-      return (
-        <span
-          className={cn(
-            "font-mono text-xs tabular-nums",
-            v > -0.05 ? "text-bullish" : v < -0.25 ? "text-bearish" : "text-golden-hour"
-          )}
-        >
-          {v >= 0 ? "+" : ""}
-          {formatPercent(v, 1)}
-        </span>
-      );
-    },
-  },
-  {
-    key: "quality_overall",
-    label: "Quality",
-    sortKey: "quality_overall",
-    align: "right",
-    tooltip: "Platform Quality Score (0–100) — sector-relative composite of Profitability, Growth, Financial Health, Cash Generation and Capital Allocation. Pre-computed weekly from cached Yahoo financials.",
-    format: (row) => {
-      const v = row.quality_overall;
-      if (v === null)
-        return (
-          <Tooltip content={`Quality score not yet computed for ${row.ticker}`} side="top">
-            <span className="inline-flex items-center justify-end cursor-help">
-              <span className="font-mono text-[10px] text-mist/30 border-b border-dashed border-mist/25 leading-none pb-px">
-                —
-              </span>
-            </span>
-          </Tooltip>
-        );
-      return (
-        <span
-          className={cn(
-            "font-mono text-xs tabular-nums font-semibold",
-            v >= 80
-              ? "text-bullish"
-              : v >= 65
-                ? "text-teal-400"
-                : v >= 50
-                  ? "text-snow-peak"
-                  : "text-bearish"
-          )}
-        >
-          {v}
-        </span>
-      );
-    },
-  },
-  {
-    key: "sector",
-    label: "Sector",
-    sortKey: "sector",
-    align: "left",
-    format: (row) => (
-      <span className="text-[10px] text-mist/70 truncate max-w-[120px] block">
-        {row.sector || "—"}
-      </span>
-    ),
-  },
-];
-
-// ─── Sort header ──────────────────────────────────────────────────────────────
-
-function ThCell({
-  col,
-  sort,
-  onSort,
-}: {
-  col: ColDef;
-  sort: { key: string; dir: string };
-  onSort: (k: keyof ScreenerRow) => void;
-}) {
-  const isActive = col.sortKey && sort.key === col.sortKey;
-
-  const inner = (
-    <button
-      type="button"
-      onClick={() => col.sortKey && onSort(col.sortKey)}
-      disabled={!col.sortKey}
-      className={cn(
-        // Padding rather than height: the label stays put, but sorting becomes
-        // tappable instead of a 15px sliver.
-        "inline-flex items-center gap-1 py-2 text-[10px] font-semibold uppercase tracking-wider transition-colors sm:py-0",
-        col.sortKey ? "cursor-pointer" : "cursor-default",
-        isActive ? "text-sunset-orange" : "text-mist/60 hover:text-mist"
-      )}
-    >
-      {col.label}
-      {col.sortKey ? (
-        isActive ? (
-          sort.dir === "asc" ? (
-            <ArrowUp className="h-2.5 w-2.5" />
-          ) : (
-            <ArrowDown className="h-2.5 w-2.5" />
-          )
-        ) : (
-          <ChevronsUpDown className="h-2.5 w-2.5 opacity-40" />
-        )
-      ) : null}
-    </button>
-  );
-
-  return (
-    <th
-      className={cn(
-        "px-3 py-2.5 whitespace-nowrap",
-        col.align === "right" ? "text-right" : "text-left"
-      )}
-    >
-      {col.tooltip ? (
-        <Tooltip content={col.tooltip} side="top">
-          <span>{inner}</span>
-        </Tooltip>
-      ) : (
-        inner
-      )}
-    </th>
-  );
-}
-
-// ─── Filter panel ─────────────────────────────────────────────────────────────
-
-function FilterGroup({
-  defs,
-  activeFilters,
-  onSetFilter,
-  onRemove,
-}: {
-  defs: FilterDef[];
-  activeFilters: ReturnType<typeof useScreener>["activeFilters"];
-  onSetFilter: (id: FilterId, min: number | null, max: number | null) => void;
-  onRemove: (id: FilterId) => void;
-}) {
-  return (
-    <>
-      {defs.map((def) => {
-        const current = activeFilters[def.id];
-        const isActive = !!current;
-        return (
-          <div key={def.id} className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Tooltip content={def.tooltip} side="right">
-                <span className="text-[11px] font-medium text-mist cursor-help">
-                  {def.label}
-                </span>
-              </Tooltip>
-              {isActive && (
-                <button
-                  type="button"
-                  onClick={() => onRemove(def.id)}
-                  aria-label={`Remove ${def.label} filter`}
-                  className="text-mist/50 hover:text-bearish transition-colors"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-            <div className="flex flex-wrap gap-1">
-              {def.presets.map((preset) => {
-                const isNone = preset.min === null && preset.max === null;
-                const isSelected = isNone
-                  ? !isActive
-                  : current?.min === preset.min && current?.max === preset.max;
-                return (
-                  <button
-                    key={preset.label}
-                    type="button"
-                    onClick={() =>
-                      isNone ? onRemove(def.id) : onSetFilter(def.id, preset.min, preset.max)
-                    }
-                    className={cn(
-                      "min-h-8 rounded-lg px-2.5 py-1.5 text-[10px] font-medium ring-1 ring-inset sm:min-h-0 sm:px-2 sm:py-0.5",
-                      // Presets are tapped repeatedly while narrowing a
-                      // screen, so each one acknowledges the press itself
-                      // rather than waiting on the table below to re-query.
-                      "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
-                      "active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100",
-                      isSelected
-                        ? "bg-sunset-orange/12 text-sunset-orange ring-sunset-orange/30"
-                        : "bg-transparent text-mist/70 ring-wolf-border/30 hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border/60"
-                    )}
-                  >
-                    {preset.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        );
-      })}
-    </>
-  );
-}
-
-function FilterPanel({
-  activeFilters,
-  onSetFilter,
-  onRemove,
-  onClear,
-  filterCount,
-}: {
-  activeFilters: ReturnType<typeof useScreener>["activeFilters"];
-  onSetFilter: (id: FilterId, min: number | null, max: number | null) => void;
-  onRemove: (id: FilterId) => void;
-  onClear: () => void;
-  filterCount: number;
-}) {
-  return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-3.5 w-3.5 text-mist" />
-          <span className="text-xs font-semibold text-snow-peak">Filters</span>
-          {filterCount > 0 && (
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-sunset-orange text-[9px] font-bold text-wolf-black">
-              {filterCount}
-            </span>
-          )}
-        </div>
-        {filterCount > 0 && (
-          <button
-            type="button"
-            onClick={onClear}
-            className="text-[10px] text-mist hover:text-bearish transition-colors"
-          >
-            Clear all
-          </button>
-        )}
-      </div>
-
-      {/* Standard market filters */}
-      <FilterGroup
-        defs={FILTER_DEFS}
-        activeFilters={activeFilters}
-        onSetFilter={onSetFilter}
-        onRemove={onRemove}
-      />
-
-      {/* Quality Ratings section */}
-      <div className="pt-1 border-t border-wolf-border/20">
-        <div className="flex items-center gap-1.5 mb-3">
-          <span className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/50">
-            Quality Ratings
-          </span>
-          <Tooltip
-            content="Platform-computed quality scores (0–100). Calculated from cached financial data using sector-relative benchmarks. Scores appear once a stock's financials have been cached (visit the stock page once)."
-            side="right"
-          >
-            <span className="inline-flex cursor-help">
-              <SlidersHorizontal className="h-2.5 w-2.5 text-mist/30" />
-            </span>
-          </Tooltip>
-        </div>
-        <div className="space-y-5">
-          <FilterGroup
-            defs={QUALITY_FILTER_DEFS}
-            activeFilters={activeFilters}
-            onSetFilter={onSetFilter}
-            onRemove={onRemove}
-          />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Active chips ─────────────────────────────────────────────────────────────
-
-function ActiveChips({
-  activeFilters,
-  onRemove,
-}: {
-  activeFilters: ReturnType<typeof useScreener>["activeFilters"];
-  onRemove: (id: FilterId) => void;
-}) {
-  const allDefs = [...FILTER_DEFS, ...QUALITY_FILTER_DEFS];
-  const entries = Object.entries(activeFilters) as [
-    FilterId,
-    { min: number | null; max: number | null },
-  ][];
-  if (entries.length === 0) return null;
-
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {entries.map(([id, range], chipIndex) => {
-        const def = allDefs.find((d) => d.id === id);
-        const scale = def?.displayScale ?? 1;
-        const unit = def?.unit ?? "";
-
-        // Use the custom formatter when defined (e.g. market cap → "200B"),
-        // otherwise fall back to numeric scaling + unit suffix.
-        const fmtVal = def?.formatValue
-          ? def.formatValue
-          : (v: number) => `${(v * scale).toFixed(1)}${unit}`;
-
-        const label =
-          range.min !== null && range.max !== null
-            ? `${fmtVal(range.min)}–${fmtVal(range.max)}`
-            : range.min !== null
-              ? `≥${fmtVal(range.min)}`
-              : `≤${fmtVal(range.max!)}`;
-
-        return (
-          <span
-            key={id}
-            // A chip appearing is the confirmation that a filter took effect,
-            // so it arrives rather than blinking into place.
-            style={enterDelay(Math.min(chipIndex * 20, 120))}
-            className="insight-enter inline-flex items-center gap-1 rounded-lg bg-sunset-orange/[0.08] px-2 py-0.5 text-[10px] font-medium text-sunset-orange ring-1 ring-inset ring-sunset-orange/25"
-          >
-            {def?.label}: {label}
-            <button
-              type="button"
-              aria-label={`Remove ${def?.label ?? id} filter`}
-              onClick={() => onRemove(id)}
-              className="ml-0.5 rounded transition-[color,transform] duration-150 ease-out hover:text-bearish active:scale-90 motion-reduce:transition-none motion-reduce:active:scale-100"
-            >
-              <X className="h-2.5 w-2.5" />
-            </button>
-          </span>
-        );
-      })}
-    </div>
-  );
-}
-
-// ─── URL serialisation ────────────────────────────────────────────────────────
-// Mirrors the parsing done in use-screener.ts (paramToFilters / paramToSort).
-// Format: f=id=min:max~id2=min2:max2  |  sort=key:dir  |  q=search  |  pg=N
-
-function filtersToParam(filters: ReturnType<typeof useScreener>["activeFilters"]): string {
-  return Object.entries(filters)
-    .map(([id, r]) => `${id}=${r?.min ?? ""}:${r?.max ?? ""}`)
-    .join("~");
-}
-
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
-export default function ScreenerPage() {
+function Screener() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-
+  const s = useScreener();
   const {
     isLoading,
-    metricsLoading,
-    filteredRows,
-    totalCount,
-    filteredCount,
     activeFilters,
-    activeFilterCount,
-    activePresetId,
     sort,
     search,
-    nullEnrichedCount,
-    enrichedFieldsActive,
-    mergeMetricsIntoRows,
-    setFilter,
-    removeFilter,
-    clearFilters,
-    applyPreset,
-    toggleSort,
-    setSearch,
-  } = useScreener();
+    sectors,
+    activePresetId,
+    filteredRows,
+    filteredCount,
+    totalCount,
+    missingCount,
+    narrowingCount,
+  } = s;
 
-  // Initialise page from URL; default 1.
-  const [page, setPage] = useState<number>(() => {
-    const pg = searchParams.get("pg");
-    return pg ? Math.max(1, parseInt(pg, 10)) : 1;
-  });
+  const [page, setPage] = useState(() => Math.max(1, parseInt(searchParams.get("pg") ?? "1", 10) || 1));
 
-  // ── Single effect that writes all screener state to the URL ────────────────
-  // Uses router.replace (same history entry) so the browser back button returns
-  // to the URL with the exact filters/page the user had before clicking a ticker.
-  const hasMounted = useRef(false);
-
+  // The whole screen lives in the URL: a link reopens it, and the back button
+  // from a company returns to the same page of the same results.
+  const mounted = useRef(false);
   useEffect(() => {
-    // Skip the very first render — state was just initialised FROM the URL,
-    // so there is nothing new to write back.
-    if (!hasMounted.current) {
-      hasMounted.current = true;
+    if (!mounted.current) {
+      mounted.current = true;
       return;
     }
-
     const params = new URLSearchParams();
-
     const f = filtersToParam(activeFilters);
     if (f) params.set("f", f);
-
+    if (sectors.length) params.set("sec", sectors.join("|"));
     if (search) params.set("q", search);
-
-    // Omit sort when it equals the default (market_cap desc) to keep URLs clean.
-    if (sort.key !== "market_cap" || sort.dir !== "desc") {
-      params.set("sort", `${sort.key}:${sort.dir}`);
-    }
-
+    if (sort.key !== "market_cap" || sort.dir !== "desc") params.set("sort", `${sort.key}:${sort.dir}`);
     if (activePresetId) params.set("preset", activePresetId);
-
-    // Omit pg=1 to keep URLs clean.
     if (page > 1) params.set("pg", String(page));
-
     const qs = params.toString();
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
-  }, [activeFilters, sort, search, activePresetId, page, router, pathname]);
+  }, [activeFilters, sectors, sort, search, activePresetId, page, router, pathname]);
 
-  const handleSetFilter = useCallback(
-    (id: FilterId, min: number | null, max: number | null) => { setPage(1); setFilter(id, min, max); },
-    [setFilter]
-  );
-  const handleRemoveFilter = useCallback(
-    (id: FilterId) => { setPage(1); removeFilter(id); },
-    [removeFilter]
-  );
-  const handleClear = useCallback(() => { setPage(1); clearFilters(); }, [clearFilters]);
-  const handleSearch = useCallback((v: string) => { setPage(1); setSearch(v); }, [setSearch]);
+  // Any change to what is shown starts again from the first page.
+  const reset = <A extends unknown[]>(fn: (...args: A) => void) => (...args: A) => {
+    setPage(1);
+    fn(...args);
+  };
 
-  const totalPages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
+  const activeIds = useMemo(() => Object.keys(activeFilters) as FilterId[], [activeFilters]);
+  const activeSet = useMemo(() => new Set(activeIds), [activeIds]);
+  const columns = useMemo(() => columnsFor(activeIds, sort.key), [activeIds, sort.key]);
 
-  // Slice current page from filtered results
-  const pageRows = useMemo(
-    () => filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filteredRows, safePage]
-  );
+  const pages = Math.max(1, Math.ceil(filteredCount / PAGE_SIZE));
+  const safePage = Math.min(page, pages);
+  const pageRows = useMemo(() => filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE), [filteredRows, safePage]);
 
-  // For the visible 13 tickers, trigger individual Yahoo quoteSummary fetch
-  // (financialData.earningsGrowth/revenueGrowth + financials cache for FCF/quality).
-  // This populates the Supabase "quote" cache and returns real values.
+  // The rows on screen are refreshed from Yahoo if their cache is missing,
+  // so a ticker the weekly warm-up has not reached still fills in.
   const pageTickers = useMemo(() => pageRows.map((r) => r.ticker), [pageRows]);
-  const { data: pageMetrics } = useScreenerMetrics(pageTickers, !isLoading);
+  const { data: pageMetrics } = useScreenerMetrics(pageTickers, !isLoading && pageTickers.length > 0);
+  const shownRows = useMemo(() => mergeMetrics(pageRows, pageMetrics), [pageRows, pageMetrics]);
 
-  // Merge per-page Yahoo data INTO the display rows.
-  // pageMetrics overrides allMetrics (more fresh / more complete for the visible slice).
-  const enrichedPageRows = useMemo(
-    () => mergeMetricsIntoRows(pageRows, pageMetrics),
-    [pageRows, pageMetrics, mergeMetricsIntoRows]
+  const toggleFilter = useCallback(
+    (id: FilterId) => {
+      setPage(1);
+      if (activeSet.has(id)) s.removeFilter(id);
+      else s.addFilter(id);
+    },
+    [activeSet, s]
   );
 
-  // Latest sync timestamp — most recent metrics_fetched_at across visible rows
-  const latestSyncTs = useMemo(() => {
-    const ts = enrichedPageRows
-      .map((r) => r.metrics_fetched_at)
-      .filter((t): t is string => !!t)
-      .sort()
-      .at(-1);
-    return ts ? new Date(ts) : null;
-  }, [enrichedPageRows]);
+  const unknownFor = activeIds.filter((id) => FILTER_BY_ID.get(id)?.source === "cached" && (activeFilters[id]?.min !== null || activeFilters[id]?.max !== null));
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      {/* The page builds top to bottom on arrival: title, then the filter
-          panel, then the results. Small steps, the whole cascade over inside
-          a quarter of a second. */}
-      <div
-        className="insight-enter flex flex-wrap items-center justify-between gap-4"
-        style={enterDelay(0)}
-      >
-        <div>
-          <h1 className="text-lg font-bold text-snow-peak">Stock Screener</h1>
-          <p className="mt-0.5 text-[11px] tabular-nums text-mist">
-            {isLoading ? (
-              <span className="inline-flex items-center gap-1.5">
-                <Spinner size="xs" color="mist" /> Loading stocks…
-              </span>
-            ) : (
-              `${filteredCount} of ${totalCount} stocks`
-            )}
-          </p>
+    <div className="w-full space-y-6">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sunset-orange/15 bg-sunset-orange/10">
+            <SlidersHorizontal className="h-5 w-5 text-sunset-orange" aria-hidden />
+          </div>
+          <div>
+            <h1 className="text-2xl font-bold leading-tight tracking-[-0.02em] text-snow-peak">Screener</h1>
+            <p className="mt-0.5 text-xs tabular-nums text-mist" aria-live="polite">
+              {isLoading ? "Loading the universe…" : narrowingCount || search ? `${filteredCount} of ${totalCount} US stocks match` : `${totalCount} US stocks`}
+            </p>
+          </div>
         </div>
-
-        <div className="relative w-full sm:w-64">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-mist/60" />
-          <Input
-            placeholder="Ticker or company…"
+        <label className="flex h-10 w-full items-center gap-2 rounded-xl bg-snow-peak/[0.04] px-3 ring-1 ring-inset ring-wolf-border/50 transition-shadow focus-within:ring-sunset-orange/50 sm:w-72">
+          <Search className="h-4 w-4 shrink-0 text-mist" aria-hidden />
+          <input
             value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            className="h-10 bg-snow-peak/[0.03] pl-8 text-xs ring-1 ring-inset ring-wolf-border/45 focus:ring-sunset-orange/50 sm:h-8"
+            onChange={(e) => reset(s.setSearch)(e.target.value)}
+            placeholder="Ticker, company or sector"
+            aria-label="Search the screener"
+            className="min-w-0 flex-1 bg-transparent text-sm text-snow-peak outline-none placeholder:text-mist/60"
           />
-          {search && (
-            <button
-              type="button"
-              onClick={() => handleSearch("")}
-              aria-label="Clear search"
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-mist/50 hover:text-snow-peak"
-            >
-              <X className="h-3 w-3" />
+          {search ? (
+            <button type="button" aria-label="Clear search" onClick={() => reset(s.setSearch)("")} className="text-mist hover:text-snow-peak">
+              <X className="h-3.5 w-3.5" />
             </button>
-          )}
-        </div>
-      </div>
+          ) : null}
+        </label>
+      </header>
 
-      {/* Preset pills */}
-      <div className="flex flex-wrap gap-1.5">
-        {SCREENER_PRESETS.map((preset) => {
-          const Icon = PRESET_ICONS[preset.icon];
-          const isActive = activePresetId === preset.id;
-          return (
-            <Tooltip key={preset.id} content={preset.description} side="bottom">
+      {/* ── Strategies ─────────────────────────────────────────────────── */}
+      <section aria-label="Start from a strategy">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+          {SCREENER_PRESETS.map((p) => {
+            const Icon = PRESET_ICONS[p.icon] ?? Gem;
+            const on = activePresetId === p.id;
+            return (
               <button
+                key={p.id}
                 type="button"
-                onClick={() => { setPage(1); applyPreset(preset); }}
+                onClick={() => reset(s.applyPreset)(p)}
+                aria-pressed={on}
                 className={cn(
-                  "inline-flex min-h-9 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium ring-1 ring-inset sm:min-h-0 sm:py-1.5",
-                  "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
-                  "active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100",
-                  isActive
-                    ? "bg-sunset-orange/12 border-sunset-orange/30 text-sunset-orange"
-                    : "text-mist ring-wolf-border/40 hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border"
+                  "group min-w-0 rounded-2xl p-3.5 text-left ring-1 ring-inset",
+                  "transition-[background-color,box-shadow,transform] duration-200 ease-out active:scale-[0.98] motion-reduce:active:scale-100",
+                  on ? "bg-sunset-orange/[0.08] ring-sunset-orange/40" : "bg-wolf-surface/60 ring-wolf-border/50 hover:bg-wolf-surface hover:ring-wolf-border"
                 )}
               >
-                {Icon && <Icon className="h-3 w-3" />}
-                {preset.label}
+                <span className="flex items-center gap-2">
+                  <span className={cn("flex h-7 w-7 items-center justify-center rounded-lg", on ? "bg-sunset-orange text-wolf-black" : "bg-snow-peak/[0.06] text-mist group-hover:text-snow-peak")}>
+                    <Icon className="h-3.5 w-3.5" />
+                  </span>
+                  <span className={cn("text-[13.5px] font-semibold", on ? "text-sunset-orange" : "text-snow-peak")}>{p.label}</span>
+                </span>
+                <span className="mt-2 line-clamp-2 block text-[12px] leading-snug text-mist">{p.description}</span>
               </button>
-            </Tooltip>
-          );
-        })}
-        {activePresetId && (
-          <button
-            type="button"
-            onClick={handleClear}
-            className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2.5 py-2 text-[10px] text-mist ring-1 ring-inset ring-wolf-border/30 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-bearish/10 hover:text-bearish hover:ring-bearish/30 active:scale-[0.96] motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-0 sm:py-1.5"
-          >
-            <X className="h-2.5 w-2.5" /> Clear
-          </button>
-        )}
-      </div>
-
-      {/* Active filter chips */}
-      <ActiveChips activeFilters={activeFilters} onRemove={handleRemoveFilter} />
-
-      {/* Enrichment data notice — shown when quality/FCF/growth filters are active */}
-      {enrichedFieldsActive && (metricsLoading || nullEnrichedCount > 0) && (
-        <div className="flex items-center gap-2 rounded-lg border border-golden-hour/20 bg-golden-hour/6 px-3 py-2">
-          {metricsLoading ? (
-            <Spinner size="xs" color="mist" />
-          ) : (
-            <span className="h-1.5 w-1.5 rounded-full bg-golden-hour/70 shrink-0" />
-          )}
-          <p className="text-[11px] text-mist/80">
-            {metricsLoading
-              ? "Loading quality scores & FCF data from cache…"
-              : `${nullEnrichedCount} stock${nullEnrichedCount !== 1 ? "s" : ""} shown unfiltered — quality data not yet cached. Browse their stock pages once to populate.`}
-          </p>
+            );
+          })}
         </div>
-      )}
+      </section>
 
-      {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-4 items-start">
+      {/* ── Filters ────────────────────────────────────────────────────── */}
+      {/* Above the results: its menus open over the table, and a blurred
+          panel is a stacking context of its own, so without this the table
+          painted over them. */}
+      <MaterialPanel className="relative z-20 space-y-4 p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <AddFiltersDialog active={activeSet} coverage={s.coverage} onToggle={toggleFilter} />
+            <p className="hidden text-xs text-mist sm:block">
+              {activeIds.length === 0 ? "Pick a strategy above, or add the filters you care about." : "Set a value on each filter to narrow the list."}
+            </p>
+          </div>
+          {activeIds.length || sectors.length || search ? (
+            <button
+              type="button"
+              onClick={() => reset(s.clearFilters)()}
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg px-2.5 text-xs font-medium text-mist transition-colors hover:bg-snow-peak/[0.05] hover:text-snow-peak"
+            >
+              <X className="h-3.5 w-3.5" />
+              Clear all
+            </button>
+          ) : null}
+        </div>
 
-        {/* Filter sidebar */}
-        <Card className="insight-enter p-4" style={enterDelay(60)}>
-          <FilterPanel
-            activeFilters={activeFilters}
-            onSetFilter={handleSetFilter}
-            onRemove={handleRemoveFilter}
-            onClear={handleClear}
-            filterCount={activeFilterCount}
-          />
-        </Card>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+          <SectorFilterControl sectors={s.sectorList} selected={sectors} onToggle={reset(s.toggleSector)} onClear={() => reset(s.setSectors)([])} />
+          {activeIds.map((id) => {
+            const spec = FILTER_BY_ID.get(id);
+            const range = activeFilters[id];
+            if (!spec || !range) return null;
+            return (
+              <RangeFilterControl
+                // Re-mounted when the range changes from outside (a strategy), so its fields follow.
+                key={`${id}:${range.min}:${range.max}`}
+                spec={spec}
+                range={range}
+                onChange={(min, max) => reset(s.setFilter)(id, min, max)}
+                onRemove={() => reset(s.removeFilter)(id)}
+              />
+            );
+          })}
+        </div>
 
-        {/* Table card */}
-        <Card className="insight-enter" style={enterDelay(120)}>
-          <CardContent className="p-0">
-            {isLoading ? (
-              <div className="p-4 space-y-2">
-                {Array.from({ length: PAGE_SIZE }).map((_, i) => (
-                  <div key={i} className="flex items-center gap-4 py-2 px-1">
-                    <Skeleton shape="circle" className="h-7 w-7 shrink-0" />
-                    <Skeleton shape="line" className="h-3 w-20 flex-1" />
-                    {Array.from({ length: 5 }).map((_, j) => (
-                      <Skeleton key={j} shape="line" className="h-3 w-12 hidden sm:block" />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            ) : filteredCount === 0 ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-2 text-center">
-                <SlidersHorizontal className="h-7 w-7 text-mist/20" />
-                <p className="text-sm font-semibold text-snow-peak">No stocks match</p>
-                <p className="text-xs text-mist">Try relaxing the filters</p>
-              </div>
-            ) : (
-              <>
-                <div className="scroll-quiet overflow-x-auto">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="border-b border-wolf-border/30">
-                        {COLUMNS.map((col) => (
-                          <ThCell
-                            key={col.key}
-                            col={col}
-                            sort={sort}
-                            onSort={toggleSort}
-                          />
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {enrichedPageRows.map((row, i) => (
-                        <tr
-                          key={row.ticker}
-                          // Rows arrive in reading order, capped so a full page
-                          // never leaves its tail waiting on the head. Sorting
-                          // reuses the same keys, so re-ordering stays instant
-                          // and the cascade only plays when a new page loads.
-                          style={enterDelay(Math.min(i * 16, 180))}
-                          className={cn(
-                            "insight-enter border-b border-wolf-border/15",
-                            // Rows lift under the pointer instead of sinking:
-                            // hovering should feel like the row comes forward.
-                            "transition-colors duration-150 ease-out hover:bg-snow-peak/[0.035]",
-                            i === enrichedPageRows.length - 1 && "border-b-0"
-                          )}
-                        >
-                          {COLUMNS.map((col) => (
-                            <td
-                              key={col.key}
-                              className={cn(
-                                "px-3 py-2.5 whitespace-nowrap",
-                                col.align === "right" ? "text-right" : "text-left"
-                              )}
-                            >
-                              {col.format(row)}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+        {missingCount > 0 && unknownFor.length > 0 ? (
+          <p className="text-xs text-mist">
+            {missingCount} {missingCount === 1 ? "stock has" : "stocks have"} no figure yet for{" "}
+            {unknownFor.map((id) => FILTER_BY_ID.get(id)?.label).join(", ")} and {missingCount === 1 ? "is" : "are"} left out rather than guessed.
+          </p>
+        ) : null}
+      </MaterialPanel>
+
+      {/* ── Results ────────────────────────────────────────────────────── */}
+      <MaterialPanel className="overflow-hidden p-0">
+        {isLoading ? (
+          <div className="space-y-3 p-5" aria-busy="true">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="flex items-center gap-4">
+                <Skeleton shape="circle" className="h-8 w-8 shrink-0" />
+                <Skeleton shape="line" className="h-3 w-28" />
+                <div className="flex flex-1 justify-end gap-6">
+                  {Array.from({ length: 5 }).map((__, j) => (
+                    <Skeleton key={j} shape="line" className="hidden h-3 w-14 sm:block" />
+                  ))}
                 </div>
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between border-t border-wolf-border/20 px-4 py-3">
-                    <span className="text-[10px] text-mist">
-                      {(safePage - 1) * PAGE_SIZE + 1}–
-                      {Math.min(safePage * PAGE_SIZE, filteredCount)} of {filteredCount}
-                    </span>
-                    <div className="flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setPage((p) => Math.max(1, p - 1))}
-                        disabled={safePage === 1}
-                        aria-label="Previous page"
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
-                      >
-                        <ChevronLeft className="h-3.5 w-3.5" />
-                      </button>
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        const p =
-                          totalPages <= 5
-                            ? i + 1
-                            : safePage <= 3
-                              ? i + 1
-                              : safePage >= totalPages - 2
-                                ? totalPages - 4 + i
-                                : safePage - 2 + i;
-                        return (
-                          <button
-                            key={p}
-                            type="button"
-                            onClick={() => setPage(p)}
-                            className={cn(
-                              "flex h-9 w-9 items-center justify-center rounded-lg font-mono text-[11px] tabular-nums ring-1 ring-inset sm:h-7 sm:w-7",
-                              "transition-[background-color,color,box-shadow,transform] duration-150 ease-out",
-                              "active:scale-[0.94] motion-reduce:transition-none motion-reduce:active:scale-100",
-                              safePage === p
-                                ? "border-sunset-orange/40 bg-sunset-orange/10 text-sunset-orange"
-                                : "text-mist ring-wolf-border/40 hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border"
-                            )}
-                          >
-                            {p}
-                          </button>
-                        );
-                      })}
-                      <button
-                        type="button"
-                        onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                        disabled={safePage === totalPages}
-                        aria-label="Next page"
-                        className="flex h-9 w-9 items-center justify-center rounded-lg text-mist ring-1 ring-inset ring-wolf-border/40 transition-[background-color,color,box-shadow,transform] duration-150 ease-out hover:bg-snow-peak/[0.05] hover:text-snow-peak hover:ring-wolf-border active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-30 motion-reduce:transition-none motion-reduce:active:scale-100 sm:h-7 sm:w-7"
-                      >
-                        <ChevronRight className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-            {/* Sync timestamp footer */}
-            {!isLoading && (
-              <div className="border-t border-wolf-border/15 px-4 py-2 flex items-center justify-between gap-2">
-                <span className="text-[10px] text-mist/35">
-                  Data from Yahoo Finance · Quality scores & FCF Yield computed from cached financials · Not financial advice
-                </span>
-                <span className="text-[10px] text-mist/35 shrink-0 tabular-nums">
-                  {latestSyncTs
-                    ? `Synced ${latestSyncTs.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })} ${latestSyncTs.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`
-                    : "Sync time unavailable"}
-                </span>
               </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+            ))}
+          </div>
+        ) : filteredCount === 0 ? (
+          <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
+            <SlidersHorizontal className="h-8 w-8 text-mist/40" aria-hidden />
+            <div>
+              <p className="text-base font-semibold text-snow-peak">No stocks match this screen</p>
+              <p className="mt-1 text-sm text-mist">Loosen a filter, or remove the last one you added.</p>
+            </div>
+            {activeIds.length ? (
+              <button
+                type="button"
+                onClick={() => reset(s.removeFilter)(activeIds[activeIds.length - 1])}
+                className="mt-1 h-9 rounded-xl bg-snow-peak/[0.06] px-4 text-[13px] font-medium text-snow-peak ring-1 ring-inset ring-wolf-border/60 transition-colors hover:bg-snow-peak/[0.1]"
+              >
+                Remove {FILTER_BY_ID.get(activeIds[activeIds.length - 1])?.label}
+              </button>
+            ) : null}
+          </div>
+        ) : (
+          <ResultsTable
+            rows={shownRows}
+            columns={columns}
+            sort={sort}
+            onSort={reset(s.toggleSort)}
+            page={safePage}
+            pageSize={PAGE_SIZE}
+            total={filteredCount}
+            onPage={setPage}
+          />
+        )}
+      </MaterialPanel>
+
+      <p className="text-[11px] text-mist/70">
+        Prices and multiples from Yahoo Finance, refreshed on every visit; margins, returns and ratios from each company&apos;s latest filings, refreshed weekly. Not investment advice.
+      </p>
     </div>
+  );
+}
+
+export default function ScreenerPage() {
+  return (
+    <Suspense fallback={null}>
+      <Screener />
+    </Suspense>
   );
 }

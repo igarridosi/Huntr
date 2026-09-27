@@ -11,12 +11,15 @@ import type { CompanyFinancials } from "@/types/financials";
 import type { SearchEntry } from "@/lib/mock-data/search-index";
 import type { EarningsDetailData } from "@/lib/api";
 import { prewarmEarningsDetailCacheForTickers as prewarmEarningsDetailCacheForTickersService } from "@/lib/api/earnings-detail";
-import { getAlphaStatements, getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState, type AlphaStatementKind } from "@/lib/api/alphavantage";
+import { getAlphaEarningsQuarters, getAlphaStatements, getFinancialsFromAlphaVantage, isAlphaThrottleError, readAlphaThrottleState, type AlphaStatementKind } from "@/lib/api/alphavantage";
 import { repairAlphaFinancials } from "@/lib/api/alpha-repair";
 import { getCachedDataState, setCachedData, withSingleFlight, getBatchCachedScreenerMetrics } from "@/lib/api/cache";
 import type { ScreenerMetrics } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 import { getSECFundamentals } from "@/lib/api/sec-edgar";
+import { getEpsTrend, getShareBasis, type YahooShareBasis } from "@/lib/api/yahoo";
+import { readNtmSnapshots } from "@/lib/api/forward-eps";
+import type { ForwardInputs } from "@/lib/chart-builder/forward";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
 import { getCachedInsiderActivity, getInsiderActivity, type InsiderActivity } from "@/lib/api/sec-form4";
 
@@ -208,6 +211,40 @@ export async function fetchAlphaStatements(
     }
     throw error;
   });
+}
+
+/**
+ * Chart Builder: each company's splits and today's share count, the basis
+ * every per-share figure on a chart is set on (Yahoo's closes are adjusted
+ * for these splits). Cached for a day.
+ */
+export async function fetchShareBases(tickers: string[]): Promise<Record<string, YahooShareBasis | null>> {
+  const list = sanitizeTickers(tickers).slice(0, 8);
+  const entries = await Promise.all(list.map(async (t) => [t, await getShareBasis(t).catch(() => null)] as const));
+  return Object.fromEntries(entries);
+}
+
+/**
+ * Chart Builder: what a forward P/E is built from — each past quarter's
+ * pre-report consensus (Alpha Vantage EARNINGS, the same answer that lends
+ * EPS to the income statement; one call when not cached, none when
+ * throttled), today's consensus (Yahoo) and the snapshots recorded daily.
+ */
+export async function fetchForwardInputs(ticker: string): Promise<ForwardInputs> {
+  const t = sanitizeTicker(ticker);
+  const alphaKey = process.env.ALPHAVANTAGE_API_KEY?.trim();
+  const quartersPromise = (async () => {
+    if (!alphaKey) return [];
+    const throttled = await readAlphaThrottleState(alphaKey);
+    const run = () => getAlphaEarningsQuarters(t, alphaKey, { cachedOnly: !!throttled });
+    return (await withSingleFlight(`${t}:alpha-earnings-quarters`, run).catch(() => null)) ?? [];
+  })();
+  const [quarters, trend, snapshots] = await Promise.all([
+    quartersPromise,
+    getEpsTrend(t).catch(() => null),
+    readNtmSnapshots(t).catch(() => []),
+  ]);
+  return { quarters, trend, snapshots };
 }
 
 export async function getAlphaAvailability(): Promise<{

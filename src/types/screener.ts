@@ -61,6 +61,29 @@ export interface ScreenerRow {
 
   // Volume
   avg_volume: number;
+
+  // Live from the batch quote (every ticker, every load)
+  forward_pe: number | null;
+  price_to_book: number | null;
+  /** Next fiscal year's consensus EPS over trailing EPS, less one. */
+  expected_eps_growth: number | null;
+  /** Price over its 200-day average, less one. */
+  vs_200dma: number | null;
+  /** Price change over 52 weeks, as a fraction. */
+  change_52w: number | null;
+  /** Analysts' mean rating, 1 (strong buy) to 5 (sell). */
+  analyst_rating: number | null;
+
+  // From the cached quoteSummary (warmed weekly for the whole universe)
+  price_to_sales: number | null;
+  ev_to_ebitda: number | null;
+  gross_margin: number | null;
+  operating_margin: number | null;
+  net_margin: number | null;
+  roe: number | null;
+  debt_to_equity: number | null;
+  current_ratio: number | null;
+  target_upside: number | null;
 }
 
 // ─── Filter definitions ───────────────────────────────────────────────────────
@@ -78,7 +101,22 @@ export type FilterId =
   | "quality_overall"
   | "quality_profitability"
   | "quality_financial_health"
-  | "quality_cash_generation";
+  | "quality_cash_generation"
+  | "forward_pe"
+  | "price_to_book"
+  | "price_to_sales"
+  | "ev_to_ebitda"
+  | "expected_eps_growth"
+  | "gross_margin"
+  | "operating_margin"
+  | "net_margin"
+  | "roe"
+  | "debt_to_equity"
+  | "current_ratio"
+  | "target_upside"
+  | "analyst_rating"
+  | "change_52w"
+  | "vs_200dma";
 
 // Keep this interface before ScreenerPreset is defined
 export interface ScreenerPreset {
@@ -129,75 +167,73 @@ export interface ScreenerPreset {
   sortDir: SortDir;
 }
 
+/**
+ * Starting points, each one question a value or growth investor asks. The
+ * filters are ordinary ones, so a preset is a screen the user can then
+ * adjust, not a black box.
+ */
 export const SCREENER_PRESETS: ScreenerPreset[] = [
   {
-    id: "value",
-    label: "Deep Value",
-    description: "Low P/E ratio — trading cheap vs trailing earnings",
+    id: "deep_value",
+    label: "Deep value",
+    description: "Cheap on earnings and on assets: P/E under 12x, price to book under 2x.",
     icon: "Gem",
-    filters: {
-      pe_ratio: { min: 1, max: 15 },
-    },
+    filters: { pe_ratio: { min: 0, max: 12 }, price_to_book: { min: 0, max: 2 } },
     sortBy: "pe_ratio",
     sortDir: "asc",
   },
   {
-    id: "magic_formula",
-    label: "Magic Formula",
-    description: "Low P/E + positive earnings yield (Greenblatt proxy)",
-    icon: "Zap",
-    filters: {
-      pe_ratio: { min: 1, max: 18 },
-      earnings_growth: { min: 0, max: null },
-    },
-    sortBy: "pe_ratio",
-    sortDir: "asc",
-  },
-  {
-    id: "dividend",
-    label: "Dividend Income",
-    description: "Consistent yield with sustainable payout ratio",
-    icon: "DollarSign",
-    filters: {
-      dividend_yield: { min: 0.02, max: null },
-      payout_ratio: { min: null, max: 0.75 },
-    },
-    sortBy: "dividend_yield",
+    id: "quality_compounders",
+    label: "Quality compounders",
+    description: "High returns on equity, fat operating margins and modest debt.",
+    icon: "Crown",
+    filters: { roe: { min: 0.15, max: null }, operating_margin: { min: 0.2, max: null }, debt_to_equity: { min: 0, max: 1 } },
+    sortBy: "quality_overall",
     sortDir: "desc",
   },
   {
     id: "garp",
-    label: "GARP",
-    description: "Growth at a Reasonable Price — P/E ≤ 35 with earnings growth",
+    label: "Growth at a fair price",
+    description: "Earnings expected to grow over 10% at a forward P/E under 25x.",
     icon: "TrendingUp",
-    filters: {
-      earnings_growth: { min: 0.05, max: null },
-      pe_ratio: { min: 1, max: 35 },
-    },
-    sortBy: "earnings_growth",
+    filters: { forward_pe: { min: 0, max: 25 }, expected_eps_growth: { min: 0.1, max: null } },
+    sortBy: "expected_eps_growth",
     sortDir: "desc",
   },
   {
-    id: "momentum",
-    label: "52W Breakout",
-    description: "Trading near or above 52-week high",
+    id: "cash_machines",
+    label: "Cash machines",
+    description: "Free cash flow yield over 6%: a lot of cash for the price.",
+    icon: "Banknote",
+    filters: { fcf_yield: { min: 0.06, max: null } },
+    sortBy: "fcf_yield",
+    sortDir: "desc",
+  },
+  {
+    id: "dividend_income",
+    label: "Dividend income",
+    description: "Yield over 3%, with a payout under 75% of earnings so it can last.",
+    icon: "HandCoins",
+    filters: { dividend_yield: { min: 0.03, max: null }, payout_ratio: { min: 0, max: 0.75 } },
+    sortBy: "dividend_yield",
+    sortDir: "desc",
+  },
+  {
+    id: "high_growth",
+    label: "High growth",
+    description: "Revenue growing over 20% with gross margins over 50%.",
     icon: "Rocket",
-    filters: {
-      from_52w_high: { min: -0.05, max: null },
-    },
-    sortBy: "from_52w_high_pct",
+    filters: { revenue_growth: { min: 0.2, max: null }, gross_margin: { min: 0.5, max: null } },
+    sortBy: "revenue_growth",
     sortDir: "desc",
   },
   {
-    id: "defensive_quality",
-    label: "Defensive Quality",
-    description: "Strong balance sheet + reliable cash generation — resilient in downturns",
-    icon: "Shield",
-    filters: {
-      quality_financial_health: { min: 70, max: null },
-      quality_cash_generation:  { min: 65, max: null },
-    },
-    sortBy: "quality_overall",
-    sortDir: "desc",
+    id: "quality_on_sale",
+    label: "Quality on sale",
+    description: "Quality score over 70, trading over 20% below its 52-week high.",
+    icon: "Tag",
+    filters: { quality_overall: { min: 70, max: null }, from_52w_high: { min: null, max: -0.2 } },
+    sortBy: "from_52w_high_pct",
+    sortDir: "asc",
   },
 ];

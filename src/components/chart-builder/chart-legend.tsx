@@ -60,7 +60,7 @@ export function ChartLegend({ spec, chart, hoverRow, pendingTickers, selectedId,
       aria-label="Series"
     >
       {period && (
-        <li aria-live="polite" className="font-mono text-[11px] tabular-nums" style={{ color: theme.tick }}>
+        <li aria-live="polite" data-legend-period className="font-mono text-[11px] tabular-nums" style={{ color: theme.tick }}>
           {period}
         </li>
       )}
@@ -70,7 +70,7 @@ export function ChartLegend({ spec, chart, hoverRow, pendingTickers, selectedId,
         const hovered = hoverId === s.id;
         const stepped = hoverId !== null && !hovered && !s.hidden;
         return (
-          <li key={s.id}>
+          <li key={s.id} data-series-id={s.id}>
             <button
               type="button"
               aria-pressed={!s.hidden}
@@ -114,7 +114,7 @@ export function ChartLegend({ spec, chart, hoverRow, pendingTickers, selectedId,
               {pending ? (
                 <span className="text-[10px] uppercase tracking-[0.08em]" style={{ color: theme.tick }}>loading</span>
               ) : (
-                <span className="min-w-[5ch] text-right font-mono text-[12px] font-semibold tabular-nums" style={{ color: theme.title }}>
+                <span data-legend-value className="min-w-[5ch] text-right font-mono text-[12px] font-semibold tabular-nums" style={{ color: theme.title }}>
                   {valueAt(s.id)}
                 </span>
               )}
