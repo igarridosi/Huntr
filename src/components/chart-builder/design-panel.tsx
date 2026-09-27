@@ -3,6 +3,7 @@
 import { Database, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
+import { METRIC_GROUP_OPTIONS, METRIC_SEARCH_PLACEHOLDER } from "./metric-options";
 import { SelectMenu, type SelectMenuGroup } from "@/components/ui/select-menu";
 import { cn } from "@/lib/utils";
 import {
@@ -62,11 +63,6 @@ const TRANSFORMS: ReadonlyArray<{ value: SeriesTransform; label: string }> = [
 /** How a statement figure is shown: the amount, or one of two percentages. */
 type GrowthView = "value" | "yoy" | "indexed";
 const growthViewOf = (t: SeriesTransform): GrowthView => (t === "yoy" || t === "indexed" ? t : "value");
-
-const METRIC_GROUP_OPTIONS: ReadonlyArray<SelectMenuGroup<MetricId>> = METRIC_GROUPS.map((group) => ({
-  label: group,
-  options: metricsInGroup(group).map((m) => ({ value: m.id, label: m.label })),
-}));
 
 const AXIS_FORMATS: ReadonlyArray<SelectMenuGroup<AxisFormat>> = [
   {
@@ -172,6 +168,7 @@ export function DesignPanel({ spec, onChange, dataSource, periods }: DesignPanel
           <Row label="Metric">
             <SelectMenu<MetricId | typeof MIXED>
               groups={withMixed(METRIC_GROUP_OPTIONS, metric === MIXED)}
+              searchPlaceholder={METRIC_SEARCH_PLACEHOLDER}
               value={metric}
               onChange={(v) => {
                 if (v === MIXED) return;
