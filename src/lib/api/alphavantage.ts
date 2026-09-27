@@ -1374,3 +1374,56 @@ export async function getEarningsCallTranscriptFromAlphaVantage(
 
   return null;
 }
+
+// ─────────────────────────────────────────────────────────
+// Consensus history (for forward EPS)
+// ─────────────────────────────────────────────────────────
+
+export interface AlphaEarningsQuarter {
+  /** Fiscal quarter end, ISO. */
+  date: string;
+  reported: number | null;
+  /** Consensus just before the report. */
+  estimate: number | null;
+}
+
+/**
+ * Every quarter's reported EPS beside the consensus it was measured
+ * against, from the EARNINGS answer the income statement already borrows
+ * EPS from (same cache entry, so a chart that loaded EPS spends nothing
+ * here). With `cachedOnly` it never spends a call and returns null on a
+ * miss. Figures are as Alpha Vantage serves them — on whatever share basis
+ * each row happens to be; the Chart Builder sets them on one.
+ */
+export async function getAlphaEarningsQuarters(
+  ticker: string,
+  apiKey: string,
+  options: AlphaStatementsOptions = {}
+): Promise<AlphaEarningsQuarter[] | null> {
+  const symbol = ticker.toUpperCase();
+  const cached = await getCachedDataState<AlphaEarningsResponse>(symbol, EARNINGS_CACHE_KEY, STATEMENT_TTL_MS, STATEMENT_STALE_MS);
+  let earnings: AlphaEarningsResponse | null = cached.status !== "miss" && cached.data ? cached.data : null;
+  if (!earnings) {
+    if (options.cachedOnly) return null;
+    earnings = (await fetchWithRetry(symbol, "EARNINGS", apiKey)) as AlphaEarningsResponse;
+    if (earnings.annualEarnings?.length || earnings.quarterlyEarnings?.length) {
+      await setCachedData(symbol, EARNINGS_CACHE_KEY, earnings as unknown as Record<string, unknown>);
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  return (earnings.quarterlyEarnings ?? [])
+    .map((row) => {
+      const date = parseAlphaDate(row.fiscalDateEnding);
+      if (!date) return null;
+      const future = !row.reportedDate || row.reportedDate > today;
+      const reported = parseNullableNumber(row.reportedEPS);
+      return {
+        date,
+        // An unreported quarter comes back with a 0; that is not a result.
+        reported: future && reported === 0 ? null : reported,
+        estimate: parseNullableNumber(row.estimatedEPS),
+      };
+    })
+    .filter((row): row is AlphaEarningsQuarter => row !== null)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}

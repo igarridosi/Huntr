@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/quality-scores",
       "schedule": "0 2 * * 0"
+    },
+    {
+      "path": "/api/cron/forward-eps",
+      "schedule": "30 22 * * 1-5"
     }
   ]
 }

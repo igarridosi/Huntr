@@ -76,6 +76,8 @@ export interface PricePoint {
 export interface ResolveInputs {
   financials: Record<string, CompanyFinancials | null | undefined>;
   prices: Record<string, PricePoint[] | undefined>;
+  /** Next-twelve-month consensus EPS at a date, per ticker, on the price basis. */
+  forwardEps?: Record<string, ((date: string) => number | null) | undefined>;
 }
 
 export type XMode = "category" | "time";
@@ -282,7 +284,8 @@ function statementValues(
   series: ChartSeries,
   granularity: Granularity,
   bundles: BundledPeriod[],
-  prices: PricePoint[]
+  prices: PricePoint[],
+  forwardEps?: (date: string) => number | null
 ): Keyed {
   const def = METRICS[series.metric];
   const out: Keyed = new Map();
@@ -307,6 +310,7 @@ function statementValues(
       if (price !== null) {
         const ctx: MarketContext = {
           price,
+          forwardEps: forwardEps?.(b.date) ?? null,
           flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, i, read)),
           stock: (read) => read(b),
         };
@@ -582,7 +586,7 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `No price history for ${series.ticker}; market metrics need it.` });
     }
 
-    const raw = statementValues(series, spec.granularity, bundles, prices);
+    const raw = statementValues(series, spec.granularity, bundles, prices, inputs.forwardEps?.[series.ticker]);
     const transformed = applyTransform(raw, series.transform, spec.granularity, bundles, series.metric);
 
     if (CAPEX_BASED.has(series.metric) && spec.granularity !== "annual" && !warnedTickers.has(`c:${series.ticker}`)) {
@@ -625,8 +629,10 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
   warnings.push(...axisWarnings);
 
   // Align on the union of x values — or, in `common` mode, only on the
-  // buckets every statement series with data reports, so one company's
-  // extra quarter does not stand alone.
+  // buckets every company with data reports, so one company's extra
+  // quarter does not stand alone. By company, not by series: a forward P/E
+  // with no consensus for a quarter must not take that company's trailing
+  // P/E out of it too.
   const xs = new Set<number>();
   for (const s of all) for (const p of s.points) xs.add(p.x);
   if (spec.align === "common") {
@@ -636,8 +642,10 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
     if (statementSeries.length > 1) {
       const bucketXs = new Set<number>();
       for (const s of statementSeries) for (const p of s.points) bucketXs.add(p.x);
+      const tickers = [...new Set(statementSeries.map((s) => s.series.ticker))];
       for (const x of bucketXs) {
-        if (!statementSeries.every((s) => s.points.some((p) => p.x === x && p.value !== null))) {
+        const reported = (t: string) => statementSeries.some((s) => s.series.ticker === t && s.points.some((p) => p.x === x && p.value !== null));
+        if (!tickers.every(reported)) {
           xs.delete(x);
           for (const s of statementSeries) s.points = s.points.filter((p) => p.x !== x);
         }

@@ -36,7 +36,7 @@ describe("metric catalogue", () => {
     for (const id of ["capex", "long_term_debt", "net_debt", "pe_ttm", "market_cap", "enterprise_value", "fcf_yield", "ev_to_ebitda"]) {
       expect(isMetricId(id)).toBe(true);
     }
-    expect(isMetricId("pe_forward")).toBe(false); // no consensus history in the data layer
+    expect(isMetricId("pe_forward")).toBe(true); // consensus: Alpha Vantage history, Yahoo today, our own snapshots
   });
 
   it("groups every metric exactly once", () => {
