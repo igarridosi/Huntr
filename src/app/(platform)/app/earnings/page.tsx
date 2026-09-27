@@ -1,16 +1,13 @@
 "use client";
 
 import { fetchEarningsDetailData } from "@/app/actions/stock";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
-import { Input } from "@/components/ui/input";
+import { MaterialPanel } from "@/components/ui/material-panel";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
+import { SelectMenu } from "@/components/ui/select-menu";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { cn } from "@/lib/utils";
 import {
-  ArrowDown,
-  ArrowUp,
   CalendarClock,
   ChevronLeft,
   ChevronRight,
@@ -98,25 +95,6 @@ interface SidePanelCache {
   dataError?: string;
 }
 
-const PANEL_LOADING_DOTS = [
-  "left-[3%] top-[72%] [animation-delay:0.1s] [animation-duration:1.9s]",
-  "left-[9%] top-[90%] [animation-delay:0.3s] [animation-duration:2.2s]",
-  "left-[15%] top-[86%] [animation-delay:0.5s] [animation-duration:2.1s]",
-  "left-[21%] top-[76%] [animation-delay:0.2s] [animation-duration:1.8s]",
-  "left-[27%] top-[64%] [animation-delay:0.7s] [animation-duration:2.4s]",
-  "left-[33%] top-[51%] [animation-delay:0.4s] [animation-duration:2.0s]",
-  "left-[39%] top-[35%] [animation-delay:0.9s] [animation-duration:2.3s]",
-  "left-[45%] top-[46%] [animation-delay:0.6s] [animation-duration:1.9s]",
-  "left-[51%] top-[55%] [animation-delay:0.8s] [animation-duration:2.5s]",
-  "left-[57%] top-[42%] [animation-delay:0.4s] [animation-duration:2.1s]",
-  "left-[63%] top-[42%] [animation-delay:0.2s] [animation-duration:1.7s]",
-  "left-[69%] top-[44%] [animation-delay:0.5s] [animation-duration:2.2s]",
-  "left-[75%] top-[32%] [animation-delay:0.7s] [animation-duration:2.0s]",
-  "left-[81%] top-[25%] [animation-delay:0.35s] [animation-duration:2.3s]",
-  "left-[87%] top-[28%] [animation-delay:0.55s] [animation-duration:2.1s]",
-  "left-[93%] top-[24%] [animation-delay:0.15s] [animation-duration:1.8s]",
-  "left-[97%] top-[18%] [animation-delay:0.75s] [animation-duration:2.4s]",
-];
 
 const PERSISTED_WEEK_KEY = "huntr_earnings_current_week";
 const PREVIEW_HISTORY_LIMIT = 4;
@@ -431,6 +409,14 @@ function formatDate(value: string | null): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/** "Aug 31 '26": fits the quarter column under its label. */
+function formatShortDate(value: string | null): string {
+  if (!value) return "-";
+  const d = new Date(`${value.slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return "-";
+  return `${d.toLocaleDateString("en-US", { month: "short", day: "numeric" })} '${String(d.getFullYear()).slice(2)}`;
 }
 
 function formatEps(value: number | null): string {
@@ -791,109 +777,85 @@ function EarningsTable({
   metric: ChartMetric;
   onHover: (index: number | null) => void;
 }) {
-  const rowsByQuarter = new Map<string, FormattedEarningsPoint>(
-    rows.map((row) => [row.quarter, row])
-  );
+  const rowsByQuarter = new Map<string, FormattedEarningsPoint>(rows.map((row) => [row.quarter, row]));
 
   const revenueTtm = (quarter: string): number | null => {
-    const quarters = [
-      quarter,
-      shiftQuarterLabel(quarter, -1),
-      shiftQuarterLabel(quarter, -2),
-      shiftQuarterLabel(quarter, -3),
-    ];
-
+    const quarters = [quarter, shiftQuarterLabel(quarter, -1), shiftQuarterLabel(quarter, -2), shiftQuarterLabel(quarter, -3)];
     const values = quarters
       .map((label) => (label ? rowsByQuarter.get(label)?.revenue ?? null : null))
       .filter((value): value is number => value != null && Number.isFinite(value));
-
     if (values.length < 4) return null;
     return values.reduce((sum, value) => sum + value, 0);
   };
 
+  // Same five columns, same widths, for both metrics: switching EPS and
+  // Revenue changes what the cells say, never where they are.
+  const heads = metric === "eps" ? ["Estimate", "Reported", "Surprise", "Revenue"] : ["Revenue", "QoQ", "YoY", "TTM"];
+
   return (
-    <div className="rounded-md border border-wolf-border/35 overflow-hidden">
-      <div className="max-h-[240px] overflow-auto">
-        <table className="w-full text-xs">
-          <thead className="bg-wolf-black sticky top-0">
-            <tr className="text-mist">
-              <th className="px-2.5 py-2 text-left font-medium">Quarter</th>
-              <th className="px-2.5 py-2 text-left font-medium">Release Date</th>
-              {metric === "eps" ? (
-                <>
-                  <th className="px-2.5 py-2 text-right font-medium">Estimate</th>
-                  <th className="px-2.5 py-2 text-right font-medium">Reported</th>
-                  <th className="px-2.5 py-2 text-right font-medium">Surprise %</th>
-                  <th className="px-2.5 py-2 text-right font-medium">Revenue</th>
-                </>
-              ) : (
-                <>
-                  <th className="px-2.5 py-2 text-right font-medium">Revenue</th>
-                  <th className="px-2.5 py-2 text-right font-medium">QoQ %</th>
-                  <th className="px-2.5 py-2 text-right font-medium">YoY %</th>
-                  <th className="px-2.5 py-2 text-right font-medium">TTM Rev</th>
-                </>
-              )}
+    <div className="overflow-hidden rounded-xl ring-1 ring-inset ring-wolf-border/40">
+      <div className="scroll-quiet h-[232px] overflow-y-auto">
+        <table className="w-full table-fixed font-mono text-[12px] tabular-nums">
+          <colgroup>
+            <col className="w-[22%]" />
+            <col className="w-[19.5%]" />
+            <col className="w-[19.5%]" />
+            <col className="w-[19.5%]" />
+            <col className="w-[19.5%]" />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-wolf-surface font-sans">
+            <tr className="text-[11px] text-mist">
+              <th className="px-3 py-2.5 text-left font-medium">Quarter</th>
+              {heads.map((h) => (
+                <th key={h} className="px-3 py-2.5 text-right font-medium">
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-2.5 py-4 text-center text-mist">No history available</td>
+                <td colSpan={5} className="px-3 py-10 text-center font-sans text-mist">
+                  No quarters on file yet
+                </td>
               </tr>
             ) : (
               rows.map((row) => {
                 const chartIndex = chartRows.findIndex((item) => item.quarter === row.quarter);
-                const estimateValue = metric === "eps" ? row.estimate : row.revenueEstimate;
-                const reportedValue = metric === "eps" ? row.reported : row.revenue;
-                const surpriseValue =
-                  metric === "eps"
-                    ? row.surprise
-                    : inferSurprise(row.revenue ?? null, row.revenueEstimate ?? null);
-                const isBeat = (surpriseValue ?? 0) >= 0;
                 const previousQuarter = shiftQuarterLabel(row.quarter, -1);
                 const previousYearQuarter = shiftQuarterLabel(row.quarter, -4);
-                const qoq = computeGrowthPercent(
-                  row.revenue,
-                  previousQuarter ? rowsByQuarter.get(previousQuarter)?.revenue ?? null : null
-                );
-                const yoy = computeGrowthPercent(
-                  row.revenue,
-                  previousYearQuarter ? rowsByQuarter.get(previousYearQuarter)?.revenue ?? null : null
-                );
-                const ttmRevenue = revenueTtm(row.quarter);
+                const qoq = computeGrowthPercent(row.revenue, previousQuarter ? rowsByQuarter.get(previousQuarter)?.revenue ?? null : null);
+                const yoy = computeGrowthPercent(row.revenue, previousYearQuarter ? rowsByQuarter.get(previousYearQuarter)?.revenue ?? null : null);
+                const surprise = row.surprise;
+                const beat = (surprise ?? 0) >= 0;
 
                 return (
                   <tr
                     key={row.quarter}
-                    className="border-t border-wolf-border/30 text-snow-peak/95 hover:bg-wolf-surface/40 transition-colors"
+                    className="border-t border-wolf-border/25 text-snow-peak transition-colors duration-150 hover:bg-snow-peak/[0.035]"
                     onMouseEnter={() => onHover(chartIndex >= 0 ? chartIndex : null)}
                     onMouseLeave={() => onHover(null)}
                   >
-                    <td className="px-2.5 py-2">{row.quarter}</td>
-                    <td className="px-2.5 py-2">{formatDate(row.releaseDate)}</td>
+                    <td className="px-3 py-2">
+                      <span className="block font-sans text-[12px] font-medium">{row.quarter}</span>
+                      <span className="block truncate font-sans text-[10.5px] text-mist">{formatShortDate(row.releaseDate)}</span>
+                    </td>
                     {metric === "eps" ? (
                       <>
-                        <td className="px-2.5 py-2 text-right">{formatEps(estimateValue)}</td>
-                        <td className="px-2.5 py-2 text-right">{formatEps(reportedValue)}</td>
-                        <td className={isBeat ? "px-2.5 py-2 text-right text-emerald-500" : "px-2.5 py-2 text-right text-rose-500"}>
-                          {surpriseValue == null ? (
-                            <span>-</span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1">
-                              {isBeat ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
-                              {formatPct(surpriseValue)}
-                            </span>
-                          )}
+                        <td className="px-3 py-2 text-right text-mist">{formatEps(row.estimate)}</td>
+                        <td className="px-3 py-2 text-right">{formatEps(row.reported)}</td>
+                        <td className={cn("px-3 py-2 text-right", surprise == null ? "text-mist/50" : beat ? "text-bullish" : "text-bearish")}>
+                          {surprise == null ? "-" : `${beat ? "+" : ""}${surprise.toFixed(1)}%`}
                         </td>
-                        <td className="px-2.5 py-2 text-right">{formatCompactMoney(row.revenue)}</td>
+                        <td className="px-3 py-2 text-right text-mist">{formatCompactMoney(row.revenue)}</td>
                       </>
                     ) : (
                       <>
-                        <td className="px-2.5 py-2 text-right">{formatCompactMoney(row.revenue)}</td>
-                        <td className={`px-2.5 py-2 text-right ${signToneClass(qoq)}`}>{formatPct(qoq)}</td>
-                        <td className={`px-2.5 py-2 text-right ${signToneClass(yoy)}`}>{formatPct(yoy)}</td>
-                        <td className="px-2.5 py-2 text-right">{formatCompactMoney(ttmRevenue)}</td>
+                        <td className="px-3 py-2 text-right">{formatCompactMoney(row.revenue)}</td>
+                        <td className={cn("px-3 py-2 text-right", signToneClass(qoq))}>{formatPct(qoq)}</td>
+                        <td className={cn("px-3 py-2 text-right", signToneClass(yoy))}>{formatPct(yoy)}</td>
+                        <td className="px-3 py-2 text-right text-mist">{formatCompactMoney(revenueTtm(row.quarter))}</td>
                       </>
                     )}
                   </tr>
@@ -1311,144 +1273,116 @@ export default function EarningsPage() {
     }
   };
 
+  const closePanel = () => {
+    setIsPanelOpen(false);
+    setSelectedTicker(null);
+  };
+
+  const panelItem = isPanelOpen ? selectedItem : null;
+
   const renderPanelContent = () => {
-    if (!selectedTicker || !selectedItem) {
+    if (!panelItem) {
       return (
-        <div className="p-6">
-          <p className="text-sm text-snow-peak font-medium">Quick View</p>
-          <p className="text-xs text-mist mt-1">Select a ticker from the calendar to open the side menu.</p>
+        <div className="flex h-full flex-col items-center justify-center gap-3 px-8 text-center">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-snow-peak/[0.05] ring-1 ring-inset ring-wolf-border/50">
+            <CalendarClock className="h-5 w-5 text-mist" aria-hidden />
+          </span>
+          <div>
+            <p className="text-[15px] font-semibold text-snow-peak">Pick a company</p>
+            <p className="mt-1 text-[13px] leading-relaxed text-mist">Its last quarters against estimates, and what analysts expect next, open here.</p>
+          </div>
         </div>
       );
     }
 
-    const panelMarketCap = selectedCache?.marketCap ?? selectedItem.quote.market_cap ?? null;
-    const panelPeRatio = selectedCache?.peRatio ?? selectedItem.quote.pe_ratio ?? null;
+    const panelMarketCap = selectedCache?.marketCap ?? panelItem.quote.market_cap ?? null;
+    const panelPeRatio = selectedCache?.peRatio ?? panelItem.quote.pe_ratio ?? null;
     const panelPsRatio = selectedCache?.psRatio ?? null;
     const hasHistoryLoaded = !!selectedCache;
     const panelError = selectedCache?.dataError ?? null;
+    const change = panelItem.quote.day_change_percent;
+    const reportDay = panelItem.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 
     return (
-      <div className="h-full min-h-0 flex flex-col">
-        <div className="p-4 border-b border-wolf-border/35">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <TickerLogo
-                ticker={selectedItem.ticker}
-                src={selectedItem.profile?.logo_url}
-                className="h-10 w-10"
-                imageClassName="rounded-md"
-                fallbackClassName="rounded-md text-xs"
-              />
-              <div>
-                <p className="text-lg font-semibold text-snow-peak">{selectedItem.ticker}</p>
-                <p
-                  className={
-                    selectedItem.quote.day_change_percent != null && selectedItem.quote.day_change_percent >= 0
-                      ? "text-sm font-medium text-emerald-400 leading-tight"
-                      : "text-sm font-medium text-rose-400 leading-tight"
-                  }
-                >
-                  {formatPrice(selectedItem.quote.price)}
-                  {" "}
-                  <span className="text-xs">
-                    {formatDisplayPercent(selectedItem.quote.day_change_percent)}
-                  </span>
-                </p>
-                <p className="text-xs text-mist/90 mt-1">
-                  Next earnings: {formatDate(selectedItem.quote.next_earnings_date ?? null)}
-                </p>
-              </div>
+      <div className="flex h-full min-h-0 flex-col">
+        {/* Company: always the same height, whatever loads below. */}
+        <div className="shrink-0 border-b border-wolf-border/35 p-5">
+          <div className="flex items-start gap-3">
+            <TickerLogo ticker={panelItem.ticker} src={panelItem.profile?.logo_url} className="h-11 w-11 shrink-0" imageClassName="rounded-xl" fallbackClassName="rounded-xl text-xs" />
+            <div className="min-w-0 flex-1">
+              <p className="flex items-baseline gap-2">
+                <span className="font-mono text-lg font-semibold text-snow-peak">{panelItem.ticker}</span>
+                <span className="truncate text-[13px] text-mist">{panelItem.profile?.name ?? ""}</span>
+              </p>
+              <p className="mt-0.5 font-mono text-[13px] tabular-nums">
+                <span className="text-snow-peak">{formatPrice(panelItem.quote.price)}</span>{" "}
+                <span className={change != null && change >= 0 ? "text-bullish" : "text-bearish"}>{formatDisplayPercent(change)}</span>
+              </p>
             </div>
-
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={() => setIsPanelOpen(false)}
-              aria-label="Close side panel"
+            <button
+              type="button"
+              onClick={closePanel}
+              aria-label="Close"
+              className="-mr-1 -mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-mist transition-[background-color,color,transform] duration-150 hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-90"
             >
               <X className="h-4 w-4" />
-            </Button>
+            </button>
           </div>
 
-          <div className="mt-4 grid grid-cols-3 gap-4">
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-mist">Mkt Cap</p>
-              <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">{formatMarketCap(panelMarketCap)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-mist">P/E</p>
-              <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">{formatRatio(panelPeRatio)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wide text-mist">P/S</p>
-              <p className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">{formatRatio(panelPsRatio)}</p>
-            </div>
-          </div>
-        </div>
-
-        <div className="p-4 space-y-3 flex-1 min-h-0 overflow-y-auto">
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Recent Earnings Quarters</p>
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleLoadMoreHistory}
-                disabled={!selectedCache || hasFullHistoryLoaded || isHistoryExpansionLoading || isPanelLoading}
-                className="h-7 text-[11px] border-wolf-border/60"
-              >
-                {isHistoryExpansionLoading
-                  ? "Loading 14Q..."
-                  : hasFullHistoryLoaded
-                    ? "14Q loaded"
-                    : "Load 14 quarters"}
-              </Button>
-              <div className="inline-flex rounded-full bg-wolf-black/40 ring-1 ring-inset ring-wolf-border/40 p-0.5">
-                <button
-                  type="button"
-                  className={
-                    chartMetric === "revenue"
-                      ? "px-3 py-1 rounded-full text-xs font-medium bg-wolf-surface text-snow-peak"
-                      : "px-3 py-1 rounded-full text-xs text-mist"
-                  }
-                  onClick={() => setChartMetric("revenue")}
-                >
-                  Revenue
-                </button>
-                <button
-                  type="button"
-                  className={
-                    chartMetric === "eps"
-                      ? "px-3 py-1 rounded-full text-xs font-medium bg-wolf-surface text-snow-peak"
-                      : "px-3 py-1 rounded-full text-xs text-mist"
-                  }
-                  onClick={() => setChartMetric("eps")}
-                >
-                  EPS
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/40 px-3 py-2">
-            <p className="text-[10px] uppercase tracking-[0.09em] text-mist/60">Next estimate</p>
-            <p className="mt-1 font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
-              {chartMetric === "eps"
-                ? `EPS: ${formatEps(selectedCache?.nextEstEps ?? null)}`
-                : `Revenue: ${formatCompactMoney(selectedCache?.nextEstRevenue ?? null)}`}
+          <div className="mt-4 flex items-center gap-2 rounded-xl bg-sunset-orange/[0.07] px-3 py-2 ring-1 ring-inset ring-sunset-orange/20">
+            {panelItem.timing === "Before Open" ? <Sun className="h-3.5 w-3.5 text-sunset-orange" aria-hidden /> : <Moon className="h-3.5 w-3.5 text-sunset-orange" aria-hidden />}
+            <p className="text-[13px] text-snow-peak">
+              {panelItem.source === "persisted" ? "Reported" : "Reports"} {reportDay}, <span className="text-mist">{panelItem.timing === "Before Open" ? "before the open" : "after the close"}</span>
             </p>
           </div>
 
-          {panelError ? (
-            <ErrorState
-              inline
-              variant="server"
-              title={panelError}
-            />
-          ) : null}
+          <dl className="mt-4 grid grid-cols-3 gap-2">
+            {[
+              ["Market cap", formatMarketCap(panelMarketCap)],
+              ["P/E", formatRatio(panelPeRatio)],
+              ["P/S", formatRatio(panelPsRatio)],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-xl bg-snow-peak/[0.03] px-3 py-2 ring-1 ring-inset ring-wolf-border/35">
+                <dt className="text-[11px] text-mist">{label}</dt>
+                <dd className="mt-0.5 font-mono text-[14px] font-semibold tabular-nums text-snow-peak">{value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
 
-          <div className="h-[250px] rounded-xl border border-wolf-border/45 bg-wolf-black/30 px-2 py-0">
+        <div className="scroll-quiet min-h-0 flex-1 space-y-3 overflow-y-auto p-5">
+          <div className="flex items-center justify-between gap-3">
+            <SegmentedTabs<ChartMetric>
+              items={[
+                { key: "eps", label: "EPS" },
+                { key: "revenue", label: "Revenue" },
+              ]}
+              value={chartMetric}
+              onChange={setChartMetric}
+              ariaLabel="Metric"
+              size="sm"
+            />
+            <button
+              type="button"
+              onClick={handleLoadMoreHistory}
+              disabled={!selectedCache || hasFullHistoryLoaded || isHistoryExpansionLoading || isPanelLoading}
+              // Fixed width: the label changes, the button does not.
+              className="inline-flex h-8 w-[8.5rem] items-center justify-center gap-1.5 rounded-lg text-[12px] font-medium text-mist ring-1 ring-inset ring-wolf-border/50 transition-[background-color,color] duration-150 hover:bg-snow-peak/[0.05] hover:text-snow-peak disabled:pointer-events-none disabled:opacity-50"
+            >
+              {isHistoryExpansionLoading ? "Loading…" : hasFullHistoryLoaded ? "14 quarters shown" : "Show 14 quarters"}
+            </button>
+          </div>
+
+          <div className="flex items-baseline justify-between rounded-xl bg-snow-peak/[0.03] px-3.5 py-2.5 ring-1 ring-inset ring-wolf-border/35">
+            <span className="text-[12px] text-mist">Next quarter, consensus</span>
+            <span className="font-mono text-[15px] font-semibold tabular-nums text-snow-peak">
+              {hasHistoryLoaded ? (chartMetric === "eps" ? formatEps(selectedCache?.nextEstEps ?? null) : formatCompactMoney(selectedCache?.nextEstRevenue ?? null)) : <span className="huntr-skeleton inline-block h-4 w-14 rounded" />}
+            </span>
+          </div>
+
+          {panelError ? <ErrorState inline variant="server" title={panelError} /> : null}
+
+          <div className="h-[240px] rounded-xl bg-wolf-black/25 px-2 ring-1 ring-inset ring-wolf-border/35">
             {hasHistoryLoaded ? (
               <EarningsMetricChart
                 metric={chartMetric}
@@ -1465,31 +1399,24 @@ export default function EarningsPage() {
                 }}
               />
             ) : isPanelLoading ? (
-              <div className="relative h-full w-full overflow-hidden">
-                {PANEL_LOADING_DOTS.map((dotClassName, idx) => (
-                  <div
-                    key={`panel-loading-dot-${idx}`}
-                    className={`absolute h-2.5 w-2.5 rounded-full bg-sunset-orange/75 shadow-[0_0_10px_rgba(255,140,66,0.55)] animate-pulse ${dotClassName}`}
-                  />
+              // The chart's own silhouette: axis, four quarters of dots.
+              <div className="flex h-full items-end justify-around px-6 pb-12 pt-10" aria-busy="true">
+                {[0.55, 0.35, 0.7, 0.45, 0.6].map((h, i) => (
+                  <span key={i} className="huntr-skeleton h-3 w-3 rounded-full" style={{ marginBottom: `${h * 120}px` }} />
                 ))}
               </div>
             ) : (
-              <div className="h-full w-full flex items-center justify-center text-xs text-mist">
-                No chart data available
-              </div>
+              <div className="flex h-full items-center justify-center text-[13px] text-mist">No history to chart</div>
             )}
           </div>
 
           {hasHistoryLoaded ? (
-            <EarningsTable
-              rows={tableRows}
-              chartRows={chartRows}
-              metric={chartMetric}
-              onHover={setHoveredChartIndex}
-            />
+            <EarningsTable rows={tableRows} chartRows={chartRows} metric={chartMetric} onHover={setHoveredChartIndex} />
           ) : (
-            <div className="rounded-md border border-wolf-border/35 px-3 py-4 text-xs text-mist">
-              Loading earnings history...
+            <div className="h-[234px] space-y-2 rounded-xl p-3 ring-1 ring-inset ring-wolf-border/40" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="huntr-skeleton h-6 rounded-md" />
+              ))}
             </div>
           )}
         </div>
@@ -1497,203 +1424,193 @@ export default function EarningsPage() {
     );
   };
 
+  const weekEnd = addDays(weekStart, 4);
+  const rangeLabel = `${weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })} - ${weekEnd.toLocaleDateString("en-US", { month: weekEnd.getMonth() === weekStart.getMonth() ? undefined : "short", day: "numeric" })}`;
+  const weekName = weekOffset === 0 ? "This week" : weekOffset === 1 ? "Next week" : `In ${weekOffset} weeks`;
+  const watchlistGroups = [{ label: "Watchlists", options: [{ value: "all", label: "All companies" }, ...lists.map((l) => ({ value: l.id, label: l.name }))] }];
+
   return (
-    <div className="w-full min-h-0 flex flex-col gap-4">
-      <div className="flex items-center gap-3">
-        <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-sunset-orange/10 border border-sunset-orange/15">
-          <CalendarClock className="w-5 h-5 text-sunset-orange" />
+    // At lg the page is exactly the window below the topbar (56px) and the
+    // main padding (2rem each side): nothing scrolls the page, the day columns
+    // and the detail scroll inside, and a bottom margin is always kept.
+    <div className="flex w-full min-h-0 flex-col gap-5 lg:h-[calc(100dvh-56px-4rem)]">
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <header className="flex items-center gap-3">
+        <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-sunset-orange/15 bg-sunset-orange/10">
+          <CalendarClock className="h-5 w-5 text-sunset-orange" aria-hidden />
         </div>
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-snow-peak">Earnings</h1>
-          <p className="text-xs text-mist mt-0.5">Weekly earnings calendar, curated for fast scanning</p>
+          <h1 className="text-2xl font-bold leading-tight tracking-[-0.02em] text-snow-peak">Earnings</h1>
+          <p className="mt-0.5 text-xs tabular-nums text-mist" aria-live="polite">
+            {isLoading ? "Loading the calendar…" : `${earningsItems.length} ${earningsItems.length === 1 ? "company reports" : "companies report"} ${weekOffset === 0 ? "this week" : "that week"}`}
+          </p>
         </div>
-      </div>
+      </header>
 
-      <div className={isPanelOpen && selectedItem ? "grid grid-cols-1 2xl:grid-cols-[1fr_450px] gap-4 flex-1 min-h-0" : "grid grid-cols-1 gap-4 flex-1 min-h-0"}>
-        <Card className="min-h-0">
-          <CardContent className="p-2 h-full min-h-0 flex flex-col">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-wolf-border/30 p-3">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setWeekOffset((value) => Math.max(0, value - 1))}
-                  aria-label="Previous week"
-                  disabled={weekOffset === 0}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setWeekOffset(0)} className="text-xs">
-                  Today
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setWeekOffset((value) => Math.min(maxWeekOffset, value + 1))}
-                  aria-label="Next week"
-                  disabled={weekOffset >= maxWeekOffset}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <div className="ml-1">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">Earnings This Week</p>
-                  <p className="text-[11px] text-mist">
-                    {weekStart.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                    {" - "}
-                    {addDays(weekStart, 4).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                  </p>
-                </div>
-              </div>
+      {/* ── Toolbar: above the calendar, so its menus open over it. ───── */}
+      <MaterialPanel className="relative z-20 flex flex-wrap items-center gap-3 p-3 sm:p-3.5">
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setWeekOffset((value) => Math.max(0, value - 1))}
+            aria-label="Previous week"
+            disabled={weekOffset === 0}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-mist transition-[background-color,color,transform] duration-150 hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          {/* Fixed width, so the arrows do not move as the label changes. */}
+          <div className="w-[9.5rem] text-center">
+            <p className="text-[14px] font-semibold text-snow-peak">{weekName}</p>
+            <p className="font-mono text-[11px] tabular-nums text-mist">{rangeLabel}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setWeekOffset((value) => Math.min(maxWeekOffset, value + 1))}
+            aria-label="Next week"
+            disabled={weekOffset >= maxWeekOffset}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-mist transition-[background-color,color,transform] duration-150 hover:bg-snow-peak/[0.06] hover:text-snow-peak active:scale-90 disabled:pointer-events-none disabled:opacity-30"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setWeekOffset(0)}
+            disabled={weekOffset === 0}
+            className="ml-1 h-8 rounded-lg px-2.5 text-[12px] font-medium text-mist ring-1 ring-inset ring-wolf-border/50 transition-colors hover:text-snow-peak disabled:invisible"
+          >
+            Today
+          </button>
+        </div>
 
-              <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
-                <div className="relative w-full sm:w-auto sm:min-w-[220px]">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-mist/70" />
-                  <Input
-                    value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    placeholder="Search ticker or company"
-                    className="h-9 w-full sm:w-[220px] pl-8 text-xs"
-                  />
-                </div>
+        <div className="ml-auto flex w-full flex-wrap items-center gap-2 sm:w-auto">
+          <label className="flex h-10 w-full items-center gap-2 rounded-lg bg-wolf-black/30 px-3 ring-1 ring-inset ring-wolf-border/50 focus-within:ring-sunset-orange/50 sm:w-60">
+            <Search className="h-4 w-4 shrink-0 text-mist" aria-hidden />
+            <input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Ticker or company"
+              aria-label="Search this week"
+              className="min-w-0 flex-1 bg-transparent text-sm text-snow-peak outline-none placeholder:text-mist/60"
+            />
+            {search ? (
+              <button type="button" aria-label="Clear search" onClick={() => setSearch("")} className="text-mist hover:text-snow-peak">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : null}
+          </label>
+          <SelectMenu<CapFilter>
+            groups={[
+              {
+                label: "Market cap",
+                options: [
+                  { value: "all", label: "All sizes (over $10B)" },
+                  { value: "mega", label: "Mega (over $200B)" },
+                  { value: "large", label: "Large ($10B-200B)" },
+                ],
+              },
+            ]}
+            value={capFilter}
+            onChange={setCapFilter}
+            ariaLabel="Market cap"
+            className="w-full sm:w-52"
+          />
+          <SelectMenu<string> groups={watchlistGroups} value={watchlistFilterId} onChange={setWatchlistFilterId} ariaLabel="Watchlist" className="w-full sm:w-48" />
+        </div>
+      </MaterialPanel>
 
-                <select
-                  value={capFilter}
-                  onChange={(event) => setCapFilter(event.target.value as CapFilter)}
-                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black px-3 text-xs text-snow-peak [color-scheme:dark]"
-                  aria-label="Market cap filter"
-                >
-                  <option className="bg-wolf-surface text-snow-peak" value="all">Market Cap: 10B+</option>
-                  <option className="bg-wolf-surface text-snow-peak" value="mega">Mega (200B+)</option>
-                  <option className="bg-wolf-surface text-snow-peak" value="large">Large (10B-200B)</option>
-                </select>
-
-                <select
-                  value={watchlistFilterId}
-                  onChange={(event) => setWatchlistFilterId(event.target.value)}
-                  className="h-9 w-full sm:w-auto rounded-md border border-wolf-border/40 bg-wolf-black px-3 text-xs text-snow-peak [color-scheme:dark]"
-                  aria-label="Watchlist filter"
-                >
-                  <option className="bg-wolf-surface text-snow-peak" value="all">Filter by Watchlist: All</option>
-                  {lists.map((list) => (
-                    <option className="bg-wolf-surface text-snow-peak" key={list.id} value={list.id}>{list.name}</option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3 p-3">
-              <div className="hidden xl:grid xl:col-span-5 grid-cols-5 rounded-lg bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/35 overflow-hidden">
-                {weekDays.map((day) => (
-                  <div key={`calendar-${day.toISOString()}`} className="px-3 py-2 border-r border-wolf-border/35 last:border-r-0 text-center">
-                    <p className="text-[10px] uppercase tracking-wide text-mist">
-                      {day.toLocaleDateString("en-US", { weekday: "short" })}
-                    </p>
-                    <div className="mt-1 flex justify-center">
-                      <span
-                        className={
-                          isSameDay(day, today)
-                            ? "h-6 w-6 rounded-full bg-sunset-orange text-xs font-semibold inline-flex items-center justify-center"
-                            : "text-xs font-semibold text-snow-peak"
-                        }
-                      >
-                        {day.toLocaleDateString("en-US", { day: "numeric" })}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
+      {/* ── Calendar + detail: the detail column is always there at xl, so
+          choosing a company never re-flows the week. ─────────────────── */}
+      <div className="grid min-h-0 grid-cols-1 gap-4 lg:flex-1 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <MaterialPanel className="min-w-0 p-3 lg:flex lg:min-h-0 lg:flex-col">
+          {quotesError || profilesError ? (
+            <ErrorState
+              inline
+              title="Could not load earnings data"
+              onRetry={() => {
+                void refetchQuotes();
+                void refetchProfiles();
+              }}
+            />
+          ) : (
+            <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:min-h-0 lg:flex-1 lg:grid-cols-5">
               {dayColumns.map(({ day, groups }, dayIndex) => {
+                const isToday = isSameDay(day, today);
+                const isPast = day < today;
+                const total = groups.beforeOpen.length + groups.afterClose.length;
                 const sections: EarningsSection[] = [
                   { key: "before-open", label: "Before Open", icon: Sun, items: groups.beforeOpen },
                   { key: "after-close", label: "After Close", icon: Moon, items: groups.afterClose },
                 ];
-
                 return (
-                  <div key={day.toISOString()} className="insight-enter overflow-hidden rounded-xl bg-snow-peak/[0.02] ring-1 ring-inset ring-wolf-border/40" style={{ "--enter-delay": `${dayIndex * 40}ms` } as React.CSSProperties}>
-                    <div className="border-b border-wolf-border/30 px-3 py-2">
-                      <p className="xl:hidden text-[10px] uppercase tracking-[0.09em] text-mist/60">
-                        {day.toLocaleDateString("en-US", { weekday: "short" })}
-                      </p>
-                      <p className="xl:hidden text-sm font-semibold text-snow-peak">
-                        {day.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </p>
-                    </div>
+                  <section
+                    key={day.toISOString()}
+                    aria-label={day.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                    className={cn(
+                      "flex min-h-0 min-w-0 flex-col rounded-xl ring-1 ring-inset",
+                      isToday ? "bg-sunset-orange/[0.04] ring-sunset-orange/30" : "bg-snow-peak/[0.02] ring-wolf-border/40"
+                    )}
+                  >
+                    <header className="flex items-center justify-between border-b border-wolf-border/30 px-3 py-2.5">
+                      <div className="flex items-baseline gap-2">
+                        <span className={cn("text-[12px] font-medium", isToday ? "text-sunset-orange" : "text-mist")}>
+                          {day.toLocaleDateString("en-US", { weekday: "short" })}
+                        </span>
+                        <span className={cn("font-mono text-[15px] font-semibold tabular-nums", isPast && !isToday ? "text-mist" : "text-snow-peak")}>
+                          {day.toLocaleDateString("en-US", { day: "numeric" })}
+                        </span>
+                      </div>
+                      <span className="font-mono text-[11px] tabular-nums text-mist/70">{isLoading ? "" : total}</span>
+                    </header>
 
-                    <div className="scroll-quiet p-2 space-y-2 min-h-[280px] sm:min-h-[320px] xl:min-h-[380px] max-h-[58vh] xl:max-h-[520px] overflow-y-auto">
-                      {(quotesError || profilesError) ? (
-                        <ErrorState
-                          inline
-                          title="Could not load earnings data"
-                          onRetry={() => { void refetchQuotes(); void refetchProfiles(); }}
-                        />
-                      ) : isLoading ? (
+                    {/* One height for every day, loaded or not, full or empty: the
+                        window's, within bounds, so the detail beside it has room
+                        and nothing on the page depends on what is selected. */}
+                    <div className="scroll-quiet h-[440px] space-y-3 overflow-y-auto p-2.5 lg:h-auto lg:min-h-0 lg:flex-1">
+                      {isLoading ? (
                         <EarningsColumnSkeleton dayIndex={dayIndex} />
                       ) : (
                         sections.map((section) => (
-                          <div key={section.key} className="rounded-lg bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/35 p-2.5">
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-[11px] font-medium text-snow-peak inline-flex items-center gap-1.5">
-                                <section.icon className="h-3.5 w-3.5 text-mist" />
+                          <div key={section.key}>
+                            <p className="mb-1.5 flex items-center justify-between px-0.5 text-[11.5px] font-medium text-mist">
+                              <span className="inline-flex items-center gap-1.5">
+                                <section.icon className="h-3.5 w-3.5" aria-hidden />
                                 {section.label}
-                              </p>
-                              <Badge variant="secondary" className="text-[10px] h-5">{section.items.length}</Badge>
-                            </div>
-
+                              </span>
+                              <span className="font-mono tabular-nums text-mist/60">{section.items.length || ""}</span>
+                            </p>
                             {section.items.length === 0 ? (
-                              <p className="text-xs text-mist/70">No reports</p>
+                              <p className="rounded-lg px-2.5 py-2 text-[12px] text-mist/50 ring-1 ring-inset ring-dashed ring-wolf-border/30">None</p>
                             ) : (
-                              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-2">
-                                {section.items.map((item, itemIndex) => {
+                              <div className="grid grid-cols-2 gap-1.5">
+                                {section.items.map((item) => {
                                   const isSelected = selectedTicker === item.ticker && isPanelOpen;
                                   const isInWatchlist = allWatchlistTickerSet.has(item.ticker);
-
                                   return (
                                     <button
                                       type="button"
                                       key={`${item.ticker}-${item.date.toISOString()}-${section.key}`}
-                                      onClick={() => { void handleSelectTicker(item.ticker); }}
-                                      // Chips arrive after their column, reading
-                                      // left-to-right. Capped so a long day does
-                                      // not leave its tail hanging.
-                                      style={{ "--enter-delay": `${dayIndex * 40 + Math.min(itemIndex * 30, 240)}ms` } as React.CSSProperties}
+                                      onClick={() => {
+                                        void handleSelectTicker(item.ticker);
+                                      }}
+                                      aria-pressed={isSelected}
+                                      aria-label={`${item.ticker}${item.profile?.name ? `, ${item.profile.name}` : ""}: open earnings history`}
                                       className={cn(
-                                        "insight-enter",
-                                        "flex min-h-[78px] w-full cursor-pointer justify-center gap-2 rounded-xl p-2 text-center",
-                                        "ring-1 ring-inset transition-[background-color,box-shadow,transform] duration-150 ease-out",
-                                        // Acknowledgement on pointer-down — the
-                                        // only feedback touch ever gets here.
-                                        "active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
-                                        "motion-reduce:transition-none motion-reduce:active:scale-100",
-                                        isSelected
-                                          ? "bg-sunset-orange/10 ring-sunset-orange/45"
-                                          : "bg-snow-peak/[0.04] ring-wolf-border/40 hover:bg-snow-peak/[0.07] hover:ring-wolf-border/70"
+                                        // Fixed size: selecting a chip changes its colour, nothing else.
+                                        "relative flex h-[76px] min-w-0 flex-col items-center justify-center gap-1.5 rounded-xl px-1.5 ring-1 ring-inset",
+                                        "transition-[background-color,box-shadow,transform] duration-150 ease-out active:scale-[0.97] motion-reduce:active:scale-100",
+                                        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
+                                        isSelected ? "bg-sunset-orange/[0.12] ring-sunset-orange/50" : "bg-snow-peak/[0.035] ring-wolf-border/35 hover:bg-snow-peak/[0.07] hover:ring-wolf-border/70"
                                       )}
-                                      aria-label={`Open ${item.ticker} earnings quick view`}
                                     >
-                                      <div className="grid grid-cols-1 gap-1.5 sm:gap-2">
-                                        <div className="relative mx-auto w-fit">
-                                          <TickerLogo
-                                            ticker={item.ticker}
-                                            src={item.profile?.logo_url}
-                                            className="h-8 w-8 sm:h-10 sm:w-10"
-                                            imageClassName="rounded-[6px]"
-                                            fallbackClassName="rounded-[6px] text-[10px]"
-                                          />
-                                          {isInWatchlist ? (
-                                            <span className="absolute -top-1 -right-2 z-20 inline-flex items-center justify-center h-4 w-4 rounded-full bg-black text-sunset-orange ring-2 ring-[#000000] shadow-[0_0_0_2px_rgba(251,191,36,0.35)]">
-                                              <Star className="h-3.5 w-3.5" />
-                                            </span>
-                                          ) : null}
-                                        </div>
-                                        <div className="w-full">
-                                          <p className="text-[11px] sm:text-xs font-semibold text-snow-peak leading-tight">{item.ticker}</p>
-                                          {item.source === "persisted" ? (
-                                            <p className="text-[10px] text-mist/80">Reported</p>
-                                          ) : null}
-                                        </div>
-                                      </div>
+                                      <TickerLogo ticker={item.ticker} src={item.profile?.logo_url} className="h-8 w-8" imageClassName="rounded-lg" fallbackClassName="rounded-lg text-[10px]" />
+                                      <span className="flex items-center gap-1">
+                                        <span className="font-mono text-[12px] font-semibold text-snow-peak">{item.ticker}</span>
+                                        {isInWatchlist ? <Star className="h-3 w-3 fill-sunset-orange text-sunset-orange" aria-label="In a watchlist" /> : null}
+                                      </span>
+                                      {item.source === "persisted" ? (
+                                        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-mist/60" title="Already reported" />
+                                      ) : null}
                                     </button>
                                   );
                                 })}
@@ -1703,30 +1620,31 @@ export default function EarningsPage() {
                         ))
                       )}
                     </div>
-                  </div>
+                  </section>
                 );
               })}
-              </div>
             </div>
-          </CardContent>
-        </Card>
+          )}
+        </MaterialPanel>
 
-        {isPanelOpen && selectedItem ? (
-          <Card className="hidden 2xl:block h-full min-h-0">
-            <CardContent className="p-0 h-full min-h-0 overflow-hidden">{renderPanelContent()}</CardContent>
-          </Card>
-        ) : null}
+        {/* Detail, xl and up: a fixed column the height of the calendar. */}
+        {/* Positioned inside, so it takes the row's height from the calendar
+            and never pushes it; its own content scrolls. */}
+        <MaterialPanel className="relative hidden min-h-0 overflow-hidden p-0 xl:block">
+          <div className="absolute inset-0">{renderPanelContent()}</div>
+        </MaterialPanel>
       </div>
 
-      {isPanelOpen && selectedItem ? (
-        <div className="2xl:hidden fixed inset-0 z-40 backdrop-blur-[5px]">
-          {/* Carried two competing background classes, and `bg-midnight-rock`
-              was never a real token — Midnight Rock is the design system's name
-              for wolf-surface, so it generated no CSS and the panel fell back to
-              the page colour. A sheet floating over content should read as a
-              nearer plane, so it takes the surface colour and a bright left edge
-              rather than being the same black as what it covers. */}
-          <div className="absolute inset-y-0 right-0 w-full max-w-[480px] overflow-y-auto bg-wolf-surface shadow-2xl shadow-wolf-black/60 ring-1 ring-inset ring-wolf-border/50">
+      {/* Detail below xl: a sheet from the right, over a dimmed page. */}
+      {panelItem ? (
+        <div className="fixed inset-0 z-50 xl:hidden">
+          <button type="button" aria-label="Close" onClick={closePanel} className="absolute inset-0 bg-wolf-black/60 backdrop-blur-[3px]" />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label={`${panelItem.ticker} earnings`}
+            className="absolute inset-y-0 right-0 flex w-full max-w-[440px] flex-col bg-wolf-surface shadow-2xl shadow-wolf-black/60 ring-1 ring-inset ring-wolf-border/50 animate-huntr-sheet motion-reduce:animate-none"
+          >
             {renderPanelContent()}
           </div>
         </div>
@@ -1736,40 +1654,22 @@ export default function EarningsPage() {
 }
 
 /**
- * Placeholder for a day column while quotes are in flight.
- *
- * A spinner told the user "something is happening" and nothing else; the column
- * then snapped from a 60px box to a full grid of chips. This holds the column's
- * real silhouette instead — section header, count badge, a grid of chip-shaped
- * ghosts — so the layout is already settled when the data lands and only the
- * content changes. The shimmer delays cascade the same way the real chips do.
+ * A day column while quotes are in flight: the column's real silhouette
+ * (section labels, chips in pairs), so the layout is settled before the
+ * data lands and only the content changes.
  */
 function EarningsColumnSkeleton({ dayIndex }: { dayIndex: number }) {
   return (
-    <div className="space-y-2" role="status" aria-label="Loading earnings for this day">
+    <div className="space-y-3" role="status" aria-label="Loading earnings for this day">
       {[0, 1].map((sectionIndex) => (
-        <div
-          key={sectionIndex}
-          className="rounded-lg bg-snow-peak/[0.025] ring-1 ring-inset ring-wolf-border/35 p-2.5"
-        >
-          <div className="mb-2 flex items-center justify-between">
-            <div className="huntr-skeleton h-3 w-20 rounded-full" />
-            <div className="huntr-skeleton h-5 w-5 rounded-md" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-2 xl:grid-cols-2">
+        <div key={sectionIndex}>
+          <div className="huntr-skeleton mb-1.5 h-3 w-20 rounded-full" />
+          <div className="grid grid-cols-2 gap-1.5">
             {[0, 1].map((chipIndex) => (
-              <div
-                key={chipIndex}
-                className="flex min-h-[78px] w-full flex-col items-center justify-center gap-1.5 rounded-xl bg-snow-peak/[0.02] p-2 ring-1 ring-inset ring-wolf-border/30"
-              >
+              <div key={chipIndex} className="flex h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl bg-snow-peak/[0.02] ring-1 ring-inset ring-wolf-border/30">
                 <div
-                  className="huntr-skeleton h-8 w-8 rounded-[6px] sm:h-10 sm:w-10"
-                  style={
-                    {
-                      "--shimmer-delay": `${dayIndex * 90 + (sectionIndex * 2 + chipIndex) * 120}ms`,
-                    } as React.CSSProperties
-                  }
+                  className="huntr-skeleton h-8 w-8 rounded-lg"
+                  style={{ "--shimmer-delay": `${dayIndex * 90 + (sectionIndex * 2 + chipIndex) * 120}ms` } as React.CSSProperties}
                 />
                 <div className="huntr-skeleton h-2.5 w-9 rounded-full" />
               </div>
