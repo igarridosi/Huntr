@@ -330,6 +330,16 @@ describe("resolveChart — market metrics", () => {
     expect(on(chart, "pe", "2023-12-31")).toBeNull();
   });
 
+  it("bridges a period with no forward EPS from its neighbours instead of leaving a hole", () => {
+    const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "f", ticker: "A", metric: "pe_forward", shape: "line" })] });
+    // Q1 2024 has no forward EPS (the consensus ahead was a loss): Q4 2023 at 4 and Q2 2024 at 6 carry it.
+    const fwd = Object.assign((date: string) => (date === "2023-12-31" ? 4 : date === "2024-06-30" ? 6 : null), { snapshot: () => null });
+    const chart = resolveChart(spec, { ...inputs, forwardEps: { A: fwd } });
+    // 2024-03-31 is 91 of the 182 days from Q4 2023 to Q2 2024: EPS 4 + 2 × 91/182 = 5; close 555.
+    expect(on(chart, "f", "2024-03-31")).toBeCloseTo(555 / 5);
+    expect(on(chart, "f", "2024-05-15")).not.toBeNull();
+  });
+
   it("interpolates forward EPS between period ends", () => {
     const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "f", ticker: "A", metric: "pe_forward", shape: "line" })] });
     const fwd = Object.assign((date: string) => (date === "2023-12-31" ? 4 : date === "2024-03-31" ? 6 : null), { snapshot: () => null });

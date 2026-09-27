@@ -342,6 +342,9 @@ export function isDailyMarket(series: ChartSeries): boolean {
   return METRICS[series.metric].source === "market" && (series.transform === "raw" || series.transform === "indexed");
 }
 
+/** Forward EPS is bridged across at most this many periods without one (a year of quarters). */
+const BRIDGE_PERIODS = 4;
+
 /** How long a daily line holds its last value over rows that are not its own (weekends, holidays). */
 const HOLD_MS = 5 * 86_400_000;
 
@@ -388,9 +391,18 @@ function dailyMarketValues(
     if (forwardEps) {
       forward = forwardEps.snapshot?.(p.date) ?? null;
       if (forward === null) {
-        const a = fwdEnd(i);
-        const b = i + 1 < bundles.length ? fwdEnd(i + 1) : null;
-        forward = a !== null && b !== null ? a + ((b - a) * (t - ends[i])) / (ends[i + 1] - ends[i]) : a;
+        // Between the nearest period ends on either side that have a
+        // forward EPS: the next one normally, but a period with none (the
+        // consensus ahead of Booking in late 2020 was a loss) is bridged
+        // from its neighbours rather than left as a hole in the line.
+        let j = i;
+        while (j >= 0 && i - j <= BRIDGE_PERIODS && fwdEnd(j) === null) j--;
+        let k = i + 1;
+        while (k < bundles.length && k - i <= BRIDGE_PERIODS + 1 && fwdEnd(k) === null) k++;
+        const a = j >= 0 && i - j <= BRIDGE_PERIODS ? fwdEnd(j) : null;
+        const b = k < bundles.length && k - i <= BRIDGE_PERIODS + 1 ? fwdEnd(k) : null;
+        if (a !== null && b !== null) forward = a + ((b - a) * (t - ends[j])) / (ends[k] - ends[j]);
+        else if (a !== null && j === i) forward = a;
       }
     }
     const b = bundles[i];

@@ -280,6 +280,12 @@ describe("generated title and subtitle", () => {
     expect(next.subtitle).toBe("Trailing twelve-month net margin");
   });
 
+  it("keeps an acronym's capitals in a generated subtitle", () => {
+    const pe = createSpec({ subtitle: "Quarterly revenue", series: [createSeries({ ticker: "MA", metric: "revenue" })] });
+    const next = followAutoText(pe, { ...pe, series: pe.series.map((s) => ({ ...s, metric: "pe_forward" as const })) });
+    expect(next.subtitle).toBe("Quarterly P/E (forward)");
+  });
+
   it("never touches text the user wrote", () => {
     const own = { ...start, title: "Same card, different business", subtitle: "Net margin (TTM)" };
     const next = followAutoText(own, toMargin(own));

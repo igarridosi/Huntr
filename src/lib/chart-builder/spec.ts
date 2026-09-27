@@ -457,7 +457,10 @@ export function autoTitle(spec: ChartSpec): string | undefined {
 export function autoSubtitle(spec: ChartSpec): string {
   const metric = sharedMetric(spec);
   if (!metric) return spec.granularity === "ttm" ? "Trailing twelve months" : PERIOD_WORD[spec.granularity];
-  return `${PERIOD_WORD[spec.granularity]} ${METRICS[metric].label.toLowerCase()}`;
+  // "Net margin" reads as "net margin" mid-sentence; "P/E" and "EPS" stay as they are.
+  const label = METRICS[metric].label;
+  const inSentence = /^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label;
+  return `${PERIOD_WORD[spec.granularity]} ${inSentence}`;
 }
 
 /**
