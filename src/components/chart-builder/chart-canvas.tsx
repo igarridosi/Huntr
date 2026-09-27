@@ -142,12 +142,30 @@ function useElementWidth<T extends HTMLElement>(): [React.RefObject<T | null>, n
   return [ref, width];
 }
 
-/** A value pill, already laid out in plot pixels. */
-function Pill({ left, top, w, text, theme }: { left: number; top: number; w: number; text: string; theme: CanvasTokens }) {
+/** Dark text on a light fill, white on a dark one (WCAG relative luminance). */
+function inkOn(hex: string): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return "#FFFFFF";
+  const n = parseInt(m[1], 16);
+  const lin = (c: number) => {
+    const v = c / 255;
+    return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+  };
+  const l = 0.2126 * lin((n >> 16) & 255) + 0.7152 * lin((n >> 8) & 255) + 0.0722 * lin(n & 255);
+  // Contrast against near-black and white; take whichever is higher.
+  return (l + 0.05) / 0.06 >= 1.05 / (l + 0.05) ? "#0B1416" : "#FFFFFF";
+}
+
+/**
+ * A value pill, already laid out in plot pixels. It wears its series'
+ * colour, so which line a number belongs to reads at a glance; a stack's
+ * total, which belongs to several, keeps the neutral one.
+ */
+function Pill({ left, top, w, text, fill, theme }: { left: number; top: number; w: number; text: string; fill: string | null; theme: CanvasTokens }) {
   return (
     <g className="cb-pill">
-      <rect x={left} y={top} width={w} height={PILL_H} rx={5} fill={theme.labelBg} />
-      <text x={left + w / 2} y={top + 12.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={theme.labelText} fontFamily="var(--font-mono)">
+      <rect x={left} y={top} width={w} height={PILL_H} rx={6} fill={fill ?? theme.labelBg} />
+      <text x={left + w / 2} y={top + 15.5} textAnchor="middle" fontSize={13} fontWeight={700} fill={fill ? inkOn(fill) : theme.labelText} fontFamily="var(--font-mono)">
         {text}
       </text>
     </g>
@@ -172,13 +190,13 @@ function hoverInk(hex: string, themeKey: ChartSpec["style"]["theme"]): string {
   return `#${((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1)}`;
 }
 
-const PILL_H = 18;
+const PILL_H = 22;
 /** Space between a point (or bar top) and its pill. */
 const PILL_GAP = 5;
 /** Recharts' default XAxis height; the plot ends this far above the bottom. */
 const X_AXIS_H = 30;
 const PLOT_TOP = 24;
-const pillWidth = (text: string) => text.length * 6.6 + 12;
+const pillWidth = (text: string) => text.length * 8 + 14;
 
 /**
  * The plot itself: one ComposedChart that covers bars, lines and areas on
@@ -455,7 +473,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
   const plotLeft = leftWidth;
   const plotRight = width - (hasRight ? rightWidth : 12);
   const pills = useMemo(() => {
-    type P = { key: string; left: number; top: number; w: number; text: string };
+    type P = { key: string; left: number; top: number; w: number; text: string; fill: string | null };
     if (width <= 0) return [] as P[];
     const plotW = plotRight - plotLeft;
     const plotH = height - PLOT_TOP - X_AXIS_H;
@@ -468,7 +486,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       return PLOT_TOP + ((hi - v) / (hi - lo || 1)) * plotH;
     };
 
-    const wanted: Array<{ key: string; x: number; y: number; text: string }> = [];
+    const wanted: Array<{ key: string; x: number; y: number; text: string; fill: string | null }> = [];
     for (const s of visible) {
       const rows = labelRows.get(s.id);
       if (!rows) continue;
@@ -479,7 +497,9 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         if (!row) continue;
         const raw = isBar ? stackTotal(s, row) : row[s.id];
         if (raw === null || raw === undefined) continue;
-        wanted.push({ key: `${s.id}-${i}-${raw}`, x: px(row.x, i), y: py(s.axis, raw), text: formatValue(s.unit, raw) });
+        const sharedStack = isBar && stackedBars[s.axis].length > 1 && stackedBars[s.axis].includes(s);
+        const fill = sharedStack ? null : seriesInk(s.color, spec.style.theme);
+        wanted.push({ key: `${s.id}-${i}-${raw}`, x: px(row.x, i), y: py(s.axis, raw), text: formatValue(s.unit, raw), fill });
       }
     }
     // Lowest pills first, so a higher one lifts over what is already placed.
@@ -493,12 +513,14 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         const overlapsY = top < q.top + PILL_H + 2 && top + PILL_H > q.top - 2;
         if (overlapsX && overlapsY) top = q.top - PILL_H - 3;
       }
-      out.push({ key: p.key, left, top, w, text: p.text });
+      // A pill over the highest point would leave the frame: it sits under it instead.
+      if (top < 2) top = Math.min(p.y + PILL_GAP, height - X_AXIS_H - PILL_H);
+      out.push({ key: p.key, left, top, w, text: p.text, fill: p.fill });
     }
     return out;
     // stackTotal / topOfStack derive from stackedBars, which is listed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout]);
+  }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout, spec.style.theme]);
 
   const xTickFormatter = timeMode ? (v: number) => formatMonthTick(v) : (v: number) => chart.xLabels[v] ?? "";
   const tooltipLabel = timeMode
@@ -644,7 +666,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
         // cb-pills: the PNG export copies this layer onto the plot.
         <svg className="cb-pills pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
           {pills.map((p) => (
-            <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} theme={theme} />
+            <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} fill={p.fill} theme={theme} />
           ))}
         </svg>
       )}
