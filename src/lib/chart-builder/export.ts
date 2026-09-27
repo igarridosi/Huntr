@@ -141,6 +141,12 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
   clone.setAttribute("width", String(plotWidth));
   clone.setAttribute("height", String(plotHeight));
   clone.setAttribute("viewBox", `0 0 ${vbW} ${vbH}`);
+  // The entrance animation reveals each series through a clip that grows
+  // from nothing; exported mid-way (right after a change) the picture
+  // would carry the half-drawn state. The final one is what is wanted.
+  for (const el of Array.from(clone.querySelectorAll("[clip-path]"))) {
+    if ((el.getAttribute("clip-path") ?? "").includes("animationClipPath")) el.removeAttribute("clip-path");
+  }
   // The value pills live on an overlay of their own over the plot, in the
   // same pixel space as the Recharts surface; the picture needs them too.
   const pills = frame.querySelector<SVGSVGElement>("svg.cb-pills");

@@ -83,8 +83,24 @@ function niceCeil(v: number): number {
  * below it, ends a step above the data so nothing touches the frame, and
  * its ticks are multiples of one clean step — so a growth chart that dips
  * negative reads −10 / 0 / +10 / +20 rather than −11 / −2 / +7.
+ *
+ * `fit` drops the zero for an axis of lines only. A bar is read by its
+ * length, so it has to start at zero; a line is read by its shape, and
+ * anchored at zero a P/E between 14x and 31x is a flat band in the top
+ * half of the chart. Fitted, it spans the chart from the lowest the period
+ * saw to the highest, as Fiscal.ai and every terminal draw it.
  */
-function niceAxis(min: number, max: number): { domain: [number, number]; ticks: number[] | null } {
+function niceAxis(min: number, max: number, fit = false): { domain: [number, number]; ticks: number[] | null } {
+  if (fit && min > 0 && max > min) {
+    const pad = (max - min) * 0.08;
+    const step = niceCeil((max - min + 2 * pad) / 6);
+    // Never below zero for a positive series: the floor is the data's, not a negative number.
+    const lo = Math.max(0, Math.floor((min - pad) / step) * step);
+    const hi = Math.ceil((max + pad) / step) * step;
+    const ticks: number[] = [];
+    for (let v = lo; v <= hi + step / 1000; v += step) ticks.push(Number(v.toFixed(10)));
+    return { domain: [lo, hi], ticks };
+  }
   const lo0 = min < 0 ? min * 1.08 : 0;
   const hi0 = max > 0 ? max * 1.08 : 0;
   if (!(hi0 > lo0)) return { domain: [0, 1], ticks: [0, 1] };
@@ -312,7 +328,8 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
       }
       if (!Number.isFinite(min)) return niceAxis(0, 0);
       if (logOk && min > 0) return { domain: [logFloor(min), logCeil(max)] as [number, number], ticks: null };
-      return niceAxis(min, max);
+      // Lines and areas only: fit the axis to the data (see niceAxis).
+      return niceAxis(min, max, own.length > 0 && own.every((s) => s.shape !== "bar"));
     };
     const left: { domain: [number, number]; ticks: number[] | null } = extent("left");
     const right: { domain: [number, number]; ticks: number[] | null } = extent("right");
