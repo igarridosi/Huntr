@@ -15,8 +15,10 @@
 
 import type { CompanyFinancials, FinancialPeriod } from "@/types/financials";
 import {
+  MAX_MULTIPLE,
   METRICS,
   ttmApplies,
+  type AnomalyReason,
   type MarketContext,
   type MetricId,
   type MetricUnit,
@@ -102,6 +104,18 @@ export interface ResolvedSeries extends ChartSeries {
    * drawn as gaps, not bridged like the months between two quarter ends.
    */
   daily: boolean;
+  /**
+   * Stretches the series has no value for a reason of the company's own
+   * (a loss, earnings too small to divide by), in chart x units. Drawn as
+   * marked bands, so a gap says why it is there.
+   */
+  anomalies: Anomaly[];
+}
+
+export interface Anomaly {
+  from: number;
+  to: number;
+  reason: AnomalyReason;
 }
 
 export interface ResolveWarning {
@@ -289,30 +303,13 @@ function ttmAt(bundles: BundledPeriod[], i: number, read: StatementReader): numb
   return total;
 }
 
-/**
- * A flow's average over the three years before period `i`: the trailing
- * twelve months a year, two and three years back (or the three prior
- * fiscal years on the annual view). Null with fewer than two of them.
- */
-function normalAt(bundles: BundledPeriod[], i: number, granularity: Granularity, read: StatementReader): number | null {
-  const values: number[] = [];
-  for (let y = 1; y <= 3; y++) {
-    const v = granularity === "annual" ? (i - y >= 0 ? read(bundles[i - y]) : null) : ttmAt(bundles, i - 4 * y, read);
-    if (v !== null && Number.isFinite(v)) values.push(v);
-  }
-  return values.length >= 2 ? values.reduce((a, b) => a + b, 0) / values.length : null;
-}
-
-/** Bundle dates on which a market metric fell back to normalised earnings, per series. */
-export type NormalisedDates = Set<string>;
-
 function statementValues(
   series: ChartSeries,
   granularity: Granularity,
   bundles: BundledPeriod[],
   prices: PricePoint[],
   forwardEps?: ForwardEpsReader,
-  normalised?: NormalisedDates
+  flags?: Map<number, AnomalyReason>
 ): Keyed {
   const def = METRICS[series.metric];
   const out: Keyed = new Map();
@@ -339,8 +336,7 @@ function statementValues(
           price,
           forwardEps: forwardEps?.(b.date) ?? null,
           flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, i, read)),
-          normalFlow: (read) => normalAt(bundles, i, granularity, read),
-          noteNormalised: () => normalised?.add(b.date),
+          flag: (reason) => flags?.set(b.bucket.key, reason),
           stock: (read) => read(b),
         };
         v = def.derive(ctx);
@@ -384,9 +380,8 @@ function dailyMarketValues(
   bundles: BundledPeriod[],
   prices: PricePoint[],
   range: { from: string | null; to: string | null },
-  forwardEps?: ForwardEpsReader,
-  normalised?: NormalisedDates
-): Array<{ x: number; value: number | null }> {
+  forwardEps?: ForwardEpsReader
+): Array<{ x: number; value: number | null; flag?: AnomalyReason }> {
   const def = METRICS[series.metric];
   if (!def.derive || bundles.length === 0) return [];
   const derive = def.derive;
@@ -397,7 +392,7 @@ function dailyMarketValues(
     return fwdAtEnd.get(i) ?? null;
   };
   const stale = STALE_DAYS[granularity] * 86_400_000;
-  const out: Array<{ x: number; value: number | null }> = [];
+  const out: Array<{ x: number; value: number | null; flag?: AnomalyReason }> = [];
   let i = -1;
   for (const p of prices) {
     if (!inRange(p.date, range)) continue;
@@ -428,15 +423,17 @@ function dailyMarketValues(
     }
     const b = bundles[i];
     const idx = i;
+    let flag: AnomalyReason | undefined;
     const v = derive({
       price: p.close,
       forwardEps: forward,
       flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, idx, read)),
-      normalFlow: (read) => normalAt(bundles, idx, granularity, read),
-      noteNormalised: () => normalised?.add(b.date),
+      flag: (reason) => {
+        flag = reason;
+      },
       stock: (read) => read(b),
     });
-    out.push({ x: t, value: v !== null && Number.isFinite(v) ? v : null });
+    out.push({ x: t, value: v !== null && Number.isFinite(v) ? v : null, ...(flag ? { flag } : {}) });
   }
   return out;
 }
@@ -604,24 +601,14 @@ interface SeriesPoints {
   points: Array<{ x: number; value: number | null }>;
   /** The value of the period before `x`, from the unfiltered data — the base an indexed series starts from. */
   priorTo?: (x: number) => number | null;
+  /** Points (by x) left empty for a reason of the company's own: a loss, a meaningless multiple. */
+  flags?: Map<number, AnomalyReason>;
 }
 
 function inRange(date: string, range: ChartSpec["range"]): boolean {
   if (range.from !== null && date < range.from) return false;
   if (range.to !== null && date > range.to) return false;
   return true;
-}
-
-/** Says which periods in view a market metric drew on normalised earnings. */
-function noteNormalisedPeriods(series: ChartSeries, dates: NormalisedDates, bundles: BundledPeriod[], spec: ChartSpec, warnings: ResolveWarning[]) {
-  const shown = bundles.filter((b) => dates.has(b.date) && inRange(b.date, spec.range));
-  if (shown.length === 0) return;
-  const span = shown.length === 1 ? shown[0].bucket.label : `${shown[0].bucket.label} – ${shown[shown.length - 1].bucket.label}`;
-  warnings.push({
-    seriesId: series.id,
-    ticker: series.ticker,
-    message: `${series.ticker}'s earnings were negative or under half their three-year average in ${span}; its ${METRICS[series.metric].label} there is on that average (normalised).`,
-  });
 }
 
 export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedChart {
@@ -723,19 +710,19 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
         from: spec.range.from === null ? null : bucketStart(spec.range.from, spec.granularity),
         to: spec.range.to === null ? null : bucketEnd(spec.range.to, spec.granularity),
       };
-      const normalised: NormalisedDates = new Set();
-      const points = dailyMarketValues(series, spec.granularity, bundles, prices, dayRange, inputs.forwardEps?.[series.ticker], normalised);
-      noteNormalisedPeriods(series, normalised, bundles, spec, warnings);
+      const daily = dailyMarketValues(series, spec.granularity, bundles, prices, dayRange, inputs.forwardEps?.[series.ticker]);
+      const flags = new Map<number, AnomalyReason>();
+      for (const p of daily) if (p.flag) flags.set(p.x, p.flag);
+      const points = daily.map((p) => ({ x: p.x, value: p.value }));
       if (prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
         warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown, and the per-share figures behind it.` });
       }
-      all.push({ series, unit, points });
+      all.push({ series, unit, points, flags });
       continue;
     }
 
-    const normalised: NormalisedDates = new Set();
-    const raw = statementValues(series, spec.granularity, bundles, prices, inputs.forwardEps?.[series.ticker], normalised);
-    noteNormalisedPeriods(series, normalised, bundles, spec, warnings);
+    const keyFlags = new Map<number, AnomalyReason>();
+    const raw = statementValues(series, spec.granularity, bundles, prices, inputs.forwardEps?.[series.ticker], keyFlags);
     const transformed = applyTransform(raw, series.transform, spec.granularity, bundles, series.metric);
 
     if (CAPEX_BASED.has(series.metric) && spec.granularity !== "annual" && !warnedTickers.has(`c:${series.ticker}`)) {
@@ -768,7 +755,15 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       const key = keyOfX.get(x);
       return key === undefined ? null : (transformed.get(key - KEY_STEP) ?? null);
     };
-    all.push({ series, unit, points, priorTo });
+    // Flags by the x the points use, and only where no transform replaced the value.
+    const flags = new Map<number, AnomalyReason>();
+    if (series.transform === "raw" || series.transform === "indexed") {
+      for (const b of bundles) {
+        const reason = keyFlags.get(b.bucket.key);
+        if (reason) flags.set(xOf(b), reason);
+      }
+    }
+    all.push({ series, unit, points, priorTo, flags });
   }
 
   // Axes
@@ -856,6 +851,37 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
     const first = nonNull.length ? { x: toX(nonNull[0].x), value: nonNull[0].value } : null;
     const lastP = nonNull[nonNull.length - 1];
     const last = lastP ? { x: toX(lastP.x), value: lastP.value } : null;
+    // Runs of flagged, empty points, split where the reason changes.
+    const anomalies: Anomaly[] = [];
+    if (s.flags && s.flags.size > 0) {
+      let run: Anomaly | null = null;
+      for (const p of [...s.points].sort((a, b) => a.x - b.x)) {
+        const reason = p.value === null ? s.flags.get(p.x) : undefined;
+        const x = xMode === "category" ? indexOfX.get(p.x) : p.x;
+        if (reason && x !== undefined) {
+          if (run && run.reason === reason) run.to = x;
+          else {
+            if (run) anomalies.push(run);
+            run = { from: x, to: x, reason };
+          }
+        } else if (run) {
+          anomalies.push(run);
+          run = null;
+        }
+      }
+      if (run) anomalies.push(run);
+    }
+    if (anomalies.length > 0) {
+      const when = (x: number) =>
+        xMode === "category" ? (xLabels[x] ?? "") : new Date(x).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+      const why: Record<AnomalyReason, string> = { loss: "a loss", extreme: `over ${MAX_MULTIPLE}x` };
+      const spans = anomalies.map((a) => `${when(a.from) === when(a.to) ? when(a.from) : `${when(a.from)} – ${when(a.to)}`} (${why[a.reason]})`);
+      warnings.push({
+        seriesId: s.series.id,
+        ticker: s.series.ticker,
+        message: `${s.series.ticker} · ${METRICS[s.series.metric].label} is not meaningful in ${spans.join(", ")}.`,
+      });
+    }
     if (nonNull.length === 0 && s.points.length > 0) {
       warnings.push({ seriesId: s.series.id, ticker: s.series.ticker, message: `${seriesLabel(s.series, spec.granularity)} has no values in this range.` });
     }
@@ -868,6 +894,7 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       last,
       count: nonNull.length,
       daily: xMode === "time" && isDaily(s),
+      anomalies,
     };
   });
 

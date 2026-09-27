@@ -322,16 +322,20 @@ describe("resolveChart — market metrics", () => {
     expect(on(chart, "pe", "2024-01-01")).toBeCloseTo(465 / 4);
   });
 
-  it("normalises trailing P/E through an earnings trough, and says where", () => {
-    // Twelve quarters at EPS 1, then four at 0.1: the last year is a trough.
-    const long = quarterEnds(2021, 2024);
-    const f = fin("A", { quarterly: long.map((date, i) => ({ date, eps_diluted: i < 12 ? 1 : 0.1, shares: 10 })) });
-    const px2 = prices("2021-01-01", 1500, () => 80);
+  it("marks a loss as an anomaly for that company, not a silent gap", () => {
+    // Eight quarters at EPS 1, then four losses: the last year's trailing EPS is negative.
+    const long = quarterEnds(2022, 2024);
+    const f = fin("A", { quarterly: long.map((date, i) => ({ date, eps_diluted: i < 8 ? 1 : -1, shares: 10 })) });
+    const px2 = prices("2022-01-01", 1200, () => 80);
     const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "pe", ticker: "A", metric: "pe_ttm", shape: "line" })] });
     const chart = resolveChart(spec, { financials: { A: f }, prices: { A: px2 } });
-    // 2024-12-31: TTM EPS 0.4 against a three-year average of 4 → P/E on the average, 80 / 4.
-    expect(on(chart, "pe", "2024-12-31")).toBeCloseTo(20);
-    expect(chart.warnings.some((w) => /normalised/.test(w.message) && /Q4 2024/.test(w.message))).toBe(true);
+    expect(on(chart, "pe", "2024-12-31")).toBeNull();
+    const s = chart.series[0];
+    expect(s.anomalies.length).toBeGreaterThan(0);
+    const last = s.anomalies[s.anomalies.length - 1];
+    expect(last.reason).toBe("loss");
+    expect(last.to).toBeGreaterThanOrEqual(Date.parse("2024-12-31"));
+    expect(chart.warnings.some((w) => w.ticker === "A" && /not meaningful/.test(w.message) && /a loss/.test(w.message))).toBe(true);
   });
 
   it("leaves a gap where earnings round to nothing (P/E past 300x is not meaningful)", () => {
@@ -340,6 +344,7 @@ describe("resolveChart — market metrics", () => {
     const chart = resolveChart(spec, { financials: { A: thin }, prices: { A: px } });
     // 464 / 0.4 = 1,160x.
     expect(on(chart, "pe", "2023-12-31")).toBeNull();
+    expect(chart.series[0].anomalies.some((a) => a.reason === "extreme")).toBe(true);
   });
 
   it("bridges a period with no forward EPS from its neighbours instead of leaving a hole", () => {

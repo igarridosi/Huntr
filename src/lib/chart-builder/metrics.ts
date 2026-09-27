@@ -72,15 +72,16 @@ export interface MarketContext {
   forwardEps: number | null;
   flow: (read: StatementReader) => number | null;
   stock: (read: StatementReader) => number | null;
-  /**
-   * The flow's average over the three years before the period (each a
-   * trailing twelve months, or a fiscal year on the annual view); null
-   * with fewer than two of them.
-   */
-  normalFlow: (read: StatementReader) => number | null;
-  /** Records that this period's value was worked out on normalised earnings. */
-  noteNormalised: () => void;
+  /** Says why this period has no value when the reason is the company's, not missing data. */
+  flag: (reason: AnomalyReason) => void;
 }
+
+/**
+ * Why a market multiple is not drawn: the denominator is a loss (there is
+ * no P/E on negative earnings), or it is so small the multiple says
+ * nothing (past `MAX_MULTIPLE`).
+ */
+export type AnomalyReason = "loss" | "extreme";
 
 export interface MetricDef {
   id: MetricId;
@@ -209,31 +210,24 @@ const ratio = (n: number | null, d: number | null): number | null =>
  * providers show it; a real 100-250x (NVIDIA in 2023) still draws.
  */
 export const MAX_MULTIPLE = 300;
-const multiple = (n: number | null, d: number | null): number | null => {
-  const r = ratio(n, d);
-  return r === null || r > MAX_MULTIPLE ? null : r;
-};
-/** Below this share of their three-year average, trailing earnings are a trough, not a level. */
-const TROUGH_SHARE = 0.5;
 /**
- * Trailing P/E, normalised through an earnings trough. Over a loss there
- * is no P/E, and over a collapse (Booking in 2021, twelve months of EPS
- * at a tenth of normal) it reads 290x: neither says what the market paid
- * for the business. Where trailing EPS is negative or under half its
- * average of the three years before, the price is set against that
- * average instead — the normalised P/E analysts use through a cycle —
- * and the chart says which periods it did so for.
+ * A multiple, or null with the reason recorded when the company's own
+ * figures make it meaningless: a loss, or earnings too small to divide by.
+ * The chart marks those stretches rather than leaving an unexplained gap.
  */
-function trailingPe(ctx: MarketContext): number | null {
-  const eps = ctx.flow(epsDiluted);
-  const normal = ctx.normalFlow(epsDiluted);
-  const trough = eps === null || eps <= 0 || (normal !== null && normal > 0 && eps < TROUGH_SHARE * normal);
-  if (!trough) return multiple(ctx.price, eps);
-  if (normal === null || normal <= 0) return multiple(ctx.price, eps);
-  ctx.noteNormalised();
-  return multiple(ctx.price, normal);
-}
-
+const multipleOf = (ctx: MarketContext, n: number | null, d: number | null): number | null => {
+  if (n === null || d === null || n <= 0) return null;
+  if (d <= 0) {
+    ctx.flag("loss");
+    return null;
+  }
+  const r = n / d;
+  if (r > MAX_MULTIPLE) {
+    ctx.flag("extreme");
+    return null;
+  }
+  return r;
+};
 const yieldPct = (n: number | null, d: number | null): number | null => {
   const r = ratio(n, d);
   return r === null ? null : r * 100;
@@ -358,12 +352,12 @@ const defs: Record<MetricId, Omit<MetricDef, "id">> = {
   price: { label: "Price", short: "Price", group: "Market", unit: "price", kind: "price", source: "price", statements: [] },
   market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: marketCap },
   enterprise_value: { label: "Enterprise value", short: "EV", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: enterpriseValue },
-  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: trailingPe },
-  pe_forward: { label: "P/E (forward)", short: "Fwd P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(ctx.price, ctx.forwardEps) },
+  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multipleOf(ctx, ctx.price, ctx.flow(epsDiluted)) },
+  pe_forward: { label: "P/E (forward)", short: "Fwd P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multipleOf(ctx, ctx.price, ctx.forwardEps) },
   price_to_sales: { label: "Price to sales", short: "P/S", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(revenue)) },
   price_to_book: { label: "Price to book", short: "P/B", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(marketCap(ctx), ctx.stock(equity)) },
-  price_to_fcf: { label: "Price to FCF", short: "P/FCF", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => multiple(marketCap(ctx), ctx.flow(fcf)) },
-  ev_to_ebitda: { label: "EV / EBITDA", short: "EV/EBITDA", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(enterpriseValue(ctx), ctx.flow(ebitda)) },
+  price_to_fcf: { label: "Price to FCF", short: "P/FCF", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => multipleOf(ctx, marketCap(ctx), ctx.flow(fcf)) },
+  ev_to_ebitda: { label: "EV / EBITDA", short: "EV/EBITDA", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multipleOf(ctx, enterpriseValue(ctx), ctx.flow(ebitda)) },
   earnings_yield: { label: "Earnings yield", short: "E/P", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => yieldPct(ctx.flow(netIncome), marketCap(ctx)) },
   fcf_yield: { label: "FCF yield", short: "FCF yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(fcf), marketCap(ctx)) },
   dividend_yield: { label: "Dividend yield", short: "Div yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(dividends), marketCap(ctx)) },

@@ -17,6 +17,7 @@ import { ChartTooltip } from "@/components/charts/chart-tooltip";
 import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 import {
   CANVAS_THEMES,
+  MAX_MULTIPLE,
   METRICS,
   effectiveValueLabels,
   formatDate,
@@ -522,6 +523,39 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visible, labelRows, chart.points, stackedBars, logOk, width, height, plotLeft, plotRight, timeMode, timeDomain, axisLayout, spec.style.theme]);
 
+  // Stretches a series has no value for a reason of the company's own: a
+  // band in its colour over the whole plot, hatched so it reads as "not
+  // data" rather than as a fill, and a chip naming whose and why. Each
+  // company has its own, on its own dates.
+  const bands = useMemo(() => {
+    type B = { key: string; id: string; x1: number; x2: number; ink: string; chip: string; title: string; row: number };
+    if (width <= 0) return [] as B[];
+    const plotW = plotRight - plotLeft;
+    const n = chart.points.length;
+    const [t0, t1] = timeDomain;
+    const step = timeMode ? 0 : plotW / Math.max(1, n);
+    const at = (x: number) => (timeMode ? plotLeft + ((x - t0) / Math.max(1, t1 - t0)) * plotW : plotLeft + step * (x + 0.5));
+    const out: B[] = [];
+    let row = 0;
+    for (const s of visible) {
+      if (!s.anomalies.length) continue;
+      const ink = seriesInk(s.color, spec.style.theme);
+      s.anomalies.forEach((a, k) => {
+        const x1 = Math.max(plotLeft, at(a.from) - step / 2);
+        // A single day still gets a band a few pixels wide.
+        const x2 = Math.min(plotRight, Math.max(at(a.to) + step / 2, x1 + 4));
+        if (x2 <= plotLeft || x1 >= plotRight) return;
+        const title =
+          a.reason === "loss"
+            ? `${s.ticker} made a loss over these trailing twelve months: there is no ${METRICS[s.metric].short} on negative earnings.`
+            : `${s.ticker}'s ${METRICS[s.metric].short} was above ${MAX_MULTIPLE}x here: earnings too small for the multiple to mean anything.`;
+        out.push({ key: `${s.id}-${k}`, id: s.id, x1, x2, ink, chip: `${s.ticker} · ${a.reason === "loss" ? "loss" : `>${MAX_MULTIPLE}x`}`, title, row });
+      });
+      row++;
+    }
+    return out;
+  }, [visible, chart.points.length, width, plotLeft, plotRight, timeMode, timeDomain, spec.style.theme]);
+
   const xTickFormatter = timeMode ? (v: number) => formatMonthTick(v) : (v: number) => chart.xLabels[v] ?? "";
   const tooltipLabel = timeMode
     ? (label: string) => formatDate(Number(label))
@@ -662,9 +696,40 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
           </ComposedChart>
         </ResponsiveContainer>
       )}
-      {pills.length > 0 && (
+      {(pills.length > 0 || bands.length > 0) && (
         // cb-pills: the PNG export copies this layer onto the plot.
         <svg className="cb-pills pointer-events-none absolute inset-0" width={width} height={height} aria-hidden>
+          {bands.length > 0 && (
+            <defs>
+              {[...new Map(bands.map((b) => [b.id, b.ink])).entries()].map(([id, ink]) => (
+                <pattern key={id} id={`cb-hatch-${id}`} width={7} height={7} patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                  <line x1={0} y1={0} x2={0} y2={7} stroke={ink} strokeWidth={1.5} strokeOpacity={0.28} />
+                </pattern>
+              ))}
+            </defs>
+          )}
+          {bands.map((b) => {
+            const top = PLOT_TOP;
+            const bottom = height - X_AXIS_H;
+            const chipW = b.chip.length * 6.6 + 14;
+            const chipX = Math.min(Math.max(b.x1 + (b.x2 - b.x1) / 2 - chipW / 2, plotLeft), plotRight - chipW);
+            const chipY = top + 4 + b.row * 22;
+            return (
+              <g key={b.key}>
+                <rect x={b.x1} y={top} width={b.x2 - b.x1} height={bottom - top} fill={b.ink} fillOpacity={0.07} />
+                <rect x={b.x1} y={top} width={b.x2 - b.x1} height={bottom - top} fill={`url(#cb-hatch-${b.id})`} />
+                <line x1={b.x1} y1={top} x2={b.x1} y2={bottom} stroke={b.ink} strokeOpacity={0.55} strokeDasharray="3 3" />
+                <line x1={b.x2} y1={top} x2={b.x2} y2={bottom} stroke={b.ink} strokeOpacity={0.55} strokeDasharray="3 3" />
+                <g style={{ pointerEvents: "auto" }}>
+                  <title>{b.title}</title>
+                  <rect x={chipX} y={chipY} width={chipW} height={18} rx={5} fill={theme.plot} stroke={b.ink} strokeOpacity={0.8} />
+                  <text x={chipX + chipW / 2} y={chipY + 12.5} textAnchor="middle" fontSize={11} fontWeight={600} fill={b.ink} fontFamily="var(--font-mono)">
+                    {b.chip}
+                  </text>
+                </g>
+              </g>
+            );
+          })}
           {pills.map((p) => (
             <Pill key={p.key} left={p.left} top={p.top} w={p.w} text={p.text} fill={p.fill} theme={theme} />
           ))}
