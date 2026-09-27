@@ -16,6 +16,8 @@ import { createSeries, createSpec } from "../spec";
 import { fin, prices, quarterEnds } from "./fixtures";
 
 const col = (chart: ReturnType<typeof resolveChart>, id: string) => chart.points.map((p) => p[id]);
+/** A daily series' value on one day. */
+const on = (chart: ReturnType<typeof resolveChart>, id: string, date: string) => chart.points.find((p) => p.x === Date.parse(date))?.[id];
 
 describe("toCalendarBucket", () => {
   it("puts a September fiscal quarter end in calendar Q3", () => {
@@ -309,13 +311,32 @@ describe("resolveChart — market metrics", () => {
   const px = prices("2023-01-01", 800, (i) => 100 + i);
   const inputs = { financials: { A: a }, prices: { A: px } };
 
-  it("P/E is price at period end over trailing four-quarter EPS", () => {
+  it("P/E is each day's close over the trailing four quarters ended by that day", () => {
     const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "pe", ticker: "A", metric: "pe_ttm", shape: "line" })] });
     const chart = resolveChart(spec, inputs);
-    const v = col(chart, "pe");
-    expect(v.slice(0, 3)).toEqual([null, null, null]); // no four quarters yet
+    expect(chart.xMode).toBe("time");
+    expect(on(chart, "pe", "2023-09-30")).toBeNull(); // no four quarters yet
     // 2023-12-31 is day 364 → close 464; EPS TTM = 4 → P/E 116.
-    expect(v[3]).toBeCloseTo(464 / 4);
+    expect(on(chart, "pe", "2023-12-31")).toBeCloseTo(464 / 4);
+    // A day later the price has moved and the earnings have not.
+    expect(on(chart, "pe", "2024-01-01")).toBeCloseTo(465 / 4);
+  });
+
+  it("leaves a gap where earnings round to nothing (P/E past 300x is not meaningful)", () => {
+    const thin = fin("A", { quarterly: dates.map((date) => ({ date, eps_diluted: 0.1, shares: 10 })) });
+    const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "pe", ticker: "A", metric: "pe_ttm", shape: "line" })] });
+    const chart = resolveChart(spec, { financials: { A: thin }, prices: { A: px } });
+    // 464 / 0.4 = 1,160x.
+    expect(on(chart, "pe", "2023-12-31")).toBeNull();
+  });
+
+  it("interpolates forward EPS between period ends", () => {
+    const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "f", ticker: "A", metric: "pe_forward", shape: "line" })] });
+    const fwd = Object.assign((date: string) => (date === "2023-12-31" ? 4 : date === "2024-03-31" ? 6 : null), { snapshot: () => null });
+    const chart = resolveChart(spec, { ...inputs, forwardEps: { A: fwd } });
+    expect(on(chart, "f", "2023-12-31")).toBeCloseTo(464 / 4);
+    // 2024-02-15 is 46 of the 91 days to the next period end: EPS 4 + 2 × 46/91.
+    expect(on(chart, "f", "2024-02-15")).toBeCloseTo(510 / (4 + (2 * 46) / 91));
   });
 
   it("annual granularity uses the annual figure, not a rolling sum", () => {
@@ -340,7 +361,7 @@ describe("resolveChart — market metrics", () => {
     const spec = createSpec({ granularity: "quarterly", series: [createSeries({ id: "fy", ticker: "A", metric: "fcf_yield", shape: "line" })] });
     const chart = resolveChart(spec, inputs);
     // Q4 2023: FCF TTM 80, mcap 4640 → 1.724 %
-    expect(col(chart, "fy")[3]).toBeCloseTo((80 / 4640) * 100);
+    expect(on(chart, "fy", "2023-12-31")).toBeCloseTo((80 / 4640) * 100);
   });
 
   it("is null and warns where the price history does not reach", () => {

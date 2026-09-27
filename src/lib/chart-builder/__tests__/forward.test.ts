@@ -37,33 +37,72 @@ describe("forwardEpsReader", () => {
     { date: "2026-06-30", reported: 2.54, estimate: 2.45 },
   ];
 
-  it("grows the last twelve months by the next quarter's expected growth", () => {
-    const read = forwardEpsReader({ quarters, trend: TREND, snapshots: [] }, BKNG_SPLITS);
-    // After Q2 2026: Q3 2026 is expected at 4.489 against 3.98 a year earlier.
-    const ttm = 3.98 + 1.952 + 1.14 + 2.54;
-    expect(read("2026-06-30")).toBeCloseTo(ttm * (4.48906 / 3.98), 6);
-  });
+  const withYearAgo = [
+    { date: "2024-12-31", reported: 1.662, estimate: 1.442 },
+    { date: "2025-03-31", reported: 0.99, estimate: 0.7 },
+    { date: "2025-06-30", reported: 2.22, estimate: 2.02 },
+    ...quarters,
+  ];
 
-  it("reads a seasonally small quarter together with the next", () => {
-    const withYearAgo = [
-      { date: "2025-03-31", reported: 0.99, estimate: 0.7 },
-      { date: "2025-06-30", reported: 2.22, estimate: 2.02 },
-      ...quarters,
-    ];
+  it("takes the geometric mean of the roll and the sum when they agree", () => {
     const read = forwardEpsReader({ quarters: withYearAgo, trend: TREND, snapshots: [] }, BKNG_SPLITS);
-    // After Q4 2025 the next quarter is Q1 (~10% of the year): Q1 and Q2 2026 against Q1 and Q2 2025.
-    const ttm = 2.22 + 3.98 + 1.952 + 0.99;
-    expect(read("2025-12-31")).toBeCloseTo(((ttm * (1.08 + 2.45)) / (0.99 + 2.22)), 6);
+    // After Q4 2025: the last twelve months with Q1 2025 swapped for Q1 2026's consensus…
+    const roll = 0.99 + 2.22 + 3.98 + 1.952 - 0.99 + 1.08;
+    // …and Q1-Q2 2026 pre-report consensus, then Q3-Q4 2026 from today's trend.
+    const sum = 1.08 + 2.45 + 4.48906 + 2.31112;
+    expect(read("2025-12-31")).toBeCloseTo(Math.sqrt(roll * sum), 6);
   });
 
-  it("sums the next four quarters' consensus when growth cannot be read", () => {
-    const read = forwardEpsReader({ quarters, trend: TREND, snapshots: [] }, BKNG_SPLITS);
-    // No year-earlier quarters before Q3 2025: Q4 2025, Q1 and Q2 2026 pre-report, then Q3 2026 from today's trend.
-    expect(read("2025-09-30")).toBeCloseTo(1.929 + 1.08 + 2.45 + 4.48906, 6);
+  it("meets a rise halfway: the roll lags it, the sum overstates it", () => {
+    const boom = [
+      { date: "2025-03-31", reported: 0.1, estimate: 0.1 },
+      { date: "2025-06-30", reported: 0.1, estimate: 0.1 },
+      { date: "2025-09-30", reported: 0.1, estimate: 0.1 },
+      { date: "2025-12-31", reported: 0.1, estimate: 0.1 },
+      { date: "2026-03-31", reported: 1, estimate: 0.9 },
+      { date: "2026-06-30", reported: 2, estimate: 1.8 },
+      { date: "2026-09-30", reported: null, estimate: 2.5 },
+      { date: "2026-12-31", reported: null, estimate: 3 },
+    ];
+    const read = forwardEpsReader({ quarters: boom, trend: null, snapshots: [] }, []);
+    const roll = 0.4 - 0.1 + 0.9;
+    const sum = 0.9 + 1.8 + 2.5 + 3;
+    expect(read("2025-12-31")).toBeCloseTo(Math.sqrt(roll * sum), 6);
+  });
+
+  it("keeps the roll when only hindsight sees a fall (2020 seen from 2019)", () => {
+    const fall = [
+      { date: "2018-12-31", reported: 24, estimate: 23 },
+      { date: "2019-03-31", reported: 10, estimate: 9 },
+      { date: "2019-06-30", reported: 20, estimate: 19 },
+      { date: "2019-09-30", reported: 40, estimate: 38 },
+      { date: "2019-12-31", reported: 25, estimate: 24 },
+      { date: "2020-03-31", reported: 4, estimate: 5 },
+      { date: "2020-06-30", reported: 1, estimate: 2 },
+      { date: "2020-09-30", reported: 12, estimate: 3 },
+    ];
+    const read = forwardEpsReader({ quarters: fall, trend: null, snapshots: [] }, []);
+    // After Q3 2019 the sum (24 + 5 + 2 + 3) knows about 2020; the roll (94 - 24 + 24) does not.
+    expect(read("2019-09-30")).toBeCloseTo(24 + 10 + 20 + 40 - 24 + 24, 6);
+  });
+
+  it("falls back to the roll when the consensus ahead is a loss", () => {
+    const crash = [
+      { date: "2019-03-31", reported: 10, estimate: 9 },
+      { date: "2019-06-30", reported: 20, estimate: 19 },
+      { date: "2019-09-30", reported: 40, estimate: 38 },
+      { date: "2019-12-31", reported: 25, estimate: 24 },
+      { date: "2020-03-31", reported: 4, estimate: 5 },
+      { date: "2020-06-30", reported: -10, estimate: -15 },
+      { date: "2020-09-30", reported: 12, estimate: 3 },
+      { date: "2020-12-31", reported: 0, estimate: -2 },
+    ];
+    const read = forwardEpsReader({ quarters: crash, trend: null, snapshots: [] }, []);
+    expect(read("2019-12-31")).toBeCloseTo(10 + 20 + 40 + 25 - 10 + 5, 6);
   });
 
   it("prefers a recorded snapshot near the date, on today's share basis", () => {
-    const read = forwardEpsReader({ quarters, trend: TREND, snapshots: [{ date: "2025-10-02", ntm: 250 }] }, BKNG_SPLITS);
+    const read = forwardEpsReader({ quarters: withYearAgo, trend: TREND, snapshots: [{ date: "2025-10-02", ntm: 250 }] }, BKNG_SPLITS);
     expect(read("2025-09-30")).toBeCloseTo(250 / 25, 6);
   });
 

@@ -77,10 +77,13 @@ export interface ResolveInputs {
   financials: Record<string, CompanyFinancials | null | undefined>;
   prices: Record<string, PricePoint[] | undefined>;
   /** Next-twelve-month consensus EPS at a date, per ticker, on the price basis. */
-  forwardEps?: Record<string, ((date: string) => number | null) | undefined>;
+  forwardEps?: Record<string, ForwardEpsReader | undefined>;
 }
 
 export type XMode = "category" | "time";
+
+/** Next-twelve-month EPS at a period end; `snapshot` answers for any day a consensus was recorded. */
+export type ForwardEpsReader = ((date: string) => number | null) & { snapshot?: (date: string) => number | null };
 
 /** One row of the chart table: `x` plus one column per series id. */
 export type ResolvedPoint = { x: number } & Record<string, number | null>;
@@ -93,6 +96,12 @@ export interface ResolvedSeries extends ChartSeries {
   last: { x: number; value: number } | null;
   /** Non-null points. */
   count: number;
+  /**
+   * A line with a value every trading day (a price, a market metric). Its
+   * gaps are real — a multiple that stopped meaning anything — so they are
+   * drawn as gaps, not bridged like the months between two quarter ends.
+   */
+  daily: boolean;
 }
 
 export interface ResolveWarning {
@@ -285,7 +294,7 @@ function statementValues(
   granularity: Granularity,
   bundles: BundledPeriod[],
   prices: PricePoint[],
-  forwardEps?: (date: string) => number | null
+  forwardEps?: ForwardEpsReader
 ): Keyed {
   const def = METRICS[series.metric];
   const out: Keyed = new Map();
@@ -320,6 +329,80 @@ function statementValues(
     out.set(b.bucket.key, v !== null && Number.isFinite(v) ? v : null);
   });
 
+  return out;
+}
+
+/**
+ * A market metric drawn day by day: whether a series is one. Price over a
+ * statement figure moves every trading day, not every quarter — drawn at
+ * quarter ends only, a P/E reads as a few straight segments. Transforms
+ * that compare periods (YoY, TTM, per share) keep the period values.
+ */
+export function isDailyMarket(series: ChartSeries): boolean {
+  return METRICS[series.metric].source === "market" && (series.transform === "raw" || series.transform === "indexed");
+}
+
+/** How long a daily line holds its last value over rows that are not its own (weekends, holidays). */
+const HOLD_MS = 5 * 86_400_000;
+
+/** A period's figures stand for this long after its end before they are too old to divide a price by. */
+const STALE_DAYS: Record<Granularity, number> = { quarterly: 200, ttm: 200, annual: 400 };
+
+/**
+ * Daily values of a market metric: each close over the figures of the
+ * latest period ended by that day. Forward EPS moves between period ends
+ * rather than stepping — the consensus drifts, it does not jump on the
+ * quarter's last day — so it is interpolated from one period end to the
+ * next (or read from a snapshot on the day where one was recorded).
+ */
+function dailyMarketValues(
+  series: ChartSeries,
+  granularity: Granularity,
+  bundles: BundledPeriod[],
+  prices: PricePoint[],
+  range: { from: string | null; to: string | null },
+  forwardEps?: ForwardEpsReader
+): Array<{ x: number; value: number | null }> {
+  const def = METRICS[series.metric];
+  if (!def.derive || bundles.length === 0) return [];
+  const derive = def.derive;
+  const ends = bundles.map((b) => Date.parse(b.date));
+  const fwdAtEnd = new Map<number, number | null>();
+  const fwdEnd = (i: number) => {
+    if (!fwdAtEnd.has(i)) fwdAtEnd.set(i, forwardEps ? forwardEps(bundles[i].date) : null);
+    return fwdAtEnd.get(i) ?? null;
+  };
+  const stale = STALE_DAYS[granularity] * 86_400_000;
+  const out: Array<{ x: number; value: number | null }> = [];
+  let i = -1;
+  for (const p of prices) {
+    if (!inRange(p.date, range)) continue;
+    const t = Date.parse(p.date);
+    while (i + 1 < bundles.length && ends[i + 1] <= t) i++;
+    if (i < 0) continue;
+    if (t - ends[i] > stale) {
+      out.push({ x: t, value: null });
+      continue;
+    }
+    let forward: number | null = null;
+    if (forwardEps) {
+      forward = forwardEps.snapshot?.(p.date) ?? null;
+      if (forward === null) {
+        const a = fwdEnd(i);
+        const b = i + 1 < bundles.length ? fwdEnd(i + 1) : null;
+        forward = a !== null && b !== null ? a + ((b - a) * (t - ends[i])) / (ends[i + 1] - ends[i]) : a;
+      }
+    }
+    const b = bundles[i];
+    const idx = i;
+    const v = derive({
+      price: p.close,
+      forwardEps: forward,
+      flow: (read) => (granularity === "annual" ? read(b) : ttmAt(bundles, idx, read)),
+      stock: (read) => read(b),
+    });
+    out.push({ x: t, value: v !== null && Number.isFinite(v) ? v : null });
+  }
   return out;
 }
 
@@ -496,7 +579,8 @@ function inRange(date: string, range: ChartSpec["range"]): boolean {
 
 export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedChart {
   const warnings: ResolveWarning[] = [];
-  const xMode: XMode = spec.series.some((s) => METRICS[s.metric].source === "price") ? "time" : "category";
+  // Prices and market metrics are daily, so either puts the chart on a time axis.
+  const xMode: XMode = spec.series.some((s) => METRICS[s.metric].source === "price" || isDailyMarket(s)) ? "time" : "category";
 
   const bundleCache = new Map<string, BundledPeriod[] | null>();
   const priceCache = new Map<string, PricePoint[]>();
@@ -586,6 +670,20 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       warnings.push({ seriesId: series.id, ticker: series.ticker, message: `No price history for ${series.ticker}; market metrics need it.` });
     }
 
+    if (isDailyMarket(series)) {
+      // Cover the whole of the first and last bucket, as a price line does.
+      const dayRange = {
+        from: spec.range.from === null ? null : bucketStart(spec.range.from, spec.granularity),
+        to: spec.range.to === null ? null : bucketEnd(spec.range.to, spec.granularity),
+      };
+      const points = dailyMarketValues(series, spec.granularity, bundles, prices, dayRange, inputs.forwardEps?.[series.ticker]);
+      if (prices.length > 0 && points.length > 0 && points.every((p) => p.value === null)) {
+        warnings.push({ seriesId: series.id, ticker: series.ticker, message: `${def.label} needs price history covering the periods shown, and the per-share figures behind it.` });
+      }
+      all.push({ series, unit, points });
+      continue;
+    }
+
     const raw = statementValues(series, spec.granularity, bundles, prices, inputs.forwardEps?.[series.ticker]);
     const transformed = applyTransform(raw, series.transform, spec.granularity, bundles, series.metric);
 
@@ -636,8 +734,10 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
   const xs = new Set<number>();
   for (const s of all) for (const p of s.points) xs.add(p.x);
   if (spec.align === "common") {
+    // Daily lines (prices, market metrics) have a point every trading day;
+    // only period series take part.
     const statementSeries = all.filter(
-      (s) => METRICS[s.series.metric].source !== "price" && s.points.some((p) => p.value !== null)
+      (s) => METRICS[s.series.metric].source !== "price" && !isDailyMarket(s.series) && s.points.some((p) => p.value !== null)
     );
     if (statementSeries.length > 1) {
       const bucketXs = new Set<number>();
@@ -674,11 +774,26 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
   const indexOfX = new Map(sortedX.map((x, i) => [x, i] as const));
 
   const points: ResolvedPoint[] = sortedX.map((x, i) => ({ x: xMode === "category" ? i : x }) as ResolvedPoint);
+  const isDaily = (s: SeriesPoints) => METRICS[s.series.metric].source === "price" || isDailyMarket(s.series);
   for (const s of all) {
     for (const p of points) p[s.series.id] = null;
     for (const p of s.points) {
       const i = indexOfX.get(p.x);
       if (i !== undefined) points[i][s.series.id] = p.value;
+    }
+    // A daily line meets rows that are not its own (a quarter that closed
+    // on a Saturday): it holds its last close there, so the only breaks
+    // left in it are its own gaps.
+    if (xMode === "time" && isDaily(s)) {
+      const own = new Set(s.points.map((p) => p.x));
+      let last: { x: number; value: number | null } | null = null;
+      for (const p of points) {
+        if (own.has(p.x)) {
+          last = { x: p.x, value: p[s.series.id] };
+        } else if (last && p.x - last.x <= HOLD_MS) {
+          p[s.series.id] = last.value;
+        }
+      }
     }
   }
 
@@ -701,6 +816,7 @@ export function resolveChart(spec: ChartSpec, inputs: ResolveInputs): ResolvedCh
       first,
       last,
       count: nonNull.length,
+      daily: xMode === "time" && isDaily(s),
     };
   });
 

@@ -600,7 +600,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                     strokeWidth={strokeFor(s.id)}
                     fill={`url(#${gradientPrefix}-${s.id})`}
                     dot={false}
-                    connectNulls={timeMode}
+                    connectNulls={timeMode && !s.daily}
                     activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}
                   />
                 );
@@ -614,7 +614,7 @@ function ChartCanvasImpl({ spec, chart, height, emphasisId = null, onHoverRow }:
                   stroke={ink}
                   strokeWidth={strokeFor(s.id)}
                   dot={false}
-                  connectNulls={timeMode}
+                  connectNulls={timeMode && !s.daily}
                   activeDot={{ r: 4, fill: ink, stroke: theme.plot, strokeWidth: 2 }}
                   zIndex={LINE_Z}
                 />

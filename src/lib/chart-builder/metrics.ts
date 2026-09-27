@@ -193,6 +193,18 @@ const equity = bal("total_equity");
 
 const ratio = (n: number | null, d: number | null): number | null =>
   n === null || d === null || d <= 0 ? null : n / d;
+/**
+ * An earnings or cash multiple is only meaningful while the earnings are:
+ * Booking's trailing P/E read 1,700x in 2020, when twelve months of EPS
+ * rounded to nothing, and drawn it flattened ten years of history to a
+ * line along the floor. Past this it is "not meaningful" (a gap), as data
+ * providers show it; a real 100-250x (NVIDIA in 2023) still draws.
+ */
+export const MAX_MULTIPLE = 300;
+const multiple = (n: number | null, d: number | null): number | null => {
+  const r = ratio(n, d);
+  return r === null || r > MAX_MULTIPLE ? null : r;
+};
 const yieldPct = (n: number | null, d: number | null): number | null => {
   const r = ratio(n, d);
   return r === null ? null : r * 100;
@@ -317,12 +329,12 @@ const defs: Record<MetricId, Omit<MetricDef, "id">> = {
   price: { label: "Price", short: "Price", group: "Market", unit: "price", kind: "price", source: "price", statements: [] },
   market_cap: { label: "Market cap", short: "Mkt cap", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: marketCap },
   enterprise_value: { label: "Enterprise value", short: "EV", group: "Market", unit: "currency", kind: "stock", source: "market", statements: ["income", "balance"], derive: enterpriseValue },
-  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(ctx.price, ctx.flow(epsDiluted)) },
-  pe_forward: { label: "P/E (forward)", short: "Fwd P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(ctx.price, ctx.forwardEps) },
+  pe_ttm: { label: "P/E (trailing)", short: "P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(ctx.price, ctx.flow(epsDiluted)) },
+  pe_forward: { label: "P/E (forward)", short: "Fwd P/E", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(ctx.price, ctx.forwardEps) },
   price_to_sales: { label: "Price to sales", short: "P/S", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(revenue)) },
   price_to_book: { label: "Price to book", short: "P/B", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(marketCap(ctx), ctx.stock(equity)) },
-  price_to_fcf: { label: "Price to FCF", short: "P/FCF", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => ratio(marketCap(ctx), ctx.flow(fcf)) },
-  ev_to_ebitda: { label: "EV / EBITDA", short: "EV/EBITDA", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => ratio(enterpriseValue(ctx), ctx.flow(ebitda)) },
+  price_to_fcf: { label: "Price to FCF", short: "P/FCF", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => multiple(marketCap(ctx), ctx.flow(fcf)) },
+  ev_to_ebitda: { label: "EV / EBITDA", short: "EV/EBITDA", group: "Market", unit: "ratio", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => multiple(enterpriseValue(ctx), ctx.flow(ebitda)) },
   earnings_yield: { label: "Earnings yield", short: "E/P", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "balance"], derive: (ctx) => yieldPct(ctx.flow(netIncome), marketCap(ctx)) },
   fcf_yield: { label: "FCF yield", short: "FCF yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(fcf), marketCap(ctx)) },
   dividend_yield: { label: "Dividend yield", short: "Div yld", group: "Market", unit: "percent", kind: "ratio", source: "market", statements: ["income", "cashflow"], derive: (ctx) => yieldPct(ctx.flow(dividends), marketCap(ctx)) },

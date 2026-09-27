@@ -9,12 +9,9 @@
  *  1. Snapshots we record ourselves every trading day (the `forward-eps`
  *     cron): exact, but only from the day recording started.
  *  2. The consensus for each past quarter as it stood just before that
- *     quarter reported (Alpha Vantage's EARNINGS). Near point-in-time is
- *     the next quarter's: its growth over the same quarter a year before,
- *     applied to the last twelve months' EPS. Where that cannot be read
- *     (a loss a year ago, an outlier quarter), the next four quarters'
- *     estimates summed — each the estimate it had near its own report,
- *     which is why it comes second.
+ *     quarter reported (Alpha Vantage's EARNINGS), read two ways — the
+ *     last twelve months rolled forward one quarter, and the next four
+ *     quarters summed — and combined (see below).
  *  3. Today's consensus by quarter and fiscal year (Yahoo's earnings trend)
  *     for quarters that have not reported yet.
  *
@@ -93,8 +90,10 @@ export function ntmFromTrend(trend: EpsTrend): number | null {
 // Forward EPS at a date
 // ---------------------------------------------------------------------------
 
-/** Below this share of the last twelve months, one quarter is too small to read growth from alone. */
-const SMALL_QUARTER_SHARE = 0.18;
+/** How far apart the two readings of the next twelve months may be and still both count. */
+const AGREEMENT = 1.6;
+/** Below this share of its best of the two years before, the last twelve months are a trough. */
+const TROUGH = 0.5;
 /** How far a snapshot may be from a period end and still speak for it. */
 const SNAPSHOT_REACH_DAYS = 10;
 
@@ -104,7 +103,13 @@ const SNAPSHOT_REACH_DAYS = 10;
  * (see `perShareMultipliers`); trend and snapshot figures are scaled here,
  * since they are on the basis of the day they were read.
  */
-export function forwardEpsReader(inputs: ForwardInputs, splits: readonly Split[]): (date: string) => number | null {
+/** Next-twelve-month EPS at a period end; `snapshot` answers for any day a consensus was recorded near. */
+export type ForwardReader = ((date: string) => number | null) & { snapshot: (date: string) => number | null };
+
+/** A daily line reads a snapshot only this close to the day. */
+const SNAPSHOT_DAILY_DAYS = 4;
+
+export function forwardEpsReader(inputs: ForwardInputs, splits: readonly Split[]): ForwardReader {
   const byMonth = new Map<number, EpsQuarter>();
   for (const q of inputs.quarters) byMonth.set(monthIndex(q.date), q);
 
@@ -144,26 +149,34 @@ export function forwardEpsReader(inputs: ForwardInputs, splits: readonly Split[]
     return unknown === 0 ? null : (fy.eps - known) / unknown;
   };
 
-  return (date: string) => {
+  const snapshotNear = (date: string, reachDays: number): number | null => {
+    const t = Date.parse(date);
+    if (!Number.isFinite(t) || snapshots.length === 0) return null;
+    let nearest: { d: number; ntm: number } | null = null;
+    for (const s of snapshots) {
+      const d = Math.abs(s.t - t) / 86_400_000;
+      if (d <= reachDays && (!nearest || d < nearest.d)) nearest = { d, ntm: s.ntm };
+    }
+    return nearest?.ntm ?? null;
+  };
+
+  const read = (date: string) => {
     const t = Date.parse(date);
     if (!Number.isFinite(t)) return null;
 
     // 1. A snapshot recorded near the date.
-    let nearest: { d: number; ntm: number } | null = null;
-    for (const s of snapshots) {
-      const d = Math.abs(s.t - t) / 86_400_000;
-      if (d <= SNAPSHOT_REACH_DAYS && (!nearest || d < nearest.d)) nearest = { d, ntm: s.ntm };
-    }
-    if (nearest) return nearest.ntm;
+    const snap = snapshotNear(date, SNAPSHOT_REACH_DAYS);
+    if (snap !== null) return snap;
 
     const m = monthIndex(date);
 
-    // 2. The next quarter's consensus against the same quarter a year
-    //    earlier, applied to the last twelve months: only the estimate
-    //    nearest the date is used, so a crisis a year out (the 2020
-    //    quarters, seen from 2019) does not leak back into it.
     const estimateOf = (k: number) => byMonth.get(k)?.estimate ?? trendQuarter.get(k) ?? null;
     const reportedOf = (k: number) => byMonth.get(k)?.reported ?? null;
+
+    // 2a. Roll: the last twelve months with the quarter about to drop out
+    //     replaced by the consensus for the one coming in. Only the nearest
+    //     estimate is used, so nothing a year out leaks back — but it lags
+    //     a company whose earnings are about to change a lot.
     let ttm = 0;
     for (let k = 0; k < 4; k++) {
       const r = reportedOf(m - 3 * k);
@@ -173,39 +186,53 @@ export function forwardEpsReader(inputs: ForwardInputs, splits: readonly Split[]
       }
       ttm += r;
     }
-    if (Number.isFinite(ttm) && ttm > 0) {
-      // A seasonally small quarter (Booking's first) moves too much on its
-      // own to stand for a year; then the next two stand together.
-      const one = reportedOf(m - 9);
-      const span = one !== null && one / ttm >= SMALL_QUARTER_SHARE ? 1 : 2;
-      let expected = 0;
-      let base = 0;
-      for (let k = 1; k <= span; k++) {
-        const e = estimateOf(m + 3 * k);
-        const r = reportedOf(m + 3 * k - 12);
-        if (e === null || r === null) {
-          expected = NaN;
-          break;
-        }
-        expected += e;
-        base += r;
-      }
-      const growth = base > 0 ? expected / base : NaN;
-      // Beyond these the quarters are an outlier (a loss, a one-off), not a trend.
-      if (Number.isFinite(growth) && growth >= 0.5 && growth <= 2.5) return ttm * growth;
-    }
+    const nextEstimate = estimateOf(m + 3);
+    const leaving = reportedOf(m - 9);
+    const roll = Number.isFinite(ttm) && nextEstimate !== null && leaving !== null ? ttm - leaving + nextEstimate : NaN;
 
-    // 3. The next four fiscal quarters' consensus.
-    let total = 0;
+    // 2b. Sum: the next four quarters' consensus, each as it stood near its
+    //     own report — ahead of the date, so it sees change coming, with
+    //     some hindsight in the quarters furthest out.
+    let sum = 0;
     for (let k = 1; k <= 4; k++) {
       const e = quarterEstimate(m + 3 * k);
       if (e === null) {
-        total = NaN;
+        sum = NaN;
         break;
       }
-      total += e;
+      sum += e;
     }
-    if (Number.isFinite(total)) return total;
+
+    // How they combine, measured against Fiscal.ai's Booking series and
+    // NVIDIA's 2022-23 turn:
+    //  - agreeing (within 1.6x), the truth sits between them: geometric mean;
+    //  - the sum below the roll is a fall only hindsight saw (the 2020
+    //    quarters seen from 2019): the roll;
+    //  - the sum above the roll is a rise the roll lags and the sum
+    //    overstates: the mean again;
+    //  - the roll is not trusted off a trough (twelve months under half the
+    //    best of the two years before), where it divides by next to nothing.
+    const pos = (x: number) => Number.isFinite(x) && x > 0;
+    let best = 0;
+    for (let k = 1; k <= 8; k++) {
+      let t = 0;
+      for (let j = 0; j < 4; j++) {
+        const r = reportedOf(m - 3 * (k + j));
+        if (r === null) {
+          t = NaN;
+          break;
+        }
+        t += r;
+      }
+      if (Number.isFinite(t)) best = Math.max(best, t);
+    }
+    const rollOk = pos(roll) && ttm >= TROUGH * best;
+    if (rollOk && pos(sum)) {
+      const agree = Math.max(roll, sum) / Math.min(roll, sum) <= AGREEMENT;
+      return agree || sum > roll ? Math.sqrt(roll * sum) : roll;
+    }
+    if (pos(sum)) return sum;
+    if (pos(roll)) return roll;
 
     // The latest period, when the quarters ahead are only known as years.
     if (trend && lastReported !== null && m >= lastReported) {
@@ -214,6 +241,7 @@ export function forwardEpsReader(inputs: ForwardInputs, splits: readonly Split[]
     }
     return null;
   };
+  return Object.assign(read, { snapshot: (date: string) => snapshotNear(date, SNAPSHOT_DAILY_DAYS) });
 }
 
 /**
@@ -227,7 +255,7 @@ export function buildForwardReader(
   inputs: ForwardInputs,
   basis: ShareBasis | null | undefined,
   quarterlyIncome: readonly IncomeStatement[] = []
-): (date: string) => number | null {
+): ForwardReader {
   const splits = basis?.splits ?? [];
   const rows = inputs.quarters.map((q) => ({ date: q.date, value: q.reported ?? q.estimate ?? 0 }));
   const m = splits.length > 0 ? perShareMultipliers(rows, splits, gaapAnchor(quarterlyIncome)) : rows.map(() => 1);
