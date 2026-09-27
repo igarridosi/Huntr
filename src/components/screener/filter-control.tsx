@@ -112,7 +112,7 @@ function ValueMenu({ label, set, children }: { label: string; set: boolean; chil
         <div
           id={id}
           role="dialog"
-          className="popover-materialize absolute right-0 top-full z-50 mt-2 w-64 origin-top-right rounded-xl bg-wolf-surface/95 p-1.5 shadow-2xl ring-1 ring-inset ring-wolf-border/60 backdrop-blur-xl"
+          className="popover-materialize absolute right-0 top-full z-50 mt-2 w-64 origin-top-right rounded-xl bg-wolf-surface p-1.5 shadow-2xl shadow-wolf-black/50 ring-1 ring-inset ring-wolf-border/60"
         >
           {children(close)}
         </div>

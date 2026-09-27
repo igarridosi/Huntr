@@ -96,7 +96,7 @@ export function ResultsTable({
           <thead className="font-sans">
             <tr className="[&>th]:border-b [&>th]:border-wolf-border/40">
               {/* The company stays in view while the figures scroll sideways on a phone. */}
-              <SortHeader label="Company" sortKey="ticker" sort={sort} onSort={onSort} align="left" className="sticky left-0 z-10 bg-wolf-surface" />
+              <SortHeader label="Company" sortKey="ticker" sort={sort} onSort={onSort} align="left" className="max-md:sticky max-md:left-0 max-md:z-10 max-md:bg-wolf-surface" />
               <SortHeader label="Price" sortKey="price" sort={sort} onSort={onSort} />
               <SortHeader label="Mkt cap" sortKey="market_cap" sort={sort} onSort={onSort} />
               {columns.map((c) => (
@@ -108,7 +108,7 @@ export function ResultsTable({
           <tbody>
             {rows.map((row) => (
               <tr key={row.ticker} className="group transition-colors duration-150 hover:bg-snow-peak/[0.035] [&>td]:border-b [&>td]:border-wolf-border/15">
-                <td className="sticky left-0 z-10 bg-wolf-surface px-3 py-2.5 transition-colors duration-150 group-hover:bg-[color-mix(in_srgb,var(--color-wolf-surface)_94%,var(--color-snow-peak))]">
+                <td className="px-3 py-2.5 max-md:sticky max-md:left-0 max-md:z-10 max-md:bg-wolf-surface">
                   <Link href={ROUTES.SYMBOL(row.ticker)} className="flex min-w-0 items-center gap-2.5 font-sans">
                     <TickerLogo ticker={row.ticker} src={row.logo_url} className="h-8 w-8 shrink-0" imageClassName="rounded-lg" fallbackClassName="rounded-lg text-[10px]" />
                     <span className="min-w-0">

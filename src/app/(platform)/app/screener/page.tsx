@@ -124,7 +124,7 @@ function Screener() {
 
       {/* ── Strategies ─────────────────────────────────────────────────── */}
       <section aria-label="Start from a strategy">
-        <div className="scroll-quiet -mx-1 flex snap-x gap-2.5 overflow-x-auto px-1 pb-1">
+        <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
           {SCREENER_PRESETS.map((p) => {
             const Icon = PRESET_ICONS[p.icon] ?? Gem;
             const on = activePresetId === p.id;
@@ -135,7 +135,7 @@ function Screener() {
                 onClick={() => reset(s.applyPreset)(p)}
                 aria-pressed={on}
                 className={cn(
-                  "group w-[15.5rem] shrink-0 snap-start rounded-2xl p-3.5 text-left ring-1 ring-inset",
+                  "group min-w-0 rounded-2xl p-3.5 text-left ring-1 ring-inset",
                   "transition-[background-color,box-shadow,transform] duration-200 ease-out active:scale-[0.98] motion-reduce:active:scale-100",
                   on ? "bg-sunset-orange/[0.08] ring-sunset-orange/40" : "bg-wolf-surface/60 ring-wolf-border/50 hover:bg-wolf-surface hover:ring-wolf-border"
                 )}
@@ -154,7 +154,10 @@ function Screener() {
       </section>
 
       {/* ── Filters ────────────────────────────────────────────────────── */}
-      <MaterialPanel className="space-y-4 p-4 sm:p-5">
+      {/* Above the results: its menus open over the table, and a blurred
+          panel is a stacking context of its own, so without this the table
+          painted over them. */}
+      <MaterialPanel className="relative z-20 space-y-4 p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-3">
             <AddFiltersDialog active={activeSet} coverage={s.coverage} onToggle={toggleFilter} />
