@@ -53,6 +53,9 @@ import { cn, formatCurrency, formatCompactNumber } from "@/lib/utils";
 import { useSettledValue } from "@/hooks/use-settled-value";
 import { useFitToViewport } from "@/hooks/use-fit-to-viewport";
 import { useSECFundamentals } from "@/hooks/use-stock-data";
+import { useQuery } from "@tanstack/react-query";
+import { fetchFxRate } from "@/app/actions/stock";
+import { convertFinancials, convertSecFundamentals, describeAdrBasis, resolveAdrBasis } from "@/lib/dcf/adr-basis";
 import {
   applySourcedBalanceSheet,
   buildSourcedFields,
@@ -265,12 +268,49 @@ export default function DcfCalculatorPage() {
    * company it describes, so the check is free and the class of staleness
    * stops being possible rather than being unlikely.
    */
-  const companyFinancials = useMemo(() => {
+  const rawCompanyFinancials = useMemo(() => {
     if (!financials || !ticker) return null;
     return financials.ticker?.toUpperCase() === ticker.toUpperCase()
       ? financials
       : null;
   }, [financials, ticker]);
+
+  // Balance-sheet figures from the filings, with Yahoo as the fallback. Keyed
+  // on the ticker, so switching company cannot leave last one numbers behind.
+  const { data: rawSecFundamentals, isFetching: secFetching } = useSECFundamentals(ticker);
+
+  /**
+   * A foreign listing (an ADR) valued in its own currency and per receipt.
+   * Haleon reports in pounds per ordinary share and trades in dollars per
+   * receipt of two; the statements are put on the receipt's basis here, so
+   * the model, its checks and its output are all in dollars per ADR.
+   */
+  const fxFrom = quote?.financial_currency?.toUpperCase() ?? null;
+  const fxTo = quote?.currency?.toUpperCase() ?? null;
+  const needsFx = !!fxFrom && !!fxTo && fxFrom !== fxTo;
+  const { data: fxRate } = useQuery({
+    queryKey: ["fx", fxFrom, fxTo],
+    queryFn: () => fetchFxRate(fxFrom ?? "", fxTo ?? ""),
+    enabled: needsFx,
+    staleTime: 6 * 60 * 60 * 1000,
+  });
+  const adrBasis = useMemo(() => {
+    if (!needsFx || !quote) return null;
+    const latestIncome = [...(rawCompanyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
+    const filed = rawSecFundamentals?.dilutedShares?.value ?? latestIncome?.shares_outstanding_diluted ?? null;
+    const implied = quote.price > 0 && quote.market_cap > 0 ? quote.market_cap / quote.price : null;
+    return resolveAdrBasis({ priceCurrency: fxTo, financialCurrency: fxFrom, fx: fxRate, filedShares: filed, impliedShares: implied });
+  }, [needsFx, fxFrom, fxTo, quote, fxRate, rawCompanyFinancials, rawSecFundamentals]);
+  const adrNotice = adrBasis ? describeAdrBasis(adrBasis) : null;
+
+  const companyFinancials = useMemo(
+    () => (rawCompanyFinancials && adrBasis ? convertFinancials(rawCompanyFinancials, adrBasis) : rawCompanyFinancials),
+    [rawCompanyFinancials, adrBasis]
+  );
+  const secFundamentals = useMemo(
+    () => (rawSecFundamentals && adrBasis ? convertSecFundamentals(rawSecFundamentals, adrBasis) : rawSecFundamentals),
+    [rawSecFundamentals, adrBasis]
+  );
 
   const bases = useMemo(() => revenueBases(companyFinancials), [companyFinancials]);
   const revenueDivergence = useMemo(() => revenueBaseDivergence(bases), [bases]);
@@ -348,9 +388,6 @@ export default function DcfCalculatorPage() {
   }, []);
 
   // Auto-populate from real financials
-  // Balance-sheet figures from the filings, with Yahoo as the fallback. Keyed
-  // on the ticker, so switching company cannot leave last one numbers behind.
-  const { data: secFundamentals, isFetching: secFetching } = useSECFundamentals(ticker);
 
   const sourcedFields = useMemo(() => {
     if (!quote) return null;
@@ -1206,13 +1243,15 @@ export default function DcfCalculatorPage() {
     () =>
       assessValuation({
         priceCurrency: quote?.currency,
-        financialCurrency: quote?.financial_currency,
+        // Converted to the listing's currency when an ADR basis was established.
+        financialCurrency: adrBasis ? adrBasis.to : quote?.financial_currency,
         upside: (steadyResult ?? result)?.upside ?? null,
         unresolvedFields: sourcedFields?.unresolved,
       }),
     [
       quote?.currency,
       quote?.financial_currency,
+      adrBasis,
       steadyResult,
       result,
       sourcedFields?.unresolved,
@@ -1242,9 +1281,9 @@ export default function DcfCalculatorPage() {
         anchorWarnings: anchorContext.warnings,
         coherenceWarnings,
         fields: sourcedFields,
-        notices: sbcNotice ? [sbcNotice] : [],
+        notices: [...(adrNotice ? [adrNotice] : []), ...(sbcNotice ? [sbcNotice] : [])],
       }),
-    [anchorContext.warnings, coherenceWarnings, sourcedFields, sbcNotice]
+    [anchorContext.warnings, coherenceWarnings, sourcedFields, sbcNotice, adrNotice]
   );
 
   const latestAnnualRows = useMemo(() => {
@@ -1362,6 +1401,7 @@ export default function DcfCalculatorPage() {
         // First, because it voids every per-share figure below it.
         ...(shareCountAlert(sourcedFields) ? [shareCountAlert(sourcedFields)!.message] : []),
         ...(revenueDivergence ? [revenueDivergence.message] : []),
+        ...(adrNotice ? [adrNotice] : []),
         ...(sbcNotice ? [sbcNotice] : []),
         ...anchorContext.warnings.map((warning) => warning.message),
         ...coherenceWarnings.map((warning) => warning.message),
@@ -1392,6 +1432,7 @@ export default function DcfCalculatorPage() {
     revenueDivergence,
     revenueBaseRecord,
     sbcNotice,
+    adrNotice,
     provenance,
     cashFlowBasis,
     addBack,
@@ -2036,7 +2077,7 @@ export default function DcfCalculatorPage() {
                     anchorWarnings={anchorContext.warnings}
                     coherenceWarnings={coherenceWarnings}
                     fields={sourcedFields}
-                    notices={sbcNotice ? [sbcNotice] : []}
+                    notices={[...(adrNotice ? [adrNotice] : []), ...(sbcNotice ? [sbcNotice] : [])]}
                     onShareCountBasisChange={setShareCountBasis}
                     revenueBase={
                       isPopulated ? (

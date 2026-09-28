@@ -17,7 +17,7 @@ import { getCachedDataState, setCachedData, withSingleFlight, getBatchCachedScre
 import type { ScreenerMetrics } from "@/lib/api/cache";
 import type { TranscriptDocument, TranscriptPeriod } from "@/types/transcript";
 import { getSECFundamentals } from "@/lib/api/sec-edgar";
-import { getEpsTrend, getShareBasis, type YahooShareBasis } from "@/lib/api/yahoo";
+import { getEpsTrend, getFxRate, getShareBasis, type YahooShareBasis } from "@/lib/api/yahoo";
 import { readNtmSnapshots } from "@/lib/api/forward-eps";
 import type { ForwardInputs } from "@/lib/chart-builder/forward";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
@@ -245,6 +245,12 @@ export async function fetchForwardInputs(ticker: string): Promise<ForwardInputs>
     readNtmSnapshots(t).catch(() => []),
   ]);
   return { quarters, trend, snapshots };
+}
+
+/** Units of `to` per unit of `from`, for valuing foreign listings in their trading currency. */
+export async function fetchFxRate(from: string, to: string): Promise<number | null> {
+  if (typeof from !== "string" || typeof to !== "string") return null;
+  return getFxRate(from, to);
 }
 
 export async function getAlphaAvailability(): Promise<{
