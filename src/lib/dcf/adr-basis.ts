@@ -132,3 +132,28 @@ export function describeAdrBasis(b: AdrBasis): string {
         : `1 ADR = 1/${Math.round(1 / b.ratio)} of an ordinary share`;
   return `Statements converted from ${b.from} at ${b.fx.toFixed(4)} ${b.to}/${b.from}; ${ratio}.`;
 }
+
+/**
+ * A revenue base still in the statements' currency, restated; null when it
+ * is not one. A base is written once (populate, a saved scenario, a basis
+ * choice) and can predate the rate: Haleon's £11.03bn stayed in pounds next
+ * to a balance sheet already in dollars. It is recognised by matching one of
+ * the unconverted bases within half a percent; anything else the user typed.
+ */
+export function restateStaleRevenue(value: number, rawBases: number[], b: AdrBasis): number | null {
+  if (!(value > 0) || Math.abs(b.fx - 1) < 0.01) return null;
+  const stale = rawBases.some((raw) => raw > 0 && Math.abs(value / raw - 1) <= 0.005);
+  return stale ? value * b.fx : null;
+}
+
+/**
+ * A share count Yahoo reports in ordinary shares, on the receipt's basis.
+ * Yahoo's count for Haleon is the 8.95bn ordinary shares; the price is per
+ * receipt of two. Only divided when the count itself lands on the ratio
+ * against the market-implied count, so a count already per receipt stays.
+ */
+export function receiptShareCount(shares: number | null | undefined, implied: number | null | undefined, b: AdrBasis | null): number | null {
+  if (!shares || !(shares > 0)) return shares ?? null;
+  if (!b || b.ratio === 1) return shares;
+  return detectAdrRatio(shares, implied) === b.ratio ? shares / b.ratio : shares;
+}

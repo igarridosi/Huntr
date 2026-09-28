@@ -20,15 +20,23 @@ describe("detectRegimes", () => {
     expect(r).toMatchObject({ id: "lender", tab: "EPS Multiple" });
   });
 
-  it("flags a capex peak on capex above 25% of revenue or a terminal weight above 65% (Alphabet)", () => {
+  it("flags a capex peak on capex above 25% of revenue and above its own history (Alphabet)", () => {
     // Alphabet: capex guided at $195–205B against ~$450B of revenue, quarterly FCF negative.
-    const capex = detectRegimes({ ...quiet, capexToRevenue: 0.44 });
+    const capex = detectRegimes({ ...quiet, capexToRevenue: 0.44, capexHistory: [0.12, 0.13, 0.15] });
     expect(capex[0]).toMatchObject({ id: "capexPeak", tab: "EPS Multiple" });
     expect(capex[0].detail).toContain("44.0% of revenue");
-    const terminal = detectRegimes({ ...quiet, terminalWeight: 0.7 });
-    expect(terminal[0]).toMatchObject({ id: "capexPeak" });
-    expect(terminal[0].detail).toContain("70.0% of value in the terminal");
+    expect(capex[0].detail).toContain("against 13.0% in earlier years");
+    // A business that always spends this much is not at a peak.
+    expect(detectRegimes({ ...quiet, capexToRevenue: 0.3, capexHistory: [0.28, 0.3, 0.29] })).toEqual([]);
     expect(detectRegimes({ ...quiet, capexToRevenue: 0.24, terminalWeight: 0.64 })).toEqual([]);
+  });
+
+  it("keeps a heavy terminal weight apart from a capex peak (Haleon)", () => {
+    // Haleon: capex about 3% of revenue, 66.5% of the value in the terminal.
+    const hln = detectRegimes({ ...quiet, capexToRevenue: 0.03, capexHistory: [0.03, 0.035], terminalWeight: 0.665 });
+    expect(hln.map((r) => r.id)).toEqual(["terminalHeavy"]);
+    expect(hln[0].detail).toBe("66.5% of value in the terminal");
+    expect(hln[0].tab).toBeNull();
   });
 
   it("flags leverage above 2.5× EBITDA and demands the basis switch (FIS, Universal Health)", () => {

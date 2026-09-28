@@ -57,7 +57,22 @@ export function interestAddBack(income: IncomeStatement | null | undefined): Int
   };
 }
 
-/** The inputs the engine runs on for a basis: levered flows go in without net debt to subtract. */
-export function engineInputsFor<T extends { totalDebt: number; cashAndEquivalents: number }>(inputs: T, basis: CashFlowBasis): T {
-  return basis === "levered" ? { ...inputs, totalDebt: 0, cashAndEquivalents: 0 } : inputs;
+/**
+ * The inputs the engine runs on for a basis.
+ *
+ * The margins on screen are free cash flow as reported, which is levered
+ * (after interest). Levered flows go in without net debt to subtract;
+ * unlevered ones keep net debt and get the after-tax interest back on both
+ * margins here, not on the sliders. It used to be added once, at populate,
+ * so a margin typed by hand afterwards - Haleon's 20.26% - reached the
+ * engine without the 2.46 points while net debt was still subtracted.
+ */
+export function engineInputsFor<T extends { totalDebt: number; cashAndEquivalents: number; baseFCFMargin: number; terminalFCFMargin: number }>(
+  inputs: T,
+  basis: CashFlowBasis,
+  interestPoints = 0
+): T {
+  if (basis === "levered") return { ...inputs, totalDebt: 0, cashAndEquivalents: 0 };
+  if (!(interestPoints > 0)) return inputs;
+  return { ...inputs, baseFCFMargin: inputs.baseFCFMargin + interestPoints, terminalFCFMargin: inputs.terminalFCFMargin + interestPoints };
 }

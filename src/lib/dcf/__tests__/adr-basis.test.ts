@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { convertFinancials, convertSecFundamentals, detectAdrRatio, resolveAdrBasis } from "../adr-basis";
+import {
+  convertFinancials,
+  convertSecFundamentals,
+  detectAdrRatio,
+  receiptShareCount,
+  resolveAdrBasis,
+  restateStaleRevenue,
+} from "../adr-basis";
 import type { CompanyFinancials } from "@/types/financials";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
 
@@ -57,5 +64,24 @@ describe("conversion", () => {
     expect(out.dilutedShares?.value).toBe(5);
     expect(out.financialDebt?.value).toBe(60);
     expect(out.cash).toBeNull();
+  });
+});
+
+describe("Haleon on the receipt's basis", () => {
+  const hln = { from: "GBP", to: "USD", fx: 1.3255, ratio: 2 };
+
+  it("restates a revenue base left in pounds and nothing else", () => {
+    expect(restateStaleRevenue(11_030e6, [11_030e6, 11_233e6], hln)).toBeCloseTo(14_620e6, -7);
+    // Already converted, or typed by the user: left alone.
+    expect(restateStaleRevenue(14_620e6, [11_030e6, 11_233e6], hln)).toBeNull();
+    expect(restateStaleRevenue(12_000e6, [11_030e6, 11_233e6], hln)).toBeNull();
+  });
+
+  it("puts Yahoo's ordinary share count on receipts", () => {
+    const implied = 4_480e6;
+    expect(receiptShareCount(8_952_353_648, implied, hln)).toBeCloseTo(4_476_176_824, 0);
+    // A count already per receipt stays.
+    expect(receiptShareCount(4_476e6, implied, hln)).toBe(4_476e6);
+    expect(receiptShareCount(8_952e6, implied, null)).toBe(8_952e6);
   });
 });

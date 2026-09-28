@@ -55,7 +55,14 @@ import { useFitToViewport } from "@/hooks/use-fit-to-viewport";
 import { useSECFundamentals } from "@/hooks/use-stock-data";
 import { useQuery } from "@tanstack/react-query";
 import { fetchFxRate } from "@/app/actions/stock";
-import { convertFinancials, convertSecFundamentals, describeAdrBasis, resolveAdrBasis } from "@/lib/dcf/adr-basis";
+import {
+  convertFinancials,
+  convertSecFundamentals,
+  describeAdrBasis,
+  receiptShareCount,
+  resolveAdrBasis,
+  restateStaleRevenue,
+} from "@/lib/dcf/adr-basis";
 import {
   applySourcedBalanceSheet,
   buildSourcedFields,
@@ -79,6 +86,7 @@ import {
 } from "@/lib/calculations/dcf-anchors";
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
 import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
+import { anchorWings } from "@/lib/dcf/scenario-anchor";
 import { looksLikeLender } from "@/lib/dcf/business-model";
 import { shareCountAlert } from "@/lib/dcf/share-count";
 import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from "@/lib/dcf/revenue-base";
@@ -409,7 +417,11 @@ export default function DcfCalculatorPage() {
     return buildSourcedFields({
       sec: secFundamentals ?? null,
       yahoo: {
-        sharesOutstanding: quote.shares_outstanding,
+        sharesOutstanding: receiptShareCount(
+          quote.shares_outstanding,
+          quote.price > 0 && quote.market_cap > 0 ? quote.market_cap / quote.price : null,
+          adrBasis
+        ),
         totalDebt: latestBalance?.long_term_debt ?? null,
         cash: latestBalance?.cash_and_equivalents ?? null,
       },
@@ -429,6 +441,7 @@ export default function DcfCalculatorPage() {
     includeLeases,
     balanceOverrides,
     shareCountBasis,
+    adrBasis,
   ]);
 
   const handleBalanceOverride = useCallback(
@@ -532,6 +545,22 @@ export default function DcfCalculatorPage() {
     applyAccountingTreatment((previous) =>
       applySourcedBalanceSheet(previous, sourcedFields)
     );
+  }
+
+  // A revenue base written before the exchange rate arrived, or restored
+  // from a scenario saved before foreign listings were converted, is still
+  // in the statements' currency while the balance sheet beside it is not.
+  // Restated here, during render like the balance sheet above; the restated
+  // figure no longer matches an unconverted base, so this settles in a pass.
+  const rawRevenueBases = useMemo(() => {
+    const raw = revenueBases(rawCompanyFinancials);
+    return [raw.ttm?.value ?? 0, raw.fiscalYear?.value ?? 0];
+  }, [rawCompanyFinancials]);
+  if (adrBasis && restateStaleRevenue(inputs.baseRevenue, rawRevenueBases, adrBasis) !== null) {
+    applyAccountingTreatment((previous) => {
+      const restated = restateStaleRevenue(previous.baseRevenue, rawRevenueBases, adrBasis);
+      return restated === null ? previous : { ...previous, baseRevenue: restated };
+    });
   }
 
   // One source of truth for the balance sheet.
@@ -837,17 +866,9 @@ export default function DcfCalculatorPage() {
       ? withCompanyFacts(sourced, { ...readCompanyFacts(sourced.base.inputs), baseRevenue: chosen.value })
       : sourced;
     setRevenueBasisChoice(null);
-    // The statements' free cash flow is levered (after interest); the model
-    // subtracts net debt, so the flows it runs on are unlevered: after-tax
-    // interest goes back on the margins of all three scenarios.
-    const points = addBack?.marginPoints ?? 0;
-    const unlever = (i: DCFInputs): DCFInputs => ({ ...i, baseFCFMargin: i.baseFCFMargin + points, terminalFCFMargin: i.terminalFCFMargin + points });
-    const based = {
-      ...revenued,
-      bear: { ...revenued.bear, inputs: unlever(revenued.bear.inputs) },
-      base: { ...revenued.base, inputs: unlever(revenued.base.inputs) },
-      bull: { ...revenued.bull, inputs: unlever(revenued.bull.inputs) },
-    };
+    // The margins stay as reported (levered); the after-tax interest goes
+    // back on in the engine, for these and for any margin typed later.
+    const based = revenued;
     setCashFlowBasis("unlevered");
     setPerimeterConfirmed(false);
     setValueUncovered(false);
@@ -884,19 +905,15 @@ export default function DcfCalculatorPage() {
       setOcfMargin(fallbackOcfMargin);
       setCapexMargin(fallbackCapexMargin);
     }
-  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields, bases, addBack]);
+  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields, bases]);
 
   /** Switching basis moves the after-tax interest on or off the margins of all three scenarios; the engine follows. */
   const handleCashFlowBasisChange = useCallback(
     (next: CashFlowBasis) => {
       if (next === cashFlowBasis) return;
       setCashFlowBasis(next);
-      const points = addBack?.marginPoints ?? 0;
-      if (points === 0) return;
-      const shift = next === "unlevered" ? points : -points;
-      applyAccountingTreatment((previous) => ({ ...previous, baseFCFMargin: previous.baseFCFMargin + shift, terminalFCFMargin: previous.terminalFCFMargin + shift }));
     },
-    [cashFlowBasis, addBack, applyAccountingTreatment]
+    [cashFlowBasis]
   );
 
   /** A new revenue base goes on the live inputs and on all three scenarios at once. */
@@ -967,7 +984,7 @@ export default function DcfCalculatorPage() {
     if (!same) {
       setScenarios((prev) => {
         if (!prev) return prev;
-        return {
+        const next = {
           ...prev,
           [activeScenario]: {
             // Stored as they are, price included.
@@ -975,6 +992,11 @@ export default function DcfCalculatorPage() {
             inputs,
           },
         };
+        if (activeScenario !== "base") return next;
+        // A Base set by hand carries the automatic wings with it, so they
+        // never end up on the wrong side of it.
+        const wings = anchorWings({ bear: next.bear.inputs, base: inputs, bull: next.bull.inputs });
+        return { ...next, bear: { ...next.bear, inputs: wings.bear }, bull: { ...next.bull, inputs: wings.bull } };
       });
     }
   }
@@ -1146,7 +1168,17 @@ export default function DcfCalculatorPage() {
   // What the engine runs on: the live inputs, or, on the levered basis,
   // the same with net debt at zero so flows after interest are never
   // also charged the debt.
-  const engineInputs = useMemo(() => engineInputsFor(inputs, cashFlowBasis), [inputs, cashFlowBasis]);
+  const engineInputs = useMemo(() => engineInputsFor(inputs, cashFlowBasis, addBack?.marginPoints ?? 0),
+    [inputs, cashFlowBasis, addBack]
+  );
+  // The three scenarios as the engine runs them: the margins on the tabs are
+  // as reported, the interest add-back goes on here for all three at once.
+  const engineScenarios = useMemo(() => {
+    if (!scenarios) return null;
+    const points = addBack?.marginPoints ?? 0;
+    const run = (preset: DCFScenarioSet["bear"]) => ({ ...preset, inputs: engineInputsFor(preset.inputs, cashFlowBasis, points) });
+    return { ...scenarios, bear: run(scenarios.bear), base: run(scenarios.base), bull: run(scenarios.bull) };
+  }, [scenarios, cashFlowBasis, addBack]);
   const result: DCFResult | null = useMemo(() => {
     if (engineInputs.baseRevenue <= 0 || engineInputs.sharesOutstanding <= 0) return null;
     return runDCF(engineInputs);
@@ -1182,14 +1214,14 @@ export default function DcfCalculatorPage() {
   // what was hiding the downside.
   const mcScenarios = useMemo(
     () =>
-      scenarios
+      engineScenarios
         ? {
-            bear: scenarios.bear.inputs,
-            base: scenarios.base.inputs,
-            bull: scenarios.bull.inputs,
+            bear: engineScenarios.bear.inputs,
+            base: engineScenarios.base.inputs,
+            bull: engineScenarios.bull.inputs,
           }
         : undefined,
-    [scenarios]
+    [engineScenarios]
   );
 
   const simulation = useMemo(() => {
@@ -1202,7 +1234,7 @@ export default function DcfCalculatorPage() {
     return buildSimulationBundle({
       result: steadyResult,
       monteCarlo,
-      bearInputs: scenarios?.bear.inputs,
+      bearInputs: mcScenarios?.bear,
       weights: convictionWeights,
       // The score is measured against all three, weighted, so it does not
       // change with the tab that happens to be open.
@@ -1215,7 +1247,6 @@ export default function DcfCalculatorPage() {
     mcScenarios,
     scenarioWeights,
     growthMarginCorrelation,
-    scenarios,
     convictionWeights,
   ]);
 
@@ -1355,15 +1386,25 @@ export default function DcfCalculatorPage() {
       const ageMonths = (Date.parse(asOf) - Date.parse(fact.periodEnd)) / (30.44 * 86_400_000);
       return ageMonths <= PERIMETER_MONTHS ? { value: fact.value, periodEnd: fact.periodEnd } : null;
     };
+    // The earlier years' capex over revenue, matched by fiscal year end.
+    const revenueByDate = new Map((companyFinancials?.income_statement.annual ?? []).map((row) => [row.date, row.revenue]));
+    const capexHistory = (companyFinancials?.cash_flow.annual ?? [])
+      .filter((row) => row.date !== cash?.date)
+      .map((row) => {
+        const revenue = revenueByDate.get(row.date);
+        return revenue && revenue > 0 ? Math.abs(row.capital_expenditures) / revenue : NaN;
+      })
+      .filter((value) => Number.isFinite(value));
     return detectRegimes({
       lender: revenueHistory.lender,
       capexToRevenue: cash && income && income.revenue > 0 ? Math.abs(cash.capital_expenditures) / income.revenue : null,
+      capexHistory,
       terminalWeight: result && result.enterpriseValue > 0 ? result.pvTerminalValue / result.enterpriseValue : null,
       debtToEbitda: income && income.ebitda > 0 ? inputs.totalDebt / income.ebitda : null,
       fcfMargin: fcf !== null && income && income.revenue > 0 ? fcf / income.revenue : null,
       perimeter: { divergence: revenueDivergence?.deviation ?? null, acquisitions: recent(secFundamentals?.acquisitions), divestitures: recent(secFundamentals?.divestitures) },
     });
-  }, [latestAnnualRows, revenueHistory.lender, result, inputs.totalDebt, revenueDivergence, secFundamentals]);
+  }, [latestAnnualRows, revenueHistory.lender, result, inputs.totalDebt, revenueDivergence, secFundamentals, companyFinancials]);
   const paydown = useMemo(
     () => (result ? { ...debtPaydown(inputs.totalDebt, result.projections.map((p) => p.fcf)), debt: inputs.totalDebt } : null),
     [result, inputs.totalDebt]
@@ -1380,11 +1421,11 @@ export default function DcfCalculatorPage() {
       // what is on screen, on all three: a balance sheet that arrived after
       // a scenario was generated is not a disagreement between scenarios.
       scenarios: withCompanyFacts(
-        scenarios,
+        engineScenarios ?? scenarios,
         readCompanyFacts(sourcedFields ? applySourcedBalanceSheet(inputs, sourcedFields) : inputs)
       ),
       activeScenario,
-      liveInputs: inputs,
+      liveInputs: engineInputs,
       sourcedFields,
       monteCarlo: simulation?.monteCarlo ?? null,
       conviction: simulation?.conviction ?? null,
@@ -1421,6 +1462,8 @@ export default function DcfCalculatorPage() {
   }, [
     ticker,
     scenarios,
+    engineScenarios,
+    engineInputs,
     activeScenario,
     inputs,
     profile?.name,
@@ -2102,10 +2145,10 @@ export default function DcfCalculatorPage() {
                     scenarioTable={
                       scenarios ? (
                         <DCFScenarioTable
-                          scenarios={scenarios}
+                          scenarios={engineScenarios ?? scenarios}
                           activeScenario={activeScenario}
                           onScenarioChange={handleScenarioChange}
-                          liveInputs={inputs}
+                          liveInputs={engineInputs}
                         />
                       ) : null
                     }
