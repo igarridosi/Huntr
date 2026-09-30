@@ -16,7 +16,8 @@
     "local:reset": "node local/local.mjs reset",
     "local:run": "node local/local.mjs run",
     "local:status": "node local/local.mjs status",
-    "test:local": "node local/local.mjs test"
+    "test:local": "node local/local.mjs test",
+    "password:verifier": "node local/scram-verifier.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

@@ -137,6 +137,26 @@ zips: `dist/azure.mjs`, `host.json` and a `package.json` pointing at the
 entry point. There is no `node_modules`. Everything is in the bundle except
 `@azure/functions-core`, which the Functions worker provides at run time.
 
+## Setting the role's password without sending it
+
+The Supabase SQL Editor keeps a history, so the password should not be
+typed there. This prints the `ALTER ROLE` statement with the SCRAM-SHA-256
+verifier only:
+
+```bash
+npm run password:verifier
+```
+
+It asks for the password twice with echo off. Postgres stores a verifier in
+that format as it is, and never sees the password.
+
+If you have `psql` connected as the project's admin, `\password
+huntr_sec_ingest` does the same thing client-side.
+
+Use a long random password from a password manager. The tool refuses
+anything under 16 characters, and anything outside printable ASCII, which
+SASLprep would rewrite on login.
+
 ## How a run works
 
 1. **Universe.** The tickers are resolved to CIKs with EDGAR's

@@ -9,6 +9,8 @@ import { activeTickers, connect, postgresFacts, postgresState, type Db } from ".
 import { createSecClient } from "../sec-client";
 import type { RawStore } from "../stores";
 import { FakeEdgar } from "./fake-edgar";
+// @ts-expect-error: a plain .mjs tool with no types
+import { alterRole, scramVerifier } from "../../local/scram-verifier.mjs";
 
 /**
  * The Postgres and Blob writers against the local test bed
@@ -160,6 +162,31 @@ describe.skipIf(!LOCAL)("Postgres writer, as huntr_sec_ingest through the pooler
     expect(second.companies.targeted).toBe(0);
     const [n] = await admin<{ n: number }[]>`select count(*)::int as n from public.sec_ingest_state`;
     expect(n.n).toBe(2);
+  });
+});
+
+describe.skipIf(!LOCAL)("the SCRAM verifier tool, against Postgres", () => {
+  it("sets a password Postgres accepts on login, and refuses any other", async () => {
+    const admin = postgres(ADMIN_URL, { onnotice: () => {} });
+    const password = "Zq7!vR2#pL9@xW4$mN6^tB8&";
+    try {
+      await admin`drop role if exists scram_tool_check`;
+      await admin`create role scram_tool_check login`;
+      await admin.unsafe(alterRole("scram_tool_check", scramVerifier(password)));
+      const [stored] = await admin<{ p: string }[]>`select rolpassword as p from pg_authid where rolname = 'scram_tool_check'`;
+      expect(stored.p).toMatch(/^SCRAM-SHA-256\$4096:/);
+
+      const login = (pw: string) => postgres(`postgres://scram_tool_check:${encodeURIComponent(pw)}@localhost:54339/postgres`, { max: 1, onnotice: () => {} });
+      const good = login(password);
+      expect((await good<{ u: string }[]>`select current_user as u`)[0].u).toBe("scram_tool_check");
+      await good.end({ timeout: 5 });
+      const bad = login(password + "x");
+      await expect(bad`select 1`).rejects.toThrow(/password authentication failed/);
+      await bad.end({ timeout: 5 });
+    } finally {
+      await admin`drop role if exists scram_tool_check`;
+      await admin.end({ timeout: 5 });
+    }
   });
 });
 
