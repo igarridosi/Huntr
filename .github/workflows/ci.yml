@@ -24,11 +24,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            pipelines/sec-ingest/package-lock.json
 
       - run: npm ci
+      # The SEC ingest pipeline is its own package (postgres, @azure/*); its
+      # tests run with the root suite, so its dependencies are installed too.
+      - run: npm ci --prefix pipelines/sec-ingest
 
       - run: npm run lint
       - run: npm run typecheck
+      - run: npm run typecheck --prefix pipelines/sec-ingest
       - run: npm test
 
       # Placeholders only. The build has to prove it needs no real keys - every

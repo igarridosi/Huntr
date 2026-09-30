@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "node build.mjs",
+    "typecheck": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
     "dry-run": "node build.mjs && node dist/cli.mjs --dry-run",
     "local:up": "node local/local.mjs up",
     "local:down": "node local/local.mjs down",
