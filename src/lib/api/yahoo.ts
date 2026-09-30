@@ -2053,3 +2053,29 @@ export async function refreshQuoteCache(ticker: string): Promise<boolean> {
   await setCachedData(key, "quote", raw as unknown as Record<string, unknown>);
   return true;
 }
+
+const FX_TTL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Units of `to` per unit of `from` (GBP→USD: about 1.3), from Yahoo's
+ * currency pair quote, cached for six hours. Null when Yahoo has no pair.
+ */
+export async function getFxRate(from: string, to: string): Promise<number | null> {
+  const a = from.trim().toUpperCase();
+  const b = to.trim().toUpperCase();
+  if (!/^[A-Z]{3}$/.test(a) || !/^[A-Z]{3}$/.test(b)) return null;
+  if (a === b) return 1;
+  const key = `FX-${a}${b}`;
+  const cached = await getCachedData<{ rate: number }>(key, "fx-rate", FX_TTL_MS);
+  if (cached && Number.isFinite(cached.rate) && cached.rate > 0) return cached.rate;
+  try {
+    const raw = (await withSuppressedYahooWarnings(() => yahooFinance.quote(`${a}${b}=X`))) as { regularMarketPrice?: number } | undefined;
+    const rate = raw?.regularMarketPrice;
+    if (typeof rate !== "number" || !Number.isFinite(rate) || rate <= 0) return null;
+    await setCachedData(key, "fx-rate", { rate });
+    return rate;
+  } catch (error) {
+    console.error(`[Yahoo] FX ${a}/${b} failed:`, error);
+    return null;
+  }
+}

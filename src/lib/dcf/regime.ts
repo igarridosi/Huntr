@@ -9,7 +9,7 @@
  * describes the company being valued. Each label below is one of those
  * assumptions not holding.
  */
-export type RegimeId = "lender" | "capexPeak" | "leveraged" | "thinMargin" | "shiftingPerimeter";
+export type RegimeId = "lender" | "capexPeak" | "terminalHeavy" | "leveraged" | "thinMargin" | "shiftingPerimeter";
 
 export interface Regime {
   id: RegimeId;
@@ -26,6 +26,8 @@ export interface Regime {
 
 export const CAPEX_PEAK_RATIO = 0.25;
 export const TERMINAL_WEIGHT_FRAGILE = 0.65;
+/** Latest capex over the median of the earlier years before it counts as a peak. */
+export const CAPEX_PEAK_VS_HISTORY = 1.25;
 export const LEVERAGE_HIGH = 2.5;
 export const THIN_MARGIN = 0.06;
 export const PERIMETER_MONTHS = 24;
@@ -34,6 +36,8 @@ export interface RegimeInput {
   lender: boolean;
   /** |capex| over revenue for the latest fiscal year, on the defined basis. */
   capexToRevenue: number | null;
+  /** The same ratio for the earlier fiscal years, oldest first. */
+  capexHistory?: number[];
   /** PV of the terminal value over enterprise value, from the current run. */
   terminalWeight: number | null;
   /** Total debt over EBITDA, latest fiscal year. */
@@ -66,16 +70,39 @@ export function detectRegimes(input: RegimeInput): Regime[] {
     });
   }
 
-  const capexHigh = input.capexToRevenue !== null && input.capexToRevenue > CAPEX_PEAK_RATIO;
+  // Two conditions that used to share one label. A peak is capex high for
+  // any business and high for this one; a terminal-heavy value is only a
+  // long-duration business. Haleon spends a few percent of revenue and got
+  // "capex peak" because two thirds of its value sits in the terminal year.
+  const ratio = input.capexToRevenue;
+  const history = (input.capexHistory ?? []).filter((v) => Number.isFinite(v) && v >= 0).sort((x, y) => x - y);
+  const median = history.length ? history[Math.floor((history.length - 1) / 2)] / 2 + history[Math.ceil((history.length - 1) / 2)] / 2 : null;
+  const capexPeak =
+    ratio !== null && ratio > CAPEX_PEAK_RATIO && (median === null || ratio > median * CAPEX_PEAK_VS_HISTORY);
   const terminalHeavy = input.terminalWeight !== null && input.terminalWeight > TERMINAL_WEIGHT_FRAGILE;
-  if (capexHigh || terminalHeavy) {
+  if (capexPeak) {
     out.push({
       id: "capexPeak",
       label: "Capex peak",
-      detail: [capexHigh ? `capex ${pct(input.capexToRevenue!)} of revenue` : null, terminalHeavy ? `${pct(input.terminalWeight!)} of value in the terminal` : null].filter(Boolean).join("; "),
+      detail: [
+        `capex ${pct(ratio!)} of revenue`,
+        median !== null ? `against ${pct(median)} in earlier years` : null,
+        terminalHeavy ? `${pct(input.terminalWeight!)} of value in the terminal` : null,
+      ]
+        .filter(Boolean)
+        .join("; "),
       recommendation: "Free cash flow is depressed by investment the projection cannot see the return on, so the value rests on the terminal year. Fragile: check it against an earnings multiple.",
       tab: "EPS Multiple",
       watch: "Guided capex against realised capex, and whether the margin path assumes the spend rolls off.",
+    });
+  } else if (terminalHeavy) {
+    out.push({
+      id: "terminalHeavy",
+      label: "Terminal-heavy",
+      detail: `${pct(input.terminalWeight!)} of value in the terminal`,
+      recommendation: "Most of the value is in the years after the projection, so the terminal margin, growth and WACC decide it. Normal for a steady, long-lived business; test those three on the sensitivity table.",
+      tab: null,
+      watch: "The spread between WACC and terminal growth, and whether the terminal margin is one the company has earned.",
     });
   }
 

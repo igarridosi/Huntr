@@ -169,3 +169,14 @@ describe("cash flow basis", () => {
     expect(engineInputsFor(BASE_INPUTS, "levered")).toMatchObject({ totalDebt: 0, cashAndEquivalents: 0, baseRevenue: BASE_INPUTS.baseRevenue });
   });
 });
+
+describe("engineInputsFor with the interest add-back", () => {
+  it("adds the after-tax interest to margins typed by hand (Haleon: 2.46 points on a 20.26% margin)", () => {
+    const typed = { ...BASE_INPUTS, baseFCFMargin: 0.2026, terminalFCFMargin: 0.21 };
+    const run = engineInputsFor(typed, "unlevered", 0.0246);
+    expect(run.baseFCFMargin).toBeCloseTo(0.2272, 6);
+    expect(run.terminalFCFMargin).toBeCloseTo(0.2346, 6);
+    // Levered flows take no add-back and no net debt.
+    expect(engineInputsFor(typed, "levered", 0.0246)).toMatchObject({ baseFCFMargin: 0.2026, totalDebt: 0 });
+  });
+});
