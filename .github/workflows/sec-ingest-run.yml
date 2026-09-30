@@ -1,0 +1,60 @@
+name: SEC ingest (run once)
+
+# Runs sec_ingest now, outside its schedule, without the portal or Cloud
+# Shell: the admin API of the function app, called with its master key.
+#
+# The key is read with the OIDC login (huntr-sec-ingest-deploy, environment
+# productionAzure, so this waits for an approval), masked before anything
+# can print it, and only ever passed to curl in a header. The run itself is
+# asynchronous: 202 means it was accepted; its outcome is in Application
+# Insights (traces | where message has "run.summary") and in the alert.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: sec-ingest-run
+  cancel-in-progress: false
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run:
+    name: trigger sec_ingest
+    runs-on: ubuntu-latest
+    environment: productionAzure
+    timeout-minutes: 5
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: POST /admin/functions/sec_ingest
+        env:
+          RG: rg-huntr-sec-ingest
+        run: |
+          set -euo pipefail
+          app=$(az functionapp list -g "$RG" --query "[?starts_with(name, 'func-huntr-sec-ingest-')].name | [0]" -o tsv)
+          if [ -z "$app" ]; then echo "::error::no function app in $RG"; exit 1; fi
+          host=$(az functionapp show -g "$RG" -n "$app" --query defaultHostName -o tsv)
+
+          key=$(az functionapp keys list -g "$RG" -n "$app" --query masterKey -o tsv)
+          if [ -z "$key" ]; then echo "::error::could not read the master key of $app"; exit 1; fi
+          echo "::add-mask::$key"
+
+          status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
+            "https://$host/admin/functions/sec_ingest" \
+            -H "x-functions-key: $key" -H "Content-Type: application/json" \
+            --data '{}')
+          unset key
+
+          echo "$app answered $status"
+          if [ "$status" != "202" ]; then echo "::error::expected 202 Accepted, got $status"; exit 1; fi
+          {
+            echo "### sec_ingest triggered on $app ($(date -u +%FT%TZ))"
+            echo "The run is asynchronous. Its outcome: Application Insights, \`traces | where message has \"run.summary\"\`."
+          } >> "$GITHUB_STEP_SUMMARY"

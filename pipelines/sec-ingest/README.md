@@ -119,6 +119,12 @@ the run exactly as the CLI does (`src/config.ts`) and runs the same ingest
   `useMonitor` makes up a missed run once.
 - **Switching it off:** set `AzureWebJobs.sec_ingest.Disabled = true`, no
   deploy needed.
+- **Running it now:** *Actions → SEC ingest (run once) → Run workflow*. It
+  waits for approval in `productionAzure`, then calls the admin API with the
+  master key. The key is read through OIDC and masked, so it never appears in
+  the logs. A 202 means the run was accepted; its outcome is in Application
+  Insights. The portal's *Test/Run* also works, because CORS allows
+  `https://portal.azure.com`.
 - **`SEC_INGEST_MODE=blob-only`** is the first stage in the cloud:
   - raw payloads go to Blob Storage with the managed identity;
   - state and facts go to the instance's temporary disk, and Postgres is not

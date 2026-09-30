@@ -120,7 +120,13 @@ resource "azapi_resource" "function_app" {
       siteConfig = {
         minTlsVersion    = "1.2"
         scmMinTlsVersion = "1.2"
-        appSettings      = [for name in sort(keys(local.app_settings)) : { name = name, value = local.app_settings[name] }]
+        # The portal's Test/Run calls the app from the browser. The app has
+        # no HTTP functions, so this opens nothing else.
+        cors = {
+          allowedOrigins     = ["https://portal.azure.com"]
+          supportCredentials = false
+        }
+        appSettings = [for name in sort(keys(local.app_settings)) : { name = name, value = local.app_settings[name] }]
       }
     }
   }
