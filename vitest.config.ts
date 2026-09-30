@@ -8,6 +8,9 @@ export default defineConfig({
     // compiler resolves fine.
     alias: {
       "@": fileURLToPath(new URL("./src", import.meta.url)),
+      // Next resolves "server-only" itself (to a module that throws in a
+      // client bundle); tests run on the server, so it is the empty one.
+      "server-only": fileURLToPath(new URL("./node_modules/next/dist/compiled/server-only/empty.js", import.meta.url)),
     },
   },
   test: {

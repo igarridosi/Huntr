@@ -1,3 +1,6 @@
+// The service role bypasses RLS: a client bundle that pulled this in would
+// ship the key. Importing it from a client module fails the build.
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 /**
