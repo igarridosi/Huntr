@@ -1,0 +1,149 @@
+name: SEC ingest (Azure)
+
+# Deploys infra/sec-ingest with Terraform and publishes the function.
+# Two jobs, both in the productionAzure environment, so each waits for an
+# approval: first the plan (read-only), then the apply of that exact plan.
+# The identity is huntr-sec-ingest-deploy through OIDC: no secret anywhere.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - infra/sec-ingest/**
+      - pipelines/sec-ingest/**
+      - src/lib/sec/**
+      - .github/workflows/sec-ingest-deploy.yml
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "deploy, or destroy everything Terraform created"
+        type: choice
+        options: [deploy, destroy]
+        default: deploy
+
+# One run at a time; a newer push waits instead of cancelling an apply.
+concurrency:
+  group: sec-ingest-deploy
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # OIDC token for Azure
+  contents: read
+
+env:
+  ARM_USE_OIDC: "true"
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_STORAGE_USE_AZUREAD: "true"
+  TF_IN_AUTOMATION: "true"
+  TF_VAR_sec_user_agent: ${{ vars.SEC_USER_AGENT }}
+  TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+  ACTION: ${{ github.event.inputs.action || 'deploy' }}
+  WORKDIR: infra/sec-ingest
+
+jobs:
+  plan:
+    name: terraform plan (${{ github.event.inputs.action || 'deploy' }})
+    runs-on: ubuntu-latest
+    environment: productionAzure
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: infra/sec-ingest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - name: terraform init
+        run: >
+          terraform init -input=false -lockfile=readonly
+          -backend-config="resource_group_name=rg-huntr-sec-ingest"
+          -backend-config="storage_account_name=sthuntrtfstate"
+          -backend-config="container_name=tfstate"
+          -backend-config="key=sec-ingest.tfstate"
+
+      - name: terraform plan
+        run: |
+          flag=""; [ "$ACTION" = "destroy" ] && flag="-destroy"
+          terraform plan -input=false -lock-timeout=5m $flag -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+          {
+            echo "## terraform plan ($ACTION)"
+            echo '```'
+            grep -E '^(  # |Plan:|No changes)' plan.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tfplan
+          path: |
+            infra/sec-ingest/tfplan
+            infra/sec-ingest/plan.txt
+          retention-days: 3
+
+  apply:
+    name: terraform apply and publish
+    needs: plan
+    runs-on: ubuntu-latest
+    environment: productionAzure
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: tfplan
+          path: infra/sec-ingest
+
+      - name: terraform apply (the reviewed plan, nothing else)
+        working-directory: infra/sec-ingest
+        run: |
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="resource_group_name=rg-huntr-sec-ingest" \
+            -backend-config="storage_account_name=sthuntrtfstate" \
+            -backend-config="container_name=tfstate" \
+            -backend-config="key=sec-ingest.tfstate"
+          terraform apply -input=false -lock-timeout=5m tfplan
+          if [ "$ACTION" = "deploy" ]; then
+            echo "FUNCTION_APP=$(terraform output -raw function_app_name)" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/setup-node@v4
+        if: env.ACTION == 'deploy'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pipelines/sec-ingest/package-lock.json
+
+      - name: Build the deploy package
+        if: env.ACTION == 'deploy'
+        working-directory: pipelines/sec-ingest
+        run: |
+          npm ci
+          npm run package:azure
+
+      - uses: azure/login@v2
+        if: env.ACTION == 'deploy'
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Publish the function
+        if: env.ACTION == 'deploy'
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.FUNCTION_APP }}
+          package: pipelines/sec-ingest/deploy
+          sku: flexconsumption
