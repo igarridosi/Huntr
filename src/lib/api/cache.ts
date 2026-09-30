@@ -7,9 +7,13 @@
  *   - On cache hit within TTL → return stored data (no Yahoo call).
  *   - On cache miss or stale → fetch from Yahoo, store, return.
  *
- * This module is server-only (uses Supabase server client).
+ * This module is server-only. Reads go through the request's client (the
+ * read policies are open); writes and deletes go through the service role,
+ * because the cache is shared by every user and no API role may write it
+ * (migration 013).
  */
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type { CompanyFinancials } from "@/types/financials";
 import type { TimeSeriesFinancialsCache } from "@/types/yahoo";
@@ -857,7 +861,7 @@ export async function setCachedData(
       lastUpdatedMs,
     });
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
 
     const { error } = await supabase.from("stock_cache").upsert(
       {
@@ -912,7 +916,7 @@ export async function invalidateCache(
     const compositeKey = toCompositeKey(normalizedTicker, cacheKey);
     hotCache.delete(compositeKey);
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase
       .from("stock_cache")
       .delete()
@@ -937,7 +941,7 @@ export async function invalidateAllForTicker(ticker: string): Promise<void> {
       }
     }
 
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     await supabase
       .from("stock_cache")
       .delete()
