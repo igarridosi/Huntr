@@ -38,22 +38,39 @@ jobs:
           RG: rg-huntr-sec-ingest
         run: |
           set -euo pipefail
-          app=$(az functionapp list -g "$RG" --query "[?starts_with(name, 'func-huntr-sec-ingest-')].name | [0]" -o tsv)
-          if [ -z "$app" ]; then echo "::error::no function app in $RG"; exit 1; fi
-          host=$(az functionapp show -g "$RG" -n "$app" --query defaultHostName -o tsv)
+          fail() { echo "::error::$1"; exit 1; }
 
-          key=$(az functionapp keys list -g "$RG" -n "$app" --query masterKey -o tsv)
-          if [ -z "$key" ]; then echo "::error::could not read the master key of $app"; exit 1; fi
+          app=$(az functionapp list -g "$RG" --query "[?starts_with(name, 'func-huntr-sec-ingest-')].name | [0]" -o tsv)
+          [ -n "$app" ] || fail "no function app named func-huntr-sec-ingest-* in $RG"
+          echo "function app: $app"
+
+          # The site straight from ARM. `az functionapp show --query
+          # defaultHostName` came back empty for this Flex Consumption app,
+          # which left the URL as https:///admin/... ; the resource's own
+          # properties do not depend on how the CLI shapes its output.
+          id=$(az functionapp list -g "$RG" --query "[?name=='$app'].id | [0]" -o tsv)
+          [ -n "$id" ] || fail "could not read the resource id of $app"
+          site="https://management.azure.com${id}?api-version=2024-04-01"
+          host=$(az rest --method get --url "$site" --query "properties.defaultHostName" -o tsv 2>/dev/null || true)
+          if [ -z "$host" ] || [ "$host" = "None" ]; then
+            host=$(az rest --method get --url "$site" --query "properties.enabledHostNames[?!contains(@, '.scm.')] | [0]" -o tsv 2>/dev/null || true)
+          fi
+          [ "$host" = "None" ] && host=""
+          [ -n "$host" ] || fail "the default host name of $app is empty: neither properties.defaultHostName nor enabledHostNames"
+          echo "host: $host"
+
+          key=$(az functionapp keys list -g "$RG" -n "$app" --query masterKey -o tsv 2>/dev/null || true)
+          [ -n "$key" ] && [ "$key" != "None" ] || fail "the master key of $app is empty: az functionapp keys list returned nothing"
           echo "::add-mask::$key"
 
           status=$(curl -sS -o /dev/null -w '%{http_code}' -X POST \
             "https://$host/admin/functions/sec_ingest" \
             -H "x-functions-key: $key" -H "Content-Type: application/json" \
-            --data '{}')
+            --data '{}') || fail "the request to https://$host/admin/functions/sec_ingest did not complete"
           unset key
 
           echo "$app answered $status"
-          if [ "$status" != "202" ]; then echo "::error::expected 202 Accepted, got $status"; exit 1; fi
+          [ "$status" = "202" ] || fail "expected 202 Accepted, got $status"
           {
             echo "### sec_ingest triggered on $app ($(date -u +%FT%TZ))"
             echo "The run is asynchronous. Its outcome: Application Insights, \`traces | where message has \"run.summary\"\`."

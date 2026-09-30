@@ -6,3 +6,7 @@ design/** linguist-documentation
 
 # Search Console ownership stubs — not code either.
 public/google*.html linguist-generated
+
+# The committed CA certificate is base64-encoded into an app setting:
+# LF everywhere, so the value is the same on every checkout.
+infra/sec-ingest/certs/*.pem text eol=lf
