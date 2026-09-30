@@ -2,8 +2,13 @@ name: SEC ingest (Azure)
 
 # Deploys infra/sec-ingest with Terraform and publishes the function.
 # Two jobs, both in the productionAzure environment, so each waits for an
-# approval: first the plan (read-only), then the apply of that exact plan.
+# approval: first the plan (read-only), then the apply of that same plan.
 # The identity is huntr-sec-ingest-deploy through OIDC: no secret anywhere.
+#
+# The binary plan is never uploaded: it holds sensitive values in clear, and
+# this repository is public, so its artifacts are readable by anyone signed
+# in to GitHub. Only the masked plan.txt is kept. The apply job plans again
+# and applies only if its plan.txt is identical to the approved one.
 
 on:
   push:
@@ -79,12 +84,47 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # The function app's body carries the Application Insights connection
+      # string, so plan.txt shows the whole body as (sensitive value). This
+      # prints the body the apply will send with every setting's value
+      # removed, and the setting names it adds and removes against the app as
+      # it is now. The JSON plan holds secrets in clear: it stays in the
+      # runner's temp directory and is deleted before anything is printed.
+      - name: Function app after the apply (setting values removed)
+        if: env.ACTION == 'deploy'
+        run: |
+          json="$RUNNER_TEMP/plan.json"
+          terraform show -json tfplan > "$json"
+          sel='[.resource_changes[] | select(.address == "azapi_resource.function_app")][0].change.after.body'
+          body=$(jq "$sel | .properties.siteConfig.appSettings |= map(.name)" "$json")
+          after=$(jq -r "$sel | .properties.siteConfig.appSettings[].name" "$json" | sort)
+          rm -f "$json"
+          app=$(terraform output -raw function_app_name 2>/dev/null || true)
+          now=""
+          if [ -n "$app" ]; then
+            now=$(az functionapp config appsettings list -g rg-huntr-sec-ingest -n "$app" --query "[].name" -o tsv 2>/dev/null | sort || true)
+          fi
+          {
+            echo "### Function app body the apply sends (setting values removed)"
+            echo '```json'
+            echo "$body"
+            echo '```'
+            echo "### App settings the apply removes"
+            comm -23 <(echo "$now" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
+            echo "### App settings the apply adds"
+            comm -13 <(echo "$now" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
       - uses: actions/upload-artifact@v4
         with:
-          name: tfplan
-          path: |
-            infra/sec-ingest/tfplan
-            infra/sec-ingest/plan.txt
+          name: plan-text
+          path: infra/sec-ingest/plan.txt
           retention-days: 3
 
   apply:
@@ -103,10 +143,10 @@ jobs:
 
       - uses: actions/download-artifact@v4
         with:
-          name: tfplan
-          path: infra/sec-ingest
+          name: plan-text
+          path: approved
 
-      - name: terraform apply (the reviewed plan, nothing else)
+      - name: terraform apply (only the plan that was approved)
         working-directory: infra/sec-ingest
         run: |
           terraform init -input=false -lockfile=readonly \
@@ -114,6 +154,13 @@ jobs:
             -backend-config="storage_account_name=sthuntrtfstate" \
             -backend-config="container_name=tfstate" \
             -backend-config="key=sec-ingest.tfstate"
+          flag=""; [ "$ACTION" = "destroy" ] && flag="-destroy"
+          terraform plan -input=false -lock-timeout=5m $flag -out=tfplan
+          terraform show -no-color tfplan > plan.txt
+          if ! diff -u ../../approved/plan.txt plan.txt; then
+            echo "::error::The plan changed since it was approved. Nothing was applied: run the workflow again and review the new plan."
+            exit 1
+          fi
           terraform apply -input=false -lock-timeout=5m tfplan
           if [ "$ACTION" = "deploy" ]; then
             echo "FUNCTION_APP=$(terraform output -raw function_app_name)" >> "$GITHUB_ENV"
@@ -139,6 +186,23 @@ jobs:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      # The app must reach its storage through the identity only. A plain
+      # AzureWebJobsStorage overrides the AzureWebJobsStorage__* settings and
+      # makes the host use Shared Key, which the accounts refuse. Names only:
+      # no value is ever printed.
+      - name: Check the host storage settings
+        if: env.ACTION == 'deploy'
+        run: |
+          names=$(az functionapp config appsettings list -g rg-huntr-sec-ingest -n "$FUNCTION_APP" --query "[].name" -o tsv)
+          echo "$names" | sort
+          if echo "$names" | grep -qiE '^(AzureWebJobsStorage|DEPLOYMENT_STORAGE_CONNECTION_STRING)$'; then
+            echo "::error::a storage connection string is set on $FUNCTION_APP; host storage must use the identity only"
+            exit 1
+          fi
+          for required in AzureWebJobsStorage__accountName AzureWebJobsStorage__credential AzureWebJobsStorage__clientId; do
+            echo "$names" | grep -qx "$required" || { echo "::error::$required is missing on $FUNCTION_APP"; exit 1; }
+          done
 
       - name: Publish the function
         if: env.ACTION == 'deploy'

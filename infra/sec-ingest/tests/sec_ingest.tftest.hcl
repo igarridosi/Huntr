@@ -55,11 +55,6 @@ mock_provider "azurerm" {
       id = "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg-huntr-sec-ingest/providers/Microsoft.Web/serverFarms/asp-huntr-sec-ingest"
     }
   }
-  mock_resource "azurerm_function_app_flex_consumption" {
-    defaults = {
-      id = "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg-huntr-sec-ingest/providers/Microsoft.Web/sites/func-huntr-sec-ingest-mock"
-    }
-  }
   mock_resource "azurerm_monitor_action_group" {
     defaults = {
       id = "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg-huntr-sec-ingest/providers/Microsoft.Insights/actionGroups/ag-huntr-sec-ingest"
@@ -67,11 +62,20 @@ mock_provider "azurerm" {
   }
 }
 
-mock_provider "azapi" {}
+mock_provider "azapi" {
+  mock_resource "azapi_resource" {
+    defaults = {
+      id = "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg-huntr-sec-ingest/providers/Microsoft.Web/sites/func-huntr-sec-ingest-mock"
+    }
+  }
+}
+
 
 variables {
-  sec_user_agent = "Huntr huntrvalue.me contact@huntrvalue.me"
-  alert_email    = "alerts@example.com"
+  # Mocked providers cannot import: the one-off adoption in migrations.tf is off here.
+  adopt_existing_function_app = false
+  sec_user_agent              = "Huntr huntrvalue.me contact@huntrvalue.me"
+  alert_email                 = "alerts@example.com"
 }
 
 run "first_stage_blob_only" {
@@ -82,7 +86,7 @@ run "first_stage_blob_only" {
       for r in [
         azurerm_user_assigned_identity.ingest, azurerm_storage_account.func, azurerm_storage_account.raw,
         azurerm_key_vault.ingest, azurerm_log_analytics_workspace.ingest, azurerm_application_insights.ingest,
-        azurerm_service_plan.ingest, azurerm_function_app_flex_consumption.ingest,
+        azurerm_service_plan.ingest, azapi_resource.function_app,
       ] : r.location == "italynorth"
     ])
     error_message = "Everything goes in italynorth, the resource group's region."
@@ -95,16 +99,50 @@ run "first_stage_blob_only" {
 
   assert {
     condition = (
-      azurerm_function_app_flex_consumption.ingest.storage_authentication_type == "UserAssignedIdentity" &&
-      azurerm_function_app_flex_consumption.ingest.app_settings["AzureWebJobsStorage__credential"] == "managedidentity" &&
-      azurerm_function_app_flex_consumption.ingest.app_settings["AzureWebJobsStorage__clientId"] == azurerm_user_assigned_identity.ingest.client_id &&
-      azurerm_function_app_flex_consumption.ingest.app_settings["AZURE_CLIENT_ID"] == azurerm_user_assigned_identity.ingest.client_id
+      azapi_resource.function_app.body.properties.functionAppConfig.deployment.storage.authentication.type == "UserAssignedIdentity" &&
+      azapi_resource.function_app.body.properties.functionAppConfig.deployment.storage.authentication.userAssignedIdentityResourceId == azurerm_user_assigned_identity.ingest.id &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["AzureWebJobsStorage__credential"] == "managedidentity" &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["AzureWebJobsStorage__clientId"] == azurerm_user_assigned_identity.ingest.client_id &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["AzureWebJobsStorage__accountName"] == azurerm_storage_account.func.name &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["AZURE_CLIENT_ID"] == azurerm_user_assigned_identity.ingest.client_id
     )
     error_message = "The function reaches every storage account through its user-assigned identity."
   }
 
   assert {
-    condition     = azapi_update_resource.key_vault_reference_identity.body.properties.keyVaultReferenceIdentity == azurerm_user_assigned_identity.ingest.id
+    # Exactly the settings the app had when azurerm managed it, minus the
+    # plain AzureWebJobsStorage azurerm forced onto it: the PUT replaces the
+    # list, so anything missing here would be lost.
+    condition = sort([for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name]) == sort([
+      "APPLICATIONINSIGHTS_CONNECTION_STRING",
+      "AZURE_CLIENT_ID",
+      "AzureWebJobs.sec_ingest.Disabled",
+      "AzureWebJobsStorage__accountName",
+      "AzureWebJobsStorage__clientId",
+      "AzureWebJobsStorage__credential",
+      "SEC_INGEST_MODE",
+      "SEC_INGEST_SCHEDULE",
+      "SEC_INGEST_TICKERS",
+      "SEC_RAW_BLOB_ACCOUNT_URL",
+      "SEC_RAW_BLOB_CONTAINER",
+      "SEC_USER_AGENT",
+    ])
+    error_message = "The app settings are the twelve the app had, without the plain AzureWebJobsStorage."
+  }
+
+  assert {
+    # A plain AzureWebJobsStorage takes precedence over the __ identity
+    # settings and makes the host use Shared Key, which these accounts
+    # refuse (403 AuthenticationFailed). Nor may any setting carry a key.
+    condition = alltrue([
+      for s in azapi_resource.function_app.body.properties.siteConfig.appSettings :
+      lower(s.name) != "azurewebjobsstorage" && !strcontains(lower(s.value), "accountkey=") && lower(s.name) != "deployment_storage_connection_string"
+    ])
+    error_message = "No plain AzureWebJobsStorage and no storage connection string with a key: host storage goes through the identity only."
+  }
+
+  assert {
+    condition     = azapi_resource.function_app.body.properties.keyVaultReferenceIdentity == azurerm_user_assigned_identity.ingest.id
     error_message = "Key Vault references must resolve with the user-assigned identity."
   }
 
@@ -123,21 +161,26 @@ run "first_stage_blob_only" {
 
   assert {
     condition = (
-      azurerm_function_app_flex_consumption.ingest.app_settings["SEC_INGEST_MODE"] == "blob-only" &&
-      azurerm_function_app_flex_consumption.ingest.app_settings["SEC_INGEST_TICKERS"] != "" &&
-      azurerm_function_app_flex_consumption.ingest.app_settings["AzureWebJobs.sec_ingest.Disabled"] == "false" &&
-      !contains(keys(azurerm_function_app_flex_consumption.ingest.app_settings), "SEC_INGEST_DATABASE_URL")
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_MODE"] == "blob-only" &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_TICKERS"] != "" &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["AzureWebJobs.sec_ingest.Disabled"] == "false" &&
+      !contains(keys({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }), "SEC_INGEST_DATABASE_URL")
     )
     error_message = "The first stage writes Blob only: no database setting at all."
   }
 
   assert {
     condition = (
-      azurerm_function_app_flex_consumption.ingest.maximum_instance_count == 1 &&
-      azurerm_function_app_flex_consumption.ingest.instance_memory_in_mb == 512 &&
-      azurerm_function_app_flex_consumption.ingest.runtime_version == "22"
+      azapi_resource.function_app.body.properties.functionAppConfig.scaleAndConcurrency.maximumInstanceCount == 1 &&
+      azapi_resource.function_app.body.properties.functionAppConfig.scaleAndConcurrency.instanceMemoryMB == 512 &&
+      azapi_resource.function_app.body.properties.functionAppConfig.runtime.name == "node" && azapi_resource.function_app.body.properties.functionAppConfig.runtime.version == "22"
     )
     error_message = "One 512 MB Node 22 instance at most."
+  }
+
+  assert {
+    condition     = alltrue([for k in ["scm", "ftp"] : !azapi_update_resource.no_basic_auth[k].body.properties.allow])
+    error_message = "Basic-auth publishing (SCM and FTP) stays off."
   }
 
   assert {
@@ -164,7 +207,7 @@ run "switched_off" {
   }
 
   assert {
-    condition     = azurerm_function_app_flex_consumption.ingest.app_settings["AzureWebJobs.sec_ingest.Disabled"] == "true"
+    condition     = { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["AzureWebJobs.sec_ingest.Disabled"] == "true"
     error_message = "ingest_enabled = false disables the timer."
   }
 }

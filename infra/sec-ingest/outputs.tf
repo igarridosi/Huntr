@@ -1,6 +1,6 @@
 output "function_app_name" {
   description = "Where the deploy workflow publishes the package."
-  value       = azurerm_function_app_flex_consumption.ingest.name
+  value       = azapi_resource.function_app.name
 }
 
 output "identity_client_id" {
