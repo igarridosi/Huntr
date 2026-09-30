@@ -48,3 +48,23 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: dummy
           NEXT_PUBLIC_SITE_URL: https://example.com
           CRON_SECRET: dummy
+
+  terraform:
+    name: terraform · fmt · validate · test (no Azure)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/sec-ingest
+    # Mocked providers only: no credentials, nothing reaches Azure. The real
+    # plan runs in the SEC ingest deploy workflow, behind an approval.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.16.4
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false -lockfile=readonly
+      - run: terraform validate
+      - run: terraform test
