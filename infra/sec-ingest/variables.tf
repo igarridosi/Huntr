@@ -21,14 +21,20 @@ variable "alert_email" {
 }
 
 variable "ingest_mode" {
-  description = "blob-only: raw payloads to Blob, no Postgres (the first stage). real: Postgres and Blob (PR 7)."
+  description = "real: Postgres and Blob, the universe from the tickers table. blob-only: raw payloads to Blob, no Postgres (the first stage, and a fallback)."
   type        = string
-  default     = "blob-only"
+  default     = "real"
 
   validation {
     condition     = contains(["blob-only", "real"], var.ingest_mode)
     error_message = "ingest_mode must be blob-only or real."
   }
+}
+
+variable "database_url_secret_name" {
+  description = "The Key Vault secret holding the pooler URL for huntr_sec_ingest, set by hand. Terraform only references it."
+  type        = string
+  default     = "sec-ingest-database-url"
 }
 
 variable "blob_only_tickers" {

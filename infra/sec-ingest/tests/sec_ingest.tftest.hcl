@@ -79,6 +79,10 @@ variables {
 run "first_stage_blob_only" {
   command = apply
 
+  variables {
+    ingest_mode = "blob-only"
+  }
+
   assert {
     condition = alltrue([
       for r in [
@@ -199,6 +203,63 @@ run "first_stage_blob_only" {
   assert {
     condition     = azurerm_monitor_scheduled_query_rules_alert_v2.ingest.evaluation_frequency == "PT1H" && azurerm_monitor_scheduled_query_rules_alert_v2.ingest.enabled
     error_message = "One alert rule, evaluated hourly."
+  }
+}
+
+run "real_mode" {
+  command = apply
+
+  assert {
+    condition = sort([for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name]) == sort([
+      "APPLICATIONINSIGHTS_CONNECTION_STRING",
+      "AZURE_CLIENT_ID",
+      "AzureWebJobs.sec_ingest.Disabled",
+      "AzureWebJobsStorage__accountName",
+      "AzureWebJobsStorage__clientId",
+      "AzureWebJobsStorage__credential",
+      "SEC_INGEST_DATABASE_CA",
+      "SEC_INGEST_DATABASE_URL",
+      "SEC_INGEST_MODE",
+      "SEC_INGEST_SCHEDULE",
+      "SEC_RAW_BLOB_ACCOUNT_URL",
+      "SEC_RAW_BLOB_CONTAINER",
+      "SEC_USER_AGENT",
+    ])
+    error_message = "Real mode: the blob-only settings minus the fixed tickers, plus the database URL and its CA."
+  }
+
+  assert {
+    condition     = { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_MODE"] == "real"
+    error_message = "real is the default mode."
+  }
+
+  assert {
+    condition = (
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_URL"] == "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.ingest.name};SecretName=sec-ingest-database-url)" &&
+      !strcontains(lower({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_URL"]), "postgres")
+    )
+    error_message = "The database URL is a Key Vault reference, never a value in the configuration."
+  }
+
+  assert {
+    condition     = azapi_resource.function_app.body.properties.keyVaultReferenceIdentity == azurerm_user_assigned_identity.ingest.id
+    error_message = "The reference resolves with the user-assigned identity."
+  }
+
+  assert {
+    condition = (
+      startswith(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]), "-----BEGIN CERTIFICATE-----") &&
+      strcontains(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]), "-----END CERTIFICATE-----")
+    )
+    error_message = "The pooler's root CA travels as base64 of a PEM certificate."
+  }
+
+  assert {
+    condition = alltrue([
+      for s in azapi_resource.function_app.body.properties.siteConfig.appSettings :
+      lower(s.name) != "azurewebjobsstorage" && !strcontains(lower(s.value), "accountkey=") && !strcontains(lower(s.value), "password")
+    ])
+    error_message = "No storage key and no password in any setting."
   }
 }
 

@@ -130,7 +130,12 @@ the run exactly as the CLI does (`src/config.ts`) and runs the same ingest
   - state and facts go to the instance's temporary disk, and Postgres is not
     touched;
   - the universe is `SEC_INGEST_TICKERS`.
-- **`SEC_INGEST_MODE=real`:** Postgres and Blob.
+- **`SEC_INGEST_MODE=real`** (the default in the infrastructure): Postgres
+  and Blob, with the universe taken from the active rows of `tickers`.
+  - The database URL is a Key Vault reference, and the deploy checks that it
+    resolves.
+  - TLS to Supabase's pooler is verified against Supabase's own root CA
+    (`infra/sec-ingest/certs/`), which is not in the public trust stores.
 - **Failing on purpose:** a run that raises an alert, or cannot run, throws.
   The invocation fails, and that is what the Azure Monitor alert watches.
 - **No retries:** neither `host.json` nor the function defines a retry

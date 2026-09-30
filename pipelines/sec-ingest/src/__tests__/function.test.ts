@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { ConfigError, setupRun, type RunSetup } from "../config";
+import { caFrom, ConfigError, setupRun, type RunSetup } from "../config";
 import { diskFacts, diskState } from "../disk";
 import { IngestAlertError, runNightly, targetFor } from "../function";
 import { silentLogger } from "../log";
@@ -88,5 +88,16 @@ describe("runNightly", () => {
     const error = await runNightly(env, silentLogger, () => new Date("2026-09-24T12:00:00Z"), fakeSetup).catch((e) => e);
     expect(error).toBeInstanceOf(IngestAlertError);
     expect(error.message).toMatch(/the cursor is 9 days old/);
+  });
+});
+
+describe("caFrom", () => {
+  const pem = "-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIU\n-----END CERTIFICATE-----\n";
+  it("takes a PEM as it is, or base64 of it, and nothing else", () => {
+    expect(caFrom(pem)).toBe(pem.trim());
+    expect(caFrom(Buffer.from(pem).toString("base64"))).toBe(pem);
+    expect(caFrom(undefined)).toBeUndefined();
+    expect(caFrom("  ")).toBeUndefined();
+    expect(() => caFrom("bm90IGEgY2VydA==")).toThrow(ConfigError);
   });
 });
