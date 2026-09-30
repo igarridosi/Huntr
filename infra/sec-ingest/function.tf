@@ -33,43 +33,31 @@ resource "azurerm_service_plan" "ingest" {
   tags                = local.tags
 }
 
-resource "azurerm_function_app_flex_consumption" "ingest" {
-  name                = "func-huntr-sec-ingest-${local.suffix}"
-  location            = local.location
-  resource_group_name = data.azurerm_resource_group.ingest.name
-  service_plan_id     = azurerm_service_plan.ingest.id
-
-  runtime_name          = "node"
-  runtime_version       = "22"
-  instance_memory_in_mb = 512
-  # One nightly run: never more than one instance.
-  maximum_instance_count = 1
-
-  # The deployment package, read with the identity.
-  storage_container_type            = "blobContainer"
-  storage_container_endpoint        = "${azurerm_storage_account.func.primary_blob_endpoint}${azurerm_storage_container.deployment.name}"
-  storage_authentication_type       = "UserAssignedIdentity"
-  storage_user_assigned_identity_id = azurerm_user_assigned_identity.ingest.id
-
-  identity {
-    type         = "UserAssigned"
-    identity_ids = [azurerm_user_assigned_identity.ingest.id]
-  }
-
-  https_only                                     = true
-  webdeploy_publish_basic_authentication_enabled = false
-
-  site_config {
-    application_insights_connection_string = azurerm_application_insights.ingest.connection_string
-  }
-
+# The function app, as a plain Microsoft.Web/sites resource.
+#
+# Not azurerm_function_app_flex_consumption: azurerm 5.7 always writes an
+# AzureWebJobsStorage connection string built from storage_access_key, even
+# with storage_authentication_type = "UserAssignedIdentity" (it builds the
+# string unconditionally and passes storageUsesMSI = false), and puts it
+# back on every app-settings update. A plain AzureWebJobsStorage takes
+# precedence over the AzureWebJobsStorage__* identity settings, so the host
+# tried Shared Key against accounts that refuse it: 403 AuthenticationFailed
+# on azure-webjobs-secrets. It also has no keyVaultReferenceIdentity.
+#
+# Here the app settings are exactly these and nothing else, the host
+# storage and the deployment package go through the user-assigned identity,
+# and Key Vault references resolve with it too. The Flex Consumption shape
+# follows Microsoft's own templates (functionAppConfig).
+locals {
   app_settings = {
-    # The host's own storage (timer leases, useMonitor), through the identity.
+    # The host's own storage (timer leases, useMonitor, keys), through the
+    # identity. No plain AzureWebJobsStorage: see above, and the test.
     "AzureWebJobsStorage__accountName" = azurerm_storage_account.func.name
     "AzureWebJobsStorage__credential"  = "managedidentity"
     "AzureWebJobsStorage__clientId"    = azurerm_user_assigned_identity.ingest.client_id
     # DefaultAzureCredential in the pipeline picks this identity for Blob.
-    "AZURE_CLIENT_ID" = azurerm_user_assigned_identity.ingest.client_id
+    "AZURE_CLIENT_ID"                       = azurerm_user_assigned_identity.ingest.client_id
+    "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.ingest.connection_string
 
     "SEC_INGEST_MODE"                  = var.ingest_mode
     "SEC_INGEST_TICKERS"               = var.ingest_mode == "blob-only" ? join(",", var.blob_only_tickers) : ""
@@ -79,10 +67,65 @@ resource "azurerm_function_app_flex_consumption" "ingest" {
     "SEC_RAW_BLOB_CONTAINER"           = azurerm_storage_container.raw.name
     "AzureWebJobs.sec_ingest.Disabled" = var.ingest_enabled ? "false" : "true"
   }
+}
 
-  tags = local.tags
+resource "azapi_resource" "function_app" {
+  type      = "Microsoft.Web/sites@2024-04-01"
+  name      = "func-huntr-sec-ingest-${local.suffix}"
+  parent_id = data.azurerm_resource_group.ingest.id
+  location  = local.location
+  tags      = local.tags
 
-  # The roles first: an app that starts without them fails to read its package.
+  identity {
+    type         = "UserAssigned"
+    identity_ids = [azurerm_user_assigned_identity.ingest.id]
+  }
+
+  body = {
+    kind = "functionapp,linux"
+    properties = {
+      serverFarmId = azurerm_service_plan.ingest.id
+      # What azurerm sent for this app, kept as it was: the PUT replaces the
+      # site, and anything left out would fall back to Azure's defaults.
+      enabled             = true
+      httpsOnly           = true
+      clientCertEnabled   = false
+      clientCertMode      = "Optional"
+      publicNetworkAccess = "Enabled"
+      # @Microsoft.KeyVault references resolve with this identity (PR 7).
+      keyVaultReferenceIdentity = azurerm_user_assigned_identity.ingest.id
+
+      functionAppConfig = {
+        deployment = {
+          storage = {
+            type  = "blobContainer"
+            value = "${azurerm_storage_account.func.primary_blob_endpoint}${azurerm_storage_container.deployment.name}"
+            authentication = {
+              type                           = "UserAssignedIdentity"
+              userAssignedIdentityResourceId = azurerm_user_assigned_identity.ingest.id
+            }
+          }
+        }
+        runtime = {
+          name    = "node"
+          version = "22"
+        }
+        scaleAndConcurrency = {
+          # One nightly run: never more than one instance.
+          maximumInstanceCount = 1
+          instanceMemoryMB     = 512
+        }
+      }
+
+      siteConfig = {
+        minTlsVersion    = "1.2"
+        scmMinTlsVersion = "1.2"
+        appSettings      = [for name in sort(keys(local.app_settings)) : { name = name, value = local.app_settings[name] }]
+      }
+    }
+  }
+
+  # The roles first: an app that starts without them cannot read its package.
   depends_on = [
     azurerm_role_assignment.func_storage,
     azurerm_role_assignment.raw_container,
@@ -90,22 +133,18 @@ resource "azurerm_function_app_flex_consumption" "ingest" {
   ]
 }
 
-# azurerm does not expose keyVaultReferenceIdentity on Flex Consumption apps,
-# and without it Azure resolves @Microsoft.KeyVault references with a
-# system-assigned identity this app does not have. Set on the site itself,
-# and set again whenever the app is replaced or updated, since an update
-# through azurerm could reset it. PR 7 checks the reference resolves.
-resource "azapi_update_resource" "key_vault_reference_identity" {
-  type        = "Microsoft.Web/sites@2024-04-01"
-  resource_id = azurerm_function_app_flex_consumption.ingest.id
+# Publishing goes through Entra ID (the deploy workflow), never through
+# basic-auth credentials. These policies always exist on a site, so they
+# are updated rather than created.
+resource "azapi_update_resource" "no_basic_auth" {
+  for_each  = toset(["scm", "ftp"])
+  type      = "Microsoft.Web/sites/basicPublishingCredentialsPolicies@2024-04-01"
+  name      = each.key
+  parent_id = azapi_resource.function_app.id
 
   body = {
     properties = {
-      keyVaultReferenceIdentity = azurerm_user_assigned_identity.ingest.id
+      allow = false
     }
-  }
-
-  lifecycle {
-    replace_triggered_by = [azurerm_function_app_flex_consumption.ingest]
   }
 }
