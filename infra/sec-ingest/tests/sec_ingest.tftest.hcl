@@ -249,9 +249,11 @@ run "real_mode" {
   assert {
     condition = (
       startswith(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]), "-----BEGIN CERTIFICATE-----") &&
-      strcontains(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]), "-----END CERTIFICATE-----")
+      endswith(trimspace(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"])), "-----END CERTIFICATE-----") &&
+      length(regexall("BEGIN CERTIFICATE", base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]))) == 1 &&
+      !strcontains(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]), "\r")
     )
-    error_message = "The pooler's root CA travels as base64 of a PEM certificate."
+    error_message = "The pooler's root CA travels as base64 of one PEM certificate and nothing else: no text around it, no CRLF."
   }
 
   assert {

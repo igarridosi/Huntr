@@ -1,4 +1,5 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { X509Certificate } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -92,12 +93,45 @@ describe("runNightly", () => {
 });
 
 describe("caFrom", () => {
-  const pem = "-----BEGIN CERTIFICATE-----\nMIIBszCCAVmgAwIBAgIU\n-----END CERTIFICATE-----\n";
-  it("takes a PEM as it is, or base64 of it, and nothing else", () => {
-    expect(caFrom(pem)).toBe(pem.trim());
-    expect(caFrom(Buffer.from(pem).toString("base64"))).toBe(pem);
+  // The file Terraform encodes into SEC_INGEST_DATABASE_CA, read as it is
+  // committed, and the value filebase64() makes of it.
+  const repoPem = readFileSync(new URL("../../../../infra/sec-ingest/certs/supabase-root-2021-ca.pem", import.meta.url), "utf8");
+  const setting = Buffer.from(repoPem).toString("base64");
+  const SUPABASE_ROOT_2021 = "80:70:25:AD:50:D4:ED:21:9D:2C:9C:7D:29:9C:00:4F:82:4E:B0:0C:F7:F6:5A:FE:F6:07:D0:7B:72:E6:CA:FA";
+  const fingerprint = (pem: string) => new X509Certificate(pem).fingerprint256;
+
+  it("turns the exact app setting Terraform writes into the Supabase root certificate", () => {
+    expect(setting.startsWith("LS0tLS1CRUdJTi")).toBe(true);
+    const pem = caFrom(setting)!;
+    expect(fingerprint(pem)).toBe(SUPABASE_ROOT_2021);
+    expect(pem).toMatch(/^-----BEGIN CERTIFICATE-----\n[\s\S]+\n-----END CERTIFICATE-----\n$/);
+  });
+
+  it("keeps the committed file to the certificate alone, LF only", () => {
+    expect(repoPem).not.toMatch(/\r|^﻿/);
+    expect(repoPem.trim().startsWith("-----BEGIN CERTIFICATE-----")).toBe(true);
+    expect(repoPem.trim().endsWith("-----END CERTIFICATE-----")).toBe(true);
+    expect(repoPem.match(/BEGIN CERTIFICATE/g)).toHaveLength(1);
+  });
+
+  it("survives what broke the first deploy: text after the certificate", () => {
+    // The first committed file carried the rest of `openssl s_client`'s output.
+    const withTail = repoPem + "---\nServer certificate\nsubject=CN = *.pooler.supabase.com\n---\nSSL handshake has read 3500 bytes\n";
+    expect(fingerprint(caFrom(Buffer.from(withTail).toString("base64"))!)).toBe(SUPABASE_ROOT_2021);
+  });
+
+  it("survives CRLF, a byte-order mark, and base64 wrapped over lines", () => {
+    const crlf = "﻿" + repoPem.replace(/\n/g, "\r\n");
+    expect(fingerprint(caFrom(crlf)!)).toBe(SUPABASE_ROOT_2021);
+    expect(fingerprint(caFrom(Buffer.from(crlf).toString("base64"))!)).toBe(SUPABASE_ROOT_2021);
+    const wrapped = setting.replace(/(.{76})/g, "$1\n") + "\n";
+    expect(fingerprint(caFrom(wrapped)!)).toBe(SUPABASE_ROOT_2021);
+  });
+
+  it("is empty when unset, and an error when there is no certificate in it", () => {
     expect(caFrom(undefined)).toBeUndefined();
     expect(caFrom("  ")).toBeUndefined();
     expect(() => caFrom("bm90IGEgY2VydA==")).toThrow(ConfigError);
+    expect(() => caFrom("-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----")).toThrow(ConfigError);
   });
 });
