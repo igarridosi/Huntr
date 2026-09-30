@@ -10,17 +10,20 @@
     "build": "node build.mjs",
     "typecheck": "node ../../node_modules/typescript/bin/tsc -p tsconfig.json",
     "dry-run": "node build.mjs && node dist/cli.mjs --dry-run",
+    "package:azure": "node build.mjs && node local/package-azure.mjs",
     "local:up": "node local/local.mjs up",
     "local:down": "node local/local.mjs down",
     "local:reset": "node local/local.mjs reset",
     "local:run": "node local/local.mjs run",
     "local:status": "node local/local.mjs status",
-    "test:local": "node local/local.mjs test"
+    "test:local": "node local/local.mjs test",
+    "password:verifier": "node local/scram-verifier.mjs"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
   },
   "dependencies": {
+    "@azure/functions": "4.16.5",
     "@azure/identity": "4.13.1",
     "@azure/storage-blob": "12.32.0",
     "postgres": "3.4.9"

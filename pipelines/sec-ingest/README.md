@@ -109,6 +109,54 @@ storage account:
 - TLS is verified. If the pooler's certificate does not chain to a public
   CA, pass Supabase's CA as a PEM in `SEC_INGEST_DATABASE_CA`.
 
+## In Azure Functions
+
+`src/azure.ts` registers a single timer function, `sec_ingest`. It builds
+the run exactly as the CLI does (`src/config.ts`) and runs the same ingest
+(`src/function.ts`).
+
+- **Schedule:** the app setting `SEC_INGEST_SCHEDULE` (NCRONTAB, UTC).
+  `useMonitor` makes up a missed run once.
+- **Switching it off:** set `AzureWebJobs.sec_ingest.Disabled = true`, no
+  deploy needed.
+- **`SEC_INGEST_MODE=blob-only`** is the first stage in the cloud:
+  - raw payloads go to Blob Storage with the managed identity;
+  - state and facts go to the instance's temporary disk, and Postgres is not
+    touched;
+  - the universe is `SEC_INGEST_TICKERS`.
+- **`SEC_INGEST_MODE=real`:** Postgres and Blob.
+- **Failing on purpose:** a run that raises an alert, or cannot run, throws.
+  The invocation fails, and that is what the Azure Monitor alert watches.
+- **No retries:** neither `host.json` nor the function defines a retry
+  policy, so a failed invocation is not run again against EDGAR or
+  Postgres. The next night's run, and the per-company retries, do that
+  work. A test checks that the registration carries no retry options.
+
+`npm run package:azure` builds `deploy/`, the folder the deploy workflow
+zips: `dist/azure.mjs`, `host.json` and a `package.json` pointing at the
+entry point. There is no `node_modules`. Everything is in the bundle except
+`@azure/functions-core`, which the Functions worker provides at run time.
+
+## Setting the role's password without sending it
+
+The Supabase SQL Editor keeps a history, so the password should not be
+typed there. This prints the `ALTER ROLE` statement with the SCRAM-SHA-256
+verifier only:
+
+```bash
+npm run password:verifier
+```
+
+It asks for the password twice with echo off. Postgres stores a verifier in
+that format as it is, and never sees the password.
+
+If you have `psql` connected as the project's admin, `\password
+huntr_sec_ingest` does the same thing client-side.
+
+Use a long random password from a password manager. The tool refuses
+anything under 16 characters, and anything outside printable ASCII, which
+SASLprep would rewrite on login.
+
 ## How a run works
 
 1. **Universe.** The tickers are resolved to CIKs with EDGAR's
