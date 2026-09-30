@@ -10,7 +10,8 @@
  * Environment:
  *   SEC_USER_AGENT                   required unless the run is disk-only
  *   SEC_INGEST_DATABASE_URL          the pooler URL, as huntr_sec_ingest (store "postgres")
- *   SEC_INGEST_DATABASE_CA           PEM of the CA to verify the database's certificate (optional)
+ *   SEC_INGEST_DATABASE_CA           the CA that signs the database's certificate, as PEM or base64 of
+ *                                    the PEM (optional; Supabase's pooler needs its own root CA)
  *   SEC_INGEST_DATABASE_TLS=disable  local test bed only
  *   SEC_RAW_BLOB_ACCOUNT_URL         https://<account>.blob.core.windows.net, with the managed identity
  *   SEC_RAW_BLOB_CONNECTION_STRING   instead of the URL: Azurite ("UseDevelopmentStorage=true")
@@ -67,6 +68,20 @@ function blobTarget(env: NodeJS.ProcessEnv): BlobTarget {
   throw new ConfigError("raw payloads to Blob need SEC_RAW_BLOB_ACCOUNT_URL (Azure) or SEC_RAW_BLOB_CONNECTION_STRING (Azurite)");
 }
 
+/**
+ * The CA certificate from its setting: PEM as it is, or base64 of the PEM,
+ * which survives app settings and environment variables without newlines.
+ */
+export function caFrom(value: string | undefined): string | undefined {
+  const v = value?.trim();
+  if (!v) return undefined;
+  const pem = v.startsWith("-----BEGIN") ? v : Buffer.from(v, "base64").toString("utf8");
+  if (!/^-----BEGIN CERTIFICATE-----[\s\S]+-----END CERTIFICATE-----\s*$/.test(pem.trim())) {
+    throw new ConfigError("SEC_INGEST_DATABASE_CA is neither a PEM certificate nor base64 of one");
+  }
+  return pem;
+}
+
 export async function setupRun(target: RunTarget, env: NodeJS.ProcessEnv, log: Logger): Promise<RunSetup> {
   // A run that reaches anything beyond this machine must say who it is: the
   // SEC writes to that address before it blocks, and a default nobody chose
@@ -87,7 +102,7 @@ export async function setupRun(target: RunTarget, env: NodeJS.ProcessEnv, log: L
   } else {
     const url = env.SEC_INGEST_DATABASE_URL?.trim();
     if (!url) throw new ConfigError("SEC_INGEST_DATABASE_URL is required to write to Postgres (the pooler URL, as huntr_sec_ingest)");
-    const tls = env.SEC_INGEST_DATABASE_TLS === "disable" ? "disable" : { ca: env.SEC_INGEST_DATABASE_CA?.trim() || undefined };
+    const tls = env.SEC_INGEST_DATABASE_TLS === "disable" ? "disable" : { ca: caFrom(env.SEC_INGEST_DATABASE_CA) };
     db = connect({ url, tls });
     deps = { client, state: postgresState(db), facts: postgresFacts(db), raw, log };
   }

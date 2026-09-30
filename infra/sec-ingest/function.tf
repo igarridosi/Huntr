@@ -49,7 +49,20 @@ resource "azurerm_service_plan" "ingest" {
 # and Key Vault references resolve with it too. The Flex Consumption shape
 # follows Microsoft's own templates (functionAppConfig).
 locals {
-  app_settings = {
+  # In real mode the database URL is a Key Vault reference, resolved by the
+  # platform with the user-assigned identity (keyVaultReferenceIdentity
+  # below): the value is never in this configuration, its state or the
+  # plan. The pooler presents a certificate from Supabase's own root CA,
+  # which is not in the public trust stores; the pipeline verifies against
+  # it (certs/, checked against the fingerprint in the Supabase dashboard).
+  mode_settings = var.ingest_mode == "real" ? {
+    "SEC_INGEST_DATABASE_URL" = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.ingest.name};SecretName=${var.database_url_secret_name})"
+    "SEC_INGEST_DATABASE_CA"  = filebase64("${path.module}/certs/supabase-root-2021-ca.pem")
+    } : {
+    "SEC_INGEST_TICKERS" = join(",", var.blob_only_tickers)
+  }
+
+  app_settings = merge(local.mode_settings, {
     # The host's own storage (timer leases, useMonitor, keys), through the
     # identity. No plain AzureWebJobsStorage: see above, and the test.
     "AzureWebJobsStorage__accountName" = azurerm_storage_account.func.name
@@ -60,13 +73,12 @@ locals {
     "APPLICATIONINSIGHTS_CONNECTION_STRING" = azurerm_application_insights.ingest.connection_string
 
     "SEC_INGEST_MODE"                  = var.ingest_mode
-    "SEC_INGEST_TICKERS"               = var.ingest_mode == "blob-only" ? join(",", var.blob_only_tickers) : ""
     "SEC_INGEST_SCHEDULE"              = var.schedule
     "SEC_USER_AGENT"                   = var.sec_user_agent
     "SEC_RAW_BLOB_ACCOUNT_URL"         = azurerm_storage_account.raw.primary_blob_endpoint
     "SEC_RAW_BLOB_CONTAINER"           = azurerm_storage_container.raw.name
     "AzureWebJobs.sec_ingest.Disabled" = var.ingest_enabled ? "false" : "true"
-  }
+  })
 }
 
 resource "azapi_resource" "function_app" {

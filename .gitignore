@@ -23,6 +23,8 @@
 # misc
 .DS_Store
 *.pem
+# Public CA certificate (not a key): the SEC ingest verifies Supabase's pooler with it.
+!infra/sec-ingest/certs/supabase-root-2021-ca.pem
 
 # debug
 npm-debug.log*

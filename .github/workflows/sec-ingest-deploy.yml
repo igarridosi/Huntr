@@ -204,6 +204,36 @@ jobs:
             echo "$names" | grep -qx "$required" || { echo "::error::$required is missing on $FUNCTION_APP"; exit 1; }
           done
 
+      # In real mode the database URL is a Key Vault reference. App Service
+      # reports whether it resolved (status and reason, never the value):
+      # anything but Resolved means the function would start without a
+      # database, so the deploy stops here.
+      - name: Check the Key Vault reference resolves
+        if: env.ACTION == 'deploy'
+        run: |
+          names=$(az functionapp config appsettings list -g rg-huntr-sec-ingest -n "$FUNCTION_APP" --query "[].name" -o tsv)
+          if ! echo "$names" | grep -qx SEC_INGEST_DATABASE_URL; then
+            echo "blob-only mode: no Key Vault reference to check"
+            exit 0
+          fi
+          id=$(az functionapp show -g rg-huntr-sec-ingest -n "$FUNCTION_APP" --query id -o tsv)
+          url="https://management.azure.com${id}/config/configreferences/appsettings/SEC_INGEST_DATABASE_URL?api-version=2024-04-01"
+          for attempt in $(seq 1 12); do
+            status=$(az rest --method get --url "$url" --query "properties.status" -o tsv 2>/dev/null || true)
+            echo "attempt $attempt: ${status:-no status yet}"
+            if [ "$status" = "Resolved" ]; then
+              echo "### Key Vault reference SEC_INGEST_DATABASE_URL: Resolved" >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            case "$status" in
+              ""|Initialized) sleep 15 ;;
+              *) break ;;
+            esac
+          done
+          az rest --method get --url "$url" --query "{status: properties.status, details: properties.details, secretName: properties.secretName, vaultName: properties.vaultName, identityType: properties.identityType}" -o json || true
+          echo "::error::SEC_INGEST_DATABASE_URL did not resolve (status: ${status:-none}). Check the secret exists in the vault and the identity has Key Vault Secrets User."
+          exit 1
+
       - name: Publish the function
         if: env.ACTION == 'deploy'
         uses: Azure/functions-action@v1
