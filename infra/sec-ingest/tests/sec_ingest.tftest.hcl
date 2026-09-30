@@ -72,10 +72,8 @@ mock_provider "azapi" {
 
 
 variables {
-  # Mocked providers cannot import: the one-off adoption in migrations.tf is off here.
-  adopt_existing_function_app = false
-  sec_user_agent              = "Huntr huntrvalue.me contact@huntrvalue.me"
-  alert_email                 = "alerts@example.com"
+  sec_user_agent = "Huntr huntrvalue.me contact@huntrvalue.me"
+  alert_email    = "alerts@example.com"
 }
 
 run "first_stage_blob_only" {
@@ -176,6 +174,11 @@ run "first_stage_blob_only" {
       azapi_resource.function_app.body.properties.functionAppConfig.runtime.name == "node" && azapi_resource.function_app.body.properties.functionAppConfig.runtime.version == "22"
     )
     error_message = "One 512 MB Node 22 instance at most."
+  }
+
+  assert {
+    condition     = azapi_resource.function_app.body.properties.siteConfig.cors.allowedOrigins == ["https://portal.azure.com"]
+    error_message = "CORS allows the Azure portal only (its Test/Run), nothing else."
   }
 
   assert {
