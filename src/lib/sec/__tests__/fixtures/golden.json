@@ -1,0 +1,3377 @@
+{
+ "now": "2026-09-30T12:00:00Z",
+ "results": {
+  "AAPL": {
+   "fundamentals": {
+    "cik": "0000320193",
+    "dilutedShares": {
+     "value": 14714676000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0000320193-26-000020"
+    },
+    "coverShares": {
+     "value": 14594180000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-07-17",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "weightedDilutedShares": {
+     "value": 14714676000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0000320193-26-000020"
+    },
+    "financialDebt": {
+     "value": 84344000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtNoncurrent + LongTermDebtCurrent + CommercialPaper",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "cash": {
+     "value": 39544000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "operatingLeases": {
+     "value": 12490000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseExpense": {
+     "value": 2100000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "shareBasedCompensation": {
+     "value": 12863000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "revenueTtm": {
+     "value": 466823000000,
+     "periodStart": "2025-06-29",
+     "periodEnd": "2026-06-27",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0000320193-25-000079",
+      "0000320193-26-000020"
+     ],
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 111482000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": {
+     "value": 14594180000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-07-17",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "sharesOutstandingCover:quarterly": {
+     "value": 14594180000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-07-17",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "sharesOutstandingCover:annual": {
+     "value": 14594180000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-07-17",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "dilutedShares:any": {
+     "value": 14750302000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 272,
+     "accession": "0000320193-26-000020"
+    },
+    "dilutedShares:quarterly": {
+     "value": 14714676000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0000320193-26-000020"
+    },
+    "dilutedShares:annual": {
+     "value": 15004697000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "cash:any": {
+     "value": 39544000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "cash:quarterly": {
+     "value": 39544000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "cash:annual": {
+     "value": 39544000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": {
+     "value": 71340000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtNoncurrent:quarterly": {
+     "value": 71340000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtNoncurrent:annual": {
+     "value": 71340000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtCurrent:any": {
+     "value": 11007000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtCurrent:quarterly": {
+     "value": 11007000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtCurrent:annual": {
+     "value": 11007000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtShortTerm:any": {
+     "value": 1997000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtShortTerm:quarterly": {
+     "value": 1997000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtShortTerm:annual": {
+     "value": 1997000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0000320193-26-000020"
+    },
+    "debtTotalIncludingCurrent:any": {
+     "value": 91281000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "debtTotalIncludingCurrent:quarterly": {
+     "value": 91281000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "debtTotalIncludingCurrent:annual": {
+     "value": 91281000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "revenue:any": {
+     "value": 364357000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 272,
+     "accession": "0000320193-26-000020"
+    },
+    "revenue:quarterly": {
+     "value": 109417000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 90,
+     "accession": "0000320193-26-000020"
+    },
+    "revenue:annual": {
+     "value": 416161000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 10911000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 10911000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 10911000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 1579000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 1579000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 1579000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 2100000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": {
+     "value": 2100000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "shareBasedCompensation:any": {
+     "value": 10523000000,
+     "form": "10-Q",
+     "filed": "2026-07-31",
+     "periodEnd": "2026-06-27",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 272,
+     "accession": "0000320193-26-000020"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 3594000000,
+     "form": "10-Q",
+     "filed": "2026-01-30",
+     "periodEnd": "2025-12-27",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 90,
+     "accession": "0000320193-26-000006"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 12863000000,
+     "form": "10-K",
+     "filed": "2025-10-31",
+     "periodEnd": "2025-09-27",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 363,
+     "accession": "0000320193-25-000079"
+    },
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "V": {
+   "fundamentals": {
+    "cik": "0001403161",
+    "dilutedShares": {
+     "value": 1898000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding (by class, largest as-converted)",
+     "durationDays": 90
+    },
+    "coverShares": null,
+    "weightedDilutedShares": {
+     "value": 1898000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding (by class, largest as-converted)",
+     "durationDays": 90
+    },
+    "financialDebt": {
+     "value": 23976000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtNoncurrent + LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "cash": {
+     "value": 12404000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "operatingLeases": {
+     "value": 913000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseExpense": {
+     "value": 195000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "shareBasedCompensation": {
+     "value": 897000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "revenueTtm": {
+     "value": 43027000000,
+     "periodStart": "2025-04-01",
+     "periodEnd": "2026-03-31",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001403161-25-000089",
+      "0001403161-26-000079"
+     ],
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 23059000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "acquisitions": {
+     "value": 705000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 181,
+     "accession": "0001403161-26-000079"
+    },
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": null,
+    "sharesOutstandingCover:quarterly": null,
+    "sharesOutstandingCover:annual": null,
+    "dilutedShares:any": null,
+    "dilutedShares:quarterly": null,
+    "dilutedShares:annual": null,
+    "cash:any": {
+     "value": 12404000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "cash:quarterly": {
+     "value": 12404000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "cash:annual": {
+     "value": 12404000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": {
+     "value": 22417000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtNoncurrent:quarterly": {
+     "value": 22417000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtNoncurrent:annual": {
+     "value": 22417000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtCurrent:any": {
+     "value": 1559000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtCurrent:quarterly": {
+     "value": 1559000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtCurrent:annual": {
+     "value": 1559000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": {
+     "value": 23976000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "DebtLongtermAndShorttermCombinedAmount",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtTotalIncludingCurrent:quarterly": {
+     "value": 23976000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "DebtLongtermAndShorttermCombinedAmount",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "debtTotalIncludingCurrent:annual": {
+     "value": 23976000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "DebtLongtermAndShorttermCombinedAmount",
+     "durationDays": 0,
+     "accession": "0001403161-26-000079"
+    },
+    "revenue:any": {
+     "value": 22131000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 181,
+     "accession": "0001403161-26-000079"
+    },
+    "revenue:quarterly": {
+     "value": 11230000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 89,
+     "accession": "0001403161-26-000079"
+    },
+    "revenue:annual": {
+     "value": 40000000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 763000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 763000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 763000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 150000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 150000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 150000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 195000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": {
+     "value": 195000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "shareBasedCompensation:any": {
+     "value": 506000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 181,
+     "accession": "0001403161-26-000079"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 231000000,
+     "form": "10-Q",
+     "filed": "2026-01-30",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 91,
+     "accession": "0001403161-26-000045"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 897000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "acquisitions:any": {
+     "value": 705000000,
+     "form": "10-Q",
+     "filed": "2026-04-29",
+     "periodEnd": "2026-03-31",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 181,
+     "accession": "0001403161-26-000079"
+    },
+    "acquisitions:quarterly": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-01-30",
+     "periodEnd": "2025-12-31",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 91,
+     "accession": "0001403161-26-000045"
+    },
+    "acquisitions:annual": {
+     "value": 887000000,
+     "form": "10-K",
+     "filed": "2025-11-06",
+     "periodEnd": "2025-09-30",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 364,
+     "accession": "0001403161-25-000089"
+    },
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "BRK-B": {
+   "fundamentals": {
+    "cik": "0001067983",
+    "dilutedShares": {
+     "value": 2154664073,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfSharesOutstandingBasic (by class, largest as-converted)",
+     "durationDays": 90
+    },
+    "coverShares": null,
+    "weightedDilutedShares": {
+     "value": 2154664073,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfSharesOutstandingBasic (by class, largest as-converted)",
+     "durationDays": 90
+    },
+    "financialDebt": null,
+    "cash": {
+     "value": 41360000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001193125-26-341032",
+     "includesRestricted": true
+    },
+    "operatingLeases": null,
+    "operatingLeaseExpense": {
+     "value": 1647000000,
+     "form": "10-K",
+     "filed": "2026-03-02",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001193125-26-083899"
+    },
+    "shareBasedCompensation": null,
+    "revenueTtm": {
+     "value": 384687000000,
+     "periodStart": "2025-07-01",
+     "periodEnd": "2026-06-30",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001193125-26-083899",
+      "0001193125-26-341032"
+     ],
+     "concept": "Revenues"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 45969000000,
+     "form": "10-K",
+     "filed": "2026-03-02",
+     "periodEnd": "2025-12-31",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 364,
+     "accession": "0001193125-26-083899"
+    },
+    "acquisitions": {
+     "value": 9704000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 180,
+     "accession": "0001193125-26-341032"
+    },
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": null,
+    "sharesOutstandingCover:quarterly": null,
+    "sharesOutstandingCover:annual": null,
+    "dilutedShares:any": null,
+    "dilutedShares:quarterly": null,
+    "dilutedShares:annual": null,
+    "cash:any": {
+     "value": 41360000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001193125-26-341032"
+    },
+    "cash:quarterly": {
+     "value": 41360000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001193125-26-341032"
+    },
+    "cash:annual": {
+     "value": 41360000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001193125-26-341032"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": null,
+    "debtNoncurrent:quarterly": null,
+    "debtNoncurrent:annual": null,
+    "debtCurrent:any": null,
+    "debtCurrent:quarterly": null,
+    "debtCurrent:annual": null,
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": null,
+    "debtTotalIncludingCurrent:quarterly": null,
+    "debtTotalIncludingCurrent:annual": null,
+    "revenue:any": {
+     "value": 195483000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 180,
+     "accession": "0001193125-26-341032"
+    },
+    "revenue:quarterly": {
+     "value": 101808000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 90,
+     "accession": "0001193125-26-341032"
+    },
+    "revenue:annual": {
+     "value": 371444000000,
+     "form": "10-K",
+     "filed": "2026-03-02",
+     "periodEnd": "2025-12-31",
+     "concept": "Revenues",
+     "durationDays": 364,
+     "accession": "0001193125-26-083899"
+    },
+    "operatingLeaseNoncurrent:any": null,
+    "operatingLeaseNoncurrent:quarterly": null,
+    "operatingLeaseNoncurrent:annual": null,
+    "operatingLeaseCurrent:any": null,
+    "operatingLeaseCurrent:quarterly": null,
+    "operatingLeaseCurrent:annual": null,
+    "operatingLeaseExpense:any": {
+     "value": 1647000000,
+     "form": "10-K",
+     "filed": "2026-03-02",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001193125-26-083899"
+    },
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": {
+     "value": 1647000000,
+     "form": "10-K",
+     "filed": "2026-03-02",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001193125-26-083899"
+    },
+    "shareBasedCompensation:any": null,
+    "shareBasedCompensation:quarterly": null,
+    "shareBasedCompensation:annual": null,
+    "acquisitions:any": {
+     "value": 9704000000,
+     "form": "10-Q",
+     "filed": "2026-08-10",
+     "periodEnd": "2026-06-30",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 180,
+     "accession": "0001193125-26-341032"
+    },
+    "acquisitions:quarterly": {
+     "value": 9690000000,
+     "form": "10-Q",
+     "filed": "2026-05-04",
+     "periodEnd": "2026-03-31",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 89,
+     "accession": "0001193125-26-202243"
+    },
+    "acquisitions:annual": {
+     "value": 1074000000,
+     "form": "10-K",
+     "filed": "2026-03-02",
+     "periodEnd": "2025-12-31",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 364,
+     "accession": "0001193125-26-083899"
+    },
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "GOOG": {
+   "fundamentals": {
+    "cik": "0001652044",
+    "dilutedShares": {
+     "value": 12309000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "coverShares": null,
+    "weightedDilutedShares": {
+     "value": 12309000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "financialDebt": {
+     "value": 100164000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent + LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "cash": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeases": {
+     "value": 18037000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense": {
+     "value": 3345000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "shareBasedCompensation": {
+     "value": 24953000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "revenueTtm": {
+     "value": 445866000000,
+     "periodStart": "2025-07-01",
+     "periodEnd": "2026-06-30",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001652044-26-000018",
+      "0001652044-26-000071"
+     ],
+     "concept": "Revenues"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 164713000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": null,
+    "sharesOutstandingCover:quarterly": null,
+    "sharesOutstandingCover:annual": null,
+    "dilutedShares:any": {
+     "value": 12274000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "dilutedShares:quarterly": {
+     "value": 12309000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "dilutedShares:annual": {
+     "value": 12230000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "cash:any": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "cash:quarterly": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "cash:annual": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": {
+     "value": 98165000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtNoncurrent:quarterly": {
+     "value": 98165000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtNoncurrent:annual": {
+     "value": 98165000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtCurrent:any": {
+     "value": 1999000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtCurrent:quarterly": {
+     "value": 1999000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtCurrent:annual": {
+     "value": 1999000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtShortTerm:any": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtShortTerm:quarterly": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtShortTerm:annual": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtTotalIncludingCurrent:any": {
+     "value": 101085000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtTotalIncludingCurrent:quarterly": {
+     "value": 101085000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtTotalIncludingCurrent:annual": {
+     "value": 101085000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "revenue:any": {
+     "value": 229692000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "revenue:quarterly": {
+     "value": 119796000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "revenue:annual": {
+     "value": 402836000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "Revenues",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 14591000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 14591000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 14591000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 3446000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 3446000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 3446000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 1834000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense:quarterly": {
+     "value": 942000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense:annual": {
+     "value": 3345000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "shareBasedCompensation:any": {
+     "value": 14708000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 6751000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 89,
+     "accession": "0001652044-26-000048"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 24953000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "GOOGL": {
+   "fundamentals": {
+    "cik": "0001652044",
+    "dilutedShares": {
+     "value": 12309000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "coverShares": null,
+    "weightedDilutedShares": {
+     "value": 12309000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "financialDebt": {
+     "value": 100164000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent + LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "cash": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeases": {
+     "value": 18037000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense": {
+     "value": 3345000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "shareBasedCompensation": {
+     "value": 24953000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "revenueTtm": {
+     "value": 445866000000,
+     "periodStart": "2025-07-01",
+     "periodEnd": "2026-06-30",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001652044-26-000018",
+      "0001652044-26-000071"
+     ],
+     "concept": "Revenues"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 164713000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": null,
+    "sharesOutstandingCover:quarterly": null,
+    "sharesOutstandingCover:annual": null,
+    "dilutedShares:any": {
+     "value": 12274000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "dilutedShares:quarterly": {
+     "value": 12309000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "dilutedShares:annual": {
+     "value": 12230000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "cash:any": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "cash:quarterly": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "cash:annual": {
+     "value": 55911000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": {
+     "value": 98165000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtNoncurrent:quarterly": {
+     "value": 98165000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtNoncurrent:annual": {
+     "value": 98165000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtCurrent:any": {
+     "value": 1999000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtCurrent:quarterly": {
+     "value": 1999000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtCurrent:annual": {
+     "value": 1999000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtShortTerm:any": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtShortTerm:quarterly": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtShortTerm:annual": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "CommercialPaper",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtTotalIncludingCurrent:any": {
+     "value": 101085000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtTotalIncludingCurrent:quarterly": {
+     "value": 101085000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "debtTotalIncludingCurrent:annual": {
+     "value": 101085000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "revenue:any": {
+     "value": 229692000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "revenue:quarterly": {
+     "value": 119796000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "revenue:annual": {
+     "value": 402836000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "Revenues",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 14591000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 14591000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 14591000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 3446000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 3446000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 3446000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 1834000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense:quarterly": {
+     "value": 942000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 90,
+     "accession": "0001652044-26-000071"
+    },
+    "operatingLeaseExpense:annual": {
+     "value": 3345000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "shareBasedCompensation:any": {
+     "value": 14708000000,
+     "form": "10-Q",
+     "filed": "2026-07-23",
+     "periodEnd": "2026-06-30",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 180,
+     "accession": "0001652044-26-000071"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 6751000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 89,
+     "accession": "0001652044-26-000048"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 24953000000,
+     "form": "10-K",
+     "filed": "2026-02-05",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0001652044-26-000018"
+    },
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "HLN": {
+   "fundamentals": {
+    "cik": "0001900304",
+    "dilutedShares": {
+     "value": 8952353648,
+     "form": "20-F",
+     "filed": "2026-03-13",
+     "periodEnd": "2026-03-13",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001104659-26-027443"
+    },
+    "coverShares": {
+     "value": 8952353648,
+     "form": "20-F",
+     "filed": "2026-03-13",
+     "periodEnd": "2026-03-13",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001104659-26-027443"
+    },
+    "weightedDilutedShares": null,
+    "financialDebt": null,
+    "cash": null,
+    "operatingLeases": null,
+    "operatingLeaseExpense": null,
+    "shareBasedCompensation": null,
+    "revenueTtm": null,
+    "operatingCashFlowAnnual": null,
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": {
+     "value": 8952353648,
+     "form": "20-F",
+     "filed": "2026-03-13",
+     "periodEnd": "2026-03-13",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001104659-26-027443"
+    },
+    "sharesOutstandingCover:quarterly": {
+     "value": 8952353648,
+     "form": "20-F",
+     "filed": "2026-03-13",
+     "periodEnd": "2026-03-13",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001104659-26-027443"
+    },
+    "sharesOutstandingCover:annual": {
+     "value": 8952353648,
+     "form": "20-F",
+     "filed": "2026-03-13",
+     "periodEnd": "2026-03-13",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001104659-26-027443"
+    },
+    "dilutedShares:any": null,
+    "dilutedShares:quarterly": null,
+    "dilutedShares:annual": null,
+    "cash:any": null,
+    "cash:quarterly": null,
+    "cash:annual": null,
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": null,
+    "debtNoncurrent:quarterly": null,
+    "debtNoncurrent:annual": null,
+    "debtCurrent:any": null,
+    "debtCurrent:quarterly": null,
+    "debtCurrent:annual": null,
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": null,
+    "debtTotalIncludingCurrent:quarterly": null,
+    "debtTotalIncludingCurrent:annual": null,
+    "revenue:any": null,
+    "revenue:quarterly": null,
+    "revenue:annual": null,
+    "operatingLeaseNoncurrent:any": null,
+    "operatingLeaseNoncurrent:quarterly": null,
+    "operatingLeaseNoncurrent:annual": null,
+    "operatingLeaseCurrent:any": null,
+    "operatingLeaseCurrent:quarterly": null,
+    "operatingLeaseCurrent:annual": null,
+    "operatingLeaseExpense:any": null,
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": null,
+    "shareBasedCompensation:any": null,
+    "shareBasedCompensation:quarterly": null,
+    "shareBasedCompensation:annual": null,
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "TSM": {
+   "fundamentals": {
+    "cik": "0001046179",
+    "dilutedShares": {
+     "value": 25932524521,
+     "form": "20-F",
+     "filed": "2026-04-16",
+     "periodEnd": "2025-12-31",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001628280-26-025362"
+    },
+    "coverShares": {
+     "value": 25932524521,
+     "form": "20-F",
+     "filed": "2026-04-16",
+     "periodEnd": "2025-12-31",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001628280-26-025362"
+    },
+    "weightedDilutedShares": null,
+    "financialDebt": null,
+    "cash": null,
+    "operatingLeases": null,
+    "operatingLeaseExpense": null,
+    "shareBasedCompensation": null,
+    "revenueTtm": null,
+    "operatingCashFlowAnnual": null,
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": {
+     "value": 25932524521,
+     "form": "20-F",
+     "filed": "2026-04-16",
+     "periodEnd": "2025-12-31",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001628280-26-025362"
+    },
+    "sharesOutstandingCover:quarterly": {
+     "value": 25932524521,
+     "form": "20-F",
+     "filed": "2026-04-16",
+     "periodEnd": "2025-12-31",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001628280-26-025362"
+    },
+    "sharesOutstandingCover:annual": {
+     "value": 25932524521,
+     "form": "20-F",
+     "filed": "2026-04-16",
+     "periodEnd": "2025-12-31",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001628280-26-025362"
+    },
+    "dilutedShares:any": null,
+    "dilutedShares:quarterly": null,
+    "dilutedShares:annual": null,
+    "cash:any": null,
+    "cash:quarterly": null,
+    "cash:annual": null,
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": null,
+    "debtNoncurrent:quarterly": null,
+    "debtNoncurrent:annual": null,
+    "debtCurrent:any": null,
+    "debtCurrent:quarterly": null,
+    "debtCurrent:annual": null,
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": null,
+    "debtTotalIncludingCurrent:quarterly": null,
+    "debtTotalIncludingCurrent:annual": null,
+    "revenue:any": null,
+    "revenue:quarterly": null,
+    "revenue:annual": null,
+    "operatingLeaseNoncurrent:any": null,
+    "operatingLeaseNoncurrent:quarterly": null,
+    "operatingLeaseNoncurrent:annual": null,
+    "operatingLeaseCurrent:any": null,
+    "operatingLeaseCurrent:quarterly": null,
+    "operatingLeaseCurrent:annual": null,
+    "operatingLeaseExpense:any": null,
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": null,
+    "shareBasedCompensation:any": null,
+    "shareBasedCompensation:quarterly": null,
+    "shareBasedCompensation:annual": null,
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "XOM": {
+   "fundamentals": {
+    "cik": "0002115436",
+    "dilutedShares": {
+     "value": 4111911960,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "coverShares": {
+     "value": 4111911960,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "weightedDilutedShares": null,
+    "financialDebt": {
+     "value": 42368000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtAndCapitalLeaseObligations + DebtCurrent",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "cash": {
+     "value": 10588000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "operatingLeases": null,
+    "operatingLeaseExpense": null,
+    "shareBasedCompensation": null,
+    "revenueTtm": null,
+    "operatingCashFlowAnnual": null,
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": {
+     "value": 4111911960,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "sharesOutstandingCover:quarterly": {
+     "value": 4111911960,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "sharesOutstandingCover:annual": {
+     "value": 4111911960,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "dilutedShares:any": null,
+    "dilutedShares:quarterly": null,
+    "dilutedShares:annual": null,
+    "cash:any": {
+     "value": 10588000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "cash:quarterly": {
+     "value": 10588000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "cash:annual": {
+     "value": 10588000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": {
+     "value": 32229000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtAndCapitalLeaseObligations",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "debtNoncurrent:quarterly": {
+     "value": 32229000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtAndCapitalLeaseObligations",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "debtNoncurrent:annual": {
+     "value": 32229000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "LongTermDebtAndCapitalLeaseObligations",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "debtCurrent:any": {
+     "value": 10139000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtCurrent",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "debtCurrent:quarterly": {
+     "value": 10139000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtCurrent",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "debtCurrent:annual": {
+     "value": 10139000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "DebtCurrent",
+     "durationDays": 0,
+     "accession": "0000034088-26-000093"
+    },
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": null,
+    "debtTotalIncludingCurrent:quarterly": null,
+    "debtTotalIncludingCurrent:annual": null,
+    "revenue:any": {
+     "value": 201155000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 180,
+     "accession": "0000034088-26-000093"
+    },
+    "revenue:quarterly": {
+     "value": 116017000000,
+     "form": "10-Q",
+     "filed": "2026-08-03",
+     "periodEnd": "2026-06-30",
+     "concept": "Revenues",
+     "durationDays": 90,
+     "accession": "0000034088-26-000093"
+    },
+    "revenue:annual": null,
+    "operatingLeaseNoncurrent:any": null,
+    "operatingLeaseNoncurrent:quarterly": null,
+    "operatingLeaseNoncurrent:annual": null,
+    "operatingLeaseCurrent:any": null,
+    "operatingLeaseCurrent:quarterly": null,
+    "operatingLeaseCurrent:annual": null,
+    "operatingLeaseExpense:any": null,
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": null,
+    "shareBasedCompensation:any": null,
+    "shareBasedCompensation:quarterly": null,
+    "shareBasedCompensation:annual": null,
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "LULU": {
+   "fundamentals": {
+    "cik": "0001397187",
+    "dilutedShares": {
+     "value": 112919000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001397187-26-000127"
+    },
+    "coverShares": {
+     "value": 105594064,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-28",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "weightedDilutedShares": {
+     "value": 112919000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001397187-26-000127"
+    },
+    "financialDebt": null,
+    "cash": {
+     "value": 1389737000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127",
+     "includesRestricted": true
+    },
+    "operatingLeases": {
+     "value": 2141127000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseExpense": {
+     "value": 405987000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "shareBasedCompensation": {
+     "value": 62203000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "revenueTtm": {
+     "value": 11093955000,
+     "periodStart": "2025-08-04",
+     "periodEnd": "2026-08-02",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001397187-26-000020",
+      "0001397187-26-000127"
+     ],
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 1602477000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "acquisitions": {
+     "value": 0,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": {
+     "value": 105594064,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-28",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "sharesOutstandingCover:quarterly": {
+     "value": 105594064,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-28",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "sharesOutstandingCover:annual": {
+     "value": 105594064,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-28",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "dilutedShares:any": {
+     "value": 114201000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 181,
+     "accession": "0001397187-26-000127"
+    },
+    "dilutedShares:quarterly": {
+     "value": 112919000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0001397187-26-000127"
+    },
+    "dilutedShares:annual": {
+     "value": 119068000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "cash:any": {
+     "value": 1389737000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "cash:quarterly": {
+     "value": 1389737000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "cash:annual": {
+     "value": 1389737000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": null,
+    "debtNoncurrent:quarterly": null,
+    "debtNoncurrent:annual": null,
+    "debtCurrent:any": null,
+    "debtCurrent:quarterly": null,
+    "debtCurrent:annual": null,
+    "debtShortTerm:any": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "ShortTermBorrowings",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "debtShortTerm:quarterly": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "ShortTermBorrowings",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "debtShortTerm:annual": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "ShortTermBorrowings",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "debtTotalIncludingCurrent:any": null,
+    "debtTotalIncludingCurrent:quarterly": null,
+    "debtTotalIncludingCurrent:annual": null,
+    "revenue:any": {
+     "value": 4887234000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 181,
+     "accession": "0001397187-26-000127"
+    },
+    "revenue:quarterly": {
+     "value": 2415631000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 90,
+     "accession": "0001397187-26-000127"
+    },
+    "revenue:annual": {
+     "value": 11102600000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 1774478000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 1774478000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 1774478000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 366649000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 366649000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 366649000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0001397187-26-000127"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 405987000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": {
+     "value": 405987000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "shareBasedCompensation:any": {
+     "value": 50275000,
+     "form": "10-Q",
+     "filed": "2026-09-03",
+     "periodEnd": "2026-08-02",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 181,
+     "accession": "0001397187-26-000127"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 29186000,
+     "form": "10-Q",
+     "filed": "2026-06-04",
+     "periodEnd": "2026-05-03",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 90,
+     "accession": "0001397187-26-000078"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 62203000,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "acquisitions:any": {
+     "value": 0,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": {
+     "value": 0,
+     "form": "10-K",
+     "filed": "2026-03-17",
+     "periodEnd": "2026-02-01",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 363,
+     "accession": "0001397187-26-000020"
+    },
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "F": {
+   "fundamentals": {
+    "cik": "0000037996",
+    "dilutedShares": {
+     "value": 4071000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "coverShares": null,
+    "weightedDilutedShares": {
+     "value": 4071000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "financialDebt": null,
+    "cash": {
+     "value": 17649000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeases": {
+     "value": 2385000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseExpense": {
+     "value": 744000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "shareBasedCompensation": {
+     "value": 510000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "revenueTtm": {
+     "value": 189861000000,
+     "periodStart": "2025-04-01",
+     "periodEnd": "2026-03-31",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0000037996-26-000015",
+      "0000037996-26-000086"
+     ],
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 21282000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "acquisitions": null,
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": null,
+    "sharesOutstandingCover:quarterly": null,
+    "sharesOutstandingCover:annual": null,
+    "dilutedShares:any": {
+     "value": 4071000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "dilutedShares:quarterly": {
+     "value": 4071000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "dilutedShares:annual": {
+     "value": 3979000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "cash:any": {
+     "value": 17649000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "cash:quarterly": {
+     "value": 17649000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "cash:annual": {
+     "value": 17649000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "CashAndCashEquivalentsAtCarryingValue",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": null,
+    "debtNoncurrent:quarterly": null,
+    "debtNoncurrent:annual": null,
+    "debtCurrent:any": null,
+    "debtCurrent:quarterly": null,
+    "debtCurrent:annual": null,
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": null,
+    "debtTotalIncludingCurrent:quarterly": null,
+    "debtTotalIncludingCurrent:annual": null,
+    "revenue:any": {
+     "value": 43253000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "revenue:quarterly": {
+     "value": 43253000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "revenue:annual": {
+     "value": 187267000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "RevenueFromContractWithCustomerExcludingAssessedTax",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 1818000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 1818000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 1818000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 567000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 567000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 567000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000037996-26-000086"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 744000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "operatingLeaseExpense:quarterly": null,
+    "operatingLeaseExpense:annual": {
+     "value": 744000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "shareBasedCompensation:any": {
+     "value": 110000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 110000000,
+     "form": "10-Q",
+     "filed": "2026-04-30",
+     "periodEnd": "2026-03-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 89,
+     "accession": "0000037996-26-000086"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 510000000,
+     "form": "10-K",
+     "filed": "2026-02-11",
+     "periodEnd": "2025-12-31",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 364,
+     "accession": "0000037996-26-000015"
+    },
+    "acquisitions:any": null,
+    "acquisitions:quarterly": null,
+    "acquisitions:annual": null,
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "SBUX": {
+   "fundamentals": {
+    "cik": "0000829224",
+    "dilutedShares": {
+     "value": 1143800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0000829224-26-000130"
+    },
+    "coverShares": {
+     "value": 1140000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-07-23",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "weightedDilutedShares": {
+     "value": 1143800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0000829224-26-000130"
+    },
+    "financialDebt": {
+     "value": 13278600000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtNoncurrent + LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "cash": {
+     "value": 3449800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130",
+     "includesRestricted": true
+    },
+    "operatingLeases": {
+     "value": 9155500000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityNoncurrent + OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseExpense": {
+     "value": 2097000000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "shareBasedCompensation": {
+     "value": 318300000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "revenueTtm": {
+     "value": 38338300000,
+     "periodStart": "2025-06-30",
+     "periodEnd": "2026-06-28",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0000829224-25-000114",
+      "0000829224-26-000130"
+     ],
+     "concept": "Revenues"
+    },
+    "operatingCashFlowAnnual": {
+     "value": 4747500000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "NetCashProvidedByUsedInOperatingActivities",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "acquisitions": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 272,
+     "accession": "0000829224-26-000130"
+    },
+    "divestitures": null
+   },
+   "perConcept": {
+    "sharesOutstandingCover:any": {
+     "value": 1140000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-07-23",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "sharesOutstandingCover:quarterly": {
+     "value": 1140000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-07-23",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "sharesOutstandingCover:annual": {
+     "value": 1140000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-07-23",
+     "concept": "EntityCommonStockSharesOutstanding",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "dilutedShares:any": {
+     "value": 1143000000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 272,
+     "accession": "0000829224-26-000130"
+    },
+    "dilutedShares:quarterly": {
+     "value": 1143800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 90,
+     "accession": "0000829224-26-000130"
+    },
+    "dilutedShares:annual": {
+     "value": 1139800000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "WeightedAverageNumberOfDilutedSharesOutstanding",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "cash:any": {
+     "value": 3449800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "cash:quarterly": {
+     "value": 3449800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "cash:annual": {
+     "value": 3449800000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "restrictedCash:any": null,
+    "restrictedCash:quarterly": null,
+    "restrictedCash:annual": null,
+    "restrictedCashNoncurrent:any": null,
+    "restrictedCashNoncurrent:quarterly": null,
+    "restrictedCashNoncurrent:annual": null,
+    "debtNoncurrent:any": {
+     "value": 11780200000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtNoncurrent:quarterly": {
+     "value": 11780200000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtNoncurrent:annual": {
+     "value": 11780200000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtNoncurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtCurrent:any": {
+     "value": 1498400000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtCurrent:quarterly": {
+     "value": 1498400000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtCurrent:annual": {
+     "value": 1498400000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "LongTermDebtCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtShortTerm:any": null,
+    "debtShortTerm:quarterly": null,
+    "debtShortTerm:annual": null,
+    "debtTotalIncludingCurrent:any": {
+     "value": 13384100000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtTotalIncludingCurrent:quarterly": {
+     "value": 13384100000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "debtTotalIncludingCurrent:annual": {
+     "value": 13384100000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "DebtInstrumentCarryingAmount",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "revenue:any": {
+     "value": 28769300000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "Revenues",
+     "durationDays": 272,
+     "accession": "0000829224-26-000130"
+    },
+    "revenue:quarterly": {
+     "value": 9322700000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "Revenues",
+     "durationDays": 90,
+     "accession": "0000829224-26-000130"
+    },
+    "revenue:annual": {
+     "value": 37184400000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "Revenues",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "operatingLeaseNoncurrent:any": {
+     "value": 7884200000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseNoncurrent:quarterly": {
+     "value": 7884200000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseNoncurrent:annual": {
+     "value": 7884200000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityNoncurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseCurrent:any": {
+     "value": 1271300000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseCurrent:quarterly": {
+     "value": 1271300000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseCurrent:annual": {
+     "value": 1271300000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseLiabilityCurrent",
+     "durationDays": 0,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseExpense:any": {
+     "value": 1407900000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 272,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseExpense:quarterly": {
+     "value": 509400000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 90,
+     "accession": "0000829224-26-000130"
+    },
+    "operatingLeaseExpense:annual": {
+     "value": 2097000000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "OperatingLeaseCost",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "shareBasedCompensation:any": {
+     "value": 290400000,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 272,
+     "accession": "0000829224-26-000130"
+    },
+    "shareBasedCompensation:quarterly": {
+     "value": 126100000,
+     "form": "10-Q",
+     "filed": "2026-01-28",
+     "periodEnd": "2025-12-28",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 90,
+     "accession": "0000829224-26-000011"
+    },
+    "shareBasedCompensation:annual": {
+     "value": 318300000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "ShareBasedCompensation",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "acquisitions:any": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-07-29",
+     "periodEnd": "2026-06-28",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 272,
+     "accession": "0000829224-26-000130"
+    },
+    "acquisitions:quarterly": {
+     "value": 0,
+     "form": "10-Q",
+     "filed": "2026-01-28",
+     "periodEnd": "2025-12-28",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 90,
+     "accession": "0000829224-26-000011"
+    },
+    "acquisitions:annual": {
+     "value": 177100000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
+     "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
+    },
+    "divestitures:any": null,
+    "divestitures:quarterly": null,
+    "divestitures:annual": null
+   }
+  },
+  "ZZZZ": {
+   "fundamentals": null,
+   "perConcept": {}
+  }
+ }
+}
