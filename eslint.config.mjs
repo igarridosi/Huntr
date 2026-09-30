@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Build output and local runs of the ingest pipeline.
+    "pipelines/**/dist/**",
+    "pipelines/**/out/**",
   ]),
   // Node.js CJS scripts — allow require() imports.
   {

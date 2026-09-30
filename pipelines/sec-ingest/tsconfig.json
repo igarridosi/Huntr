@@ -1,0 +1,20 @@
+{
+  // The pipeline is its own package, with its own dependencies (postgres,
+  // @azure/*) that the app does not install: the root tsconfig excludes
+  // pipelines/, and this one checks it together with the shared parser in
+  // src/lib/sec that it imports.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2023"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["node"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*.ts", "build.mjs", "local/**/*.mjs"]
+}

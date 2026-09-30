@@ -1,0 +1,76 @@
+# Local test bed for the ingest writers. Nothing here talks to Supabase or
+# Azure. Driven by the npm scripts in pipelines/sec-ingest (see README).
+#
+#   postgres / pooler            for manual runs (npm run local:run)
+#   postgres-test / pooler-test  for the integration tests, which truncate
+#                                their tables freely (npm run test:local)
+#   azurite                      the Azure Storage emulator, for the Blob
+#                                writer; runs and tests use separate containers
+#
+# Each Postgres is 15 with the Supabase shim, migrations 011 and 012 and a
+# local password for huntr_sec_ingest. Each pooler is PgBouncer in
+# transaction mode, standing in for Supavisor: the pipeline connects through
+# it, as it will in production.
+
+x-postgres: &postgres
+  image: postgres:15-alpine
+  environment:
+    POSTGRES_PASSWORD: postgres # local superuser, used to seed and reset
+  volumes:
+    - ./db/00-supabase-shim.sql:/docker-entrypoint-initdb.d/00-supabase-shim.sql:ro
+    - ../../../supabase/migrations/011_sec_company_facts.sql:/docker-entrypoint-initdb.d/10-011_sec_company_facts.sql:ro
+    - ../../../supabase/migrations/012_sec_ingest_pending.sql:/docker-entrypoint-initdb.d/11-012_sec_ingest_pending.sql:ro
+    - ./db/90-local-password.sql:/docker-entrypoint-initdb.d/90-local-password.sql:ro
+  healthcheck:
+    # Ready once the last init script has given the role its password.
+    test: ["CMD-SHELL", "psql -U postgres -tAc \"select 1 from pg_authid where rolname = 'huntr_sec_ingest' and rolpassword is not null\" | grep -q 1"]
+    interval: 2s
+    retries: 30
+
+x-pooler: &pooler
+  image: edoburu/pgbouncer:v1.26.0-p0
+  environment: &pooler-env
+    DB_NAME: postgres
+    DB_USER: huntr_sec_ingest
+    DB_PASSWORD: local-only-not-a-secret
+    POOL_MODE: transaction
+    AUTH_TYPE: scram-sha-256
+    MAX_CLIENT_CONN: "20"
+  healthcheck:
+    test: ["CMD-SHELL", "nc -z 127.0.0.1 5432"]
+    interval: 2s
+    retries: 30
+
+services:
+  postgres:
+    <<: *postgres
+    ports: ["54329:5432"]
+
+  pooler:
+    <<: *pooler
+    environment:
+      <<: *pooler-env
+      DB_HOST: postgres
+    ports: ["64329:5432"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres-test:
+    <<: *postgres
+    ports: ["54339:5432"]
+
+  pooler-test:
+    <<: *pooler
+    environment:
+      <<: *pooler-env
+      DB_HOST: postgres-test
+    ports: ["64339:5432"]
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.37.0
+    command: azurite-blob --blobHost 0.0.0.0 --blobPort 10000 --skipApiVersionCheck --loose
+    ports: ["10000:10000"]
