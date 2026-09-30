@@ -25,8 +25,7 @@ const SEC_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts";
  * The SEC asks for a real contact address here and rate-limits anything that
  * does not identify itself. Configurable so a deployment can use its own.
  */
-export const USER_AGENT =
-  process.env.SEC_USER_AGENT?.trim() || "Huntr huntrvalue.me contact@huntrvalue.me";
+export const USER_AGENT = process.env.SEC_USER_AGENT?.trim() || SEC_DEFAULT_USER_AGENT;
 
 export { SEC_CONCEPTS, OPERATING_CASH_FLOW_CONCEPTS } from "@/lib/sec/concepts";
 export type { SECConceptKey, SECTaxonomy } from "@/lib/sec/concepts";
@@ -47,6 +46,7 @@ export { composeFinancialDebt } from "@/lib/sec/fundamentals";
 export type { SECFundamentals } from "@/lib/sec/fundamentals";
 
 import type { SECTaxonomy } from "@/lib/sec/concepts";
+import { SEC_DEFAULT_USER_AGENT } from "@/lib/sec/user-agent";
 import type { FactPeriod, SECFact } from "@/lib/sec/facts";
 import { parseClassDilutedShares } from "@/lib/sec/class-shares";
 import * as shared from "@/lib/sec/fundamentals";
