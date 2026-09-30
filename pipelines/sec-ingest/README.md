@@ -71,7 +71,9 @@ The log is one JSON object per line. The last line, `run.summary`, has the total
      index has a filing that `companyfacts` does not carry yet, or the
      download failed. The cursor moves on either way, so one filing that
      never gets XBRL does not stop every other company from updating.
-   - **More than 5 days owed** (`PENDING_GIVE_UP_DAYS`):
+   - **Owed for 5 days** (`PENDING_GIVE_UP_DAYS`). The first run at least 5
+     calendar days after `pending_since` flags the company: owed from a
+     Monday and tried every night, that is the sixth attempt, on Saturday.
      - A filing that never reached `companyfacts` is given up on: the
        company is marked with `last_error` and the run raises the alarm.
      - A download that keeps failing is still retried every night, and the
@@ -90,7 +92,7 @@ exits with code 2 before sending any request. The `universe` log line says
 which User-Agent the run used.
 
 **Exit codes.** `0` means a clean run. `1` means an alert: a company owing
-for more than 5 days, 5 or more failures (and at least 10% of the
+for 5 days or more, 5 or more failures (and at least 10% of the
 companies) in one run, or a cursor more than 4 days old. `2` means the run
 could not complete, for example because EDGAR refused it, a listed index is
 missing, or the configuration or arguments were wrong.

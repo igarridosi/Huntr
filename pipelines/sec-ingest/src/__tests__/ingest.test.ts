@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { diskFacts, diskRaw, diskState } from "../disk";
-import { runIngest, type IngestSummary } from "../ingest";
+import { owedFor, PENDING_GIVE_UP_DAYS, runIngest, type IngestSummary } from "../ingest";
 import { silentLogger } from "../log";
 import { createSecClient } from "../sec-client";
 
@@ -187,45 +187,50 @@ describe("later runs", () => {
     expect(state().companies["0000320193"]).toMatchObject({ lastAccession: "0000320193-26-000030", pendingSince: null, pendingAttempts: 0 });
   });
 
-  it("gives up on a filing that never reaches companyfacts after five days, and raises the alarm", async () => {
+  it("gives up on a filing that never reaches companyfacts once owed for five days, and raises the alarm", async () => {
     // A 10-K/A that only adds exhibits: in the index, never in companyfacts.
+    // Owed from Monday the 21st: pending on days 0 to 4, flagged on day 5, the sixth attempt.
     edgar.file("2026-09-18", 320193, "0000320193-26-000031", 0, true);
-    for (const day of ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26"]) {
+    for (const day of ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"]) {
       edgar.listed.push(day);
       const s = await run(day);
       expect(s.companies.pending).toHaveLength(1);
       expect(s.alerts).toEqual([]);
     }
-    edgar.listed.push("2026-09-27");
-    const s = await run("2026-09-27");
-    expect(s.companies.overdue).toMatchObject([{ ticker: "AAPL", since: "2026-09-21", attempts: 7 }]);
-    expect(s.alerts).toEqual(["1 companies overdue by more than 5 days: AAPL"]);
+    edgar.listed.push("2026-09-26");
+    const s = await run("2026-09-26");
+    expect(s.companies.overdue).toMatchObject([{ ticker: "AAPL", since: "2026-09-21", attempts: 6 }]);
+    expect(s.alerts).toEqual(["1 companies owing for 5 days or more: AAPL"]);
     expect(state().companies["0000320193"]).toMatchObject({
       lastAccession: "0000320193-26-000031",
       pendingSince: null,
-      lastError: expect.stringMatching(/not in companyfacts after 6 days/),
+      lastError: "filing 0000320193-26-000031 not in companyfacts after 5 days (6 attempts)",
     });
     // Given up: no longer fetched.
-    edgar.listed.push("2026-09-28");
+    edgar.listed.push("2026-09-27");
     edgar.urls = [];
-    await run("2026-09-28");
+    await run("2026-09-27");
     expect(factUrls()).toEqual([]);
   });
 
-  it("keeps retrying a company that keeps failing, and flags it past five days", async () => {
+  it("keeps retrying a company that keeps failing, and flags it once owed for five days", async () => {
     edgar.failFacts.add(320193);
     edgar.file("2026-09-18", 320193, "0000320193-26-000030", 31e9);
     let s = await run("2026-09-21");
     expect(s.companies.failed).toMatchObject([{ ticker: "AAPL", accession: "0000320193-26-000030", attempts: 1 }]);
-    for (const day of ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"]) {
+    for (const day of ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25"]) {
       edgar.listed.push(day);
       s = await run(day);
+      expect(s.alerts).toEqual([]);
     }
-    expect(s.companies.failed[0].attempts).toBe(7);
-    expect(s.alerts).toEqual(["1 companies overdue by more than 5 days: AAPL"]);
+    edgar.listed.push("2026-09-26");
+    s = await run("2026-09-26");
+    expect(s.companies.failed[0].attempts).toBe(6);
+    expect(s.companies.overdue[0].reason).toMatch(/^failing for 5 days \(6 attempts\)/);
+    expect(s.alerts).toEqual(["1 companies owing for 5 days or more: AAPL"]);
     edgar.failFacts.clear();
-    edgar.listed.push("2026-09-28");
-    s = await run("2026-09-28");
+    edgar.listed.push("2026-09-27");
+    s = await run("2026-09-27");
     expect(s.companies.ingested).toBe(1);
     expect(state().companies["0000320193"]).toMatchObject({ lastAccession: "0000320193-26-000030", pendingSince: null, lastError: null });
   });
@@ -265,5 +270,12 @@ describe("later runs", () => {
   it("stops the run when EDGAR refuses the requests", async () => {
     edgar.blocked = true;
     await expect(run("2026-09-21")).rejects.toThrow(/EDGAR refused/);
+  });
+});
+
+describe("owedFor", () => {
+  it("flags on the first run five calendar days after the debt started", () => {
+    expect(owedFor("2026-09-21", "2026-09-25")).toEqual({ days: 4, overdue: false });
+    expect(owedFor("2026-09-21", "2026-09-26")).toEqual({ days: PENDING_GIVE_UP_DAYS, overdue: true });
   });
 });
