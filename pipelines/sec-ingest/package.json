@@ -1,0 +1,16 @@
+{
+  "name": "huntr-sec-ingest",
+  "private": true,
+  "type": "module",
+  "description": "Nightly SEC EDGAR ingest for Huntr: daily index → companyfacts → sec_company_facts.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "esbuild src/cli.ts --bundle --platform=node --target=node20 --format=esm --outfile=dist/cli.mjs",
+    "dry-run": "npm run build && node dist/cli.mjs --dry-run"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

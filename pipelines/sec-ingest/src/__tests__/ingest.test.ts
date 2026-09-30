@@ -1,0 +1,269 @@
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { diskFacts, diskRaw, diskState } from "../disk";
+import { runIngest, type IngestSummary } from "../ingest";
+import { silentLogger } from "../log";
+import { createSecClient } from "../sec-client";
+
+/**
+ * A small EDGAR: two companies (Apple, and Alphabet under two tickers), a
+ * quarter listing, daily indexes and companyfacts that tests can change
+ * between runs, the way a real night changes them.
+ */
+class FakeEdgar {
+  listed = ["2026-09-10", "2026-09-11", "2026-09-14", "2026-09-15"];
+  indexes: Record<string, string[]> = {};
+  facts: Record<number, Array<{ end: string; val: number; form: string; filed: string; accn: string }>> = {
+    320193: [{ end: "2026-06-27", val: 30e9, form: "10-Q", filed: "2026-08-01", accn: "0000320193-26-000010" }],
+    1652044: [{ end: "2026-06-30", val: 20e9, form: "10-Q", filed: "2026-07-25", accn: "0001652044-26-000050" }],
+  };
+  failFacts = new Set<number>();
+  /** Days listed for the quarter whose file answers 403 AccessDenied anyway. */
+  unserved = new Set<string>();
+  extraTickers: Record<string, number> = {};
+  blocked = false;
+  urls: string[] = [];
+
+  fetch = (async (input: string) => {
+    const url = String(input);
+    this.urls.push(url);
+    const json = (v: unknown) => new Response(JSON.stringify(v), { status: 200, headers: { "content-type": "application/json" } });
+    const missing = () => new Response("<Error><Code>AccessDenied</Code></Error>", { status: 403, headers: { "content-type": "application/xml" } });
+    if (this.blocked) return new Response("Undeclared Automated Tool", { status: 403, headers: { "content-type": "text/html" } });
+    if (url.endsWith("company_tickers.json"))
+      return json({
+        0: { cik_str: 320193, ticker: "AAPL" },
+        1: { cik_str: 1652044, ticker: "GOOGL" },
+        2: { cik_str: 1652044, ticker: "GOOG" },
+        3: { cik_str: 789019, ticker: "MSFT" },
+        ...Object.fromEntries(Object.entries(this.extraTickers).map(([t, cik], i) => [10 + i, { cik_str: cik, ticker: t }])),
+      });
+    const q = /daily-index\/(\d{4})\/QTR(\d)\/index\.json$/.exec(url);
+    if (q) {
+      const days = this.listed.filter((d) => d.startsWith(q[1]) && Math.ceil(Number(d.slice(5, 7)) / 3) === Number(q[2]));
+      return days.length ? json({ directory: { item: days.map((d) => ({ name: `form.${d.replace(/-/g, "")}.idx` })) } }) : missing();
+    }
+    const d = /form\.(\d{8})\.idx$/.exec(url);
+    if (d) {
+      const day = `${d[1].slice(0, 4)}-${d[1].slice(4, 6)}-${d[1].slice(6)}`;
+      if (this.unserved.has(day)) return missing();
+      return new Response((this.indexes[day] ?? []).join("\n"), { status: 200, headers: { "content-type": "application/octet-stream" } });
+    }
+    const f = /companyfacts\/CIK(\d{10})\.json$/.exec(url);
+    if (f) {
+      const cik = Number(f[1]);
+      if (this.failFacts.has(cik)) return new Response("", { status: 500 });
+      const rows = this.facts[cik];
+      if (!rows) return new Response("", { status: 404 });
+      return json({ facts: { "us-gaap": { CashAndCashEquivalentsAtCarryingValue: { units: { USD: rows } } } } });
+    }
+    return new Response("", { status: 404 });
+  }) as unknown as typeof fetch;
+
+  /** A 10-Q in the daily index of `day`, and (unless `late`) its figures in companyfacts. */
+  file(day: string, cik: number, accn: string, val: number, late = false) {
+    if (!this.listed.includes(day)) this.listed.push(day);
+    (this.indexes[day] ??= []).push(`10-Q             COMPANY                                                       ${cik}      ${day.replace(/-/g, "")}    edgar/data/${cik}/${accn}.txt`);
+    if (!late) this.facts[cik].push({ end: day, val, form: "10-Q", filed: day, accn });
+  }
+}
+
+let out: string;
+let edgar: FakeEdgar;
+
+beforeEach(() => {
+  out = mkdtempSync(path.join(tmpdir(), "sec-ingest-"));
+  edgar = new FakeEdgar();
+});
+afterEach(() => rmSync(out, { recursive: true, force: true }));
+
+function run(today: string, tickers = ["AAPL", "GOOG", "GOOGL", "SPY"], maxCompanies?: number): Promise<IngestSummary> {
+  return runIngest(
+    {
+      client: createSecClient({ fetch: edgar.fetch, sleep: async () => {} }),
+      state: diskState(out),
+      facts: diskFacts(out),
+      raw: diskRaw(out),
+      log: silentLogger,
+    },
+    { tickers, today, maxCompanies, now: () => new Date(`${today}T06:00:00Z`) }
+  );
+}
+
+const state = () => JSON.parse(readFileSync(path.join(out, "state.json"), "utf8"));
+const factsOf = (cik: string) => JSON.parse(readFileSync(path.join(out, "facts", `${cik}.json`), "utf8"));
+const factUrls = () => edgar.urls.filter((u) => u.includes("companyfacts"));
+
+describe("first run", () => {
+  it("loads every company once, then points the cursor at the last published day", async () => {
+    const s = await run("2026-09-16");
+    expect(s.mode).toBe("full");
+    expect(s.companies).toMatchObject({ universe: 2, unresolved: ["SPY"], targeted: 2, ingested: 2, failed: [], pending: [] });
+    expect(factUrls()).toHaveLength(2); // GOOG and GOOGL: one download
+    expect(s.cursorAfter).toBe("2026-09-15");
+    expect(state().cursor.lastIndexDate).toBe("2026-09-15");
+    expect(factsOf("0000320193")).toHaveLength(1);
+    expect(s.raw.written).toBe(2);
+    expect(s.alerts).toEqual([]);
+  });
+
+  it("moves the cursor even if a company fails, and owes that company a full load", async () => {
+    edgar.failFacts.add(1652044);
+    const s = await run("2026-09-16");
+    expect(s.companies.failed).toMatchObject([{ ticker: "GOOG", accession: null, since: "2026-09-16", attempts: 1 }]);
+    expect(s.cursorAfter).toBe("2026-09-15");
+    expect(s.alerts).toEqual([]); // one failure is retried, not paged
+    expect(state().companies["0001652044"]).toMatchObject({ pendingAccession: null, pendingSince: "2026-09-16", pendingAttempts: 1 });
+    edgar.failFacts.clear();
+    edgar.urls = [];
+    const s2 = await run("2026-09-17");
+    expect(factUrls()).toEqual(["https://data.sec.gov/api/xbrl/companyfacts/CIK0001652044.json"]);
+    expect(s2.companies.ingested).toBe(1);
+    expect(state().companies["0001652044"]).toMatchObject({ pendingSince: null, pendingAttempts: 0, lastError: null });
+  });
+
+  it("does not move the cursor when --max-companies cut the run short", async () => {
+    const s = await run("2026-09-16", undefined, 1);
+    expect(s.partial).toBe(true);
+    expect(s.companies.ingested).toBe(1);
+    expect(s.cursorAfter).toBeNull();
+  });
+});
+
+describe("later runs", () => {
+  beforeEach(async () => {
+    await run("2026-09-16");
+    edgar.urls = [];
+  });
+
+  it("does nothing when nothing new is published, and changes nothing if run again", async () => {
+    const s = await run("2026-09-16");
+    expect(s.mode).toBe("incremental");
+    expect(s.daysRead).toEqual([]);
+    expect(factUrls()).toEqual([]);
+    expect(s.cursorAfter).toBe("2026-09-15");
+  });
+
+  it("fetches only the companies that filed, and moves the cursor over the weekend", async () => {
+    edgar.file("2026-09-18", 320193, "0000320193-26-000030", 31e9);
+    const s = await run("2026-09-21");
+    expect(s.daysRead).toEqual(["2026-09-18"]);
+    expect(factUrls()).toEqual(["https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"]);
+    expect(s.rows).toMatchObject({ inserted: 1, unchanged: 1 });
+    expect(s.cursorAfter).toBe("2026-09-18");
+    expect(state().companies["0000320193"].lastAccession).toBe("0000320193-26-000030");
+  });
+
+  it("is idempotent: the same days read twice leave the same rows", async () => {
+    edgar.file("2026-09-18", 320193, "0000320193-26-000030", 31e9);
+    await run("2026-09-21");
+    const rows = factsOf("0000320193");
+    // Force a rerun of the same day from a cursor rolled back by hand.
+    const s0 = state();
+    s0.cursor.lastIndexDate = "2026-09-15";
+    s0.companies["0000320193"].lastAccession = "0000320193-26-000010";
+    writeFileSync(path.join(out, "state.json"), JSON.stringify(s0));
+    const s = await run("2026-09-21");
+    expect(s.rows).toMatchObject({ inserted: 0, updated: 0, unchanged: 2 });
+    expect(s.raw).toMatchObject({ written: 0, existed: 1 });
+    expect(factsOf("0000320193")).toEqual(rows);
+  });
+
+  it("lets the cursor move past a filing companyfacts does not carry yet, and takes it when it arrives", async () => {
+    edgar.file("2026-09-18", 320193, "0000320193-26-000030", 31e9, true);
+    const s1 = await run("2026-09-21");
+    expect(s1.companies.pending).toMatchObject([{ ticker: "AAPL", accession: "0000320193-26-000030", since: "2026-09-21", attempts: 1 }]);
+    expect(s1.cursorAfter).toBe("2026-09-18");
+    expect(state().companies["0000320193"]).toMatchObject({ lastAccession: "0000320193-26-000010", pendingAccession: "0000320193-26-000030", pendingAttempts: 1 });
+
+    // Nothing new in the index the next night; the company is retried because it owes.
+    edgar.facts[320193].push({ end: "2026-09-18", val: 31e9, form: "10-Q", filed: "2026-09-18", accn: "0000320193-26-000030" });
+    edgar.urls = [];
+    const s2 = await run("2026-09-22");
+    expect(factUrls()).toEqual(["https://data.sec.gov/api/xbrl/companyfacts/CIK0000320193.json"]);
+    expect(s2.companies.pending).toEqual([]);
+    expect(state().companies["0000320193"]).toMatchObject({ lastAccession: "0000320193-26-000030", pendingSince: null, pendingAttempts: 0 });
+  });
+
+  it("gives up on a filing that never reaches companyfacts after five days, and raises the alarm", async () => {
+    // A 10-K/A that only adds exhibits: in the index, never in companyfacts.
+    edgar.file("2026-09-18", 320193, "0000320193-26-000031", 0, true);
+    for (const day of ["2026-09-21", "2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26"]) {
+      edgar.listed.push(day);
+      const s = await run(day);
+      expect(s.companies.pending).toHaveLength(1);
+      expect(s.alerts).toEqual([]);
+    }
+    edgar.listed.push("2026-09-27");
+    const s = await run("2026-09-27");
+    expect(s.companies.overdue).toMatchObject([{ ticker: "AAPL", since: "2026-09-21", attempts: 7 }]);
+    expect(s.alerts).toEqual(["1 companies overdue by more than 5 days: AAPL"]);
+    expect(state().companies["0000320193"]).toMatchObject({
+      lastAccession: "0000320193-26-000031",
+      pendingSince: null,
+      lastError: expect.stringMatching(/not in companyfacts after 6 days/),
+    });
+    // Given up: no longer fetched.
+    edgar.listed.push("2026-09-28");
+    edgar.urls = [];
+    await run("2026-09-28");
+    expect(factUrls()).toEqual([]);
+  });
+
+  it("keeps retrying a company that keeps failing, and flags it past five days", async () => {
+    edgar.failFacts.add(320193);
+    edgar.file("2026-09-18", 320193, "0000320193-26-000030", 31e9);
+    let s = await run("2026-09-21");
+    expect(s.companies.failed).toMatchObject([{ ticker: "AAPL", accession: "0000320193-26-000030", attempts: 1 }]);
+    for (const day of ["2026-09-22", "2026-09-23", "2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"]) {
+      edgar.listed.push(day);
+      s = await run(day);
+    }
+    expect(s.companies.failed[0].attempts).toBe(7);
+    expect(s.alerts).toEqual(["1 companies overdue by more than 5 days: AAPL"]);
+    edgar.failFacts.clear();
+    edgar.listed.push("2026-09-28");
+    s = await run("2026-09-28");
+    expect(s.companies.ingested).toBe(1);
+    expect(state().companies["0000320193"]).toMatchObject({ lastAccession: "0000320193-26-000030", pendingSince: null, lastError: null });
+  });
+
+  it("treats a listed day that EDGAR does not serve as an error, not as a quiet day", async () => {
+    edgar.listed.push("2026-09-18");
+    edgar.unserved.add("2026-09-18");
+    await expect(run("2026-09-21")).rejects.toThrow(/listed for its quarter but EDGAR answered 403/);
+    expect(state().cursor.lastIndexDate).toBe("2026-09-15");
+  });
+
+  it("loads a company that joined the universe even if it filed nothing", async () => {
+    edgar.facts[789019] = [{ end: "2026-06-30", val: 80e9, form: "10-K", filed: "2026-07-30", accn: "0000789019-26-000070" }];
+    const s = await run("2026-09-16", ["AAPL", "GOOG", "MSFT"]);
+    expect(factUrls()).toEqual(["https://data.sec.gov/api/xbrl/companyfacts/CIK0000789019.json"]);
+    expect(s.companies.ingested).toBe(1);
+  });
+
+  it("raises the alarm when many companies fail in one run", async () => {
+    const tickers = ["AAPL", "GOOG"];
+    for (let i = 0; i < 5; i++) {
+      const cik = 900 + i;
+      edgar.facts[cik] = [];
+      edgar.failFacts.add(cik);
+      edgar.extraTickers[`X${i}`] = cik;
+      tickers.push(`X${i}`);
+    }
+    const s = await run("2026-09-16", tickers);
+    expect(s.alerts).toEqual(["5 of 5 companies failed in this run"]);
+  });
+
+  it("raises the alarm when the cursor has not moved for more than four days", async () => {
+    const s = await run("2026-09-21");
+    expect(s.alerts).toEqual(["the cursor is 6 days old (2026-09-15)"]);
+  });
+
+  it("stops the run when EDGAR refuses the requests", async () => {
+    edgar.blocked = true;
+    await expect(run("2026-09-21")).rejects.toThrow(/EDGAR refused/);
+  });
+});

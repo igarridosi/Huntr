@@ -1,0 +1,51 @@
+/**
+ * SEC EDGAR — the ids under which sec_concepts stores the concepts the app
+ * reads. Fixed by migration 011; a contract test keeps the two equal.
+ */
+
+import type { SECTaxonomy } from "./concepts";
+
+export const SEC_CONCEPT_IDS: ReadonlyArray<readonly [id: number, taxonomy: SECTaxonomy, name: string]> = [
+  [1, "dei", "EntityCommonStockSharesOutstanding"],
+  [2, "us-gaap", "WeightedAverageNumberOfDilutedSharesOutstanding"],
+  [3, "us-gaap", "CashAndCashEquivalentsAtCarryingValue"],
+  [4, "us-gaap", "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents"],
+  [5, "us-gaap", "Cash"],
+  [6, "us-gaap", "RestrictedCashCurrent"],
+  [7, "us-gaap", "RestrictedCashAndCashEquivalentsAtCarryingValue"],
+  [8, "us-gaap", "RestrictedCashEquivalentsCurrent"],
+  [9, "us-gaap", "RestrictedCashNoncurrent"],
+  [10, "us-gaap", "RestrictedCashAndCashEquivalentsNoncurrent"],
+  [11, "us-gaap", "LongTermDebtNoncurrent"],
+  [12, "us-gaap", "LongTermDebtAndCapitalLeaseObligations"],
+  [13, "us-gaap", "UnsecuredLongTermDebt"],
+  [14, "us-gaap", "LongTermDebt"],
+  [15, "us-gaap", "LongTermDebtCurrent"],
+  [16, "us-gaap", "LongTermDebtAndCapitalLeaseObligationsCurrent"],
+  [17, "us-gaap", "DebtCurrent"],
+  [18, "us-gaap", "UnsecuredDebtCurrent"],
+  [19, "us-gaap", "ShortTermBorrowings"],
+  [20, "us-gaap", "CommercialPaper"],
+  [21, "us-gaap", "ShortTermBankLoansAndNotesPayable"],
+  [22, "us-gaap", "LongTermDebtAndCapitalLeaseObligationsIncludingCurrentMaturities"],
+  [23, "us-gaap", "DebtLongtermAndShorttermCombinedAmount"],
+  [24, "us-gaap", "DebtInstrumentCarryingAmount"],
+  [25, "us-gaap", "NotesPayable"],
+  [26, "us-gaap", "Revenues"],
+  [27, "us-gaap", "RevenueFromContractWithCustomerExcludingAssessedTax"],
+  [28, "us-gaap", "RevenueFromContractWithCustomerIncludingAssessedTax"],
+  [29, "us-gaap", "SalesRevenueNet"],
+  [30, "us-gaap", "OperatingLeaseLiabilityNoncurrent"],
+  [31, "us-gaap", "OperatingLeaseLiabilityCurrent"],
+  [32, "us-gaap", "OperatingLeaseExpense"],
+  [33, "us-gaap", "OperatingLeaseCost"],
+  [34, "us-gaap", "OperatingLeasePayments"],
+  [35, "us-gaap", "ShareBasedCompensation"],
+  [36, "us-gaap", "PaymentsToAcquireBusinessesNetOfCashAcquired"],
+  [37, "us-gaap", "PaymentsToAcquireBusinessesGross"],
+  [38, "us-gaap", "ProceedsFromDivestitureOfBusinesses"],
+  [39, "us-gaap", "ProceedsFromDivestitureOfBusinessesNetOfCashDivested"],
+  [40, "us-gaap", "ProceedsFromSaleOfBusinessesNetOfCashDivested"],
+  [41, "us-gaap", "NetCashProvidedByUsedInOperatingActivities"],
+  [42, "us-gaap", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
+];

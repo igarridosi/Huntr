@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
+import { SEC_CONCEPT_IDS } from "../concept-ids";
 import { OPERATING_CASH_FLOW_CONCEPTS, SEC_CONCEPTS } from "../concepts";
 import { REVIEWED_FORMS } from "../forms";
 
@@ -28,5 +29,10 @@ describe("migration 011 agrees with src/lib/sec", () => {
     ];
     expect(new Set(seeded).size).toBe(seeded.length);
     expect([...seeded].sort()).toEqual([...new Set(read)].sort());
+  });
+
+  it("gives every concept the id the migration seeded", () => {
+    const seeded = [...sql.matchAll(/\(\s*(\d+),\s*'(us-gaap|dei)',\s*'([A-Za-z]+)'\)/g)].map((m) => [Number(m[1]), m[2], m[3]]);
+    expect(SEC_CONCEPT_IDS.map((row) => [...row])).toEqual(seeded);
   });
 });
