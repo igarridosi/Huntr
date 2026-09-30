@@ -9,10 +9,10 @@ The rules for choosing a figure live in `src/lib/sec/` at the repo root,
 shared with the app, so the app and the pipeline read the filings the same
 way.
 
-**Status:** dry run only. The pipeline writes to a local folder. The
-Postgres and Blob Storage writers, the Azure Function and the infrastructure
-come in later PRs. They need migration 012
-(`supabase/migrations/012_sec_ingest_pending.sql`), which is not applied yet.
+**Status:** the dry run and the Postgres and Blob Storage writers exist
+and are tested locally (see below). The Azure Function and the
+infrastructure come in later PRs. Migrations 011 and 012 are applied in
+production.
 
 ## Try it
 
@@ -44,6 +44,70 @@ The log is one JSON object per line. The last line, `run.summary`, has the total
   A run cut short this way does not move the cursor.
 - `--today YYYY-MM-DD` changes the day the run treats as today. By default
   it is today in New York, where EDGAR's days begin and end.
+
+## The real run, locally
+
+The Postgres and Blob writers are tested against containers, never
+against Supabase or Azure (`local/docker-compose.yml`):
+
+- **Two separate Postgres 15 stacks**, each with a small Supabase shim (the
+  API roles and `tickers` as migration 002 created it) followed by
+  migrations 011 and 012:
+  - `postgres` and `pooler` (ports 54329 and 64329) are for manual runs.
+  - `postgres-test` and `pooler-test` (ports 54339 and 64339) are for the
+    integration tests, which truncate their tables freely. **The tests never
+    touch what a manual run left behind.**
+- **PgBouncer in transaction mode** in front of each Postgres, standing in
+  for Supavisor. The pipeline connects through it as `huntr_sec_ingest`,
+  with one connection and `prepare: false`, as it will in production.
+- **Azurite**, the Azure Storage emulator. Runs write to the `sec-raw`
+  container and tests to `sec-raw-test`.
+
+The only password involved is a throwaway local one for the role, in
+`local/db/90-local-password.sql`.
+
+Everything runs from npm in `pipelines/sec-ingest`, the same on Windows,
+macOS and Linux (`local/local.mjs`, no shell syntax). It needs Docker
+running.
+
+| Script | What it does |
+|---|---|
+| `npm run local:up` | Starts the containers and waits until they are ready. |
+| `npm run local:run` | Makes a real run: EDGAR is real; Postgres and Blob are the local ones. It seeds AAPL, GOOG, GOOGL, V and HLN, builds, runs, then prints the result. Arguments after `--` go to the CLI. |
+| `npm run local:status` | Shows the cursor, the rows and size of `sec_company_facts`, the state per company, and the blobs. |
+| `npm run test:local` | Runs the integration tests against the test stack. |
+| `npm run local:reset` | Deletes the data of every container and starts them again, which reapplies the migrations. |
+| `npm run local:down` | Stops the containers and deletes their data. |
+
+**A clean run from scratch:**
+
+```bash
+npm install
+npm run local:reset
+npm run local:run
+npm run local:run
+```
+
+- The first `local:run` is a full load: 4 companies (GOOG and GOOGL are one
+  CIK), 864 rows in `sec_company_facts` (about 208 kB), 4 blobs, and the
+  cursor on the last day EDGAR published.
+- The second is incremental: it fetches nothing and changes nothing.
+
+The row count moves as the companies file. 864 is the figure as of
+2026-09-30.
+
+In CI the integration tests are skipped, because there are no containers:
+they only run with `SEC_INGEST_LOCAL=1`, which `test:local` sets.
+
+**In production** the same variables point at the Supabase pooler and the
+storage account:
+
+- `SEC_INGEST_DATABASE_URL` is the pooler URL in transaction mode, port
+  6543, user `huntr_sec_ingest.<project-ref>`.
+- `SEC_RAW_BLOB_ACCOUNT_URL` is the storage account URL. The managed
+  identity signs the requests, so there is no key anywhere.
+- TLS is verified. If the pooler's certificate does not chain to a public
+  CA, pass Supabase's CA as a PEM in `SEC_INGEST_DATABASE_CA`.
 
 ## How a run works
 
