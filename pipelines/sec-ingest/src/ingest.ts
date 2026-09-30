@@ -14,8 +14,8 @@
  * the attempts so far, and retried every night. The cursor moves on
  * regardless: one company's filing that never gets XBRL (a 10-K/A that
  * only adds exhibits) must not stop the other nine hundred from updating.
- * Past PENDING_GIVE_UP_DAYS the company is flagged and the run raises the
- * alarm.
+ * Once it has been owed for PENDING_GIVE_UP_DAYS the company is flagged
+ * and the run raises the alarm.
  *
  * The cursor does not move when the run itself fails - EDGAR refuses us,
  * a listed daily index cannot be read - or when --max-companies cut it
@@ -45,12 +45,20 @@ export const WINDOW_YEARS = 3;
 /** Past this many days without the cursor moving, the run raises the alarm. */
 export const STALE_AFTER_DAYS = 4;
 /**
- * How long a company may owe a filing before it is flagged. companyfacts
- * normally carries a filing within hours; five calendar days cover a long
- * weekend with a holiday in it and a slow EDGAR, and still flag within the
- * week.
+ * Days a company may owe a filing before it is flagged: the first run at
+ * least this many calendar days after `pending_since` flags it. Owed on a
+ * Monday and tried nightly, that is the sixth attempt, on Saturday.
+ * companyfacts normally carries a filing within hours; five days cover a
+ * long weekend with a holiday in it and a slow EDGAR, and still flag within
+ * the week.
  */
 export const PENDING_GIVE_UP_DAYS = 5;
+
+/** Days owed, and whether that reaches PENDING_GIVE_UP_DAYS. */
+export function owedFor(since: string, today: string): { days: number; overdue: boolean } {
+  const days = daysBetween(since, today);
+  return { days, overdue: days >= PENDING_GIVE_UP_DAYS };
+}
 /** Failures in one run that point at the run rather than at the companies. */
 const SYSTEMIC_FAILURES = { min: 5, share: 0.1 };
 /** How far back the first run looks for the last published day. */
@@ -105,7 +113,7 @@ export interface IngestSummary {
     pending: Owed[];
     /** Download or parse failed: retried next run. */
     failed: Array<Owed & { error: string }>;
-    /** Owed for longer than PENDING_GIVE_UP_DAYS: flagged as errors. */
+    /** Owed for PENDING_GIVE_UP_DAYS or more: flagged as errors. */
     overdue: Array<Owed & { reason: string }>;
   };
   rows: { kept: number; inserted: number; updated: number; unchanged: number; droppedForm: number; droppedWindow: number; droppedMalformed: number; pruned: number };
@@ -210,7 +218,7 @@ export async function runIngest(deps: IngestDeps, options: IngestOptions): Promi
     const stillOwed = (accession: string | null) => {
       const since = prev?.pendingSince ?? today;
       const attempts = (prev?.pendingAttempts ?? 0) + 1;
-      return { accession, since, attempts, overdue: daysBetween(since, today) > PENDING_GIVE_UP_DAYS };
+      return { accession, since, attempts, ...owedFor(since, today) };
     };
 
     try {
@@ -248,7 +256,7 @@ export async function runIngest(deps: IngestDeps, options: IngestOptions): Promi
         const entry = { cik: company.cik, ticker: company.ticker, accession: o.accession, since: o.since, attempts: o.attempts };
         if (o.overdue) {
           // Given up: it is not coming. Recorded as done so it stops being fetched, and flagged.
-          const reason = `filing ${owed.accession} not in companyfacts after ${daysBetween(o.since, today)} days (${o.attempts} attempts)`;
+          const reason = `filing ${owed.accession} not in companyfacts after ${o.days} days (${o.attempts} attempts)`;
           summary.companies.overdue.push({ ...entry, reason });
           await state.putCompany(settled({ lastAccession: owed.accession, lastFiled: owed.filed ?? prev?.lastFiled ?? null, factsStored: rows.length, lastError: reason }));
           log("error", "company.overdue", { ...entry, reason });
@@ -272,7 +280,7 @@ export async function runIngest(deps: IngestDeps, options: IngestOptions): Promi
       const entry = { cik: company.cik, ticker: company.ticker, accession: o.accession, since: o.since, attempts: o.attempts };
       summary.companies.failed.push({ ...entry, error: message });
       // Failures keep being retried; past the limit they are also flagged.
-      if (o.overdue) summary.companies.overdue.push({ ...entry, reason: `failing for ${daysBetween(o.since, today)} days: ${message}` });
+      if (o.overdue) summary.companies.overdue.push({ ...entry, reason: `failing for ${o.days} days (${o.attempts} attempts): ${message}` });
       await state.putCompany(settled({ lastError: message, pendingAccession: o.accession, pendingSince: o.since, pendingAttempts: o.attempts }));
       log("error", "company.failed", { ...entry, error: message });
     }
@@ -288,13 +296,13 @@ export async function runIngest(deps: IngestDeps, options: IngestOptions): Promi
   if (partial) log("warn", "partial", { note: "--max-companies cut the run short; the cursor was not moved" });
 
   const { failed, overdue, pending } = summary.companies;
-  if (overdue.length > 0) summary.alerts.push(`${overdue.length} companies overdue by more than ${PENDING_GIVE_UP_DAYS} days: ${overdue.map((o) => o.ticker).join(", ")}`);
+  if (overdue.length > 0) summary.alerts.push(`${overdue.length} companies owing for ${PENDING_GIVE_UP_DAYS} days or more: ${overdue.map((o) => o.ticker).join(", ")}`);
   if (failed.length >= Math.max(SYSTEMIC_FAILURES.min, Math.ceil(targets.length * SYSTEMIC_FAILURES.share)))
     summary.alerts.push(`${failed.length} of ${targets.length} companies failed in this run`);
   if (plan.lastPublished === null) summary.alerts.push("no daily index is listed for the last quarters");
   const reference = summary.cursorAfter;
   if (reference && daysBetween(reference, today) > STALE_AFTER_DAYS) summary.alerts.push(`the cursor is ${daysBetween(reference, today)} days old (${reference})`);
-  if (pending.length > 0 || failed.length > 0) log("warn", "owed", { pending: pending.length, failed: failed.length, note: "retried next run; flagged after " + PENDING_GIVE_UP_DAYS + " days" });
+  if (pending.length > 0 || failed.length > 0) log("warn", "owed", { pending: pending.length, failed: failed.length, note: `retried next run; flagged once owed for ${PENDING_GIVE_UP_DAYS} days` });
 
   summary.requests = client.requests;
   log(summary.alerts.length ? "error" : "info", "run.summary", { ...summary });
