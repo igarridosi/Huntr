@@ -148,6 +148,47 @@ zips: `dist/azure.mjs`, `host.json` and a `package.json` pointing at the
 entry point. There is no `node_modules`. Everything is in the bundle except
 `@azure/functions-core`, which the Functions worker provides at run time.
 
+## Deploying
+
+`.github/workflows/sec-ingest-deploy.yml` runs on a push to `main` that
+changes the infrastructure, the pipeline's code or `src/lib/sec/`. Markdown,
+tests and the local test bed do not trigger it. It has three jobs, each in
+its own GitHub environment with its own identity, all through OIDC with no
+secret anywhere. Every environment deploys from `main` only.
+
+| Job | Environment | Approval | Identity and roles | Runs when |
+|---|---|---|---|---|
+| `plan` | `productionAzurePlan` | none | `huntr-sec-ingest-plan`: Reader on `rg-huntr-sec-ingest`, Storage Blob Data Reader on the `tfstate` container | always |
+| `apply` | `productionAzure` | required | `huntr-sec-ingest-deploy`: Contributor on the resource group, and Role Based Access Control Administrator limited by a condition to three data roles for service principals | the plan has infrastructure changes, or a destroy |
+| `publish` | `productionAzurePublish` | none | `huntr-sec-ingest-publish`: Website Contributor on the function app only | the plan has no changes: code alone |
+
+- **The plan cannot write.** Reader and Storage Blob Data Reader allow no
+  write in Azure or to the state, and no action that returns keys or setting
+  values. It cannot take the state's lease either, so it plans with
+  `-lock=false`. Runs are serialised by the workflow's concurrency group,
+  and the apply plans again with the lock. It applies only if that plan is
+  identical to the one shown.
+- **Settings outside Terraform.** Terraform owns the whole list of app
+  settings, but its plan does not see one added in the portal. Before
+  publishing, `infra/sec-ingest/scripts/check-app.sh settings` compares the
+  live names with the plan's, and any difference stops the deploy. The
+  apply runs the same check before it applies, unless that apply replaces
+  the list itself. Along with it, the job checks that host storage uses the
+  identity only and that the database URL's Key Vault reference resolves.
+- **Accepted risk.** Code reaches production without an approval when the
+  infrastructure does not change, and Website Contributor could also change
+  the function app's settings. Two things mitigate it:
+  - `main` is protected by a ruleset: a pull request is required (with no
+    reviews, since this is a one-person project), the check
+    `lint · typecheck · test · build` must pass, force pushes and deletion
+    are blocked, and nobody can bypass it.
+  - The settings check fails the deploy if the live settings differ from
+    Terraform's.
+
+  The `terraform` CI check is deliberately not required. It only runs on
+  pull requests that touch `infra/`, and requiring it would block every
+  other one. Infrastructure changes still need an approval at the apply.
+
 ## Setting the role's password without sending it
 
 The Supabase SQL Editor keeps a history, so the password should not be
