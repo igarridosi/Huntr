@@ -295,7 +295,12 @@ queries on the database:
     - a few hundred MB in Blob Storage, cut by the 90-day lifecycle;
     - Key Vault operations, measured in cents.
   - It is paid from the Azure for Students credit, with no card attached.
-    The budget alert, set at 3 EUR, has not fired.
+  - A budget of 3 USD a month covers the whole billing account, not only
+    this resource group. It was created on 2026-09-01, before the project.
+    It sends an email at 50% and 100% of the actual cost and at 100% of
+    the forecast. Spend against it today is 0.00 USD, and no alert has
+    fired. The budget is defined in USD while Cost Analysis bills in EUR;
+    Azure converts between the two.
 - **Supabase:** the free plan. The table uses 33 MB of the 100 MB set aside
   for it.
 - **GitHub Actions:** free for a public repository.
