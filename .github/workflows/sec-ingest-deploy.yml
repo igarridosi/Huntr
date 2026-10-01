@@ -78,6 +78,7 @@ jobs:
       changes: ${{ steps.plan.outputs.changes }}
       function_app: ${{ steps.app.outputs.function_app }}
       settings: ${{ steps.app.outputs.settings }}
+      secret_version: ${{ steps.app.outputs.secret_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -141,11 +142,17 @@ jobs:
           body=$(jq "$sel.after.body | .properties.siteConfig.appSettings |= map(.name)" "$json")
           after=$(jq -r "$sel.after.body.properties.siteConfig.appSettings[].name" "$json" | sort)
           before=$(jq -r "($sel.before.body.properties.siteConfig.appSettings // [])[].name" "$json" | sort)
-          rm -f "$json"
+          # The database URL setting is a Key Vault reference, not the URL:
+          # its secret version can be shown, and a rotation shows up here.
+          ref='.properties.siteConfig.appSettings // [] | map(select(.name == "SEC_INGEST_DATABASE_URL"))[0].value // "" | (capture("SecretVersion=(?<v>[0-9a-f]+)").v // "none")'
+          version_before=$(jq -r "($sel.before.body // {}) | $ref" "$json")
+          version_after=$(jq -r "($sel.after.body // {}) | $ref" "$json")
           {
             echo "function_app=$(terraform output -raw function_app_name 2>/dev/null || true)"
             echo "settings=$(echo "$after" | jq -R . | jq -cs .)"
+            echo "secret_version=$(jq -r '.variables.database_url_secret_version.value // ""' "$json")"
           } >> "$GITHUB_OUTPUT"
+          rm -f "$json"
           {
             echo "### Function app body after the plan (setting values removed)"
             echo '```json'
@@ -155,6 +162,8 @@ jobs:
             comm -23 <(echo "$before" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
             echo "### App settings added, against Terraform's state"
             comm -13 <(echo "$before" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
+            echo "### Database URL secret version"
+            echo "$version_before -> $version_after"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
@@ -178,6 +187,7 @@ jobs:
       TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
       FUNCTION_APP: ${{ needs.plan.outputs.function_app }}
       SETTINGS: ${{ needs.plan.outputs.settings }}
+      SECRET_VERSION: ${{ needs.plan.outputs.secret_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -247,7 +257,7 @@ jobs:
         if: env.ACTION == 'deploy'
         run: |
           bash infra/sec-ingest/scripts/check-app.sh storage
-          bash infra/sec-ingest/scripts/check-app.sh keyvault
+          bash infra/sec-ingest/scripts/check-app.sh keyvault "$SECRET_VERSION"
           bash infra/sec-ingest/scripts/check-app.sh settings "$SETTINGS"
 
       - name: Publish the function
@@ -268,6 +278,7 @@ jobs:
     env:
       FUNCTION_APP: ${{ needs.plan.outputs.function_app }}
       SETTINGS: ${{ needs.plan.outputs.settings }}
+      SECRET_VERSION: ${{ needs.plan.outputs.secret_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -297,7 +308,7 @@ jobs:
         run: |
           [ -n "$FUNCTION_APP" ] || { echo "::error::the plan did not report the function app"; exit 1; }
           bash infra/sec-ingest/scripts/check-app.sh storage
-          bash infra/sec-ingest/scripts/check-app.sh keyvault
+          bash infra/sec-ingest/scripts/check-app.sh keyvault "$SECRET_VERSION"
           bash infra/sec-ingest/scripts/check-app.sh settings "$SETTINGS"
 
       - name: Publish the function
