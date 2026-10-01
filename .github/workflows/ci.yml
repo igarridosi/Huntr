@@ -18,9 +18,9 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -59,8 +59,8 @@ jobs:
     # Mocked providers only: no credentials, nothing reaches Azure. The real
     # plan runs in the SEC ingest deploy workflow, behind an approval.
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.16.4
           terraform_wrapper: false
