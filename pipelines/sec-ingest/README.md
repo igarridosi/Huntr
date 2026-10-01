@@ -132,8 +132,9 @@ the run exactly as the CLI does (`src/config.ts`) and runs the same ingest
   - the universe is `SEC_INGEST_TICKERS`.
 - **`SEC_INGEST_MODE=real`** (the default in the infrastructure): Postgres
   and Blob, with the universe taken from the active rows of `tickers`.
-  - The database URL is a Key Vault reference, and the deploy checks that it
-    resolves.
+  - The database URL is a Key Vault reference to a pinned secret version,
+    and the deploy checks that it resolves to that version (see "Rotating
+    the database URL").
   - TLS to Supabase's pooler is verified against Supabase's own root CA
     (`infra/sec-ingest/certs/`), which is not in the public trust stores.
 - **Failing on purpose:** a run that raises an alert, or cannot run, throws.
@@ -208,6 +209,68 @@ huntr_sec_ingest` does the same thing client-side.
 Use a long random password from a password manager. The tool refuses
 anything under 16 characters, and anything outside printable ASCII, which
 SASLprep would rewrite on login.
+
+## Rotating the database URL
+
+The function reads `SEC_INGEST_DATABASE_URL` as a Key Vault reference to
+**one pinned version** of the secret `sec-ingest-database-url`. The version
+is in `infra/sec-ingest/database-url.auto.tfvars`; it is an identifier, not
+a secret.
+
+It is pinned because of what happened on 2026-10-01. A reference without a
+version is served from the platform's cache, and after a rotation the
+function kept reading the old version: `configreferences` said `Resolved`,
+and the run failed with "Invalid URL". Restarting did not help. Pinned, a
+rotation is a change to the setting, which makes the platform read the
+secret again, and it goes through review and the apply's approval.
+
+Do it away from the nightly run (06:00 UTC). Never paste the URL or the
+password into a chat, an issue, a commit or a command line.
+
+1. **New password**, if it changes. Generate one in a password manager and
+   set it with `npm run password:verifier` (see above). From then on the
+   old URL fails, so finish steps 2 and 3 before the next run.
+2. **New secret version.** In the portal: Key Vault `kv-huntr-sec-e329` →
+   Secrets → `sec-ingest-database-url` → New Version, and paste the URL,
+   with the password percent-encoded. Do not use
+   `az keyvault secret set --value`: the value would stay in the shell's
+   history and in the command's output. Then read the new version's id;
+   this prints no value:
+
+   ```bash
+   az keyvault secret list-versions --vault-name kv-huntr-sec-e329 --name sec-ingest-database-url --query "[].{id:id, enabled:attributes.enabled, created:attributes.created}" -o table
+   ```
+
+3. **Pin it.** Open a pull request that changes `database_url_secret_version`
+   in `database-url.auto.tfvars` to the new id's last part, 32 hex
+   characters. After the merge:
+   - The plan shows the function app updated, with
+     "Database URL secret version: old -> new".
+   - The apply waits for approval.
+   - After the apply, `check-app.sh keyvault` checks that the reference is
+     `Resolved` to that version.
+4. **Check that it connects.** Run *SEC ingest (run once)* and look at
+   `run.summary` in Application Insights. If the URL is malformed, the
+   error names the part that is wrong (scheme, user, password, host, port
+   or database), never the value.
+5. **Disable the older versions**, only now. Until then they are the way
+   back: a pull request to the previous version. Disable them in the portal
+   (the version → Enabled: No), or:
+
+   ```bash
+   az keyvault secret set-attributes --vault-name kv-huntr-sec-e329 --name sec-ingest-database-url --version <old-version> --enabled false -o none
+   ```
+
+**Checking it without the value.** Neither command prints the URL:
+
+```bash
+az rest --method get --url "https://management.azure.com/subscriptions/<subscription-id>/resourceGroups/rg-huntr-sec-ingest/providers/Microsoft.Web/sites/func-huntr-sec-ingest-e329/config/configreferences/appsettings/SEC_INGEST_DATABASE_URL?api-version=2024-04-01" --query "{status: properties.status, version: properties.secretVersion}"
+az keyvault secret list-versions --vault-name kv-huntr-sec-e329 --name sec-ingest-database-url --query "[].{id:id, enabled:attributes.enabled}" -o table
+```
+
+The first must say `Resolved` and the pinned version. The second must show
+that version as the only one enabled. `az keyvault secret show` without
+`--query` prints the value: do not use it.
 
 ## How a run works
 

@@ -72,8 +72,9 @@ mock_provider "azapi" {
 
 
 variables {
-  sec_user_agent = "Huntr huntrvalue.me contact@huntrvalue.me"
-  alert_email    = "alerts@example.com"
+  sec_user_agent              = "Huntr huntrvalue.me contact@huntrvalue.me"
+  alert_email                 = "alerts@example.com"
+  database_url_secret_version = "0123456789abcdef0123456789abcdef"
 }
 
 run "first_stage_blob_only" {
@@ -235,10 +236,10 @@ run "real_mode" {
 
   assert {
     condition = (
-      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_URL"] == "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.ingest.name};SecretName=sec-ingest-database-url)" &&
+      { for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_URL"] == "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.ingest.name};SecretName=sec-ingest-database-url;SecretVersion=0123456789abcdef0123456789abcdef)" &&
       !strcontains(lower({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_URL"]), "postgres")
     )
-    error_message = "The database URL is a Key Vault reference, never a value in the configuration."
+    error_message = "The database URL is a Key Vault reference to a pinned version, never a value in the configuration."
   }
 
   assert {
@@ -294,4 +295,14 @@ run "refuses_a_user_agent_without_contact" {
   }
 
   expect_failures = [var.sec_user_agent]
+}
+
+run "refuses_a_secret_version_that_is_not_one" {
+  command = plan
+
+  variables {
+    database_url_secret_version = "latest"
+  }
+
+  expect_failures = [var.database_url_secret_version]
 }

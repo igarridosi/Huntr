@@ -37,6 +37,16 @@ variable "database_url_secret_name" {
   default     = "sec-ingest-database-url"
 }
 
+variable "database_url_secret_version" {
+  description = "The version of that secret the function reads (32 hex characters, in database-url.auto.tfvars). Pinned: a new version is used only through a reviewed change here, never picked up from a cache."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9a-f]{32}$", var.database_url_secret_version))
+    error_message = "database_url_secret_version is a Key Vault secret version: 32 lowercase hex characters, the last part of the secret's id."
+  }
+}
+
 variable "blob_only_tickers" {
   description = "The universe in blob-only mode, where there is no tickers table to read."
   type        = list(string)

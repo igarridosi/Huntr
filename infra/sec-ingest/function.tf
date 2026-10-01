@@ -55,8 +55,12 @@ locals {
   # plan. The pooler presents a certificate from Supabase's own root CA,
   # which is not in the public trust stores; the pipeline verifies against
   # it (certs/, checked against the fingerprint in the Supabase dashboard).
+  # The reference names the secret's version: a reference without one is
+  # served from the platform's cache, which kept a stale version after a
+  # rotation. With it, a rotation is a change to this setting, which makes
+  # the platform read the secret again (see the README, "Rotating").
   mode_settings = var.ingest_mode == "real" ? {
-    "SEC_INGEST_DATABASE_URL" = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.ingest.name};SecretName=${var.database_url_secret_name})"
+    "SEC_INGEST_DATABASE_URL" = "@Microsoft.KeyVault(VaultName=${azurerm_key_vault.ingest.name};SecretName=${var.database_url_secret_name};SecretVersion=${var.database_url_secret_version})"
     "SEC_INGEST_DATABASE_CA"  = filebase64("${path.module}/certs/supabase-root-2021-ca.pem")
     } : {
     "SEC_INGEST_TICKERS" = join(",", var.blob_only_tickers)
