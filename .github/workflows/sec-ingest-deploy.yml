@@ -1,14 +1,24 @@
 name: SEC ingest (Azure)
 
-# Deploys infra/sec-ingest with Terraform and publishes the function.
-# Two jobs, both in the productionAzure environment, so each waits for an
-# approval: first the plan (read-only), then the apply of that same plan.
-# The identity is huntr-sec-ingest-deploy through OIDC: no secret anywhere.
+# Deploys infra/sec-ingest with Terraform and publishes the function. Three
+# jobs, three GitHub environments, three identities, all through OIDC (no
+# secret anywhere):
 #
-# The binary plan is never uploaded: it holds sensitive values in clear, and
-# this repository is public, so its artifacts are readable by anyone signed
-# in to GitHub. Only the masked plan.txt is kept. The apply job plans again
-# and applies only if its plan.txt is identical to the approved one.
+#   plan     productionAzurePlan     no approval   huntr-sec-ingest-plan
+#            Reader on the resource group, Storage Blob Data Reader on the
+#            tfstate container: it cannot write to Azure or to the state, so
+#            it plans with -lock=false.
+#   apply    productionAzure         approval      huntr-sec-ingest-deploy
+#            Only when the plan has infrastructure changes (and for destroy).
+#            Plans again with the lock and applies only if that plan is
+#            identical to the one shown; then publishes the code.
+#   publish  productionAzurePublish  no approval   huntr-sec-ingest-publish
+#            Only when the plan has no changes: code alone. Website
+#            Contributor on the function app and nothing else.
+#
+# All three environments deploy from main only. The binary plan is never
+# uploaded: it holds sensitive values in clear, and this repository is
+# public. Only the masked plan.txt is kept.
 
 on:
   push:
@@ -18,6 +28,13 @@ on:
       - pipelines/sec-ingest/**
       - src/lib/sec/**
       - .github/workflows/sec-ingest-deploy.yml
+      # Nothing that reaches neither the package nor the infrastructure.
+      - "!**/*.md"
+      - "!infra/sec-ingest/tests/**"
+      - "!pipelines/sec-ingest/src/__tests__/**"
+      - "!src/lib/sec/**/__tests__/**"
+      - "!pipelines/sec-ingest/local/**"
+      - pipelines/sec-ingest/local/package-azure.mjs
   workflow_dispatch:
     inputs:
       action:
@@ -37,25 +54,30 @@ permissions:
 
 env:
   ARM_USE_OIDC: "true"
-  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   ARM_STORAGE_USE_AZUREAD: "true"
   TF_IN_AUTOMATION: "true"
-  TF_VAR_sec_user_agent: ${{ vars.SEC_USER_AGENT }}
-  TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
   ACTION: ${{ github.event.inputs.action || 'deploy' }}
-  WORKDIR: infra/sec-ingest
+  RG: rg-huntr-sec-ingest
 
 jobs:
   plan:
     name: terraform plan (${{ github.event.inputs.action || 'deploy' }})
     runs-on: ubuntu-latest
-    environment: productionAzure
+    environment: productionAzurePlan
     timeout-minutes: 15
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_sec_user_agent: ${{ vars.SEC_USER_AGENT }}
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
     defaults:
       run:
         working-directory: infra/sec-ingest
+    outputs:
+      changes: ${{ steps.plan.outputs.changes }}
+      function_app: ${{ steps.app.outputs.function_app }}
+      settings: ${{ steps.app.outputs.settings }}
     steps:
       - uses: actions/checkout@v4
 
@@ -72,53 +94,67 @@ jobs:
           -backend-config="container_name=tfstate"
           -backend-config="key=sec-ingest.tfstate"
 
+      # -lock=false: this identity can read the state but not take its lease.
+      # The workflow runs one at a time, and the apply plans again with the
+      # lock before it changes anything.
       - name: terraform plan
+        id: plan
         run: |
           flag=""; [ "$ACTION" = "destroy" ] && flag="-destroy"
-          terraform plan -input=false -lock-timeout=5m $flag -out=tfplan
+          set +e
+          terraform plan -input=false -lock=false -detailed-exitcode $flag -out=tfplan
+          code=$?
+          set -e
+          case "$code" in
+            0) echo "changes=false" >> "$GITHUB_OUTPUT" ;;
+            2) echo "changes=true" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::terraform plan failed (exit $code)"; exit "$code" ;;
+          esac
           terraform show -no-color tfplan > plan.txt
           {
             echo "## terraform plan ($ACTION)"
             echo '```'
             grep -E '^(  # |Plan:|No changes)' plan.txt || true
             echo '```'
+            if [ "$code" = 0 ]; then
+              echo "No infrastructure changes: the code is published without approval (job publish)."
+            else
+              echo "Infrastructure changes: the apply waits for approval in productionAzure."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
       # The function app's body carries the Application Insights connection
       # string, so plan.txt shows the whole body as (sensitive value). This
-      # prints the body the apply will send with every setting's value
-      # removed, and the setting names it adds and removes against the app as
-      # it is now. The JSON plan holds secrets in clear: it stays in the
-      # runner's temp directory and is deleted before anything is printed.
-      - name: Function app after the apply (setting values removed)
+      # prints the body the plan expects with every setting's value removed,
+      # and the setting names it adds and removes against Terraform's state.
+      # Settings added outside Terraform are not in the state: the apply and
+      # publish jobs compare against the live app. The JSON plan holds
+      # secrets in clear: it stays in the runner's temp directory and is
+      # deleted before anything is printed.
+      - name: Function app after the plan (setting values removed)
+        id: app
         if: env.ACTION == 'deploy'
         run: |
           json="$RUNNER_TEMP/plan.json"
           terraform show -json tfplan > "$json"
-          sel='[.resource_changes[] | select(.address == "azapi_resource.function_app")][0].change.after.body'
-          body=$(jq "$sel | .properties.siteConfig.appSettings |= map(.name)" "$json")
-          after=$(jq -r "$sel | .properties.siteConfig.appSettings[].name" "$json" | sort)
+          sel='[.resource_changes[] | select(.address == "azapi_resource.function_app")][0].change'
+          body=$(jq "$sel.after.body | .properties.siteConfig.appSettings |= map(.name)" "$json")
+          after=$(jq -r "$sel.after.body.properties.siteConfig.appSettings[].name" "$json" | sort)
+          before=$(jq -r "($sel.before.body.properties.siteConfig.appSettings // [])[].name" "$json" | sort)
           rm -f "$json"
-          app=$(terraform output -raw function_app_name 2>/dev/null || true)
-          now=""
-          if [ -n "$app" ]; then
-            now=$(az functionapp config appsettings list -g rg-huntr-sec-ingest -n "$app" --query "[].name" -o tsv 2>/dev/null | sort || true)
-          fi
           {
-            echo "### Function app body the apply sends (setting values removed)"
+            echo "function_app=$(terraform output -raw function_app_name 2>/dev/null || true)"
+            echo "settings=$(echo "$after" | jq -R . | jq -cs .)"
+          } >> "$GITHUB_OUTPUT"
+          {
+            echo "### Function app body after the plan (setting values removed)"
             echo '```json'
             echo "$body"
             echo '```'
-            echo "### App settings the apply removes"
-            comm -23 <(echo "$now" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
-            echo "### App settings the apply adds"
-            comm -13 <(echo "$now" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
+            echo "### App settings removed, against Terraform's state"
+            comm -23 <(echo "$before" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
+            echo "### App settings added, against Terraform's state"
+            comm -13 <(echo "$before" | sed '/^$/d') <(echo "$after" | sed '/^$/d') | sed 's/^/- /'
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
@@ -130,9 +166,18 @@ jobs:
   apply:
     name: terraform apply and publish
     needs: plan
+    if: needs.plan.outputs.changes == 'true'
     runs-on: ubuntu-latest
     environment: productionAzure
     timeout-minutes: 30
+    env:
+      ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+      ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+      ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      TF_VAR_sec_user_agent: ${{ vars.SEC_USER_AGENT }}
+      TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
+      FUNCTION_APP: ${{ needs.plan.outputs.function_app }}
+      SETTINGS: ${{ needs.plan.outputs.settings }}
     steps:
       - uses: actions/checkout@v4
 
@@ -146,7 +191,13 @@ jobs:
           name: plan-text
           path: approved
 
-      - name: terraform apply (only the plan that was approved)
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+
+      - name: terraform plan again (only the plan that was shown)
         working-directory: infra/sec-ingest
         run: |
           terraform init -input=false -lockfile=readonly \
@@ -158,9 +209,19 @@ jobs:
           terraform plan -input=false -lock-timeout=5m $flag -out=tfplan
           terraform show -no-color tfplan > plan.txt
           if ! diff -u ../../approved/plan.txt plan.txt; then
-            echo "::error::The plan changed since it was approved. Nothing was applied: run the workflow again and review the new plan."
+            echo "::error::The plan changed since it was shown. Nothing was applied: run the workflow again and review the new plan."
             exit 1
           fi
+          # Settings added outside Terraform are only removed when the apply
+          # sends the function app's body. If it does not, they would stay:
+          # stop before applying anything.
+          if [ "$ACTION" = "deploy" ] && [ -n "$FUNCTION_APP" ] && ! grep -q '# azapi_resource.function_app will be' plan.txt; then
+            bash scripts/check-app.sh settings "$SETTINGS"
+          fi
+
+      - name: terraform apply
+        working-directory: infra/sec-ingest
+        run: |
           terraform apply -input=false -lock-timeout=5m tfplan
           if [ "$ACTION" = "deploy" ]; then
             echo "FUNCTION_APP=$(terraform output -raw function_app_name)" >> "$GITHUB_ENV"
@@ -176,66 +237,70 @@ jobs:
       - name: Build the deploy package
         if: env.ACTION == 'deploy'
         working-directory: pipelines/sec-ingest
+        # No install scripts: the job holds an OIDC token, and the build does
+        # not need them (esbuild's binary comes as an optional dependency).
         run: |
-          npm ci
+          npm ci --ignore-scripts
+          npm run package:azure
+
+      - name: Check the function app (storage, Key Vault, settings)
+        if: env.ACTION == 'deploy'
+        run: |
+          bash infra/sec-ingest/scripts/check-app.sh storage
+          bash infra/sec-ingest/scripts/check-app.sh keyvault
+          bash infra/sec-ingest/scripts/check-app.sh settings "$SETTINGS"
+
+      - name: Publish the function
+        if: env.ACTION == 'deploy'
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.FUNCTION_APP }}
+          package: pipelines/sec-ingest/deploy
+          sku: flexconsumption
+
+  publish:
+    name: publish the code (no infrastructure changes)
+    needs: plan
+    if: needs.plan.outputs.changes == 'false' && github.event.inputs.action != 'destroy'
+    runs-on: ubuntu-latest
+    environment: productionAzurePublish
+    timeout-minutes: 20
+    env:
+      FUNCTION_APP: ${{ needs.plan.outputs.function_app }}
+      SETTINGS: ${{ needs.plan.outputs.settings }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: pipelines/sec-ingest/package-lock.json
+
+      - name: Build the deploy package
+        working-directory: pipelines/sec-ingest
+        # No install scripts: the job holds an OIDC token, and the build does
+        # not need them (esbuild's binary comes as an optional dependency).
+        run: |
+          npm ci --ignore-scripts
           npm run package:azure
 
       - uses: azure/login@v2
-        if: env.ACTION == 'deploy'
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
           subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
 
-      # The app must reach its storage through the identity only. A plain
-      # AzureWebJobsStorage overrides the AzureWebJobsStorage__* settings and
-      # makes the host use Shared Key, which the accounts refuse. Names only:
-      # no value is ever printed.
-      - name: Check the host storage settings
-        if: env.ACTION == 'deploy'
+      # The same checks the apply makes. This identity could change the
+      # app's settings; the last check makes sure nothing did.
+      - name: Check the function app (storage, Key Vault, settings)
         run: |
-          names=$(az functionapp config appsettings list -g rg-huntr-sec-ingest -n "$FUNCTION_APP" --query "[].name" -o tsv)
-          echo "$names" | sort
-          if echo "$names" | grep -qiE '^(AzureWebJobsStorage|DEPLOYMENT_STORAGE_CONNECTION_STRING)$'; then
-            echo "::error::a storage connection string is set on $FUNCTION_APP; host storage must use the identity only"
-            exit 1
-          fi
-          for required in AzureWebJobsStorage__accountName AzureWebJobsStorage__credential AzureWebJobsStorage__clientId; do
-            echo "$names" | grep -qx "$required" || { echo "::error::$required is missing on $FUNCTION_APP"; exit 1; }
-          done
-
-      # In real mode the database URL is a Key Vault reference. App Service
-      # reports whether it resolved (status and reason, never the value):
-      # anything but Resolved means the function would start without a
-      # database, so the deploy stops here.
-      - name: Check the Key Vault reference resolves
-        if: env.ACTION == 'deploy'
-        run: |
-          names=$(az functionapp config appsettings list -g rg-huntr-sec-ingest -n "$FUNCTION_APP" --query "[].name" -o tsv)
-          if ! echo "$names" | grep -qx SEC_INGEST_DATABASE_URL; then
-            echo "blob-only mode: no Key Vault reference to check"
-            exit 0
-          fi
-          id=$(az functionapp show -g rg-huntr-sec-ingest -n "$FUNCTION_APP" --query id -o tsv)
-          url="https://management.azure.com${id}/config/configreferences/appsettings/SEC_INGEST_DATABASE_URL?api-version=2024-04-01"
-          for attempt in $(seq 1 12); do
-            status=$(az rest --method get --url "$url" --query "properties.status" -o tsv 2>/dev/null || true)
-            echo "attempt $attempt: ${status:-no status yet}"
-            if [ "$status" = "Resolved" ]; then
-              echo "### Key Vault reference SEC_INGEST_DATABASE_URL: Resolved" >> "$GITHUB_STEP_SUMMARY"
-              exit 0
-            fi
-            case "$status" in
-              ""|Initialized) sleep 15 ;;
-              *) break ;;
-            esac
-          done
-          az rest --method get --url "$url" --query "{status: properties.status, details: properties.details, secretName: properties.secretName, vaultName: properties.vaultName, identityType: properties.identityType}" -o json || true
-          echo "::error::SEC_INGEST_DATABASE_URL did not resolve (status: ${status:-none}). Check the secret exists in the vault and the identity has Key Vault Secrets User."
-          exit 1
+          [ -n "$FUNCTION_APP" ] || { echo "::error::the plan did not report the function app"; exit 1; }
+          bash infra/sec-ingest/scripts/check-app.sh storage
+          bash infra/sec-ingest/scripts/check-app.sh keyvault
+          bash infra/sec-ingest/scripts/check-app.sh settings "$SETTINGS"
 
       - name: Publish the function
-        if: env.ACTION == 'deploy'
         uses: Azure/functions-action@v1
         with:
           app-name: ${{ env.FUNCTION_APP }}
