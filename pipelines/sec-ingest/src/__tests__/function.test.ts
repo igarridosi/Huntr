@@ -2,8 +2,9 @@ import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { X509Certificate } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import postgres from "postgres";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { caFrom, ConfigError, setupRun, type RunSetup } from "../config";
+import { caFrom, checkDatabaseUrl, ConfigError, setupRun, type RunSetup } from "../config";
 import { diskFacts, diskState } from "../disk";
 import { IngestAlertError, runNightly, targetFor } from "../function";
 import { silentLogger } from "../log";
@@ -133,5 +134,78 @@ describe("caFrom", () => {
     expect(caFrom("  ")).toBeUndefined();
     expect(() => caFrom("bm90IGEgY2VydA==")).toThrow(ConfigError);
     expect(() => caFrom("-----BEGIN PRIVATE KEY-----\nMIIB\n-----END PRIVATE KEY-----")).toThrow(ConfigError);
+  });
+});
+
+describe("checkDatabaseUrl", () => {
+  // Made-up values in the shape of the real one: no real host, user or password.
+  const PASSWORD = "Zq7xR2pL9wN6tB8";
+  const good = `postgresql://huntr_sec_ingest.projectref:${PASSWORD}@pooler.example.test:6543/postgres`;
+
+  /** The message for a bad value, checked to leak neither the value nor the password. */
+  const messageFor = (value: string): string => {
+    let error: unknown;
+    try {
+      checkDatabaseUrl(value);
+    } catch (e) {
+      error = e;
+    }
+    expect(error).toBeInstanceOf(ConfigError);
+    const message = (error as Error).message;
+    expect(message).not.toContain(value);
+    expect(message).not.toContain(PASSWORD);
+    expect(message).not.toContain("huntr_sec_ingest");
+    expect(message).not.toContain("example.test");
+    return message;
+  };
+
+  it("accepts the pooler URL, with or without options, and a percent-encoded password", () => {
+    expect(() => checkDatabaseUrl(good)).not.toThrow();
+    expect(() => checkDatabaseUrl(`${good}?sslmode=verify-full`)).not.toThrow();
+    expect(() => checkDatabaseUrl(`postgres://u:${encodeURIComponent("p/w?#% @x")}@localhost:54339/postgres`)).not.toThrow();
+    expect(() => checkDatabaseUrl("postgres://u:p@[::1]:5432/postgres")).not.toThrow();
+  });
+
+  it("says when the value is a Key Vault reference that did not resolve", () => {
+    const message = messageFor("@Microsoft.KeyVault(VaultName=kv-huntr-sec-e329;SecretName=sec-ingest-database-url)");
+    expect(message).toMatch(/Key Vault reference the platform did not resolve/);
+    expect(message).not.toContain("kv-huntr-sec-e329");
+  });
+
+  it.each([
+    ["scheme", `pooler.example.test:6543/postgres`],
+    ["scheme", good.replace("postgresql://", "mysql://")],
+    ["user", `postgresql://pooler.example.test:6543/postgres`],
+    ["user", `postgresql://:${PASSWORD}@pooler.example.test:6543/postgres`],
+    ["password", good.replace(PASSWORD, `${PASSWORD}/x`)],
+    ["password", good.replace(PASSWORD, `${PASSWORD}#x`)],
+    ["password", good.replace(PASSWORD, `${PASSWORD}%zz`)],
+    ["host", good.replace("pooler.example.test", "")],
+    ["host", good.replace("pooler.example.test", "pooler_example!test")],
+    ["port", good.replace(":6543", ":65a3")],
+    ["port", good.replace(":6543", ":70000")],
+    ["port", good.replace(":6543", ":")],
+    ["database", good.replace("/postgres", "")],
+    ["database", good.replace("/postgres", "/?sslmode=require")],
+  ])("names the %s, and nothing of the value", (part, value) => {
+    expect(messageFor(value)).toMatch(new RegExp(`the ${part} is wrong`));
+  });
+
+  it("agrees with the driver on a password with an unencoded @", async () => {
+    // postgres.js finds the host after the first @, then hands the whole URL
+    // to new URL(), which splits at the last one. Its options are built
+    // without connecting.
+    for (const pw of ["p@ss", "a@b@c", encodeURIComponent("p@ss")]) {
+      const value = `postgresql://huntr_sec_ingest.projectref:${pw}@pooler.example.test:6543/postgres`;
+      expect(() => checkDatabaseUrl(value)).not.toThrow();
+      const sql = postgres(value, { max: 1 });
+      expect(sql.options).toMatchObject({ host: ["pooler.example.test"], port: [6543], user: "huntr_sec_ingest.projectref", pass: decodeURIComponent(pw), database: "postgres" });
+      await sql.end({ timeout: 0 });
+    }
+  });
+
+  it("is checked before connecting", async () => {
+    const env = { SEC_USER_AGENT: "Test test@example.com", SEC_INGEST_DATABASE_URL: good.replace(":6543", ":port") };
+    await expect(setupRun({ out: "unused", tickers: ["AAPL"], store: "postgres", raw: "disk" }, env, silentLogger)).rejects.toThrow(/the port is wrong/);
   });
 });

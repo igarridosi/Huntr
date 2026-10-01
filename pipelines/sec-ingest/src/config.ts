@@ -90,6 +90,78 @@ export function caFrom(value: string | undefined): string | undefined {
   return blocks.join("\n") + "\n";
 }
 
+/**
+ * Checks SEC_INGEST_DATABASE_URL before the driver sees it, and says which
+ * part is wrong: the driver's own "Invalid URL" names none, and an error
+ * that quoted the value would put the password in the logs. Nothing of the
+ * value is ever part of the message, not even the parts that looked fine.
+ *
+ * An unresolved Key Vault reference reaches the app as its own text
+ * (@Microsoft.KeyVault(...)) and is named as such. A reference that resolves
+ * to a stale version still cached by the platform reaches it as whatever
+ * that version held: the driver's "Invalid URL" of the first real run, which
+ * this check reports as a wrong scheme.
+ */
+export function checkDatabaseUrl(value: string): void {
+  const wrong = (part: string, why: string): never => {
+    throw new ConfigError(`SEC_INGEST_DATABASE_URL: the ${part} is wrong: ${why}`);
+  };
+  if (/^@Microsoft\.KeyVault\(/i.test(value)) {
+    throw new ConfigError("SEC_INGEST_DATABASE_URL is a Key Vault reference the platform did not resolve: check its status in config/configreferences and the identity's access to the secret");
+  }
+
+  const scheme = /^([A-Za-z][A-Za-z0-9+.-]*):\/\//.exec(value);
+  if (!scheme) wrong("scheme", "the value does not start with postgres:// or postgresql://");
+  if (!/^postgres(ql)?$/i.test(scheme![1])) wrong("scheme", "it is not postgres or postgresql");
+  const rest = value.slice(scheme![0].length);
+
+  // userinfo@host:port/database?options. The last @ ends the userinfo, as
+  // in the WHATWG parser postgres.js ends with: an unencoded @ in the
+  // password reaches the driver whole (a test runs it through the driver).
+  const at = rest.lastIndexOf("@");
+  if (at < 0) wrong("user", "there is no user@ before the host");
+  const userinfo = rest.slice(0, at);
+  const colon = userinfo.indexOf(":");
+  const user = colon < 0 ? userinfo : userinfo.slice(0, colon);
+  const password = colon < 0 ? "" : userinfo.slice(colon + 1);
+  const decodes = (s: string) => {
+    try {
+      decodeURIComponent(s);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+  if (!user) wrong("user", "it is empty");
+  if (/[/?#\s]/.test(user) || !decodes(user)) wrong("user", "it has characters that must be percent-encoded");
+  if (/[/?#\s]/.test(password) || !decodes(password)) {
+    wrong("password", "it has characters that must be percent-encoded (/ ? # space, or a % not followed by two hex digits); encode it with encodeURIComponent");
+  }
+
+  const afterAt = rest.slice(at + 1);
+  const end = afterAt.search(/[/?#]/);
+  const hostPort = end < 0 ? afterAt : afterAt.slice(0, end);
+  const ipv6 = /^\[[0-9A-Fa-f:.]+\]/.exec(hostPort);
+  const host = ipv6 ? ipv6[0] : hostPort.split(":")[0];
+  const portText = hostPort.slice(host.length);
+  if (!host) wrong("host", "it is empty");
+  if (!ipv6 && !/^[A-Za-z0-9.-]+$/.test(host)) wrong("host", "it has characters a host name cannot have");
+  if (portText) {
+    const port = portText.slice(1);
+    if (!/^\d{1,5}$/.test(port) || Number(port) < 1 || Number(port) > 65535) wrong("port", "it is not a number from 1 to 65535");
+  }
+
+  const tail = end < 0 ? "" : afterAt.slice(end);
+  const database = tail.startsWith("/") ? tail.slice(1).split(/[?#]/)[0] : "";
+  if (!database) wrong("database", "there is no /database after the host");
+
+  try {
+    new URL(value);
+  } catch {
+    throw new ConfigError("SEC_INGEST_DATABASE_URL does not parse as a URL, though its scheme, user, host, port and database look right");
+  }
+}
+
 export async function setupRun(target: RunTarget, env: NodeJS.ProcessEnv, log: Logger): Promise<RunSetup> {
   // A run that reaches anything beyond this machine must say who it is: the
   // SEC writes to that address before it blocks, and a default nobody chose
@@ -110,6 +182,7 @@ export async function setupRun(target: RunTarget, env: NodeJS.ProcessEnv, log: L
   } else {
     const url = env.SEC_INGEST_DATABASE_URL?.trim();
     if (!url) throw new ConfigError("SEC_INGEST_DATABASE_URL is required to write to Postgres (the pooler URL, as huntr_sec_ingest)");
+    checkDatabaseUrl(url);
     const tls = env.SEC_INGEST_DATABASE_TLS === "disable" ? "disable" : { ca: caFrom(env.SEC_INGEST_DATABASE_CA) };
     db = connect({ url, tls });
     deps = { client, state: postgresState(db), facts: postgresFacts(db), raw, log };
