@@ -51,7 +51,7 @@ describe("first run", () => {
   it("moves the cursor even if a company fails, and owes that company a full load", async () => {
     edgar.failFacts.add(1652044);
     const s = await run("2026-09-16");
-    expect(s.companies.failed).toMatchObject([{ ticker: "GOOG", accession: null, since: "2026-09-16", attempts: 1 }]);
+    expect(s.companies.failed).toMatchObject([{ ticker: "GOOGL", accession: null, since: "2026-09-16", attempts: 1 }]);
     expect(s.cursorAfter).toBe("2026-09-15");
     expect(s.alerts).toEqual([]); // one failure is retried, not paged
     expect(state().companies["0001652044"]).toMatchObject({ pendingAccession: null, pendingSince: "2026-09-16", pendingAttempts: 1 });
@@ -179,6 +179,32 @@ describe("later runs", () => {
     edgar.unserved.add("2026-09-18");
     await expect(run("2026-09-21")).rejects.toThrow(/listed for its quarter but EDGAR answered 403/);
     expect(state().cursor.lastIndexDate).toBe("2026-09-15");
+  });
+
+  it("renames a company in its state by CIK: no new state, no reload, what it owes kept", async () => {
+    // State written when a company was named by its first ticker alphabetically.
+    const renamed = (pending: object) => {
+      const s0 = state();
+      Object.assign(s0.companies["0001652044"], { ticker: "GOOG", ...pending });
+      writeFileSync(path.join(out, "state.json"), JSON.stringify(s0));
+    };
+    const ciks = Object.keys(state().companies).sort();
+
+    // Nothing filed: the new name alone fetches nothing and touches nothing.
+    renamed({});
+    const s1 = await run("2026-09-16");
+    expect(factUrls()).toEqual([]);
+    expect(s1.companies.targeted).toBe(0);
+    expect(state().companies["0001652044"].ticker).toBe("GOOG");
+
+    // Owing a filing: fetched as before, renamed, and still owing from the same day.
+    renamed({ pendingAccession: "0001652044-26-000099", pendingSince: "2026-09-14", pendingAttempts: 2 });
+    const s2 = await run("2026-09-16");
+    expect(factUrls()).toEqual(["https://data.sec.gov/api/xbrl/companyfacts/CIK0001652044.json"]);
+    expect(s2.companies.pending).toMatchObject([{ ticker: "GOOGL", accession: "0001652044-26-000099", since: "2026-09-14", attempts: 3 }]);
+    expect(s2.rows).toMatchObject({ inserted: 0, updated: 0 });
+    expect(Object.keys(state().companies).sort()).toEqual(ciks);
+    expect(state().companies["0001652044"]).toMatchObject({ ticker: "GOOGL", pendingAccession: "0001652044-26-000099", pendingSince: "2026-09-14", pendingAttempts: 3 });
   });
 
   it("loads a company that joined the universe even if it filed nothing", async () => {
