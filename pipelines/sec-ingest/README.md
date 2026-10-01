@@ -9,10 +9,11 @@ The rules for choosing a figure live in `src/lib/sec/` at the repo root,
 shared with the app, so the app and the pipeline read the filings the same
 way.
 
-**Status:** the dry run and the Postgres and Blob Storage writers exist
-and are tested locally (see below). The Azure Function and the
-infrastructure come in later PRs. Migrations 011 and 012 are applied in
-production.
+**Status:** in production since 2026-10-01. The pipeline runs nightly on
+Azure Functions and writes to Supabase and Blob Storage. Migrations 011 to
+013 are applied. What was built, what is only tested locally, what is not
+done, the incidents and the cost are in the
+[project report](../../docs/sec-ingest/REPORT.md).
 
 ## Try it
 
