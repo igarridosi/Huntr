@@ -7,6 +7,7 @@ import {
   Target,
 } from "lucide-react";
 import { TickerLogo } from "@/components/ui/ticker-logo";
+import { dailyReturns, pinTotalReturn, toPrices } from "@/components/landing/market-series";
 
 /** Headline figures the curve has to agree with. */
 const PORTFOLIO_TOTAL_RETURN = 59.5;
@@ -14,52 +15,22 @@ const BENCHMARK_TOTAL_RETURN = 54.8;
 /** Slightly aggressive book — moves more than the market in both directions. */
 const PORTFOLIO_BETA = 1.18;
 
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
- * Tilts a walk by a straight line so it lands exactly on a target without
- * flattening the path in between — a Brownian bridge. Lets the curve stay a
- * genuine random walk while still ending on the number in the legend.
+ * Three years of sessions. The market follows the realistic generator
+ * (compounding, volatility in clusters, fat tails); the portfolio takes the
+ * market's moves through its beta plus its own noise, so the two dip and
+ * rally together and drift apart only slowly, as real curves do. Both are
+ * then pinned, in log space, to the returns in the legend.
  */
-function pinEndpoint(values: number[], target: number) {
-  const last = values.length - 1;
-  const drift = values[last];
-  return values.map((value, i) => value - (drift * i) / last + (target * i) / last);
-}
+function buildPerformancePair(sessions = 756) {
+  const market = dailyReturns(20260815, sessions, 0.15, 0.17);
+  const own = dailyReturns(41, sessions, 0, 0.1);
+  const portfolio = market.map((r, i) => PORTFOLIO_BETA * r + own[i]);
 
-/**
- * A portfolio does not wander independently of the market: it inherits most of
- * the market's moves through its beta and adds its own idiosyncratic noise.
- * Two unrelated walks is what made the old pair read as invented — real curves
- * dip and rally together, and diverge only gradually.
- */
-function buildPerformancePair(count = 132) {
-  const random = mulberry32(20260815);
-  const gaussian = () =>
-    random() + random() + random() + random() + random() + random() - 3;
-
-  const market: number[] = [0];
-  const portfolio: number[] = [0];
-
-  for (let i = 1; i < count; i += 1) {
-    const marketShock = gaussian() * 1.15;
-    const idiosyncratic = gaussian() * 0.7;
-
-    market.push(market[i - 1] + marketShock);
-    portfolio.push(portfolio[i - 1] + PORTFOLIO_BETA * marketShock + idiosyncratic);
-  }
-
+  const asPercent = (prices: number[]) => prices.map((p) => (p / prices[0] - 1) * 100);
   return {
-    portfolioTrend: pinEndpoint(portfolio, PORTFOLIO_TOTAL_RETURN),
-    benchmarkTrend: pinEndpoint(market, BENCHMARK_TOTAL_RETURN),
+    portfolioTrend: asPercent(pinTotalReturn(toPrices(portfolio), PORTFOLIO_TOTAL_RETURN / 100)),
+    benchmarkTrend: asPercent(pinTotalReturn(toPrices(market), BENCHMARK_TOTAL_RETURN / 100)),
   };
 }
 
@@ -88,12 +59,39 @@ const highlights = [
   { icon: Target, title: "Decision-First UX", text: "Built for quick daily reviews and disciplined portfolio tracking." },
 ] as const;
 
+/** The palette of the header illustration, largest weight first. */
 const sectorRows = [
-  { label: "Consumer Defensive", pct: 50.7, color: "#4DC990" },
-  { label: "Technology", pct: 27.0, color: "#3b82f6" },
-  { label: "Communication Services", pct: 17.7, color: "#8b5cf6" },
-  { label: "Financial Services", pct: 4.6, color: "#06b6d4" },
+  { label: "Consumer Defensive", pct: 50.7, color: "#FF8C42" },
+  { label: "Technology", pct: 27.0, color: "#FFBF69" },
+  { label: "Communication Services", pct: 17.7, color: "#47707A" },
+  { label: "Financial Services", pct: 4.6, color: "#8C9DA1" },
 ] as const;
+
+/**
+ * The figures agree with each other and with the legend: market value over
+ * cost basis is the +59.5% the curve ends on, and the sector weights are the
+ * holdings' (ASML and ADBE make Technology's 27%).
+ */
+const MARKET_VALUE = 191_970;
+const COST_BASIS = MARKET_VALUE / (1 + PORTFOLIO_TOTAL_RETURN / 100);
+const TOTAL_RETURN = MARKET_VALUE - COST_BASIS;
+const TODAY = 1_362;
+
+const usdK = (value: number, sign = false) =>
+  `${sign && value >= 0 ? "+" : ""}$${(value / 1000).toFixed(2)}K`;
+
+const stats = [
+  { label: "Market Value", value: usdK(MARKET_VALUE), note: "4 sectors · 5 positions", tone: "text-snow-peak" },
+  { label: "Total Return", value: usdK(TOTAL_RETURN, true), note: `+${PORTFOLIO_TOTAL_RETURN}%`, tone: "text-bullish" },
+  { label: "Today", value: usdK(TODAY, true), note: `+${((TODAY / MARKET_VALUE) * 100).toFixed(2)}%`, tone: "text-bullish" },
+  { label: "Cost Basis", value: usdK(COST_BASIS), note: "average cost", tone: "text-golden-hour" },
+] as const;
+
+/** Percent labels for the dashed gridlines, from the shared domain. */
+function gridLabel(y: number) {
+  const value = trendDomain.min + ((PLOT_TOP + PLOT_HEIGHT - y) / PLOT_HEIGHT) * (trendDomain.max - trendDomain.min);
+  return `${value >= 0 ? "+" : ""}${Math.round(value)}%`;
+}
 
 const logoMap: Record<string, string> = {
   COST: "https://cdn.tickerlogos.com/costco.com",
@@ -109,12 +107,7 @@ const PLOT_HEIGHT = 200;
 const PLOT_WIDTH = 1000;
 const AXIS_Y = PLOT_TOP + PLOT_HEIGHT;
 
-/**
- * Plain polyline against a shared domain. At this point density the segments
- * already read as a curve, and the previous quadratic smoothing pinned each
- * control point to the *previous* y, which stair-stepped the line rather than
- * softening it.
- */
+/** Plain polyline against a shared domain: one vertex per session. */
 function seriesToPath(values: number[]): string {
   if (values.length < 2) return "";
   const range = Math.max(trendDomain.max - trendDomain.min, 1e-6);
@@ -130,7 +123,7 @@ function seriesToPath(values: number[]): string {
 
 export function PortfoliosShowcase() {
   return (
-    <section className="mx-auto max-w-6xl px-6 py-16">
+    <section className="relative mx-auto max-w-6xl px-6 py-16">
       <div className="mb-8 flex items-center gap-3">
         <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-sunset-orange/30 bg-sunset-orange/12 text-sunset-orange">
           <BriefcaseBusiness className="h-5 w-5" />
@@ -145,16 +138,36 @@ export function PortfoliosShowcase() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-wolf-border/50 bg-wolf-surface/45 p-4 mb-5">
-        <div className="mb-3 flex items-center justify-between">
-          <p className="text-sm font-semibold text-snow-peak">Portfolio Evolution</p>
+      <div className="huntr-grain mb-5 rounded-2xl border border-wolf-border/50 bg-wolf-surface/45 p-4 sm:p-5">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-snow-peak">Portfolio Evolution</p>
+            <p className="font-mono text-[10px] uppercase tracking-wider text-mist">Since inception</p>
+          </div>
           <div className="flex items-center gap-2">
-            <span className="rounded border border-wolf-border/45 bg-wolf-black/25 px-2 py-1 text-[10px] text-sunset-orange">Portfolio +59.5%</span>
-            <span className="rounded border border-wolf-border/45 bg-wolf-black/25 px-2 py-1 text-[10px] text-mist">S&P 500 +54.8%</span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-sunset-orange/30 bg-sunset-orange/10 px-2 py-1 font-mono text-[11px] text-sunset-orange">
+              <span className="h-1.5 w-1.5 rounded-full bg-sunset-orange" />
+              Portfolio +{PORTFOLIO_TOTAL_RETURN}%
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-md border border-wolf-border/45 bg-wolf-black/30 px-2 py-1 font-mono text-[11px] text-mist">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#9CB0C8]" />
+              S&P 500 +{BENCHMARK_TOTAL_RETURN}%
+            </span>
           </div>
         </div>
 
-        <div className="rounded-xl border border-wolf-border/45 bg-wolf-black/20 p-3">
+        <div className="relative rounded-xl border border-wolf-border/45 bg-wolf-black/30 p-3 pl-12">
+          {/* Gridline values, outside the stretched SVG so the text keeps its shape */}
+          {[30, 90, 150, 210].map((y) => (
+            <span
+              key={y}
+              aria-hidden
+              className="absolute left-2 -translate-y-1/2 font-mono text-[9px] text-mist/70"
+              style={{ top: `calc(0.75rem + (100% - 1.5rem) * ${y / 240})` }}
+            >
+              {gridLabel(y)}
+            </span>
+          ))}
           <svg viewBox="0 0 1000 240" className="h-65 w-full" preserveAspectRatio="none" aria-hidden>
             <defs>
               <linearGradient id="portfolio-fill" x1="0" y1="0" x2="0" y2="1">
@@ -177,7 +190,8 @@ export function PortfoliosShowcase() {
             <path
               d={seriesToPath(benchmarkTrend)}
               stroke="#9CB0C8"
-              strokeWidth="2"
+              strokeWidth="1.25"
+              strokeOpacity="0.85"
               fill="none"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -186,7 +200,7 @@ export function PortfoliosShowcase() {
             <path
               d={seriesToPath(portfolioTrend)}
               stroke="#FF8C42"
-              strokeWidth="2.25"
+              strokeWidth="1.6"
               fill="none"
               strokeLinejoin="round"
               strokeLinecap="round"
@@ -195,75 +209,72 @@ export function PortfoliosShowcase() {
           </svg>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2 mt-3">
-          {[
-            ["Market Value", "$191.97K", "text-sunset-orange"],
-            ["Total Return", "+$87.87K", "text-[#4DC990]"],
-            ["Today", "+$1.36", "text-[#4DC990]"],
-            ["Cost Basis", "$114K", "text-golden-hour"],
-          ].map((item) => (
-            <div key={item[0]} className="rounded-lg border border-wolf-border/40 bg-wolf-black/25 p-3">
-              <p className="text-[10px] uppercase tracking-wide text-mist">{item[0]}</p>
-              <p className={`mt-1 text-2xl font-bold font-mono ${item[2]}`}>{item[1]}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+          {stats.map((item) => (
+            <div key={item.label} className="rounded-lg border border-wolf-border/40 bg-wolf-black/30 p-3">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-mist">{item.label}</p>
+              <p className={`mt-1 font-mono text-xl font-bold tabular-nums sm:text-2xl ${item.tone}`}>{item.value}</p>
+              <p className="mt-0.5 font-mono text-[10px] text-mist/80">{item.note}</p>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_1fr] mb-5">
-        <article className="rounded-xl border border-wolf-border/50 bg-wolf-surface/45 p-4">
-          <p className="text-sm font-semibold text-snow-peak mb-3">Sector Allocation</p>
-          <div className="h-3 rounded-full bg-wolf-border/35 overflow-hidden flex mb-4">
+      <div className="mb-5 grid grid-cols-1 gap-4 lg:grid-cols-[1.2fr_1fr]">
+        <article className="huntr-grain rounded-2xl border border-wolf-border/50 bg-wolf-surface/45 p-4 sm:p-5">
+          <p className="mb-3 text-sm font-semibold text-snow-peak">Sector Allocation</p>
+          <div className="mb-4 flex h-3 gap-0.5 overflow-hidden rounded-full">
             {sectorRows.map((row) => (
-              <div key={row.label} className="h-full" style={{ width: `${row.pct}%`, backgroundColor: row.color }} />
+              <div key={row.label} className="h-full first:rounded-l-full last:rounded-r-full" style={{ width: `${row.pct}%`, backgroundColor: row.color }} />
             ))}
           </div>
 
-          <div className="space-y-2">
+          <ul className="divide-y divide-wolf-border/40">
             {sectorRows.map((row) => (
-              <div key={row.label} className="rounded-lg border border-wolf-border/35 bg-wolf-black/20 p-2.5">
+              <li key={row.label} className="py-2.5 first:pt-0 last:pb-0">
                 <div className="mb-1.5 flex items-center justify-between text-xs">
                   <span className="inline-flex items-center gap-2 text-mist">
-                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: row.color }} />
+                    <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: row.color }} />
                     {row.label}
                   </span>
-                  <span className="font-semibold text-snow-peak">{row.pct.toFixed(1)}%</span>
+                  <span className="font-mono font-semibold tabular-nums text-snow-peak">{row.pct.toFixed(1)}%</span>
                 </div>
-                <div className="h-1.5 rounded-full bg-wolf-border/35 overflow-hidden">
+                <div className="h-1.5 overflow-hidden rounded-full bg-wolf-border/35">
                   <div className="h-full rounded-full" style={{ width: `${row.pct}%`, backgroundColor: row.color }} />
                 </div>
-              </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </article>
 
-        <article className="rounded-xl border border-wolf-border/50 bg-wolf-surface/45 p-4">
-          <p className="text-sm font-semibold text-snow-peak mb-3">Top Holdings</p>
-          <div className="space-y-2">
+        <article className="huntr-grain rounded-2xl border border-wolf-border/50 bg-wolf-surface/45 p-4 sm:p-5">
+          <p className="mb-3 text-sm font-semibold text-snow-peak">Top Holdings</p>
+          <ul className="space-y-2">
             {holdings.map((h) => (
-              <div key={h.ticker} className="flex items-center justify-between rounded-lg border border-wolf-border/35 bg-wolf-black/25 px-3 py-2">
-                <span className="inline-flex items-center gap-2 font-mono text-sm text-snow-peak">
-                  <TickerLogo ticker={h.ticker} src={logoMap[h.ticker]} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[9px]" />
-                  {h.ticker}
-                </span>
-                <span className="text-xs text-mist">{h.pct}</span>
-              </div>
+              <li key={h.ticker} className="relative overflow-hidden rounded-lg border border-wolf-border/35 bg-wolf-black/30 px-3 py-2">
+                {/* The position's weight, as a wash behind the row */}
+                <div aria-hidden className="absolute inset-y-0 left-0 bg-sunset-orange/10" style={{ width: h.pct }} />
+                <div className="relative flex items-center justify-between">
+                  <span className="inline-flex items-center gap-2 font-mono text-sm text-snow-peak">
+                    <TickerLogo ticker={h.ticker} src={logoMap[h.ticker]} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[9px]" />
+                    {h.ticker}
+                  </span>
+                  <span className="font-mono text-xs tabular-nums text-mist">{h.pct}</span>
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
         </article>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      {/* What it is for, as one strip rather than five more cards */}
+      {/* Hairlines: the 1px gaps show the border colour behind the cells. */}
+      <div className="grid grid-cols-1 gap-px overflow-hidden rounded-2xl border border-wolf-border/50 bg-wolf-border/40 sm:grid-cols-2 lg:grid-cols-5">
         {highlights.map((item) => (
-          <article
-            key={item.title}
-            className="rounded-xl border border-wolf-border/50 bg-wolf-surface/45 p-5"
-          >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-sunset-orange/12 text-sunset-orange">
-              <item.icon className="h-4 w-4" />
-            </span>
-            <h3 className="mt-3 text-base font-semibold text-snow-peak">{item.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-mist">{item.text}</p>
+          <article key={item.title} className="bg-wolf-black p-5 sm:last:col-span-2 lg:last:col-span-1">
+            <item.icon className="h-4 w-4 text-sunset-orange" />
+            <h3 className="mt-3 text-sm font-semibold text-snow-peak">{item.title}</h3>
+            <p className="mt-1.5 text-sm leading-relaxed text-mist">{item.text}</p>
           </article>
         ))}
       </div>

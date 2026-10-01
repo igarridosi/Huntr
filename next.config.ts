@@ -62,6 +62,11 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  images: {
+    // 75 is Next's default for every image. 90 is allowed for the landing's
+    // grainy illustrations, whose texture breaks up into blocks at 75.
+    qualities: [75, 90],
+  },
   // A self-contained server under .next/standalone, with only the node_modules
   // it actually needs. It is what the Dockerfile copies.
   //

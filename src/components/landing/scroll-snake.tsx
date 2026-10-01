@@ -35,6 +35,12 @@ interface ScrollSnakeProps {
   targetRef: React.RefObject<HTMLElement | null>;
   /** Number of half-waves along the full height. */
   waves?: number;
+  /**
+   * Heights, in px from the top of the rail, where a stop is marked. Each is
+   * drawn on the curve itself (not on the rail's centre line, which the wave
+   * leaves by up to 18px) and lights up once the fill reaches it.
+   */
+  stops?: number[];
   className?: string;
 }
 
@@ -43,7 +49,7 @@ interface ScrollSnakeProps {
  * The track stays dim; the progress stroke uses the Huntr sunset → golden
  * gradient and carries a glowing head that rides the path.
  */
-export function ScrollSnake({ targetRef, waves = 7, className }: ScrollSnakeProps) {
+export function ScrollSnake({ targetRef, waves = 7, stops = [], className }: ScrollSnakeProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const pathRef = useRef<SVGPathElement | null>(null);
   const reducedMotion = useRef<MediaQueryList | null>(null);
@@ -52,6 +58,7 @@ export function ScrollSnake({ targetRef, waves = 7, className }: ScrollSnakeProp
   const [progress, setProgress] = useState(0);
   const [length, setLength] = useState(0);
   const [head, setHead] = useState<{ x: number; y: number } | null>(null);
+  const [stopPoints, setStopPoints] = useState<{ x: number; y: number; at: number }[]>([]);
 
   /**
    * Reads layout for both the drawing box and the scroll progress in one pass.
@@ -133,6 +140,34 @@ export function ScrollSnake({ targetRef, waves = 7, className }: ScrollSnakeProp
     setLength(pathRef.current.getTotalLength());
   }, [box]);
 
+  // Each stop at the point of the curve with its height. The path only ever
+  // moves down, so y grows with length and a bisection finds it.
+  const stopsKey = stops.map((y) => Math.round(y)).join(",");
+  useLayoutEffect(() => {
+    const path = pathRef.current;
+    if (!path || length === 0) {
+      setStopPoints([]);
+      return;
+    }
+    setStopPoints(
+      stopsKey
+        .split(",")
+        .filter(Boolean)
+        .map(Number)
+        .map((y) => {
+          let lo = 0;
+          let hi = length;
+          for (let i = 0; i < 24; i += 1) {
+            const mid = (lo + hi) / 2;
+            if (path.getPointAtLength(mid).y < y) lo = mid;
+            else hi = mid;
+          }
+          const point = path.getPointAtLength(lo);
+          return { x: point.x, y: point.y, at: lo };
+        })
+    );
+  }, [stopsKey, length]);
+
   // Keep the glowing head pinned to the filled tip.
   useEffect(() => {
     if (!pathRef.current || length === 0) return;
@@ -189,6 +224,17 @@ export function ScrollSnake({ targetRef, waves = 7, className }: ScrollSnakeProp
               strokeDashoffset={length * (1 - progress)}
             />
           )}
+
+          {/* Stops: dim until the fill reaches them */}
+          {stopPoints.map((stop) => {
+            const reached = length * progress >= stop.at;
+            return (
+              <g key={stop.y}>
+                <circle cx={stop.x} cy={stop.y} r="6" fill="#FF8C42" opacity={reached ? 0.25 : 0.12} />
+                <circle cx={stop.x} cy={stop.y} r="3" fill={reached ? "#FF8C42" : "#2A3B40"} stroke="#FF8C42" strokeOpacity={reached ? 1 : 0.6} strokeWidth="1" />
+              </g>
+            );
+          })}
 
           {/* Glowing head — rides the tip all the way to the end of the thread */}
           {head && progress > 0 && (

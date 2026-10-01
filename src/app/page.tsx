@@ -10,10 +10,18 @@ import { Footer } from "@/components/landing/footer";
 import { LandingSideMenu } from "@/components/landing/side-menu";
 import { Journey, JourneyStep } from "@/components/landing/journey";
 import { LandingNav } from "@/components/landing/landing-nav";
+import { LandingBackdrop } from "@/components/landing/backdrop";
 
 export default function Home() {
   return (
-    <div className="min-h-screen bg-wolf-black flex flex-col">
+    // isolate: the backdrop sits at a negative z-index, which
+    // without a stacking context here would paint under this background.
+    // overflow-x-clip: nothing may widen the page; clip, unlike hidden, does
+    // not make this a scroll container, so the sticky hero still sticks.
+    <div className="relative isolate flex min-h-screen flex-col overflow-x-clip bg-wolf-black">
+      {/* One backdrop from the end of the hero to the end of the footer: the
+          header's light, continued as a single surface (LandingBackdrop). */}
+      <LandingBackdrop />
       <LandingSideMenu />
 
       {/* Ko-fi now lives inline: next to "Start Free" on desktop (LandingNav)
