@@ -172,6 +172,12 @@ SASLprep would rewrite on login.
 
 1. **Universe.** The tickers are resolved to CIKs with EDGAR's
    `company_tickers.json` and deduplicated: GOOG and GOOGL are one download.
+   A share class written with a dot or a slash (BRK.B, BRK/B) is looked up
+   under EDGAR's hyphen (BRK-B). A company is named, in the logs and in
+   `sec_ingest_state.ticker`, by the ticker EDGAR lists first for its CIK,
+   which is its main listing: CMCSA, not the CCZ notes. The name changes
+   the next time the company is fetched. What does not resolve is listed in
+   `run.summary` as `companies.unresolved`; see below.
 2. **Days.** The quarter's `daily-index/{YYYY}/QTR{n}/index.json` lists the
    days that have an index.
    - A day not listed but earlier than the last listed day had no filings
@@ -219,6 +225,42 @@ for 5 days or more, 5 or more failures (and at least 10% of the
 companies) in one run, or a cursor more than 4 days old. `2` means the run
 could not complete, for example because EDGAR refused it, a listed index is
 missing, or the configuration or arguments were wrong.
+
+## Tickers EDGAR does not resolve
+
+The universe is the active rows of the app's `tickers` table, which is
+seeded from exchange listings, not from EDGAR. Some of them have no
+company in EDGAR, and that is expected: they are listed in `run.summary`
+(`companies.unresolved`), skipped, and are not errors. The run of
+2026-10-01 (918 active tickers) breaks down like this:
+
+| | Tickers | Count |
+|---|---|---|
+| Loaded | one company per CIK | 891 companies |
+| Same CIK as a loaded ticker: no extra download | ACGLO, BBDO, CMCSA, FOXA, FWONK, GOOGL, NWSA, SOJC, TBB, ZG | 10 |
+| Not in `company_tickers.json` | see the table below | 17 |
+
+Of the 891, one has no `companyfacts`: **IBN** (ICICI Bank, CIK 1103838),
+a foreign issuer filing 20-F. EDGAR answers its `companyfacts` with a 404
+(the latest 20-F, filed 2026-07-20, carries no XBRL). It counts in
+`companies.withoutFacts`, is recorded without an error, and has no raw
+payload: 890 payloads for 891 companies.
+
+The 17 unresolved, checked against EDGAR on 2026-10-01:
+
+| Cause | Tickers | Outcome |
+|---|---|---|
+| Share class written with a dot | BRK.B (EDGAR: BRK-B) | Resolved by the pipeline since this change |
+| Ticker changed, same company and CIK | BK (now BNY), PSTG (now P, Everpure), SATS (now ECHO), EQR (now VMRK, Vivmark Residential) | Fix in the `tickers` table; until then, excluded |
+| Deregistered (Form 15) in 2026 | AVB, BLD, CFLT, CTRA, EA, EXAS, HOLX, WBS | Expected exclusion: EDGAR no longer updates them |
+| Foreign issuer delisted and deregistered (Forms 25 and 15F) in 2026 | AXIA (AXIA Energia; its ADRs now trade over the counter) | Expected exclusion |
+| Delisted and deregistered in 2026 | CUK (Carnival plc, now Carnival UK Ltd.) | Expected exclusion: CCL, Carnival Corp Ltd., is loaded |
+| Preferred share | FITBI (Fifth Third, Series I) | Expected exclusion: FITB is loaded |
+| Foreign company that files no reports with the SEC | LRLCY (L'Oréal) | Expected exclusion |
+
+Tickers in `tickers` that are not a common stock (ACGLO, SOJC, TBB,
+FITBI), changed tickers and deregistered companies are a data question
+for the app, not for this pipeline.
 
 ## Tests
 
