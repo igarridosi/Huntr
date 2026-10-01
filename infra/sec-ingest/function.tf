@@ -96,7 +96,12 @@ resource "azapi_resource" "function_app" {
   body = {
     kind = "functionapp,linux"
     properties = {
-      serverFarmId = azurerm_service_plan.ingest.id
+      # As Azure returns it: azurerm's id says serverFarms, the site reads
+      # back serverfarms, and azapi compares case-sensitively, so the
+      # provider's id would be a change in every plan. ARM ids are not
+      # case-sensitive: this is the same plan. (No leading slash in the
+      # pattern: replace() reads "/.../" as a regular expression.)
+      serverFarmId = replace(azurerm_service_plan.ingest.id, "Microsoft.Web/serverFarms/", "Microsoft.Web/serverfarms/")
       # What azurerm sent for this app, kept as it was: the PUT replaces the
       # site, and anything left out would fall back to Azure's defaults.
       enabled             = true
@@ -149,6 +154,13 @@ resource "azapi_resource" "function_app" {
     azurerm_role_assignment.raw_container,
     azurerm_role_assignment.key_vault,
   ]
+
+  lifecycle {
+    # Azure adds this tag when the app is linked to Application Insights
+    # (the portal does it). Only that key is ignored; every other tag is
+    # Terraform's.
+    ignore_changes = [tags["hidden-link: /app-insights-resource-id"]]
+  }
 }
 
 # Publishing goes through Entra ID (the deploy workflow), never through

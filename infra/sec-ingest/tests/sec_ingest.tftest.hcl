@@ -248,6 +248,14 @@ run "real_mode" {
 
   assert {
     condition = (
+      azapi_resource.function_app.body.properties.serverFarmId == "/subscriptions/00000000-0000-0000-0000-000000000002/resourceGroups/rg-huntr-sec-ingest/providers/Microsoft.Web/serverfarms/asp-huntr-sec-ingest" &&
+      lower(azapi_resource.function_app.body.properties.serverFarmId) == lower(azurerm_service_plan.ingest.id)
+    )
+    error_message = "The plan's id is written as Azure returns it (serverfarms), or every plan shows a change."
+  }
+
+  assert {
+    condition = (
       startswith(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]), "-----BEGIN CERTIFICATE-----") &&
       endswith(trimspace(base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"])), "-----END CERTIFICATE-----") &&
       length(regexall("BEGIN CERTIFICATE", base64decode({ for s in azapi_resource.function_app.body.properties.siteConfig.appSettings : s.name => s.value }["SEC_INGEST_DATABASE_CA"]))) == 1 &&
