@@ -80,9 +80,9 @@ jobs:
       settings: ${{ steps.app.outputs.settings }}
       secret_version: ${{ steps.app.outputs.secret_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.16.4
           terraform_wrapper: false
@@ -166,7 +166,7 @@ jobs:
             echo "$version_before -> $version_after"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: plan-text
           path: infra/sec-ingest/plan.txt
@@ -189,19 +189,19 @@ jobs:
       SETTINGS: ${{ needs.plan.outputs.settings }}
       SECRET_VERSION: ${{ needs.plan.outputs.secret_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: hashicorp/setup-terraform@v3
+      - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: 1.16.4
           terraform_wrapper: false
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           name: plan-text
           path: approved
 
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
@@ -237,7 +237,7 @@ jobs:
             echo "FUNCTION_APP=$(terraform output -raw function_app_name)" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: env.ACTION == 'deploy'
         with:
           node-version: 22
@@ -280,9 +280,9 @@ jobs:
       SETTINGS: ${{ needs.plan.outputs.settings }}
       SECRET_VERSION: ${{ needs.plan.outputs.secret_version }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -296,7 +296,7 @@ jobs:
           npm ci --ignore-scripts
           npm run package:azure
 
-      - uses: azure/login@v2
+      - uses: azure/login@v3
         with:
           client-id: ${{ vars.AZURE_CLIENT_ID }}
           tenant-id: ${{ vars.AZURE_TENANT_ID }}
