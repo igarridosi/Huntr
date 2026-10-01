@@ -8,6 +8,7 @@ import { AuthGateProvider } from "@/providers/auth-gate-provider";
 import { ThemeProvider } from "@/providers/theme-provider";
 import { TallyFeedbackWidget } from "@/components/ui/tally-feedback";
 import { PageViews } from "@/components/analytics/page-views";
+import { AppTransition } from "@/components/navigation/app-transition";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -80,7 +81,7 @@ export default function RootLayout({
         "url": "https://huntrvalue.me/",
         "logo": "https://huntrvalue.me/icon.png",
         "sameAs": [
-          "https://twitter.com/huntrvalue",
+          "https://x.com/e4e_codex",
           "https://linkedin.com/company/huntrvalue"
         ],
         "slogan": "The Wolf of Value Street"
@@ -185,6 +186,8 @@ export default function RootLayout({
                     Server Action — see src/app/actions/analytics.ts. */}
                 <PageViews />
                 {children}
+                {/* Landing → app: a splash instead of a cut */}
+                <AppTransition />
                 <TallyFeedbackWidget />
               </AuthGateProvider>
             </QueryProvider>
