@@ -10,6 +10,7 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 import { KoFiSupport } from "@/components/ui/kofi-support";
 import { TeaserDialog } from "@/components/landing/teaser-dialog";
 import { ROUTES } from "@/lib/constants";
+import { pinTotalReturn, priceSeries } from "@/components/landing/market-series";
 
 // cmdk only matters once the palette opens, and it renders nothing while
 // closed, so the chunk loads after hydration instead of with the page.
@@ -17,6 +18,36 @@ const CommandPalette = dynamic(
   () => import("@/components/search/command-palette").then((m) => m.CommandPalette),
   { ssr: false }
 );
+
+/**
+ * The header scenes being tried. Switching is this one line: HERO_SCENE.
+ * - gradient: an abstract wave, full-bleed.
+ * - hoplites: the illustration, framed (see FRAMED).
+ * - forest: the original header, full-bleed.
+ */
+const HERO_SCENES = {
+  // Full-bleed. The picture is the wave on a canvas widened by a quarter
+  // (its own edges continued), so covering the viewport shows more of the
+  // wave: further away without a frame. A phone shows a narrow slice of it:
+  // aim that at the warm side.
+  gradient: { src: "/logo/huntr_header_gradient_wide.webp", framed: false, position: "object-[18%_50%] md:object-center" },
+  hoplites: { src: "/logo/huntr_header_hoplites_teal.webp", framed: true, position: "object-center" },
+  forest: { src: "/logo/huntr_header.webp", framed: false, position: "object-center" },
+} as const;
+const HERO_SCENE: keyof typeof HERO_SCENES = "gradient";
+const scene = HERO_SCENES[HERO_SCENE];
+
+/**
+ * A framed scene still fills a portrait screen. On a wide landscape one the
+ * whole 16:9 picture shows, smaller than the viewport and centred in it, its
+ * edges fading into the page, so it reads from further away.
+ */
+const FRAMED =
+  "md:landscape:aspect-[2000/1131] md:landscape:h-auto md:landscape:w-[min(84vw,140svh)] md:landscape:[mask-image:radial-gradient(ellipse_50%_50%_at_50%_50%,black_55%,transparent_100%)]";
+
+/** The scene's lower edge: opaque down to 58%, then an eased fade out. */
+const SCENE_FADE =
+  "linear-gradient(to bottom, black 0%, black 58%, rgba(0,0,0,0.93) 66%, rgba(0,0,0,0.78) 74%, rgba(0,0,0,0.55) 82%, rgba(0,0,0,0.3) 90%, rgba(0,0,0,0.1) 96%, transparent 100%)";
 
 /** Point in the intro where the wordmark starts surfacing. */
 const WORD_START = 0.08;
@@ -41,61 +72,31 @@ type StockSnippet = {
   points: number[];
 };
 
-/** Deterministic PRNG — keeps the generated series identical on server and client. */
-function mulberry32(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
 /**
- * Random walk with drift — the standard model for a closing-price series.
- *
- * Each step is an independent draw rather than a continuation of the previous
- * one. Carrying momentum forward is what turns a sparkline into a smooth drawn
- * arc: at 26% persistence only 38% of steps reverse direction, against ~44%
- * here and ~50% for a driftless walk. The shortfall from 50% is the drift,
- * which is what makes a trending name look like it trends.
+ * Six months of sessions per name, with each name's own drift and volatility
+ * (NVDA swings, WMT barely moves), from the realistic generator the
+ * portfolio chart also uses, each pinned to where it ends.
  */
-function buildSeries(seed: number, drift: number, volatility: number, count = 44) {
-  const random = mulberry32(seed);
-  // Irwin–Hall: six uniforms sum to an approximately standard normal, so large
-  // moves stay rare instead of the flat spread a single uniform would give.
-  const gaussian = () =>
-    random() + random() + random() + random() + random() + random() - 3;
-
-  const values: number[] = [];
-  let value = 50;
-
-  for (let i = 0; i < count; i += 1) {
-    value += drift + gaussian() * volatility;
-    values.push(value);
-  }
-
-  return values;
-}
+const SESSIONS = 126;
+const tape = (seed: number, annualReturn: number, annualVol: number, sixMonths: number) =>
+  pinTotalReturn(priceSeries(seed, SESSIONS, annualReturn, annualVol), sixMonths);
 
 const snippets: StockSnippet[] = [
-  { ticker: "AAPL", category: "Technology", logoUrl: "https://cdn.tickerlogos.com/apple.com", points: buildSeries(101, 0.26, 1.2) },
-  { ticker: "MSFT", category: "Software", logoUrl: "https://cdn.tickerlogos.com/microsoft.com", points: buildSeries(202, 0.28, 1.0) },
-  { ticker: "NVDA", category: "Semiconductors", logoUrl: "https://cdn.tickerlogos.com/nvidia.com", points: buildSeries(303, 0.44, 2.0) },
-  { ticker: "AMZN", category: "E-commerce", logoUrl: "https://cdn.tickerlogos.com/amazon.com", points: buildSeries(404, 0.2, 1.4) },
-  { ticker: "GOOGL", category: "Communication", logoUrl: "https://cdn.tickerlogos.com/abc.xyz", points: buildSeries(505, 0.24, 1.25) },
-  { ticker: "LLY", category: "Healthcare", logoUrl: "https://cdn.tickerlogos.com/lilly.com", points: buildSeries(606, 0.31, 1.1) },
-  { ticker: "WMT", category: "Retail", logoUrl: "https://i5.walmartimages.com/dfw/63fd9f59-14e2/9d304ce6-96de-4331-b8ec-c5191226d378/v1/spark-icon.svg", points: buildSeries(707, 0.19, 0.75) },
-  { ticker: "AVGO", category: "Semiconductors", logoUrl: "https://cdn.tickerlogos.com/broadcom.com", points: buildSeries(808, 0.33, 1.6) },
-  { ticker: "TSLA", category: "Automotive", logoUrl: "https://cdn.tickerlogos.com/tesla.com", points: buildSeries(909, -0.11, 2.2) },
-  { ticker: "JPM", category: "Financials", logoUrl: "https://cdn.tickerlogos.com/jpmorganchase.com", points: buildSeries(111, 0.17, 0.9) },
+  { ticker: "AAPL", category: "Technology", logoUrl: "https://cdn.tickerlogos.com/apple.com", points: tape(101, 0.24, 0.26, 0.064) },
+  { ticker: "MSFT", category: "Software", logoUrl: "https://cdn.tickerlogos.com/microsoft.com", points: tape(202, 0.28, 0.22, 0.112) },
+  { ticker: "NVDA", category: "Semiconductors", logoUrl: "https://cdn.tickerlogos.com/nvidia.com", points: tape(303, 0.6, 0.48, 0.248) },
+  { ticker: "AMZN", category: "E-commerce", logoUrl: "https://cdn.tickerlogos.com/amazon.com", points: tape(404, 0.22, 0.32, 0.091) },
+  { ticker: "GOOGL", category: "Communication", logoUrl: "https://cdn.tickerlogos.com/abc.xyz", points: tape(505, 0.26, 0.29, 0.143) },
+  { ticker: "LLY", category: "Healthcare", logoUrl: "https://cdn.tickerlogos.com/lilly.com", points: tape(606, 0.34, 0.3, 0.186) },
+  { ticker: "WMT", category: "Retail", logoUrl: "https://i5.walmartimages.com/dfw/63fd9f59-14e2/9d304ce6-96de-4331-b8ec-c5191226d378/v1/spark-icon.svg", points: tape(707, 0.2, 0.17, 0.072) },
+  { ticker: "AVGO", category: "Semiconductors", logoUrl: "https://cdn.tickerlogos.com/broadcom.com", points: tape(808, 0.4, 0.38, 0.214) },
+  { ticker: "TSLA", category: "Automotive", logoUrl: "https://cdn.tickerlogos.com/tesla.com", points: tape(909, -0.3, 0.58, -0.127) },
+  { ticker: "JPM", category: "Financials", logoUrl: "https://cdn.tickerlogos.com/jpmorganchase.com", points: tape(111, 0.18, 0.21, 0.089) },
 ];
 
 /**
- * Straight-segment polyline, normalised to fill the box. At this point density
- * the segments already read as a curve, and skipping the spline keeps the peaks
- * where the data actually puts them.
+ * Straight-segment polyline, normalised to fill the box. One vertex per
+ * session: the jagged closes are what make it read as a price.
  */
 function toLinePath(points: number[], width = 100, height = 28) {
   const max = Math.max(...points);
@@ -113,35 +114,41 @@ function toLinePath(points: number[], width = 100, height = 28) {
     .join(" ");
 }
 
-/** Compact card in the hero ticker tape — a signup entry point. */
+/**
+ * Compact card in the hero ticker tape — a signup entry point. The line
+ * takes the series' own direction: orange when it ends higher, red when it
+ * ends lower.
+ */
 function TickerChip({ item }: { item: StockSnippet }) {
   const gradientId = item.ticker.replace(/[^a-zA-Z0-9_-]/g, "-");
+  const up = item.points[item.points.length - 1] >= item.points[0];
+  const [from, to] = up ? ["#FF8C42", "#FFBF69"] : ["#FF4242", "#FF8C42"];
 
   return (
     <Link
       href={ROUTES.SIGNUP}
       aria-label={`Sign up to track ${item.ticker}`}
-      className="pointer-events-auto mx-2 flex w-[200px] shrink-0 items-center gap-3 rounded-xl border border-wolf-border/50 bg-wolf-surface/60 px-3 py-2.5 backdrop-blur-sm transition-colors hover:border-sunset-orange/50 hover:bg-wolf-surface/80"
+      className="pointer-events-auto mx-1.5 flex w-[220px] shrink-0 items-center gap-3 rounded-xl border border-wolf-border/50 bg-wolf-black/70 px-3 py-2.5 backdrop-blur-md transition-[border-color,background-color,transform] duration-200 hover:-translate-y-0.5 hover:border-sunset-orange/50 hover:bg-wolf-surface/80"
     >
       <TickerLogo
         ticker={item.ticker}
         src={item.logoUrl}
         className="h-8 w-8"
-        imageClassName="rounded"
-        fallbackClassName="rounded text-[8px]"
+        imageClassName="rounded-md"
+        fallbackClassName="rounded-md text-[8px]"
       />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-snow-peak">{item.ticker}</p>
-        <p className="truncate font-mono text-[10px] text-mist">{item.category}</p>
+        <p className="text-sm font-bold leading-tight text-snow-peak">{item.ticker}</p>
+        <p className="truncate font-mono text-[10px] leading-tight text-mist">{item.category}</p>
       </div>
-      <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="h-7 w-12 shrink-0" fill="none" aria-hidden>
+      <svg viewBox="0 0 100 28" preserveAspectRatio="none" className="h-7 w-16 shrink-0 self-center" fill="none" aria-hidden>
         <defs>
           <linearGradient id={`chip-${gradientId}`} x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stopColor="#FF8C42" stopOpacity="0.5" />
-            <stop offset="100%" stopColor="#FFBF69" stopOpacity="1" />
+            <stop offset="0%" stopColor={from} stopOpacity="0.45" />
+            <stop offset="100%" stopColor={to} stopOpacity="1" />
           </linearGradient>
         </defs>
-        <path d={toLinePath(item.points)} stroke={`url(#chip-${gradientId})`} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+        <path d={toLinePath(item.points)} stroke={`url(#chip-${gradientId})`} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
       </svg>
     </Link>
   );
@@ -213,27 +220,41 @@ export function HeroForest() {
       className="relative h-[200svh] motion-reduce:h-svh"
     >
       <div className="sticky top-0 flex h-svh flex-col overflow-hidden">
-        {/* Scene */}
-        <motion.div className="absolute inset-0" style={{ scale: sceneScale, y: sceneY }}>
-          <Image
-            src="/logo/huntr_header.webp"
-            alt=""
-            aria-hidden
-            fill
-            priority
-            sizes="100vw"
-            className="pointer-events-none select-none object-cover object-center"
+        {/* Scene, with everything that tints it. Its lower part fades to
+            transparent rather than to black, so the page's backdrop, which
+            starts under the hero, shows through and the light carries on
+            down the page instead of stopping at a black band. */}
+        <div className="absolute inset-0" style={{ maskImage: SCENE_FADE, WebkitMaskImage: SCENE_FADE }}>
+          <motion.div
+            className="absolute inset-0 flex items-center justify-center"
+            style={{ scale: sceneScale, y: sceneY }}
+          >
+            <div className={`relative h-full w-full ${scene.framed ? FRAMED : ""}`}>
+              <Image
+                src={scene.src}
+                alt=""
+                aria-hidden
+                fill
+                priority
+                sizes={scene.framed ? "(min-width: 768px) 84vw, 100vw" : "100vw"}
+                className={`pointer-events-none select-none object-cover ${scene.position}`}
+              />
+            </div>
+          </motion.div>
+
+          {/* Fine grain over the scene: it keeps a soft gradient from banding
+              and from looking flat, and the backdrop below shares it. */}
+          <div className="huntr-grain pointer-events-none absolute inset-0 opacity-70 mix-blend-soft-light" />
+
+          {/* Contrast scrim — keeps the copy readable over the misty clearing */}
+          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(11,20,22,0.72)_0%,rgba(11,20,22,0.45)_38%,rgba(11,20,22,0.25)_65%)]" />
+
+          {/* Depth — the further in, the darker it gets under the canopy */}
+          <motion.div
+            className="pointer-events-none absolute inset-0 bg-wolf-black"
+            style={{ opacity: depthOpacity }}
           />
-        </motion.div>
-
-        {/* Contrast scrim — keeps the copy readable over the misty clearing */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(11,20,22,0.72)_0%,rgba(11,20,22,0.45)_38%,rgba(11,20,22,0.25)_65%)]" />
-
-        {/* Depth — the further in, the darker it gets under the canopy */}
-        <motion.div
-          className="pointer-events-none absolute inset-0 bg-wolf-black"
-          style={{ opacity: depthOpacity }}
-        />
+        </div>
 
         {/* Wordmark rising out of the depth of field, behind the copy */}
         <motion.div
@@ -253,15 +274,6 @@ export function HeroForest() {
             HUNTR
           </motion.span>
         </motion.div>
-
-        {/* Seamless dissolve into the page background */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-[6] h-[38%]"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(11,20,22,0) 0%, rgba(11,20,22,0.55) 42%, rgba(11,20,22,0.88) 72%, var(--color-wolf-black) 100%)",
-          }}
-        />
 
         {/* Copy */}
         <motion.div
@@ -332,9 +344,11 @@ export function HeroForest() {
           </div>
         </motion.div>
 
-        {/* Ticker tape — the gaps stay click-through, the chips themselves don't */}
+        {/* Ticker tape — the gaps stay click-through, the chips themselves don't.
+            The vertical padding leaves room for a chip lifted on hover, which
+            overflow-hidden would otherwise clip. */}
         <motion.div
-          className="group pointer-events-none absolute inset-x-0 bottom-8 z-10 overflow-hidden [mask-image:linear-gradient(to_right,transparent_0%,black_12%,black_88%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_12%,black_88%,transparent_100%)]"
+          className="group pointer-events-none absolute inset-x-0 bottom-6 z-10 overflow-hidden py-2 [mask-image:linear-gradient(to_right,transparent_0%,black_12%,black_88%,transparent_100%)] [-webkit-mask-image:linear-gradient(to_right,transparent_0%,black_12%,black_88%,transparent_100%)]"
           style={{ opacity: copyOpacity, visibility: tapeVisibility }}
         >
           {/* Paused on hover so a moving chip is still a clickable target. */}

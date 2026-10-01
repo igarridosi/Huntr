@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BriefcaseBusiness,
   CalendarDays,
@@ -13,6 +13,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { chromeOpacity, useIntroProgress } from "@/hooks/use-intro-progress";
+import { glideTo } from "@/components/landing/glide";
 
 const menuItems = [
   { href: "#hero", label: "The Product", icon: House },
@@ -24,85 +25,10 @@ const menuItems = [
   { href: "#transparency", label: "Transparency", icon: HeartHandshake },
 ] as const;
 
-/** Clearance below the sticky nav so the target heading is never tucked under it. */
-const SCROLL_OFFSET = 88;
-const MIN_DURATION = 900;
-const MAX_DURATION = 1800;
-
-/** Slow, symmetric ease so long jumps glide instead of snapping. */
-function easeInOutCubic(t: number) {
-  return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
-}
-
 export function LandingSideMenu() {
   const [collapsed, setCollapsed] = useState(false);
   const [activeHref, setActiveHref] = useState<(typeof menuItems)[number]["href"]>("#hero");
-  const animationRef = useRef(0);
   const introProgress = useIntroProgress();
-
-  // Cancel any in-flight glide when the reader takes over scrolling themselves.
-  useEffect(() => {
-    const cancel = () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-        animationRef.current = 0;
-      }
-    };
-
-    window.addEventListener("wheel", cancel, { passive: true });
-    window.addEventListener("touchstart", cancel, { passive: true });
-
-    return () => {
-      cancel();
-      window.removeEventListener("wheel", cancel);
-      window.removeEventListener("touchstart", cancel);
-    };
-  }, []);
-
-  const glideTo = useCallback((href: string) => {
-    const section = document.querySelector(href);
-    if (!section) return;
-
-    const startY = window.scrollY;
-    const targetY = Math.max(
-      0,
-      section.getBoundingClientRect().top + startY - SCROLL_OFFSET
-    );
-    const distance = targetY - startY;
-
-    // Keep the address bar in sync without the jump a real hash change causes,
-    // and without stacking a history entry per menu click.
-    history.replaceState(null, "", href);
-
-    if (Math.abs(distance) < 1) return;
-
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      window.scrollTo(0, targetY);
-      return;
-    }
-
-    // Longer trips take longer, but stay inside a predictable band.
-    const duration = Math.min(
-      MAX_DURATION,
-      Math.max(MIN_DURATION, Math.abs(distance) * 0.55)
-    );
-    const startTime = performance.now();
-
-    if (animationRef.current) cancelAnimationFrame(animationRef.current);
-
-    const step = (now: number) => {
-      const elapsed = Math.min((now - startTime) / duration, 1);
-      window.scrollTo(0, startY + distance * easeInOutCubic(elapsed));
-
-      if (elapsed < 1) {
-        animationRef.current = requestAnimationFrame(step);
-      } else {
-        animationRef.current = 0;
-      }
-    };
-
-    animationRef.current = requestAnimationFrame(step);
-  }, []);
 
   useEffect(() => {
     const sections = menuItems
@@ -147,7 +73,7 @@ export function LandingSideMenu() {
 
   return (
     <aside
-      className="fixed right-8 top-1/2 z-50 hidden -translate-y-1/2 rounded-2xl border border-wolf-border/50 bg-wolf-black/80 p-2.5 shadow-2xl shadow-wolf-black/60 backdrop-blur-md md:block"
+      className="fixed right-8 top-1/2 z-50 hidden -translate-y-1/2 rounded-2xl border border-wolf-border/50 bg-wolf-black/80 p-2.5 backdrop-blur-md md:block"
       style={{ opacity: introOpacity, visibility: introHidden ? "hidden" : "visible" }}
       aria-hidden={introHidden}
     >
