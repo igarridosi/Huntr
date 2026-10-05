@@ -9,6 +9,7 @@ import { TickerLogo } from "@/components/ui/ticker-logo";
 import { cn } from "@/lib/utils";
 import {
   CalendarClock,
+  CircleCheck,
   ChevronLeft,
   ChevronRight,
   Moon,
@@ -17,7 +18,7 @@ import {
   Sun,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -40,7 +41,8 @@ import type { EarningsHistoryPoint, StockProfile, StockQuote } from "@/types/sto
 
 type CapFilter = "all" | "mega" | "large" | "mid" | "small";
 type EarningsTiming = "Before Open" | "After Close";
-type EventSource = "upcoming" | "persisted";
+/** "reported": the report has happened; "upcoming": it is still ahead. */
+type EventSource = "upcoming" | "reported";
 type ChartMetric = "revenue" | "eps";
 type HoverSeries = "epsEstimate" | "epsReported" | "revEstimate" | "revReported";
 
@@ -58,18 +60,6 @@ interface EarningsSection {
   label: EarningsTiming;
   icon: typeof Sun;
   items: EarningsItem[];
-}
-
-interface PersistedWeekItem {
-  ticker: string;
-  date: string;
-  timing: EarningsTiming;
-  marketCap?: number | null;
-}
-
-interface PersistedWeekSnapshot {
-  weekStart: string;
-  items: PersistedWeekItem[];
 }
 
 interface FormattedEarningsPoint {
@@ -96,7 +86,6 @@ interface SidePanelCache {
 }
 
 
-const PERSISTED_WEEK_KEY = "huntr_earnings_current_week";
 const PREVIEW_HISTORY_LIMIT = 4;
 const FULL_HISTORY_LIMIT = 14;
 
@@ -132,17 +121,6 @@ function capMatches(filter: CapFilter, marketCap: number): boolean {
     return marketCap >= 10_000_000_000 && marketCap < 200_000_000_000;
   }
   return false;
-}
-
-function toLocalIsoDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function toWeekIso(date: Date): string {
-  return toLocalIsoDate(date);
 }
 
 function quarterLabelFromDate(dateString: string): string {
@@ -342,62 +320,6 @@ function formatEarningsData(
 
   return Array.from(merged.values())
     .sort((a, b) => b.sortTs - a.sortTs);
-}
-
-function readPersistedWeekSnapshot(expectedWeekStartIso: string): PersistedWeekItem[] {
-  if (typeof window === "undefined") return [];
-
-  try {
-    const raw = window.localStorage.getItem(PERSISTED_WEEK_KEY);
-    if (!raw) return [];
-
-    const parsed = JSON.parse(raw) as PersistedWeekSnapshot;
-    if (parsed.weekStart !== expectedWeekStartIso) {
-      window.localStorage.removeItem(PERSISTED_WEEK_KEY);
-      return [];
-    }
-
-    return Array.isArray(parsed.items) ? parsed.items : [];
-  } catch {
-    return [];
-  }
-}
-
-function writePersistedWeekSnapshot(weekStartIso: string, items: PersistedWeekItem[]): void {
-  if (typeof window === "undefined") return;
-
-  const payload: PersistedWeekSnapshot = {
-    weekStart: weekStartIso,
-    items,
-  };
-
-  window.localStorage.setItem(PERSISTED_WEEK_KEY, JSON.stringify(payload));
-}
-
-function createPersistedFallbackQuote(
-  ticker: string,
-  marketCap: number | null | undefined,
-  date: string,
-  timing: EarningsTiming
-): StockQuote {
-  return {
-    ticker,
-    price: 0,
-    current_volume: 0,
-    day_change: 0,
-    day_change_percent: 0,
-    next_earnings_date: date,
-    earnings_timing: timing,
-    // Keep persisted current-week reporters visible even if live quote vanished.
-    market_cap: marketCap && marketCap > 0 ? marketCap : 10_000_000_000,
-    shares_outstanding: 0,
-    pe_ratio: 0,
-    dividend_yield: 0,
-    fifty_two_week_high: 0,
-    fifty_two_week_low: 0,
-    avg_volume: 0,
-    beta: 0,
-  };
 }
 
 function formatDate(value: string | null): string {
@@ -926,25 +848,39 @@ export default function EarningsPage() {
     const items: EarningsItem[] = [];
 
     for (const quote of quotes) {
-      if (!quote.next_earnings_date) continue;
+      // Both the next report and the one just made: the day after a company
+      // reports, Yahoo's next date jumps to the following quarter, and with
+      // only that date the earlier days of this week emptied out.
+      // The last report first: when Yahoo has not yet rolled the next date
+      // forward, both carry the same day, and it is the reported one.
+      const events: Array<{ iso: string | null | undefined; timing: StockQuote["earnings_timing"]; source: EventSource }> = [
+        { iso: quote.last_earnings_date, timing: quote.last_earnings_timing, source: "reported" },
+        { iso: quote.next_earnings_date, timing: quote.earnings_timing, source: "upcoming" },
+      ];
+      const seen = new Set<string>();
 
-      const timing =
-        quote.earnings_timing === "Before Open" || quote.earnings_timing === "After Close"
-          ? quote.earnings_timing
-          : "After Close";
+      for (const event of events) {
+        if (!event.iso || seen.has(event.iso)) continue;
+        seen.add(event.iso);
 
-      const date = new Date(`${quote.next_earnings_date}T00:00:00`);
-      if (Number.isNaN(date.getTime())) continue;
-      if (date < currentWeekStart) continue;
+        const timing =
+          event.timing === "Before Open" || event.timing === "After Close"
+            ? event.timing
+            : "After Close";
 
-      items.push({
-        ticker: quote.ticker.toUpperCase(),
-        date,
-        profile: profileMap.get(quote.ticker.toUpperCase()) ?? null,
-        quote,
-        timing,
-        source: "upcoming",
-      });
+        const date = new Date(`${event.iso}T00:00:00`);
+        if (Number.isNaN(date.getTime())) continue;
+        if (date < currentWeekStart) continue;
+
+        items.push({
+          ticker: quote.ticker.toUpperCase(),
+          date,
+          profile: profileMap.get(quote.ticker.toUpperCase()) ?? null,
+          quote,
+          timing,
+          source: event.source,
+        });
+      }
     }
 
     return items.sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -959,49 +895,6 @@ export default function EarningsPage() {
     return Math.max(0, weeks);
   }, [allUpcomingItems, currentWeekStart]);
 
-  const persistedCurrentWeekItems = useMemo(
-    () => readPersistedWeekSnapshot(toWeekIso(currentWeekStart)),
-    [currentWeekStart]
-  );
-
-  useEffect(() => {
-    const weekIso = toWeekIso(currentWeekStart);
-    const currentWeekEnd = addDays(currentWeekStart, 5);
-
-    const persistedCompletedItems = persistedCurrentWeekItems.filter((item) => {
-      const date = new Date(`${item.date}T00:00:00`);
-      if (Number.isNaN(date.getTime())) return false;
-      // Persist only events that are already in the past.
-      return date < today;
-    });
-
-    const liveCurrentWeekCompleted = allUpcomingItems
-      .filter(
-        (item) =>
-          item.date >= currentWeekStart &&
-          item.date < currentWeekEnd &&
-          item.date < today
-      )
-      .map((item) => ({
-        ticker: item.ticker,
-        date: toLocalIsoDate(item.date),
-        timing: item.timing,
-        marketCap: item.quote.market_cap,
-      }));
-
-    const mergedMap = new Map<string, PersistedWeekItem>();
-    for (const item of [...persistedCompletedItems, ...liveCurrentWeekCompleted]) {
-      // Keep a single entry per ticker for the current week snapshot.
-      mergedMap.set(item.ticker, item);
-    }
-
-    const merged = Array.from(mergedMap.values()).sort((a, b) => {
-      if (a.date === b.date) return a.ticker.localeCompare(b.ticker);
-      return a.date.localeCompare(b.date);
-    });
-    writePersistedWeekSnapshot(weekIso, merged);
-  }, [allUpcomingItems, currentWeekStart, persistedCurrentWeekItems, today]);
-
   const weekDays = useMemo(
     () => Array.from({ length: 5 }, (_, index) => addDays(weekStart, index)),
     [weekStart]
@@ -1009,38 +902,8 @@ export default function EarningsPage() {
 
   const weekItems = useMemo(() => {
     const weekEnd = addDays(weekStart, 5);
-    const live = allUpcomingItems.filter((item) => item.date >= weekStart && item.date < weekEnd);
-
-    if (weekOffset !== 0) return live;
-
-    const persisted = persistedCurrentWeekItems.reduce<EarningsItem[]>((acc, item) => {
-      const quote =
-        quoteMap.get(item.ticker) ??
-        createPersistedFallbackQuote(item.ticker, item.marketCap, item.date, item.timing);
-
-      const date = new Date(`${item.date}T00:00:00`);
-      if (Number.isNaN(date.getTime())) return acc;
-
-      acc.push({
-        ticker: item.ticker,
-        date,
-        profile: profileMap.get(item.ticker) ?? null,
-        quote,
-        timing: item.timing,
-        source: "persisted",
-      });
-
-      return acc;
-    }, []);
-
-    const dedupe = new Map<string, EarningsItem>();
-    for (const item of [...persisted, ...live]) {
-      const key = `${item.ticker}|${toLocalIsoDate(item.date)}|${item.timing}`;
-      dedupe.set(key, item);
-    }
-
-    return Array.from(dedupe.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [allUpcomingItems, weekOffset, weekStart, persistedCurrentWeekItems, quoteMap, profileMap]);
+    return allUpcomingItems.filter((item) => item.date >= weekStart && item.date < weekEnd);
+  }, [allUpcomingItems, weekStart]);
 
   const earningsItems = useMemo(() => {
     return weekItems
@@ -1053,7 +916,7 @@ export default function EarningsPage() {
         );
       })
       .filter((item) =>
-        item.source === "persisted" ? true : capMatches(capFilter, item.quote.market_cap)
+        capMatches(capFilter, item.quote.market_cap)
       )
       .filter((item) => {
         if (!watchlistTickerSet) return true;
@@ -1329,12 +1192,26 @@ export default function EarningsPage() {
             </button>
           </div>
 
-          <div className="mt-4 flex items-center gap-2 rounded-xl bg-sunset-orange/[0.07] px-3 py-2 ring-1 ring-inset ring-sunset-orange/20">
-            {panelItem.timing === "Before Open" ? <Sun className="h-3.5 w-3.5 text-sunset-orange" aria-hidden /> : <Moon className="h-3.5 w-3.5 text-sunset-orange" aria-hidden />}
-            <p className="text-[13px] text-snow-peak">
-              {panelItem.source === "persisted" ? "Reported" : "Reports"} {reportDay}, <span className="text-mist">{panelItem.timing === "Before Open" ? "before the open" : "after the close"}</span>
-            </p>
-          </div>
+          {/* Past tense and a badge once it has happened: "Reports Thu, Oct 1"
+              read as still ahead on the day after. */}
+          {panelItem.source === "reported" ? (
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-bullish/[0.07] px-3 py-2 ring-1 ring-inset ring-bullish/20">
+              <CircleCheck className="h-3.5 w-3.5 shrink-0 text-bullish" aria-hidden />
+              <p className="min-w-0 flex-1 text-[13px] text-snow-peak">
+                Reported {reportDay}, <span className="text-mist">{panelItem.timing === "Before Open" ? "before the open" : "after the close"}</span>
+              </p>
+              <span className="shrink-0 rounded-md bg-bullish/[0.12] px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase tracking-[0.06em] text-bullish">
+                Results out
+              </span>
+            </div>
+          ) : (
+            <div className="mt-4 flex items-center gap-2 rounded-xl bg-sunset-orange/[0.07] px-3 py-2 ring-1 ring-inset ring-sunset-orange/20">
+              {panelItem.timing === "Before Open" ? <Sun className="h-3.5 w-3.5 text-sunset-orange" aria-hidden /> : <Moon className="h-3.5 w-3.5 text-sunset-orange" aria-hidden />}
+              <p className="text-[13px] text-snow-peak">
+                Reports {reportDay}, <span className="text-mist">{panelItem.timing === "Before Open" ? "before the open" : "after the close"}</span>
+              </p>
+            </div>
+          )}
 
           <dl className="mt-4 grid grid-cols-3 gap-2">
             {[
@@ -1608,8 +1485,8 @@ export default function EarningsPage() {
                                         <span className="font-mono text-[12px] font-semibold text-snow-peak">{item.ticker}</span>
                                         {isInWatchlist ? <Star className="h-3 w-3 fill-sunset-orange text-sunset-orange" aria-label="In a watchlist" /> : null}
                                       </span>
-                                      {item.source === "persisted" ? (
-                                        <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-mist/60" title="Already reported" />
+                                      {item.source === "reported" ? (
+                                        <CircleCheck className="absolute right-1.5 top-1.5 h-3 w-3 text-bullish" aria-label="Already reported" />
                                       ) : null}
                                     </button>
                                   );
@@ -1657,19 +1534,45 @@ export default function EarningsPage() {
  * A day column while quotes are in flight: the column's real silhouette
  * (section labels, chips in pairs), so the layout is settled before the
  * data lands and only the content changes.
+ *
+ * Sized to the column, not to a token pair of chips: four small tiles in a
+ * column the height of the window read as "nothing here" rather than
+ * "loading". Each day gets a different count, as a real week would, and the
+ * last rows fade out so the column reads as continuing, not as cut off.
  */
+const SKELETON_CHIPS: ReadonlyArray<readonly [number, number]> = [
+  [6, 4],
+  [4, 8],
+  [8, 6],
+  [6, 6],
+  [4, 8],
+];
+
 function EarningsColumnSkeleton({ dayIndex }: { dayIndex: number }) {
+  const counts = SKELETON_CHIPS[dayIndex % SKELETON_CHIPS.length];
   return (
-    <div className="space-y-3" role="status" aria-label="Loading earnings for this day">
-      {[0, 1].map((sectionIndex) => (
+    <div
+      className="h-full space-y-3 overflow-hidden [mask-image:linear-gradient(to_bottom,black_0,black_70%,transparent_100%)]"
+      role="status"
+      aria-label="Loading earnings for this day"
+    >
+      {counts.map((count, sectionIndex) => (
         <div key={sectionIndex}>
-          <div className="huntr-skeleton mb-1.5 h-3 w-20 rounded-full" />
+          <div className="mb-1.5 flex items-center justify-between px-0.5">
+            <div className="flex items-center gap-1.5">
+              <div className="huntr-skeleton h-3.5 w-3.5 rounded-full" />
+              <div className="huntr-skeleton h-3 w-20 rounded-full" />
+            </div>
+            <div className="huntr-skeleton h-2.5 w-3 rounded-full" />
+          </div>
           <div className="grid grid-cols-2 gap-1.5">
-            {[0, 1].map((chipIndex) => (
+            {Array.from({ length: count }).map((_, chipIndex) => (
               <div key={chipIndex} className="flex h-[76px] flex-col items-center justify-center gap-1.5 rounded-xl bg-snow-peak/[0.02] ring-1 ring-inset ring-wolf-border/30">
                 <div
                   className="huntr-skeleton h-8 w-8 rounded-lg"
-                  style={{ "--shimmer-delay": `${dayIndex * 90 + (sectionIndex * 2 + chipIndex) * 120}ms` } as React.CSSProperties}
+                  // A diagonal wave across the week: down each column, then
+                  // on to the next day.
+                  style={{ "--shimmer-delay": `${dayIndex * 90 + (sectionIndex * 4 + Math.floor(chipIndex / 2)) * 80}ms` } as React.CSSProperties}
                 />
                 <div className="huntr-skeleton h-2.5 w-9 rounded-full" />
               </div>

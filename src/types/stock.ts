@@ -41,6 +41,13 @@ export interface StockQuote {
   day_change_percent?: number;
   next_earnings_date?: string | null;
   earnings_timing?: "Before Open" | "After Close" | "Time TBD";
+  /**
+   * The report that has already happened. Once a company reports, Yahoo moves
+   * its next date to the following quarter, so without this a company drops
+   * off the calendar the day after it reports.
+   */
+  last_earnings_date?: string | null;
+  last_earnings_timing?: "Before Open" | "After Close" | "Time TBD";
   market_cap: number;
   shares_outstanding: number;
   pe_ratio: number;

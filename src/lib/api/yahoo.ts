@@ -708,6 +708,24 @@ export async function getBatchQuotes(
     return "Time TBD";
   };
 
+  /**
+   * After a report, Yahoo moves earningsTimestampStart/End to the next
+   * quarter's (estimated) date but leaves earningsTimestamp on the report
+   * that just happened: on 2 Oct NKE read 1 Oct for earningsTimestamp and
+   * 17 Dec for the other two. That past timestamp is the last report.
+   */
+  const extractLastEarnings = (
+    row: Record<string, unknown>
+  ): { date: string | null; timing: "Before Open" | "After Close" | "Time TBD" } => {
+    const ts = toTimestampMs(row.earningsTimestamp);
+    if (ts == null || ts > Date.now()) return { date: null, timing: "Time TBD" };
+    const hourUtc = new Date(ts).getUTCHours();
+    return {
+      date: new Date(ts).toISOString().split("T")[0],
+      timing: hourUtc <= 14 ? "Before Open" : hourUtc >= 20 ? "After Close" : "Time TBD",
+    };
+  };
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw: any = await yahooFinance.quote(tickers);
@@ -745,6 +763,8 @@ export async function getBatchQuotes(
           day_change_percent: computeIntradayPercentFromQuoteRow(r),
           next_earnings_date: extractNextEarningsDate(r),
           earnings_timing: extractEarningsTiming(r),
+          last_earnings_date: extractLastEarnings(r).date,
+          last_earnings_timing: extractLastEarnings(r).timing,
           market_cap: (r.marketCap as number) ?? 0,
           shares_outstanding: (r.sharesOutstanding as number) ?? 0,
           pe_ratio: (r.trailingPE as number) ?? 0,
