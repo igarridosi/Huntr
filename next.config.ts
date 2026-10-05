@@ -77,6 +77,15 @@ const nextConfig: NextConfig = {
   // keyed on that.
   output: process.env.VERCEL ? undefined : "standalone",
   reactCompiler: true,
+  experimental: {
+    // Off: Turbopack's build cache (on by default since 16.3) served a stale
+    // globals.css. Vercel restores .next/cache between deployments, and the
+    // deployment after PR #56 shipped the new HTML with the previous CSS,
+    // so the hero's veil never lifted and the landing had no background.
+    // Reproduced locally; a build without the cache was correct. The cost is
+    // a slower cold build.
+    turbopackFileSystemCacheForBuild: false,
+  },
   // Transcripts became Tracks — insiders now, transcripts later, same
   // section. Old links keep working.
   async redirects() {
