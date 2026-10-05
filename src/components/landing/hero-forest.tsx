@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useReducedMotion, useScroll, useTransform } from "framer-motion";
@@ -35,6 +35,9 @@ const HERO_SCENES = {
   forest: { src: "/logo/huntr_header.webp", framed: false, position: "object-center" },
 } as const;
 const HERO_SCENE: keyof typeof HERO_SCENES = "gradient";
+
+/** Longest the entrance waits for the scene to decode before it plays anyway. */
+const ENTRANCE_MAX_WAIT_MS = 1500;
 const scene = HERO_SCENES[HERO_SCENE];
 
 /**
@@ -165,6 +168,38 @@ export function HeroForest() {
   const sectionRef = useRef<HTMLElement | null>(null);
   const reduceMotion = useReducedMotion();
 
+  // Start the entrance once the page can give it every frame: React has
+  // hydrated (this effect runs), the scene picture is decoded, and two frames
+  // have gone by so its layers are painted. See the note in globals.css.
+  useEffect(() => {
+    const root = document.documentElement;
+    if (root.hasAttribute("data-hero-ready")) return;
+    let cancelled = false;
+
+    const img = sectionRef.current?.querySelector<HTMLImageElement>("[data-hero-scene] img");
+    const decoded = img
+      ? img.complete
+        ? img.decode().catch(() => undefined)
+        : new Promise<void>((resolve) => {
+            img.addEventListener("load", () => resolve(), { once: true });
+            img.addEventListener("error", () => resolve(), { once: true });
+          }).then(() => img.decode().catch(() => undefined))
+      : Promise.resolve();
+    const timeout = new Promise<void>((resolve) => window.setTimeout(resolve, ENTRANCE_MAX_WAIT_MS));
+
+    void Promise.race([decoded, timeout]).then(() => {
+      requestAnimationFrame(() =>
+        requestAnimationFrame(() => {
+          if (!cancelled) root.setAttribute("data-hero-ready", "");
+        })
+      );
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Measured across the tall outer container: progress reaches 1 at exactly the
   // point the sticky scene unpins, so the sequence finishes as the hero leaves.
   const { scrollYProgress } = useScroll({
@@ -229,7 +264,9 @@ export function HeroForest() {
             className="absolute inset-0 flex items-center justify-center"
             style={{ scale: sceneScale, y: sceneY }}
           >
-            <div className={`relative h-full w-full ${scene.framed ? FRAMED : ""}`}>
+            {/* Settles on arrival from slightly close, under the copy's
+                entrance (transform only: see the note in globals.css). */}
+            <div data-hero-scene className={`hero-scene-enter relative h-full w-full ${scene.framed ? FRAMED : ""}`}>
               <Image
                 src={scene.src}
                 alt=""
@@ -245,6 +282,11 @@ export function HeroForest() {
           {/* Fine grain over the scene: it keeps a soft gradient from banding
               and from looking flat, and the backdrop below shares it. */}
           <div className="huntr-grain pointer-events-none absolute inset-0 opacity-70 mix-blend-soft-light" />
+
+          {/* The arrival: the scene starts dark and the light comes up as
+              this lifts. A layer fading out, not a filter on the picture,
+              so it stays smooth while the page hydrates. */}
+          <div aria-hidden className="hero-veil pointer-events-none absolute inset-0 bg-wolf-black" />
 
           {/* Contrast scrim — keeps the copy readable over the misty clearing */}
           <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(11,20,22,0.72)_0%,rgba(11,20,22,0.45)_38%,rgba(11,20,22,0.25)_65%)]" />
@@ -285,16 +327,20 @@ export function HeroForest() {
             from zero would keep it out of the LCP until the fade began — and
             the copy under it carries the fade. */}
         <div className="flex w-full max-w-2xl flex-col items-center text-center">
-          <h1 className="hero-headline-enter text-4xl font-bold leading-[1.06] tracking-tight text-snow-peak drop-shadow-[0_2px_24px_rgba(11,20,22,0.85)] sm:text-6xl lg:text-7xl">
-            Stop Searching
+          <h1 className="text-4xl font-bold leading-[1.06] tracking-tight text-snow-peak drop-shadow-[0_2px_24px_rgba(11,20,22,0.85)] sm:text-6xl lg:text-7xl">
+            <span className="hero-headline-enter" style={{ "--d": "150ms" } as CSSProperties}>
+              Stop Searching
+            </span>
             <br />
-            Start{" "}
-            <span className="bg-gradient-to-r from-sunset-orange to-golden-hour bg-clip-text text-transparent">
-              Hunting
+            <span className="hero-headline-enter" style={{ "--d": "300ms" } as CSSProperties}>
+              Start{" "}
+              <span className="bg-gradient-to-r from-sunset-orange to-golden-hour bg-clip-text text-transparent">
+                Hunting
+              </span>
             </span>
           </h1>
 
-          <p className="hero-copy-enter mt-5 max-w-xl text-base leading-relaxed text-mist drop-shadow-[0_1px_12px_rgba(11,20,22,0.9)]">
+          <p style={{ "--d": "500ms" } as CSSProperties} className="hero-rise mt-5 max-w-xl text-base leading-relaxed text-mist drop-shadow-[0_1px_12px_rgba(11,20,22,0.9)]">
             <b className="text-lg font-extrabold tracking-tight text-snow-peak">HUNTR</b>{" "}
             simplifies fundamental analysis for the modern value investor.
           </p>
@@ -302,7 +348,8 @@ export function HeroForest() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="hero-copy-enter mt-8 flex w-full max-w-xl cursor-pointer items-center gap-2 rounded-xl border border-wolf-border/60 bg-wolf-black/55 p-2 shadow-xl shadow-wolf-black/40 backdrop-blur-md transition-colors hover:border-sunset-orange/50"
+            style={{ "--d": "620ms" } as CSSProperties}
+            className="hero-rise mt-8 flex w-full max-w-xl cursor-pointer items-center gap-2 rounded-xl border border-wolf-border/60 bg-wolf-black/55 p-2 shadow-xl shadow-wolf-black/40 backdrop-blur-md transition-colors hover:border-sunset-orange/50"
           >
             <div className="flex flex-1 items-center gap-2 px-2">
               <Search className="h-4 w-4 text-mist" />
@@ -314,15 +361,16 @@ export function HeroForest() {
             </span>
           </button>
 
-          <div className="hero-copy-enter mt-7 flex flex-wrap items-center justify-center gap-2">
+          <div className="mt-7 flex flex-wrap items-center justify-center gap-2">
             {[
               { icon: BarChart3, label: "Yahoo Finance" },
               { icon: Radio, label: "Real-time Data" },
               { icon: FileText, label: "SEC Filings" },
-            ].map(({ icon: Icon, label }) => (
+            ].map(({ icon: Icon, label }, index) => (
               <div
                 key={label}
-                className="inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-wolf-black/40 px-2.5 py-1.5 backdrop-blur-sm"
+                style={{ "--d": `${740 + index * 70}ms` } as CSSProperties}
+                className="hero-rise inline-flex items-center gap-1.5 rounded-md border border-white/10 bg-wolf-black/40 px-2.5 py-1.5 backdrop-blur-sm"
               >
                 <Icon className="h-3.5 w-3.5 text-sunset-orange/70" />
                 <span className="font-mono text-[10px] text-snow-peak/75">{label}</span>
@@ -330,15 +378,20 @@ export function HeroForest() {
             ))}
           </div>
 
-          <div className="hero-copy-enter mt-5 flex justify-center">
+          <div style={{ "--d": "940ms" } as CSSProperties} className="hero-rise mt-5 flex justify-center">
             <TeaserDialog />
           </div>
 
           {/* Mobile only — desktop gets this in the nav next to "Start Free"
               instead, where the trust badges have less room to spare. */}
-          <div className="hero-copy-enter mt-3 flex justify-center sm:hidden">
+          <div style={{ "--d": "1000ms" } as CSSProperties} className="hero-rise mt-3 flex justify-center sm:hidden">
             <KoFiSupport text="Support Huntr on Ko-fi" />
           </div>
+
+            {/* Without JS nothing sets data-hero-ready: play the entrance anyway. */}
+            <noscript>
+              <style>{`.hero-scene-enter,.hero-veil,.hero-headline-enter,.hero-rise,.hero-drop,.hero-slide-in{animation-play-state:running!important}`}</style>
+            </noscript>
 
             <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} redirectTo={ROUTES.SIGNUP} />
           </div>
@@ -352,10 +405,12 @@ export function HeroForest() {
           style={{ opacity: copyOpacity, visibility: tapeVisibility }}
         >
           {/* Paused on hover so a moving chip is still a clickable target. */}
+          <div style={{ "--d": "1050ms" } as CSSProperties} className="hero-rise">
           <div className="flex w-max animate-huntr-marquee group-hover:[animation-play-state:paused] motion-reduce:animate-none">
             {[...snippets, ...snippets].map((item, i) => (
               <TickerChip key={`${item.ticker}-${i}`} item={item} />
             ))}
+          </div>
           </div>
         </motion.div>
       </div>
