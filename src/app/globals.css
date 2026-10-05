@@ -19,6 +19,10 @@
   /* Accents */
   --color-sunset-orange: #FF8C42;
   --color-golden-hour:   #FFBF69;
+  /* Secondary accents: the teal of the wolf's backdrop and the rose of a
+     late sunset, for the few places that need more than two hues. */
+  --color-glacier:       #5CCFD6;
+  --color-dusk-rose:     #F08BA7;
 
   /* Text */
   --color-snow-peak: #F2F4F3;
@@ -125,6 +129,8 @@
   /* Accents — darkened for WCAG AA contrast on white */
   --color-sunset-orange: #C85D14;  /* 4.8:1 on white ✓ AA               */
   --color-golden-hour:   #966200;  /* 5.1:1 on white ✓ AA               */
+  --color-glacier:       #0B7480;  /* 5.3:1 on white ✓ AA               */
+  --color-dusk-rose:     #B2365E;  /* 5.6:1 on white ✓ AA               */
 
   /* Text */
   --color-snow-peak: #0C1A1E;  /* 17:1 on white ✓ AAA  (branded dark) */

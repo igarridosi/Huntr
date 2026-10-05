@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState, memo } from "react";
+import { useMemo, useState } from "react";
 import {
   Lightbulb,
   ChevronLeft,
@@ -28,13 +28,15 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ErrorState } from "@/components/ui/error-state";
-import { Spinner } from "@/components/ui/spinner";
+import {
+  OpportunityRadar,
+  type BreakoutMode,
+  type PerformanceWindow,
+} from "@/components/insights/opportunity-radar";
 import { cn, formatCompactNumber, formatCurrency, formatPercent } from "@/lib/utils";
 import type { StockProfile, StockQuote } from "@/types/stock";
 
 type InsightTab = "sp500" | "trending" | "growth" | "dividend";
-type PerformanceWindow = "1D" | "1W" | "1M" | "YTD";
-type BreakoutMode = "near" | "break";
 
 /**
  * Yahoo's `fiftyTwoWeekHigh` is the intraday high over the trailing 52 weeks,
@@ -45,6 +47,15 @@ type BreakoutMode = "near" | "break";
  * single stock. Touching the high IS the breakout, so both modes are bands
  * measured below it, and they do not overlap.
  */
+/** Each Radar signal keeps its top twelve, shown four at a time. */
+const RADAR_DEPTH = 12;
+
+/** Value + Growth bands; see where the list is built. */
+const GARP_MIN_PE = 5;
+const GARP_MAX_PE = 25;
+const GARP_MIN_GROWTH = 0.05;
+const GARP_MAX_GROWTH = 0.35;
+
 const BREAKOUT_BAND = 0.01; // within 1% of the high — testing/breaking it
 const APPROACH_BAND = 0.03; // 1–3% below — approaching it
 
@@ -60,8 +71,6 @@ type InsightRow = {
   profile: StockProfile | undefined;
   dayChangePercent: number;
 };
-
-const performanceWindows: PerformanceWindow[] = ["1D", "1W", "1M", "YTD"];
 
 function getContextMetric(row: InsightRow, activeTab: InsightTab): { label: string; value: string } {
   if (activeTab === "dividend") {
@@ -177,22 +186,39 @@ export default function InsightsPage() {
   }, [insightRows, currentPage]);
 
   const premiumSignals = useMemo(() => {
+    // Every company in the universe (all of them above $10B). It used to be
+    // the largest 120 only, which cut the line near $120B: NKE (#291) and
+    // LULU (#780) could never show up among the YTD losers however far they
+    // fell. Period returns now come in batches, so ranking all of them is
+    // cheap.
     const universe = quotes
       .filter((quote) => quote.market_cap > 10_000_000_000)
-      .sort((a, b) => b.market_cap - a.market_cap)
-      .slice(0, 120)
       .map((quote) => ({
         quote,
         profile: profileMap[quote.ticker],
         dayChangePercent: quote.day_change_percent ?? 0,
       }));
 
-    const incomeLeaders = universe
-      .filter((item) => item.quote.dividend_yield > 0)
-      .sort((a, b) => b.quote.dividend_yield - a.quote.dividend_yield)
-      .slice(0, 4);
+    // Growth at a reasonable price: forward P/E over expected EPS growth
+    // (the PEG ratio), lowest first. Growth is next fiscal year's consensus
+    // EPS against trailing EPS; revenue growth is not in the batch quotes.
+    // The bands keep that comparison honest. Trailing EPS is GAAP and the
+    // consensus is adjusted, so after a year of one-off charges the "growth"
+    // reads 50%+ for nothing (insurers and banks topped the list that way);
+    // 35% is the ceiling. Below a 5x forward P/E the estimate is usually
+    // stale or in another currency.
+    const valueGrowth = universe
+      .flatMap((item) => {
+        const { forward_pe: fpe, eps_ttm: ttm, eps_forward: fwd, pe_ratio: pe } = item.quote;
+        if (!fpe || !ttm || !fwd || fpe < GARP_MIN_PE || fpe > GARP_MAX_PE || pe <= 0 || ttm <= 0 || fwd <= 0) return [];
+        const growth = fwd / ttm - 1;
+        if (growth < GARP_MIN_GROWTH || growth > GARP_MAX_GROWTH) return [];
+        return [{ ...item, peg: fpe / (growth * 100), epsGrowth: growth }];
+      })
+      .sort((a, b) => a.peg - b.peg)
+      .slice(0, RADAR_DEPTH);
 
-    return { universe, incomeLeaders };
+    return { universe, valueGrowth };
   }, [quotes, profileMap]);
 
   const performanceTickers = useMemo(
@@ -202,7 +228,7 @@ export default function InsightsPage() {
 
   const { data: buybackStrength = {}, isFetching: isBuybackFetching } =
     useBatchBuybackStrength(
-      performanceTickers.slice(0, 80),
+      performanceTickers,
       premiumSignals.universe.length > 0
     );
 
@@ -212,7 +238,8 @@ export default function InsightsPage() {
   } = useBatchPeriodPerformance(
     performanceTickers,
     performanceWindow,
-    premiumSignals.universe.length > 0
+    // 1D comes with the quotes already; asking again would re-fetch all of them.
+    performanceWindow !== "1D" && premiumSignals.universe.length > 0
   );
 
   const isPerformanceLoading =
@@ -221,29 +248,31 @@ export default function InsightsPage() {
       Object.keys(periodPerformance).length < Math.min(performanceTickers.length, 8));
 
   const rankedSignals = useMemo(() => {
-    const rows = premiumSignals.universe.map((item) => {
+    // A stock with no figure for the window is left out rather than ranked
+    // on its daily move: mixing the two put 1D changes into a YTD list.
+    const rows = premiumSignals.universe.flatMap((item) => {
       const perf =
         performanceWindow === "1D"
           ? item.dayChangePercent
-          : (periodPerformance[item.quote.ticker] ?? item.dayChangePercent);
-
-      return {
-        ...item,
-        periodChangePercent: perf,
-      };
+          : periodPerformance[item.quote.ticker];
+      return typeof perf === "number" && Number.isFinite(perf)
+        ? [{ ...item, periodChangePercent: perf }]
+        : [];
     });
 
     const topGainers = rows
       .slice()
       .sort((a, b) => b.periodChangePercent - a.periodChangePercent)
-      .slice(0, 4);
+      .slice(0, RADAR_DEPTH);
 
     const topLosers = rows
       .slice()
       .sort((a, b) => a.periodChangePercent - b.periodChangePercent)
-      .slice(0, 4);
+      .slice(0, RADAR_DEPTH);
 
-    const unusualVolumeRanked = rows
+    // Volume is today's, whatever the momentum window: ranked on the whole
+    // universe, so it does not wait for (or depend on) period returns.
+    const unusualVolumeRanked = premiumSignals.universe
       .filter((item) => item.quote.avg_volume > 0 && (item.quote.current_volume ?? 0) > 0)
       .map((item) => {
         const dayVolume = Math.max(item.quote.current_volume ?? 0, 1);
@@ -254,18 +283,20 @@ export default function InsightsPage() {
           volumeRatio: ratio,
         };
       })
-      .filter((item) => item.volumeRatio >= 2 && item.volumeRatio <= 5)
+      // Up to 20x: the old 5x ceiling hid the real events (FICO traded 6.5x
+      // on its drop); beyond 20x it is almost always a bad volume print.
+      .filter((item) => item.volumeRatio >= 2 && item.volumeRatio <= 20)
       .sort((a, b) => b.volumeRatio - a.volumeRatio)
-      .slice(0, 4);
+      .slice(0, RADAR_DEPTH);
 
-    const buybackLeaders = rows
+    const buybackLeaders = premiumSignals.universe
       .map((item) => ({
         ...item,
         buybackPct: buybackStrength[item.quote.ticker] ?? 0,
       }))
       .filter((item) => item.buybackPct > 0)
       .sort((a, b) => b.buybackPct - a.buybackPct)
-      .slice(0, 4);
+      .slice(0, RADAR_DEPTH);
 
     const breaking52WeekHigh = rows
       .map((item) => {
@@ -288,7 +319,7 @@ export default function InsightsPage() {
           item.periodChangePercent > 0
       )
       .sort((a, b) => b.breakoutPct - a.breakoutPct)
-      .slice(0, 4);
+      .slice(0, RADAR_DEPTH);
 
     return {
       topGainers,
@@ -671,254 +702,18 @@ export default function InsightsPage() {
         </DialogContent>
       </Dialog>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-sm font-semibold text-snow-peak">Opportunity Radar</h2>
-              <p className="text-xs text-mist mt-0.5">Premium signals for faster stock discovery</p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="mb-4 mt-2 grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="rounded-xl bg-snow-peak/[0.02] p-3 ring-1 ring-inset ring-wolf-border/40 lg:col-span-2">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-[10px] uppercase tracking-[0.08em] text-mist/60">
-                  <CompactLabel text="Price Momentum Window (Top Gainers / Top Losers)" />
-                </p>
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-0.5 rounded-lg bg-wolf-black/40 p-0.5 ring-1 ring-inset ring-wolf-border/40">
-                    {performanceWindows.map((window) => (
-                      <button
-                        key={window}
-                        type="button"
-                        onClick={() => setPerformanceWindow(window)}
-                        aria-pressed={performanceWindow === window}
-                        className={cn(
-                          "min-h-8 cursor-pointer rounded-md px-2.5 font-mono text-[10px] tracking-[0.02em]",
-                          "transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.94]",
-                          "motion-reduce:transition-none motion-reduce:active:scale-100 sm:min-h-7 sm:px-2",
-                          performanceWindow === window
-                            ? "bg-sunset-orange/12 text-sunset-orange"
-                            : "text-mist hover:text-snow-peak"
-                        )}
-                      >
-                        {window}
-                      </button>
-                    ))}
-                  </div>
-                  {(isPerformanceLoading || isBuybackFetching) && (
-                    <div className="inline-flex items-center gap-1 text-[10px] text-mist">
-                      <Spinner size="xs" color="mist" /> updating
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <SignalColumn
-              title="Top Gainers"
-              rows={rankedSignals.topGainers}
-              metric={performanceWindow}
-              metricValue={(r) => formatPercent(r.periodChangePercent ?? 0, 2)}
-              metricColorClass="text-emerald-400"
-              loading={isPerformanceLoading}
-            />
-            <SignalColumn
-              title="Top Losers"
-              rows={rankedSignals.topLosers}
-              metric={performanceWindow}
-              metricValue={(r) => formatPercent(r.periodChangePercent ?? 0, 2)}
-              negativeMetric
-              loading={isPerformanceLoading}
-            />
-            <SignalColumn
-              title="Unusual Volume"
-              rows={rankedSignals.unusualVolume}
-              metric="Vol"
-              metricValue={(r) => `${((r as InsightRow & { volumeRatio?: number }).volumeRatio ?? 0).toFixed(1)}x`}
-              infoText="Shows stocks trading between 2x and 5x their average daily volume baseline."
-            />
-            <SignalColumn
-              title="Buyback Leaders"
-              rows={rankedSignals.buybackLeaders}
-              metric="Buyback"
-              metricValue={(r) => formatPercent((r as InsightRow & { buybackPct?: number }).buybackPct ?? 0, 2)}
-              subtitle="TTM"
-              loading={isBuybackFetching}
-            />
-            <SignalColumn
-              title="Breaking 52-Week High"
-              rows={rankedSignals.breaking52WeekHigh}
-              metric={breakoutMode === "near" ? "Away" : "At high"}
-              metricValue={(r) => {
-                const raw = (r as InsightRow & { breakoutPct?: number }).breakoutPct ?? 0;
-                // Both bands sit below the high, so the distance is always
-                // shown as a magnitude — a negative number under a "breaking
-                // out" heading reads as a contradiction.
-                return formatPercent(Math.abs(raw), 2);
-              }}
-              headerActions={
-                <div className="flex items-center gap-0.5 rounded-lg bg-wolf-black/40 p-0.5 ring-1 ring-inset ring-wolf-border/40">
-                  {(["near", "break"] as const).map((mode) => (
-                    <button
-                      key={mode}
-                      type="button"
-                      onClick={() => setBreakoutMode(mode)}
-                      aria-pressed={breakoutMode === mode}
-                      className={cn(
-                        "min-h-8 cursor-pointer rounded-md px-2.5 font-mono text-[10px] capitalize tracking-[0.02em] sm:min-h-7 sm:px-2",
-                        "transition-[color,background-color,transform] duration-150 ease-out active:scale-[0.94]",
-                        "motion-reduce:transition-none motion-reduce:active:scale-100",
-                        breakoutMode === mode
-                          ? "bg-sunset-orange/12 text-sunset-orange"
-                          : "text-mist hover:text-snow-peak"
-                      )}
-                    >
-                      {mode}
-                    </button>
-                  ))}
-                </div>
-              }
-              infoText="Distance to the 52-week high, as (Price / 52W High) - 1. Break lists stocks within 1% of the high — the ones testing it now. Near lists those 1–3% below, still approaching. The 52-week high already includes today's trading, so a price above it is not something this data can show."
-            />
-            <SignalColumn
-              title="Income Leaders"
-              rows={premiumSignals.incomeLeaders}
-              metric="Yield"
-              metricValue={(r) => formatPercent(r.quote.dividend_yield, 2)}
-            />
-          </div>
-        </CardContent>
-      </Card>
+      <OpportunityRadar
+        signals={{ ...rankedSignals, valueGrowth: premiumSignals.valueGrowth }}
+        performanceWindow={performanceWindow}
+        onPerformanceWindowChange={setPerformanceWindow}
+        breakoutMode={breakoutMode}
+        onBreakoutModeChange={setBreakoutMode}
+        performanceLoading={isPerformanceLoading}
+        buybackLoading={isBuybackFetching}
+      />
     </div>
   );
 }
-
-const SignalColumn = memo(function SignalColumn({
-  title,
-  rows,
-  metric,
-  metricValue,
-  negativeMetric = false,
-  metricColorClass,
-  loading = false,
-  headerActions,
-  infoText,
-  subtitle,
-}: {
-  title: string;
-  rows: Array<InsightRow & { periodChangePercent?: number }>;
-  metric: string;
-  metricValue: (row: InsightRow & { periodChangePercent?: number }) => string;
-  negativeMetric?: boolean;
-  metricColorClass?: string;
-  loading?: boolean;
-  headerActions?: React.ReactNode;
-  infoText?: string;
-  subtitle?: string;
-}) {
-  return (
-    <div className="rounded-xl bg-snow-peak/[0.02] p-3 ring-1 ring-inset ring-wolf-border/40">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <div className="min-w-0">
-            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.09em] text-mist/70">{title}</p>
-            {subtitle ? <p className="mt-0.5 text-[10px] text-mist/50">{subtitle}</p> : null}
-          </div>
-          {infoText && (
-            <span className="group relative inline-flex shrink-0">
-              {/* Focusable, so the explanation is reachable by tap and by
-                  keyboard — hover alone left it invisible on touch. */}
-              <button
-                type="button"
-                aria-label={`About ${title}`}
-                // Padding grows the hit area to ~34px while the negative margin
-                // keeps the header row the same height it was.
-                className="-m-2.5 inline-flex cursor-help items-center justify-center rounded p-2.5 text-mist/60 transition-colors hover:text-snow-peak focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-sunset-orange sm:-m-1 sm:p-1"
-              >
-                <CircleHelp className="h-3.5 w-3.5" />
-              </button>
-              <span
-                role="tooltip"
-                className="pointer-events-none absolute right-0 top-7 z-20 w-64 rounded-lg bg-wolf-black/95 p-2.5 text-[10px] leading-relaxed text-mist opacity-0 shadow-xl ring-1 ring-inset ring-wolf-border/60 transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100 sm:top-5"
-              >
-                {infoText}
-              </span>
-            </span>
-          )}
-        </div>
-        {headerActions}
-      </div>
-      <div className="mt-3 space-y-2">
-        {loading ? (
-          Array.from({ length: 4 }).map((_, index) => (
-            <div
-              key={`${title}-loading-${index}`}
-              className="flex items-center gap-2 rounded-md px-2 py-1.5 animate-pulse"
-            >
-              <Skeleton className="h-5 w-5 rounded-[4px]" />
-              <div className="min-w-0 flex-1 space-y-1">
-                <Skeleton className="h-3 w-16" />
-                <Skeleton className="h-2.5 w-24" />
-              </div>
-              <Skeleton className="h-3 w-14" />
-            </div>
-          ))
-        ) : rows.length > 0 ? (
-          rows.map((row, index) => (
-            <Link
-              key={`${title}-${row.quote.ticker}`}
-              href={ROUTES.SYMBOL(row.quote.ticker)}
-              // Four rows at most here, so a slightly wider step still lands
-              // well inside the same budget as the main grid.
-              style={{ "--enter-delay": `${index * 40}ms` } as React.CSSProperties}
-              className={cn(
-                "insight-enter",
-                "flex items-center gap-2.5 rounded-lg px-2 py-2",
-                "transition-[background-color,transform] duration-150 ease-out",
-                "hover:bg-snow-peak/[0.05] active:scale-[0.985] active:bg-snow-peak/[0.07]",
-                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
-                "motion-reduce:transition-none motion-reduce:active:scale-100"
-              )}
-            >
-              <TickerLogo
-                ticker={row.quote.ticker}
-                src={row.profile?.logo_url}
-                className="h-6 w-6"
-                imageClassName="rounded-[5px]"
-                fallbackClassName="rounded-[5px] text-[9px]"
-              />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-[12px] font-semibold leading-tight tracking-[-0.01em] text-snow-peak">{row.quote.ticker}</p>
-                <p className="truncate text-[10px] leading-tight text-mist/70">
-                  <CompactLabel text={row.profile?.name ?? row.quote.ticker} />
-                </p>
-              </div>
-              <span className="shrink-0 text-right leading-tight">
-                <span className="block text-[9px] uppercase tracking-[0.08em] text-mist/45">{metric}</span>
-                <span
-                  className={cn(
-                    "block font-mono text-[12px] font-semibold tabular-nums",
-                    metricColorClass ?? (negativeMetric ? "text-bearish" : "text-sunset-orange")
-                  )}
-                >
-                  {metricValue(row)}
-                </span>
-              </span>
-            </Link>
-          ))
-        ) : (
-          <p className="text-xs text-mist/70">No signals available right now.</p>
-        )}
-      </div>
-    </div>
-  );
-});
-SignalColumn.displayName = "SignalColumn";
 
 function InsightsSkeleton() {
   return (
