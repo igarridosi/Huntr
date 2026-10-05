@@ -156,13 +156,17 @@ export async function renderChartPng(frame: HTMLElement, spec: ChartSpec, option
     clone.appendChild(layer);
   }
   const faces = await inlinedFontFaces([primaryFamily(headingFont), primaryFamily(monoFont)]);
+  // The families come back double-quoted ("Outfit", …) and land inside
+  // double-quoted attributes, which would end the attribute early and leave
+  // the SVG unparseable. Single quotes mean the same thing in CSS.
+  const attrSafe = (list: string) => list.replace(/"/g, "'");
   const styleEl = document.createElementNS("http://www.w3.org/2000/svg", "style");
   styleEl.textContent = faces;
   clone.insertBefore(styleEl, clone.firstChild);
   const markup = new XMLSerializer()
     .serializeToString(clone)
-    .replace(/var\(--font-mono\)/g, monoFont)
-    .replace(/var\(--font-heading\)/g, headingFont);
+    .replace(/var\(--font-mono\)/g, attrSafe(monoFont))
+    .replace(/var\(--font-heading\)/g, attrSafe(headingFont));
   const img = await svgToImage(markup);
 
   // --- Compose -------------------------------------------------------------
