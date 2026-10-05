@@ -708,6 +708,24 @@ export async function getBatchQuotes(
     return "Time TBD";
   };
 
+  /**
+   * After a report, Yahoo moves earningsTimestampStart/End to the next
+   * quarter's (estimated) date but leaves earningsTimestamp on the report
+   * that just happened: on 2 Oct NKE read 1 Oct for earningsTimestamp and
+   * 17 Dec for the other two. That past timestamp is the last report.
+   */
+  const extractLastEarnings = (
+    row: Record<string, unknown>
+  ): { date: string | null; timing: "Before Open" | "After Close" | "Time TBD" } => {
+    const ts = toTimestampMs(row.earningsTimestamp);
+    if (ts == null || ts > Date.now()) return { date: null, timing: "Time TBD" };
+    const hourUtc = new Date(ts).getUTCHours();
+    return {
+      date: new Date(ts).toISOString().split("T")[0],
+      timing: hourUtc <= 14 ? "Before Open" : hourUtc >= 20 ? "After Close" : "Time TBD",
+    };
+  };
+
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const raw: any = await yahooFinance.quote(tickers);
@@ -745,6 +763,8 @@ export async function getBatchQuotes(
           day_change_percent: computeIntradayPercentFromQuoteRow(r),
           next_earnings_date: extractNextEarningsDate(r),
           earnings_timing: extractEarningsTiming(r),
+          last_earnings_date: extractLastEarnings(r).date,
+          last_earnings_timing: extractLastEarnings(r).timing,
           market_cap: (r.marketCap as number) ?? 0,
           shares_outstanding: (r.sharesOutstanding as number) ?? 0,
           pe_ratio: (r.trailingPE as number) ?? 0,
@@ -1424,6 +1444,81 @@ async function getTickerWindowPerformance(
   return pct;
 }
 
+/**
+ * Yahoo's spark endpoint returns daily closes for up to 20 symbols per call.
+ * One ticker per chart call cost ~40 s for the whole universe; this answers
+ * it in a few seconds, which is what lets the Opportunity Radar rank every
+ * stock instead of only the largest 120.
+ *
+ * The figure is the same one getTickerWindowPerformance computes: from the
+ * first close on or after the window's start date to the latest close. The
+ * range only has to be wide enough to contain that start.
+ */
+const SPARK_RANGE: Partial<Record<PerformanceWindow, string>> = {
+  "1W": "1mo",
+  "1M": "3mo",
+  YTD: "ytd",
+  "1Y": "2y",
+};
+const SPARK_BATCH = 20;
+const SPARK_CONCURRENCY = 4;
+const sparkMemo = new Map<string, { pct: number; at: number }>();
+
+async function getSparkPeriodPerformance(
+  symbols: string[],
+  window: PerformanceWindow
+): Promise<Record<string, number>> {
+  const range = SPARK_RANGE[window];
+  if (!range) return {};
+
+  const result: Record<string, number> = {};
+  const now = Date.now();
+  const pending: string[] = [];
+  for (const symbol of symbols) {
+    const hit = sparkMemo.get(`${window}:${symbol}`);
+    if (hit && now - hit.at < TTL.PERFORMANCE) result[symbol] = hit.pct;
+    else pending.push(symbol);
+  }
+
+  const startDate = getWindowStartDate(window);
+  const batches: string[][] = [];
+  for (let i = 0; i < pending.length; i += SPARK_BATCH) batches.push(pending.slice(i, i + SPARK_BATCH));
+
+  const fetchBatch = async (batch: string[]) => {
+    try {
+      const url = `https://query1.finance.yahoo.com/v8/finance/spark?symbols=${batch
+        .map(encodeURIComponent)
+        .join(",")}&range=${range}&interval=1d`;
+      const res = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0" }, cache: "no-store" });
+      if (!res.ok) return;
+      const body = (await res.json()) as Record<string, { timestamp?: number[]; close?: Array<number | null> }>;
+      for (const symbol of batch) {
+        const series = body?.[symbol];
+        const stamps = series?.timestamp ?? [];
+        const closes = series?.close ?? [];
+        const points = stamps
+          .map((t, i) => ({ t: t * 1000, c: closes[i] }))
+          .filter((p): p is { t: number; c: number } => typeof p.c === "number" && Number.isFinite(p.c) && p.c > 0);
+        // Bars are stamped at the US open, so the UTC date is the trading day.
+        const inWindow = points.filter((p) => new Date(p.t).toISOString().slice(0, 10) >= startDate);
+        if (inWindow.length < 2) continue;
+        const start = inWindow[0].c;
+        const end = inWindow[inWindow.length - 1].c;
+        const pct = (end - start) / start;
+        result[symbol] = pct;
+        sparkMemo.set(`${window}:${symbol}`, { pct, at: now });
+      }
+    } catch (error) {
+      console.error(`[Yahoo] Spark ${window} failed for ${batch.length} symbols:`, error);
+    }
+  };
+
+  for (let i = 0; i < batches.length; i += SPARK_CONCURRENCY) {
+    await Promise.all(batches.slice(i, i + SPARK_CONCURRENCY).map(fetchBatch));
+  }
+  return result;
+}
+
 export async function getBatchPeriodPerformance(
   tickers: string[],
   window: PerformanceWindow
@@ -1452,11 +1547,14 @@ export async function getBatchPeriodPerformance(
     }
   }
 
-  const CHUNK_SIZE = 8;
-  const result: Record<string, number> = {};
+  const result: Record<string, number> = await getSparkPeriodPerformance(symbols, window);
 
-  for (let i = 0; i < symbols.length; i += CHUNK_SIZE) {
-    const chunk = symbols.slice(i, i + CHUNK_SIZE);
+  // Whatever the batch endpoint could not answer goes one ticker at a time.
+  const missing = symbols.filter((symbol) => !(symbol in result));
+  const CHUNK_SIZE = 8;
+
+  for (let i = 0; i < missing.length; i += CHUNK_SIZE) {
+    const chunk = missing.slice(i, i + CHUNK_SIZE);
     const values = await Promise.all(
       chunk.map(async (symbol) => [symbol, await getTickerWindowPerformance(symbol, window)] as const)
     );
@@ -1628,9 +1726,12 @@ export async function getBatchIntradayTrend(
   return result;
 }
 
+const MAX_PLAUSIBLE_BUYBACK = 0.2;
+
 async function getTickerBuybackStrength(ticker: string): Promise<number> {
   const key = ticker.toUpperCase();
-  const cacheKey = `${key}-buyback-strength`;
+  // v2: the rule below changed, so values cached under the old one are ignored.
+  const cacheKey = `${key}-buyback-strength-v2`;
 
   const cached = await getCachedData<{ pct: number }>(
     cacheKey,
@@ -1667,7 +1768,10 @@ async function getTickerBuybackStrength(ticker: string): Promise<number> {
       .filter((row) => Number.isFinite(row.date) && row.shares > 0)
       .sort((a, b) => a.date - b.date);
 
-    if (normalized.length >= 2) {
+    // Three fiscal years at least: in the year of an IPO or a share-class
+    // conversion the weighted average share count swings for reasons that
+    // have nothing to do with buybacks (FIG and CRCL read as 30% "buybacks").
+    if (normalized.length >= 3) {
       const previous = normalized[normalized.length - 2].shares;
       const current = normalized[normalized.length - 1].shares;
 
@@ -1675,6 +1779,10 @@ async function getTickerBuybackStrength(ticker: string): Promise<number> {
         pct = (previous - current) / previous;
       }
     }
+
+    // No company retires a fifth of its shares in a year through buybacks;
+    // a drop that size is a data error or a restructuring (TRV read 99%).
+    if (pct > MAX_PLAUSIBLE_BUYBACK) pct = 0;
   } catch (error) {
     console.error(`[Yahoo] Buyback strength failed for ${key}:`, error);
     pct = 0;
@@ -1907,7 +2015,9 @@ export async function getBatchBuybackStrength(
   );
   if (symbols.length === 0) return {};
 
-  const CHUNK_SIZE = 6;
+  // Twelve in flight: the Radar now asks for the whole universe, and six at a
+  // time made a cold load take over a minute.
+  const CHUNK_SIZE = 12;
   const result: Record<string, number> = {};
 
   for (let i = 0; i < symbols.length; i += CHUNK_SIZE) {

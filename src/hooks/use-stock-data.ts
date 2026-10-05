@@ -135,6 +135,25 @@ export function useMarketIndices() {
   });
 }
 
+/**
+ * The server actions refuse more than 500 tickers per call (an abuse guard),
+ * and the Opportunity Radar ranks the whole universe, which is larger. Split
+ * the request and merge the answers; the calls run side by side.
+ */
+const ACTION_BATCH_LIMIT = 400;
+async function inChunks<T>(
+  tickers: string[],
+  call: (chunk: string[]) => Promise<Record<string, T>>
+): Promise<Record<string, T>> {
+  if (tickers.length <= ACTION_BATCH_LIMIT) return call(tickers);
+  const chunks: string[][] = [];
+  for (let i = 0; i < tickers.length; i += ACTION_BATCH_LIMIT) {
+    chunks.push(tickers.slice(i, i + ACTION_BATCH_LIMIT));
+  }
+  const parts = await Promise.all(chunks.map(call));
+  return Object.assign({}, ...parts);
+}
+
 export function useBatchPeriodPerformance(
   tickers: string[],
   window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL",
@@ -147,7 +166,7 @@ export function useBatchPeriodPerformance(
 
   return useQuery<Record<string, number>>({
     queryKey: QUERY_KEYS.STOCK_PERFORMANCE(window, tickersKey),
-    queryFn: () => fetchBatchPeriodPerformance(normalized, window),
+    queryFn: () => inChunks(normalized, (chunk) => fetchBatchPeriodPerformance(chunk, window)),
     staleTime: STALE_TIMES.QUOTE,
     enabled: enabled && normalized.length > 0,
   });
@@ -199,7 +218,7 @@ export function useBatchBuybackStrength(
 
   return useQuery<Record<string, number>>({
     queryKey: QUERY_KEYS.STOCK_BUYBACK(tickersKey),
-    queryFn: () => fetchBatchBuybackStrength(normalized),
+    queryFn: () => inChunks(normalized, fetchBatchBuybackStrength),
     staleTime: STALE_TIMES.STATIC,
     enabled: enabled && normalized.length > 0,
   });

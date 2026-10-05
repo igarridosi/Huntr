@@ -19,6 +19,10 @@
   /* Accents */
   --color-sunset-orange: #FF8C42;
   --color-golden-hour:   #FFBF69;
+  /* Secondary accents: the teal of the wolf's backdrop and the rose of a
+     late sunset, for the few places that need more than two hues. */
+  --color-glacier:       #5CCFD6;
+  --color-dusk-rose:     #F08BA7;
 
   /* Text */
   --color-snow-peak: #F2F4F3;
@@ -125,6 +129,8 @@
   /* Accents — darkened for WCAG AA contrast on white */
   --color-sunset-orange: #C85D14;  /* 4.8:1 on white ✓ AA               */
   --color-golden-hour:   #966200;  /* 5.1:1 on white ✓ AA               */
+  --color-glacier:       #0B7480;  /* 5.3:1 on white ✓ AA               */
+  --color-dusk-rose:     #B2365E;  /* 5.6:1 on white ✓ AA               */
 
   /* Text */
   --color-snow-peak: #0C1A1E;  /* 17:1 on white ✓ AAA  (branded dark) */
@@ -328,28 +334,105 @@ select optgroup {
   animation-delay: var(--enter-delay, 0ms);
 }
 
-/* Landing hero copy. This used to be a framer-motion `initial`/`animate`
- * pair, which meant the headline sat at opacity 0 until the JS bundle had
- * hydrated — on a throttled phone that was the whole LCP. As a CSS
- * animation it starts on first paint and needs nothing downloaded. */
-@keyframes hero-copy-enter {
-  from { opacity: 0; transform: translate3d(0, 24px, 0); }
-  to   { opacity: 1; transform: none; }
+/* Landing entrance. One sequence of CSS animations, started by the page
+ * once it is ready (data-hero-ready on <html>, set by HeroForest).
+ *
+ *   0 ms     the scene settles from slightly close while a dark veil lifts
+ *   150 ms   the headline rises, a line at a time
+ *   500 ms+  the copy under it, one piece after another (--d)
+ *   ~950 ms  the chrome: nav from above, section menu from the right,
+ *            ticker tape from below
+ *
+ * Why it waits. Measured frame by frame on a screen recording, the first
+ * ~600 ms after load repeated every second or third frame: the browser was
+ * decoding the scene, rasterising its layers and hydrating React, and no
+ * animation, not even a compositor one, gets frames while new layers are
+ * being painted. Starting the motion after that window, with the elements
+ * held at their first keyframe meanwhile, removes the stutter rather than
+ * hiding it. The headline is held visible (it never goes below opacity 1),
+ * so the wait costs nothing on LCP.
+ *
+ * Only transform and opacity: filter is painted on the main thread every
+ * frame. will-change hands the moving layers to the compositor before the
+ * first frame instead of during it. One curve for all of it: a long settle
+ * with no overshoot. */
+:root {
+  --ease-hero: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* The headline never leaves opacity 1: an element is not an LCP candidate
- * until it is visible, and a fade from zero pushed its paint past the JS. */
-@keyframes hero-headline-enter {
-  from { transform: translate3d(0, 24px, 0); }
+@keyframes hero-scene-enter {
+  from { transform: scale(1.06); }
   to   { transform: none; }
 }
 
-.hero-copy-enter {
-  animation: hero-copy-enter 700ms ease-out both;
+/* The scene's dimming, as a layer of its own that fades out, rather than a
+ * brightness filter on the picture. */
+@keyframes hero-veil-lift {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes hero-headline-enter {
+  from { transform: translate3d(0, 0.3em, 0); }
+  to   { transform: none; }
+}
+
+@keyframes hero-rise {
+  from { opacity: 0; transform: translate3d(0, 14px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes hero-drop {
+  from { opacity: 0; transform: translate3d(0, -12px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+@keyframes hero-slide-in {
+  from { opacity: 0; transform: translate3d(20px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hero-scene-enter {
+  will-change: transform;
+  animation: hero-scene-enter 2800ms var(--ease-hero) both;
+}
+
+.hero-veil {
+  will-change: opacity;
+  animation: hero-veil-lift 1800ms cubic-bezier(0.33, 0, 0.2, 1) both;
 }
 
 .hero-headline-enter {
-  animation: hero-headline-enter 700ms ease-out both;
+  display: inline-block;
+  will-change: transform;
+  animation: hero-headline-enter 1400ms var(--ease-hero) both;
+  animation-delay: var(--d, 150ms);
+}
+
+.hero-rise {
+  will-change: transform, opacity;
+  animation: hero-rise 1200ms var(--ease-hero) both;
+  animation-delay: var(--d, 0ms);
+}
+
+/* Chrome whose own opacity is driven inline by the scroll intro: these go on
+ * an inner element, since a finished animation with `both` would otherwise
+ * pin opacity at 1 over the inline value. */
+.hero-drop {
+  will-change: transform, opacity;
+  animation: hero-drop 1100ms var(--ease-hero) both;
+  animation-delay: var(--d, 0ms);
+}
+
+.hero-slide-in {
+  will-change: transform, opacity;
+  animation: hero-slide-in 1200ms var(--ease-hero) both;
+  animation-delay: var(--d, 0ms);
+}
+
+/* Held at the first keyframe until the page is ready (see above). */
+html:not([data-hero-ready]) :is(.hero-scene-enter, .hero-veil, .hero-headline-enter, .hero-rise, .hero-drop, .hero-slide-in) {
+  animation-play-state: paused;
 }
 
 /* Loading bars that build like a chart rather than blink like a placeholder.
@@ -544,12 +627,21 @@ select optgroup {
     animation-delay: 0ms;
   }
 
-  .hero-copy-enter {
+  /* Nothing moves; the copy still fades in, briefly and all at once. */
+  .hero-rise,
+  .hero-drop,
+  .hero-slide-in {
     animation: insight-row-fade 160ms ease both;
+    animation-delay: 0ms;
   }
 
+  .hero-scene-enter,
   .hero-headline-enter {
     animation: none;
+  }
+
+  .hero-veil {
+    animation-duration: 400ms;
   }
 
   /* The bars keep breathing in opacity — a loading indicator that stops moving

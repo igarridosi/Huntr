@@ -73,11 +73,13 @@ export function LandingSideMenu() {
 
   return (
     <aside
-      className="fixed right-8 top-1/2 z-50 hidden -translate-y-1/2 rounded-2xl border border-wolf-border/50 bg-wolf-black/80 p-2.5 backdrop-blur-md md:block"
+      // The panel's surface is on the inner nav, which carries the entrance,
+      // so its frame does not show empty before the items arrive.
+      className="fixed right-8 top-1/2 z-50 hidden -translate-y-1/2 md:block"
       style={{ opacity: introOpacity, visibility: introHidden ? "hidden" : "visible" }}
       aria-hidden={introHidden}
     >
-      <nav aria-label="Landing sections" className="flex flex-col gap-2">
+      <nav aria-label="Landing sections" style={{ "--d": "1020ms" } as React.CSSProperties} className="hero-slide-in flex flex-col gap-2 rounded-2xl border border-wolf-border/50 bg-wolf-black/80 p-2.5 backdrop-blur-md">
         {menuItems.map((item) => {
           const isActive = activeHref === item.href;
 

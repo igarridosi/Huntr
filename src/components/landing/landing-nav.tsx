@@ -20,14 +20,20 @@ export function LandingNav() {
   // Opacity is scrubbed straight from scroll, so no CSS transition: one would
   // lag the scrub, and visibility flips discretely regardless of it.
   return (
+    // The bar's surface lives on the inner element with the entrance, so
+    // nothing of it shows (not even an empty band) before it arrives.
     <nav
-      className="sticky top-0 z-40 border-b border-wolf-border/30 bg-wolf-black/80 backdrop-blur-md px-4 py-3 sm:px-6"
+      className="sticky top-0 z-40"
       style={{
         opacity,
         visibility: hidden ? "hidden" : "visible",
       }}
       aria-hidden={hidden}
     >
+      <div
+        style={{ "--d": "950ms" } as React.CSSProperties}
+        className="hero-drop border-b border-wolf-border/30 bg-wolf-black/80 px-4 py-3 backdrop-blur-md sm:px-6"
+      >
       <div className="max-w-6xl mx-auto flex items-center justify-between">
         <span className="text-lg font-extrabold tracking-tight text-snow-peak">
           HUNTR
@@ -65,6 +71,7 @@ export function LandingNav() {
             <KoFiSupport text="Support Huntr on Ko-fi" />
           </div>
         </div>
+      </div>
       </div>
     </nav>
   );
