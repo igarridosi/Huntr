@@ -88,7 +88,7 @@ import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from 
 import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
 import { sbcTreatment } from "@/lib/dcf/sbc-treatment";
 import { statementFreeCashFlow } from "@/lib/dcf/free-cash-flow";
-import { engineInputsFor, interestAddBack, interestIncomeStrip, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
+import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
 
 /**
  * Always unlevered: after-tax interest added back, the interest earned on
@@ -1095,14 +1095,20 @@ export default function DcfCalculatorPage() {
     leasePrincipal && leasePrincipal.value > 0 && latestAnnualIncome && latestAnnualIncome.revenue > 0
       ? leasePrincipal.value / latestAnnualIncome.revenue
       : 0;
+  // A debt-free IFRS filer's interest expense is lease interest, not a cost
+  // of borrowing: it stays out of the flows like the rest of the rent.
+  const interestPoints = debtInterestPoints(addBack?.marginPoints ?? 0, {
+    ifrsLeases: leasePrincipalPoints > 0,
+    financialDebt: sourcedFields?.netDebt.financialDebt ?? 0,
+  });
   const adjustmentsFor = useCallback(
     (baseRevenue: number) => ({
-      interestPoints: addBack?.marginPoints ?? 0,
+      interestPoints,
       interestIncomePoints: incomeStrip,
       sbcPoints: baseRevenue > 0 ? sbcAmount / baseRevenue : 0,
       leasePrincipalPoints,
     }),
-    [addBack, incomeStrip, sbcAmount, leasePrincipalPoints]
+    [interestPoints, incomeStrip, sbcAmount, leasePrincipalPoints]
   );
   // What the engine runs on: the live inputs with the adjustments applied
   // to both margins, or, on the levered basis, net debt at zero so flows
@@ -1419,7 +1425,7 @@ export default function DcfCalculatorPage() {
       provenance,
       cashFlowBasis: {
         basis: CASH_FLOW_BASIS,
-        interestAddBackPoints: addBack?.marginPoints ?? null,
+        interestAddBackPoints: addBack ? interestPoints : null,
         taxRate: addBack?.taxRate ?? null,
         taxRateSource: addBack?.taxRateSource ?? null,
         interestIncomeStripPoints: incomeStrip,
@@ -1479,6 +1485,7 @@ export default function DcfCalculatorPage() {
     adrNotice,
     provenance,
     addBack,
+    interestPoints,
     incomeStrip,
     sbcAmount,
     leasePrincipalPoints,

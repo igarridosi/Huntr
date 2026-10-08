@@ -12,7 +12,7 @@ import { buildHistoricalBand, checkGrowthVsRecord } from "@/lib/calculations/dcf
 import { runDCF, type DCFInputs } from "@/lib/calculations/dcf";
 import { composeCash } from "@/lib/sec/fundamentals";
 import { preferredIsDebt } from "@/lib/calculations/dcf-inputs-source";
-import { engineInputsFor, interestIncomeStrip, marginAdjustment } from "../cash-flow-basis";
+import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, marginAdjustment } from "../cash-flow-basis";
 import type { IncomeStatement } from "@/types/financials";
 
 const M = 1e6;
@@ -180,6 +180,20 @@ describe("Phase 3 — On: IFRS lease principal comes out of free cash flow", () 
 
   it("is zero for a US GAAP filer, whose rent is already in operating cash flow", () => {
     expect(marginAdjustment("unlevered", { leasePrincipalPoints: 0 })).toBe(0);
+  });
+
+  it("does not add back lease interest as a cost of borrowing when there is no financial debt (On: 0.72 points)", () => {
+    expect(debtInterestPoints(0.0072, { ifrsLeases: true, financialDebt: 0 })).toBe(0);
+    // With borrowings the interest cannot be split, so it is kept.
+    expect(debtInterestPoints(0.0072, { ifrsLeases: true, financialDebt: 500 * M })).toBe(0.0072);
+    // A US GAAP filer's operating-lease cost is not interest at all.
+    expect(debtInterestPoints(0.0072, { ifrsLeases: false, financialDebt: 0 })).toBe(0.0072);
+  });
+
+  it("does not take a 0.7% effective tax rate as the company's rate (On)", () => {
+    const on = income({ revenue: 3_014 * M, interest_expense: 22 * M, interest_income: 30 * M, pre_tax_income: 137 * M, income_tax: 1 * M });
+    expect(interestAddBack(on)!.taxRateSource).toBe("statutory");
+    expect(interestIncomeStrip(on)).toBeCloseTo((30 * M * (1 - 0.21)) / (3_014 * M), 8);
   });
 });
 

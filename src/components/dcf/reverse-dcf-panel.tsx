@@ -310,6 +310,7 @@ function SolveCard({
               history10Y={comparison.history10Y}
               pessimistic={comparison.marketIsPessimistic}
               optimistic={comparison.marketIsOptimistic}
+              recordMax={marginHistory && marginHistory.series.length > 0 ? marginHistory.max : null}
             />
           ) : null}
 
@@ -340,13 +341,19 @@ function RecordComparison({
   history10Y,
   pessimistic,
   optimistic,
+  recordMax = null,
 }: {
   implied: number;
   history5Y: number;
   history10Y: number | null;
   pessimistic: boolean;
   optimistic: boolean;
+  /** The best year in the record, when there is a year-by-year one: "ever" only above it. */
+  recordMax?: number | null;
 }) {
+  // "Ever" is a claim about the best year, not the median: On's implied
+  // 13.5% sat above a 9.8% median and below the 19.2% it earned in 2024.
+  const beyondEver = recordMax !== null && implied > recordMax;
   const verdict = pessimistic
     ? {
         tone: "bullish" as const,
@@ -357,7 +364,9 @@ function RecordComparison({
       ? {
           tone: "bearish" as const,
           icon: <TrendingDown className="h-3 w-3" />,
-          text: "The market is assuming more than this company has ever delivered.",
+          text: beyondEver || recordMax === null
+            ? "The market is assuming more than this company has ever delivered."
+            : "The market is assuming more than this company's median, though within its best years.",
         }
       : null;
 
