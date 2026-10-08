@@ -37,6 +37,8 @@ interface DCFDiagnosticsProps {
   scenarioTable?: React.ReactNode;
   /** The balance-sheet and sources panel. */
   balanceSheet?: React.ReactNode;
+  /** How far the valuation can be trusted, first: it sums up everything below it. */
+  reliability?: React.ReactNode;
 }
 
 /**
@@ -78,6 +80,7 @@ export function DCFDiagnostics({
   regime,
   scenarioTable,
   balanceSheet,
+  reliability,
 }: DCFDiagnosticsProps) {
   const capCheck = fields?.marketCapCheck ?? null;
   const shareCount = fields?.shareCount ?? null;
@@ -98,6 +101,7 @@ export function DCFDiagnostics({
 
   return (
     <div className="space-y-5">
+      {reliability}
       <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">
