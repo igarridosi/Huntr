@@ -12,7 +12,8 @@ import { buildHistoricalBand, checkGrowthVsRecord } from "@/lib/calculations/dcf
 import { runDCF, type DCFInputs } from "@/lib/calculations/dcf";
 import { composeCash } from "@/lib/sec/fundamentals";
 import { preferredIsDebt } from "@/lib/calculations/dcf-inputs-source";
-import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, marginAdjustment } from "../cash-flow-basis";
+import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, marginAdjustment, trailingIncome } from "../cash-flow-basis";
+import { selectLargestRecentFact } from "@/lib/sec/facts";
 import type { IncomeStatement } from "@/types/financials";
 
 const M = 1e6;
@@ -225,5 +226,52 @@ describe("Instacart — redeemable preferred is shown, and counted only when it 
     const net = buildNetDebt({ ...parts, includePreferred: true });
     expect(net.netDebt).toBe(-685 * M);
     expect(debtClaims(net)).toBe(200 * M);
+  });
+});
+
+describe("Synopsys — interest read off the trailing year, and the Ansys deal found", () => {
+  // SNPS, 8 October: the closed year to 2025-10-31 carried the interest on the
+  // cash raised for Ansys before it was paid out; the base is the trailing
+  // twelve months to 2026-07-31, after the deal.
+  const annual = income({ date: "2025-10-31", revenue: 7_054 * M, interest_expense: 447 * M, interest_income: 277 * M, pre_tax_income: 600 * M, income_tax: 90 * M });
+  const quarter = (date: string, revenue: number, interest: number) =>
+    income({ period: date, date, revenue: revenue * M, interest_expense: interest * M, interest_income: 38 * M, pre_tax_income: 150 * M, income_tax: 25 * M });
+  const quarters = [
+    quarter("2025-10-31", 2_255, 160),
+    quarter("2026-01-31", 2_350, 163),
+    quarter("2026-04-30", 2_400, 133),
+    quarter("2026-07-31", 2_411, 133),
+  ];
+
+  it("sums the last four quarters into one statement", () => {
+    const ttm = trailingIncome(quarters, annual)!;
+    expect(ttm.revenue).toBe(9_416 * M);
+    expect(ttm.interest_expense).toBe(589 * M);
+    expect(ttm.interest_income).toBe(152 * M);
+    expect(interestIncomeStrip(ttm)).toBeLessThan(interestIncomeStrip(annual) / 2);
+  });
+
+  it("keeps the closed year when the quarters do not reach past it or are not four", () => {
+    expect(trailingIncome(quarters.slice(1), annual)).toBeNull();
+    expect(trailingIncome(quarters, income({ date: "2026-07-31", revenue: 1 }))).toBeNull();
+  });
+
+  it("takes a line the quarters leave at zero from the closed year, not as zero", () => {
+    const noIncome = trailingIncome(quarters.map((row) => ({ ...row, interest_income: 0 })), annual)!;
+    expect(noIncome.interest_income).toBe(277 * M);
+    expect(noIncome.interest_expense).toBe(589 * M);
+    expect(trailingIncome(quarters.map((row) => ({ ...row, interest_expense: 0 })), annual)!.interest_expense).toBe(447 * M);
+  });
+
+  it("finds the $16.7B paid for Ansys although the latest year-to-date reads zero", () => {
+    const rows = [
+      { start: "2022-11-01", end: "2023-07-31", val: 51_324_000, form: "10-Q" },
+      { start: "2024-11-01", end: "2025-07-31", val: 16_681_257_000, form: "10-Q" },
+      { start: "2025-11-01", end: "2026-07-31", val: 0, form: "10-Q" },
+    ];
+    const deal = selectLargestRecentFact(rows, 730, "PaymentsToAcquireBusinessesNetOfCashAcquired", new Date("2026-10-09"))!;
+    expect(deal.value).toBe(16_681_257_000);
+    expect(deal.periodEnd).toBe("2025-07-31");
+    expect(selectLargestRecentFact(rows.slice(0, 1), 730, "x", new Date("2026-10-09"))).toBeNull();
   });
 });

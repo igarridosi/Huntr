@@ -7,7 +7,7 @@
  */
 
 import { IFRS_LEASE_PRINCIPAL_CONCEPTS, IFRS_SBC_CONCEPTS, OPERATING_CASH_FLOW_CONCEPTS, SEC_CONCEPTS, type SECTaxonomy } from "./concepts";
-import { extractFactRows, pickFresher, selectLatestFact, sumFacts, type FactPeriod, type SECFact } from "./facts";
+import { extractFactRows, pickFresher, selectLargestRecentFact, selectLatestFact, sumFacts, type FactPeriod, type SECFact } from "./facts";
 import { composeRevenueTtm, type SECRevenueTtm } from "./revenue-ttm";
 
 /** Every fact a company has filed, by taxonomy then concept, as companyfacts carries it. */
@@ -80,6 +80,22 @@ export async function fetchConcept(
   });
 }
 
+/** Two years: the closed fiscal year and the trailing twelve months, whichever way they overlap. */
+export const DEAL_WINDOW_DAYS = 730;
+
+/** The largest deal on file within the window, across a cascade of tags. */
+async function fetchLargestRecentDeal(source: FactsSource, cik: string, concepts: readonly string[]): Promise<SECFact | null> {
+  const allFacts = await source.companyFacts(cik);
+  const candidates: SECFact[] = [];
+  for (const concept of concepts) {
+    const entry = allFacts?.["us-gaap"]?.[concept] ?? (allFacts ? null : await source.concept(cik, "us-gaap", concept));
+    const fact = entry ? selectLargestRecentFact(extractFactRows(entry), DEAL_WINDOW_DAYS, concept) : null;
+    if (fact) candidates.push(fact);
+  }
+  if (candidates.length === 0) return null;
+  return candidates.reduce((winner, candidate) => (candidate.value > winner.value ? candidate : winner));
+}
+
 export interface SECFundamentals {
   cik: string;
   /** The preferred count before the market cap has had its say. */
@@ -107,7 +123,7 @@ export interface SECFundamentals {
   shareBasedCompensationTtm?: SECRevenueTtm | null;
   /** Operating cash flow of the last fiscal year, from the 10-K, for verifying the margin's numerator. */
   operatingCashFlowAnnual?: SECFact | null;
-  /** The latest business acquisition and disposal on file, whatever their age; the reader of the regime decides if they are recent. */
+  /** The largest business acquisition and disposal on file in the last two years; the reader of the regime decides if they are recent. */
   acquisitions?: SECFact | null;
   divestitures?: SECFact | null;
   /** Redeemable preferred and other temporary equity: a claim ahead of the common shareholder. */
@@ -326,8 +342,8 @@ export async function fundamentalsForCik(
     resolveRevenueTtm(source, cik),
     resolveShareBasedCompensationTtm(source, cik),
     fetchConcept(source, cik, OPERATING_CASH_FLOW_CONCEPTS, "annual"),
-    fetchConcept(source, cik, SEC_CONCEPTS.acquisitions),
-    fetchConcept(source, cik, SEC_CONCEPTS.divestitures),
+    fetchLargestRecentDeal(source, cik, SEC_CONCEPTS.acquisitions),
+    fetchLargestRecentDeal(source, cik, SEC_CONCEPTS.divestitures),
     fetchConcept(source, cik, SEC_CONCEPTS.redeemablePreferred),
     fetchConcept(source, cik, SEC_CONCEPTS.preferredConversionShares, "quarterly"),
   ]);

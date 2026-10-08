@@ -69,6 +69,48 @@ export function interestAddBack(income: IncomeStatement | null | undefined): Int
 }
 
 /**
+ * The last four quarters as one income statement, for a base struck on the
+ * trailing twelve months.
+ *
+ * The interest adjustments were read off the closed year and divided by its
+ * revenue, then applied to a trailing base. After a deal that is a different
+ * company: Synopsys's closed year carried $278M of interest earned on the
+ * cash it raised for Ansys before paying it out - 3.1 points stripped -
+ * against $69M over the last four quarters, 0.6 points. Its closed-year tax
+ * rate of 4% fell to the statutory floor besides; the trailing year's is 17%.
+ *
+ * Null - and the closed year stands - unless four consecutive quarters are on
+ * file, the latest after the closed year.
+ */
+export function trailingIncome(
+  quarterly: readonly IncomeStatement[] | null | undefined,
+  annual: IncomeStatement | null | undefined
+): IncomeStatement | null {
+  const quarters = [...(quarterly ?? [])].sort((a, b) => a.date.localeCompare(b.date)).slice(-4);
+  if (quarters.length < 4) return null;
+  const latest = quarters[3];
+  if (annual && latest.date <= annual.date) return null;
+  const spanDays = (Date.parse(latest.date) - Date.parse(quarters[0].date)) / 86_400_000;
+  if (!(spanDays >= 250 && spanDays <= 300)) return null;
+  const sum = (pick: (row: IncomeStatement) => number) => quarters.reduce((total, row) => total + (pick(row) || 0), 0);
+  const revenue = sum((row) => row.revenue);
+  if (!(revenue > 0)) return null;
+  // A line the quarters leave at zero while the closed year carries it is a
+  // line the vendor does not file quarterly, not interest that stopped: the
+  // closed year's amount stands for that line alone.
+  const interestExpense = sum((row) => Math.abs(row.interest_expense || 0));
+  const interestIncome = sum((row) => Math.max(0, row.interest_income ?? 0));
+  return {
+    ...latest,
+    revenue,
+    interest_expense: interestExpense > 0 || !annual ? interestExpense : Math.abs(annual.interest_expense || 0),
+    interest_income: interestIncome > 0 || !annual ? interestIncome : annual.interest_income,
+    pre_tax_income: sum((row) => row.pre_tax_income),
+    income_tax: sum((row) => row.income_tax),
+  };
+}
+
+/**
  * The interest add-back that belongs to debt, for an IFRS filer.
  *
  * Under IFRS 16 the interest on lease liabilities sits in interest expense.

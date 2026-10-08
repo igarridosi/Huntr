@@ -88,7 +88,7 @@ import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from 
 import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
 import { sbcTreatment } from "@/lib/dcf/sbc-treatment";
 import { statementFreeCashFlow } from "@/lib/dcf/free-cash-flow";
-import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
+import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, trailingIncome, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
 
 /**
  * Always unlevered: after-tax interest added back, the interest earned on
@@ -526,7 +526,25 @@ export default function DcfCalculatorPage() {
   // before correcting itself. Adjusting during render re-renders immediately
   // and that frame never reaches the screen. The signature in state is what
   // makes it converge - the second pass finds them equal and does nothing.
-  if (factsSignature !== null && factsSignature !== appliedSignature && sourcedFields) {
+  // The signature alone missed one door: restoring a saved set animates the
+  // live inputs towards the stored ones, and the animation's frames land after
+  // the pass that applied the filings. Alphabet's restored Base ran on its
+  // December debt, cash and a single class's share count while the export
+  // carried the June filing. So once the animation settles, live inputs that
+  // disagree with the filings are corrected as well.
+  const liveFactsDrifted =
+    factsSignature !== null &&
+    !isAnimating &&
+    !!sourcedFields &&
+    (() => {
+      const sourced = applySourcedBalanceSheet(inputs, sourcedFields);
+      return (
+        sourced.totalDebt !== inputs.totalDebt ||
+        sourced.cashAndEquivalents !== inputs.cashAndEquivalents ||
+        sourced.sharesOutstanding !== inputs.sharesOutstanding
+      );
+    })();
+  if (factsSignature !== null && (factsSignature !== appliedSignature || liveFactsDrifted) && sourcedFields) {
     setAppliedSignature(factsSignature);
     applyAccountingTreatment((previous) =>
       applySourcedBalanceSheet(previous, sourcedFields)
@@ -667,9 +685,17 @@ export default function DcfCalculatorPage() {
     () => [...(companyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1),
     [companyFinancials]
   );
-  const addBack = useMemo(() => interestAddBack(latestAnnualIncome), [latestAnnualIncome]);
+  // On a trailing base, the trailing four quarters: the closed year can
+  // describe a company before a deal, or before its cash was spent.
+  const interestIncomeStatement = useMemo(
+    () =>
+      (revenueBasis !== "fiscal_year" ? trailingIncome(companyFinancials?.income_statement.quarterly, latestAnnualIncome) : null) ??
+      latestAnnualIncome,
+    [revenueBasis, companyFinancials, latestAnnualIncome]
+  );
+  const addBack = useMemo(() => interestAddBack(interestIncomeStatement), [interestIncomeStatement]);
   /** After-tax interest income over revenue: taken out of unlevered flows, because the cash it is earned on is added separately. */
-  const incomeStrip = useMemo(() => interestIncomeStrip(latestAnnualIncome), [latestAnnualIncome]);
+  const incomeStrip = useMemo(() => interestIncomeStrip(interestIncomeStatement), [interestIncomeStatement]);
 
   // The realised ranges drawn under the sliders, and the checks that compare
   // the assumptions against them.

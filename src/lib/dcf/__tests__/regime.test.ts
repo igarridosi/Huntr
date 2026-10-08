@@ -31,6 +31,14 @@ describe("detectRegimes", () => {
     expect(detectRegimes({ ...quiet, capexToRevenue: 0.24, terminalWeight: 0.64 })).toEqual([]);
   });
 
+  it("flags a peak below 25% when the company's own history shows the jump (Alphabet, FY2025)", () => {
+    // 22.7% of revenue in 2025 against 12-13% before: missed at the flat 25%.
+    const [peak] = detectRegimes({ ...quiet, capexToRevenue: 0.227, capexHistory: [0.12, 0.13, 0.12] });
+    expect(peak).toMatchObject({ id: "capexPeak" });
+    expect(detectRegimes({ ...quiet, capexToRevenue: 0.14, capexHistory: [0.08, 0.09] })).toEqual([]);
+    expect(detectRegimes({ ...quiet, capexToRevenue: 0.2, capexHistory: [0.18, 0.19] })).toEqual([]);
+  });
+
   it("keeps a heavy terminal weight apart from a capex peak (Haleon)", () => {
     // Haleon: capex about 3% of revenue, 66.5% of the value in the terminal.
     const hln = detectRegimes({ ...quiet, capexToRevenue: 0.03, capexHistory: [0.03, 0.035], terminalWeight: 0.665 });
