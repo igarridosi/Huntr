@@ -6,6 +6,7 @@ import {
   buildNetDebt,
   checkMarketCap,
   debtClaims,
+  shareCountReconciles,
   selectShareCount,
   MARKET_CAP_TOLERANCE,
   factAgeInDays,
@@ -176,6 +177,8 @@ export function resolveShareCount(params: {
   preference?: "filings" | "implied";
   manual?: number | null;
   tolerance?: number;
+  /** True when the filed count is the diluted one, which may run above the basic count behind the market cap. */
+  diluted?: boolean;
 }): ShareCountResolution & { value: number } {
   const { filed, price, reportedMarketCap, preference, manual } = params;
   const tolerance = params.tolerance ?? MARKET_CAP_TOLERANCE;
@@ -204,7 +207,7 @@ export function resolveShareCount(params: {
     return { value: manual, basis: "manual", filed, implied, deviation, ratio, splitLike };
   }
 
-  const agrees = deviation !== null && Math.abs(deviation) <= tolerance;
+  const agrees = deviation !== null && shareCountReconciles(deviation, params.diluted ?? false, tolerance);
 
   // The requested default: when the filed count does not reconcile, the
   // market's own arithmetic wins, because that is the count every quoted
@@ -259,6 +262,8 @@ export interface SourcedDCFFields {
   shareBasedCompensation: SourcedValue;
   netDebt: NetDebtBreakdown;
   marketCapCheck: MarketCapCheck | null;
+  /** True when the filed count is the weighted diluted one, allowed to run above the market cap's basic count. */
+  dilutedCount?: boolean;
   /** True when at least one figure came from the filings. */
   usesSEC: boolean;
   /** Which share count is in use, and what the alternatives were. */
@@ -358,6 +363,12 @@ export function buildSourcedFields(params: {
     now
   );
   const cashSourced = pickSourced(sec?.cash ?? null, yahoo.cash, now);
+  // The count in use is the diluted one when it came from the weighted
+  // diluted tag; it may then run above the market cap's basic count.
+  const dilutedCount =
+    sharesOutstandingSourced.source === "sec" &&
+    !!sec?.weightedDilutedShares &&
+    sharesOutstandingSourced.value === sec.weightedDilutedShares.value;
 
   /**
    * The denominator, chosen rather than assumed.
@@ -372,6 +383,7 @@ export function buildSourcedFields(params: {
     reportedMarketCap,
     preference: shareCountBasis,
     manual: overrides.sharesOutstanding ?? null,
+    diluted: dilutedCount,
   });
 
   const sharesOutstanding: SourcedValue =
@@ -445,8 +457,11 @@ export function buildSourcedFields(params: {
     marketCapCheck: checkMarketCap(
       price,
       shareCount.filed ?? sharesOutstanding.value,
-      reportedMarketCap
+      reportedMarketCap,
+      MARKET_CAP_TOLERANCE,
+      dilutedCount
     ),
+    dilutedCount,
     usesSEC: [
       sharesOutstanding,
       financialDebt,

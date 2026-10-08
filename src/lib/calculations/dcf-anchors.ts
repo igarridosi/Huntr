@@ -84,19 +84,38 @@ const pct = (value: number) => formatPercent(value, 1);
  */
 export function checkGrowthVsRecord(
   growthPhase1: number,
-  band: HistoricalBand | null
+  band: HistoricalBand | null,
+  /**
+   * Growth over the trailing twelve months, when it can be measured. The
+   * record is closed years; a company already growing below all of them
+   * today has a worse year on file than the record shows. Lululemon was told
+   * its 1% was below the worst year (4.9%) while guiding −6%.
+   */
+  ttmGrowth: number | null = null
 ): AnchorWarning | null {
   if (!band || !band.beyondRecord) return null;
 
+  if (growthPhase1 > band.max) {
+    return {
+      id: "growth-vs-record",
+      severity: "warning",
+      message: `Phase 1 growth (${pct(growthPhase1)}) is above the fastest year on record (${pct(band.max)}). Worth a reason beyond extrapolation.`,
+    };
+  }
+  // Below the closed years but not below where the company is running now.
+  if (ttmGrowth !== null && ttmGrowth < band.min && growthPhase1 >= ttmGrowth) return null;
   return {
     id: "growth-vs-record",
-    severity: growthPhase1 > band.max ? "warning" : "info",
+    severity: "info",
     message:
-      growthPhase1 > band.max
-        ? `Phase 1 growth (${pct(growthPhase1)}) is above the fastest year on record (${pct(band.max)}). Worth a reason beyond extrapolation.`
+      ttmGrowth !== null
+        ? `Phase 1 growth (${pct(growthPhase1)}) is below the worst year on record (${pct(band.min)}) and the trailing twelve months (${pct(ttmGrowth)}).`
         : `Phase 1 growth (${pct(growthPhase1)}) is below the worst year on record (${pct(band.min)}).`,
   };
 }
+
+/** Capex under this share of revenue cannot be what moves the margin. */
+export const ASSET_LIGHT_CAPEX = 0.05;
 
 /**
  * Margin expansion against capital intensity.
@@ -128,6 +147,10 @@ export function checkMarginVsCapex(params: {
   // A falling capex ratio is the mechanism; if it is already falling the story
   // holds together and there is nothing to flag.
   if (capexTrend !== null && capexTrend < 0) return null;
+  // Below this, capex cannot be the mechanism either way: Instacart spends
+  // 1.6% of revenue, and its margin moves with advertising mix and operating
+  // leverage, which this check does not see.
+  if (capexToRevenue < ASSET_LIGHT_CAPEX) return null;
 
   return {
     id: "margin-vs-capex",
@@ -143,6 +166,8 @@ export interface AnchorInputs {
   growthBand: HistoricalBand | null;
   capexToRevenue: number | null;
   capexTrend: number | null;
+  /** Revenue growth over the trailing twelve months against the twelve before. */
+  ttmGrowth?: number | null;
 }
 
 /** Every anchor check, ordered so the strongest evidence reads first. */
@@ -154,6 +179,6 @@ export function collectAnchorWarnings(inputs: AnchorInputs): AnchorWarning[] {
       capexToRevenue: inputs.capexToRevenue,
       capexTrend: inputs.capexTrend,
     }),
-    checkGrowthVsRecord(inputs.growthPhase1, inputs.growthBand),
+    checkGrowthVsRecord(inputs.growthPhase1, inputs.growthBand, inputs.ttmGrowth ?? null),
   ].filter((warning): warning is AnchorWarning => warning !== null);
 }

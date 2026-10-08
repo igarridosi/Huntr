@@ -99,7 +99,18 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 13706000000,
+     "periodStart": "2025-06-29",
+     "periodEnd": "2026-06-27",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0000320193-25-000079",
+      "0000320193-26-000020"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -537,7 +548,18 @@
     },
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 920000000,
+     "periodStart": "2025-04-01",
+     "periodEnd": "2026-03-31",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001403161-25-000089",
+      "0001403161-26-000079"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -904,7 +926,8 @@
     },
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1144,7 +1167,18 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 28147000000,
+     "periodStart": "2025-07-01",
+     "periodEnd": "2026-06-30",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001652044-26-000018",
+      "0001652044-26-000071"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1560,7 +1594,18 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 28147000000,
+     "periodStart": "2025-07-01",
+     "periodEnd": "2026-06-30",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001652044-26-000018",
+      "0001652044-26-000071"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1918,7 +1963,8 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2036,7 +2082,8 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2170,7 +2217,8 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2443,7 +2491,18 @@
     },
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 91231000,
+     "periodStart": "2025-08-04",
+     "periodEnd": "2026-08-02",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0001397187-26-000020",
+      "0001397187-26-000127"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2811,7 +2870,18 @@
     "acquisitions": null,
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 499000000,
+     "periodStart": "2025-04-01",
+     "periodEnd": "2026-03-31",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0000037996-26-000015",
+      "0000037996-26-000086"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -3140,7 +3210,18 @@
     },
     "divestitures": null,
     "redeemablePreferred": null,
-    "preferredConversionShares": null
+    "preferredConversionShares": null,
+    "shareBasedCompensationTtm": {
+     "value": 364400000,
+     "periodStart": "2025-06-30",
+     "periodEnd": "2026-06-28",
+     "method": "10-K FY + 10-Q YTD − prior-year YTD",
+     "accessions": [
+      "0000829224-25-000114",
+      "0000829224-26-000130"
+     ],
+     "concept": "ShareBasedCompensation"
+    }
    },
    "perConcept": {
     "sharesOutstandingCover:any": {

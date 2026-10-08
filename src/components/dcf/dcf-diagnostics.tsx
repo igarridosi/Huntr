@@ -207,7 +207,9 @@ export function DCFDiagnostics({
             <p className="text-[10px] leading-relaxed text-mist/80">
               {shareCount.splitLike && shareCount.ratio
                 ? `These differ by almost exactly ${shareCount.ratio.toFixed(2)}x, which is the signature of a stock split or an ADR ratio rather than a missing share class. When the ratio is a whole number the filing is usually the one to trust — check before accepting the default.`
-                : "A multi-class company often reports only one class under this tag, so the implied count is used by default."}
+                : shareCount.deviation !== null && shareCount.deviation < 0
+                  ? "The filed count is below the market's. A multi-class company often reports only one class under this tag; if so, switch to the implied count."
+                  : "The filed count is above the market's by more than options and units explain: a stale filing before buybacks, or a count in another unit. Check before relying on it."}
             </p>
           </div>
         ) : null}

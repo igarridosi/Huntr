@@ -17,6 +17,8 @@
  * and the caller falls back to Yahoo, marked as such in the UI.
  */
 
+import { DILUTION_ALLOWANCE, MARKET_CAP_TOLERANCE, shareCountReconciles } from "@/lib/dcf/share-reconcile";
+
 const SEC_TICKERS_URL = "https://www.sec.gov/files/company_tickers.json";
 const SEC_CONCEPT_URL = "https://data.sec.gov/api/xbrl/companyconcept";
 const SEC_FACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts";
@@ -67,13 +69,15 @@ export interface MarketCapCheck {
   agrees: boolean;
 }
 
-export const MARKET_CAP_TOLERANCE = 0.03;
+export { MARKET_CAP_TOLERANCE, DILUTION_ALLOWANCE, shareCountReconciles };
 
 export function checkMarketCap(
   price: number,
   shareCount: number,
   reportedMarketCap: number,
-  tolerance: number = MARKET_CAP_TOLERANCE
+  tolerance: number = MARKET_CAP_TOLERANCE,
+  /** True when the count is diluted, so it may run above the basic count the market cap uses. */
+  diluted = false
 ): MarketCapCheck | null {
   if (!(price > 0) || !(shareCount > 0) || !(reportedMarketCap > 0)) return null;
 
@@ -84,7 +88,7 @@ export function checkMarketCap(
     implied,
     reported: reportedMarketCap,
     deviation,
-    agrees: Math.abs(deviation) <= tolerance,
+    agrees: shareCountReconciles(deviation, diluted, tolerance),
   };
 }
 

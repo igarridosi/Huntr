@@ -31,6 +31,20 @@ export const CAPEX_PEAK_VS_HISTORY = 1.25;
 export const LEVERAGE_HIGH = 2.5;
 export const THIN_MARGIN = 0.06;
 export const PERIMETER_MONTHS = 24;
+/**
+ * A deal smaller than this share of revenue does not change what the history
+ * describes. Instacart's $29M purchase against $3.99B of revenue (0.7%) put
+ * "Shifting perimeter" on screen; a revenue step on its own did the same to
+ * Reddit growing 61% organically.
+ */
+export const MATERIAL_DEAL = 0.05;
+
+/** Whether a deal is large enough, against revenue, to change the perimeter. */
+export function isMaterialDeal(value: number | null | undefined, revenue: number | null | undefined): boolean {
+  if (!(typeof value === "number" && value > 0)) return false;
+  if (!(typeof revenue === "number" && revenue > 0)) return true; // no yardstick: assume it matters
+  return value / revenue >= MATERIAL_DEAL;
+}
 
 export interface RegimeInput {
   lender: boolean;
@@ -50,6 +64,8 @@ export interface RegimeInput {
     /** A business bought or sold in the filings of the last 24 months. */
     acquisitions: { value: number; periodEnd: string } | null;
     divestitures: { value: number; periodEnd: string } | null;
+    /** Revenue of the latest year, the yardstick a deal is measured against. */
+    revenue?: number | null;
   };
 }
 
@@ -111,7 +127,7 @@ export function detectRegimes(input: RegimeInput): Regime[] {
       id: "leveraged",
       label: "Leveraged",
       detail: `debt ${input.debtToEbitda.toFixed(1)}× EBITDA`,
-      recommendation: "The cash-flow basis switch is not optional here: unlevered flows with net debt subtracted, or levered flows with none. A static net debt taken off ten years of flows assumes the debt is still there in year ten; read the paydown schedule under the switch.",
+      recommendation: "Unlevered flows with net debt subtracted assume a static debt still there in year ten; read the paydown schedule, and how much of the value the debt takes.",
       tab: "DCF",
       watch: "Interest cover, maturities and the rate the debt refinances at.",
     });
@@ -128,12 +144,16 @@ export function detectRegimes(input: RegimeInput): Regime[] {
     });
   }
 
-  const { divergence, acquisitions, divestitures } = input.perimeter;
-  const moved = (divergence !== null && Math.abs(divergence) > 0.1) || acquisitions !== null || divestitures !== null;
-  if (moved) {
+  const { divergence, acquisitions, divestitures, revenue } = input.perimeter;
+  // Only a material deal changes the company. A trailing twelve months far
+  // from the closed year is growth on its own; it is named here only beside
+  // a deal that could explain it.
+  const bought = isMaterialDeal(acquisitions?.value, revenue);
+  const sold = isMaterialDeal(divestitures?.value, revenue);
+  if (bought || sold) {
     const parts = [
-      acquisitions ? `acquisition of ${m(acquisitions.value)} to ${acquisitions.periodEnd}` : null,
-      divestitures ? `disposal of ${m(divestitures.value)} to ${divestitures.periodEnd}` : null,
+      bought ? `acquisition of ${m(acquisitions!.value)} to ${acquisitions!.periodEnd}` : null,
+      sold ? `disposal of ${m(divestitures!.value)} to ${divestitures!.periodEnd}` : null,
       divergence !== null && Math.abs(divergence) > 0.1 ? `trailing twelve months ${pct(Math.abs(divergence))} ${divergence > 0 ? "above" : "below"} the closed year` : null,
     ].filter(Boolean);
     out.push({

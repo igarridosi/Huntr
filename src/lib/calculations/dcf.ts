@@ -837,21 +837,33 @@ function computeCAGRFromSeries(values: number[], years: number): number | null {
   return Math.pow(end / start, 1 / years) - 1;
 }
 
+/**
+ * The realised FCF margins of the last `windowSize` fiscal years, on the
+ * model's one definition: operating cash flow less |capex|, paired with the
+ * revenue of the same fiscal year.
+ *
+ * This used to read the vendor's `free_cash_flow` field and pair the two
+ * statements by position. The record under the sliders and the reverse DCF
+ * were built the other way, so the generated Base and the record beside it
+ * could disagree about the same company - Instacart's Base came out at 8.8%
+ * next to a record whose median was 18%. With margins entered as reported,
+ * the generator has to speak the record's language.
+ */
 function computeRecentFCFMargins(
   incomeAnnual: CompanyFinancials["income_statement"]["annual"],
   cashFlowAnnual: CompanyFinancials["cash_flow"]["annual"],
   windowSize: number
 ): number[] {
-  const income = incomeAnnual.slice(-windowSize);
-  const cash = cashFlowAnnual.slice(-windowSize);
+  const revenueByYear = new Map<string, number>();
+  for (const row of incomeAnnual) {
+    if (row.revenue > 0) revenueByYear.set(row.date.slice(0, 4), row.revenue);
+  }
   const margins: number[] = [];
-
-  for (let i = 0; i < Math.min(income.length, cash.length); i++) {
-    const rev = income[i].revenue;
-    const fcf = cash[i].free_cash_flow;
-    if (rev > 0) {
-      margins.push(fcf / rev);
-    }
+  for (const row of cashFlowAnnual.slice(-windowSize)) {
+    const revenue = revenueByYear.get(row.date.slice(0, 4));
+    if (!(revenue && revenue > 0)) continue;
+    const fcf = row.operating_cash_flow - Math.abs(row.capital_expenditures);
+    if (Number.isFinite(fcf)) margins.push(fcf / revenue);
   }
 
   return margins.length > 0 ? margins : [0.15];

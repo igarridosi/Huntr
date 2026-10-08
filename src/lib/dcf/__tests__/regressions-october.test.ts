@@ -6,7 +6,9 @@
  * twice, a claim nobody showed, a wing with a 44x exit.
  */
 import { describe, expect, it } from "vitest";
-import { buildNetDebt, debtClaims, type SECFact } from "@/lib/api/sec-edgar";
+import { buildNetDebt, debtClaims, shareCountReconciles, type SECFact } from "@/lib/api/sec-edgar";
+import { buildMarginHistory } from "@/lib/calculations/margin-history";
+import { buildHistoricalBand, checkGrowthVsRecord } from "@/lib/calculations/dcf-anchors";
 import { runDCF, type DCFInputs } from "@/lib/calculations/dcf";
 import { composeCash } from "@/lib/sec/fundamentals";
 import { preferredIsDebt } from "@/lib/calculations/dcf-inputs-source";
@@ -123,6 +125,45 @@ describe("Reddit and Instacart — current marketable securities are cash", () =
       marketable: fact(93 * M, "2026-06-30", "ShortTermInvestments"),
     });
     expect(got!.value).toBe(976 * M);
+  });
+});
+
+describe("Phase 2 — false alarms that blocked sound valuations", () => {
+  it("lets a diluted count run above the market cap's basic one, but not below it", () => {
+    // RDDT 202.0M against 192.4M (+5.0%), CART 248.9M against 237.3M (+4.9%).
+    expect(shareCountReconciles(0.05, true)).toBe(true);
+    expect(shareCountReconciles(0.049, true)).toBe(true);
+    // Visa's class A alone was 9% short; Lululemon's tag 6%; On's 11%.
+    expect(shareCountReconciles(-0.09, true)).toBe(false);
+    expect(shareCountReconciles(-0.06, true)).toBe(false);
+    // A count that is not diluted keeps the plain tolerance; Haleon's ordinary
+    // shares against the ADR price were 100% above.
+    expect(shareCountReconciles(0.05, false)).toBe(false);
+    expect(shareCountReconciles(1.0, true)).toBe(false);
+  });
+
+  it("keeps an organic swing in the margin record comparable (Reddit −10.6% → 16.6%)", () => {
+    const rows = [
+      { date: "2022-12-31", revenue: 667e6, ocf: -100e6 },
+      { date: "2023-12-31", revenue: 804e6, ocf: -85e6 },
+      { date: "2024-12-31", revenue: 1_300e6, ocf: 216e6 },
+      { date: "2025-12-31", revenue: 2_200e6, ocf: 690e6 },
+    ];
+    const input = {
+      revenues: rows.map((r) => ({ date: r.date, revenue: r.revenue })),
+      cashFlows: rows.map((r) => ({ date: r.date, operating_cash_flow: r.ocf, capital_expenditures: 0 })),
+    };
+    const organic = buildMarginHistory({ ...input, perimeterEvent: false });
+    expect(organic.comparable).toBe(true);
+    expect(organic.flags).toContain("volatile");
+    // Without the filings read, the same step is still treated as a possible new perimeter.
+    expect(buildMarginHistory(input).comparable).toBe(false);
+  });
+
+  it("does not say growth is below the record when the company is already running below it (Lululemon)", () => {
+    const band = buildHistoricalBand([0.049, 0.1, 0.19, 0.3], 0.01)!;
+    expect(checkGrowthVsRecord(0.01, band, -0.02)).toBeNull();
+    expect(checkGrowthVsRecord(-0.05, band, -0.02)?.message).toContain("trailing twelve months");
   });
 });
 
