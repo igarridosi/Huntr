@@ -66,6 +66,12 @@ export const SEC_CONCEPTS = {
    * liabilities and equity. Instacart's $200M Series A sits here.
    */
   redeemablePreferred: ["TemporaryEquityCarryingAmountAttributableToParent"],
+  /**
+   * Shares the diluted count adds for preferred that converts. Present and
+   * positive means the preferred is already in the denominator, so it must
+   * not be subtracted as debt as well: Instacart's 5.8M in Q2 2026.
+   */
+  preferredConversionShares: ["IncrementalCommonSharesAttributableToConversionOfPreferredStock"],
 
   /**
    * Debt, as two halves that must be added.

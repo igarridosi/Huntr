@@ -98,7 +98,8 @@
     },
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -434,7 +435,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "V": {
@@ -532,7 +536,8 @@
      "accession": "0001403161-26-000079"
     },
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -820,7 +825,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "BRK-B": {
@@ -895,7 +903,8 @@
      "accession": "0001193125-26-341032"
     },
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1039,7 +1048,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "GOOG": {
@@ -1131,7 +1143,8 @@
     },
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1451,7 +1464,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "GOOGL": {
@@ -1543,7 +1559,8 @@
     },
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1863,7 +1880,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "HLN": {
@@ -1897,7 +1917,8 @@
     "operatingCashFlowAnnual": null,
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -1977,7 +1998,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "TSM": {
@@ -2011,7 +2035,8 @@
     "operatingCashFlowAnnual": null,
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2091,7 +2116,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "XOM": {
@@ -2141,7 +2169,8 @@
     "operatingCashFlowAnnual": null,
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2309,7 +2338,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "LULU": {
@@ -2410,7 +2442,8 @@
      "accession": "0001397187-26-000020"
     },
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2690,7 +2723,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "F": {
@@ -2774,7 +2810,8 @@
     },
     "acquisitions": null,
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -2990,7 +3027,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "SBUX": {
@@ -3099,7 +3139,8 @@
      "accession": "0000829224-26-000130"
     },
     "divestitures": null,
-    "redeemablePreferred": null
+    "redeemablePreferred": null,
+    "preferredConversionShares": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -3443,7 +3484,10 @@
     "marketableSecuritiesCurrent:annual": null,
     "redeemablePreferred:any": null,
     "redeemablePreferred:quarterly": null,
-    "redeemablePreferred:annual": null
+    "redeemablePreferred:annual": null,
+    "preferredConversionShares:any": null,
+    "preferredConversionShares:quarterly": null,
+    "preferredConversionShares:annual": null
    }
   },
   "ZZZZ": {

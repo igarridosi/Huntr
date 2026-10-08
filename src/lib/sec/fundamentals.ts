@@ -110,6 +110,8 @@ export interface SECFundamentals {
   divestitures?: SECFact | null;
   /** Redeemable preferred and other temporary equity: a claim ahead of the common shareholder. */
   redeemablePreferred?: SECFact | null;
+  /** Shares the latest quarter's diluted count adds for preferred conversion; positive means the preferred is in the count. */
+  preferredConversionShares?: SECFact | null;
 }
 
 /**
@@ -301,12 +303,13 @@ export async function fundamentalsForCik(
     fetchConcept(source, cik, SEC_CONCEPTS.operatingLeaseExpense, "annual"),
     fetchConcept(source, cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
-  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures, redeemablePreferred] = await Promise.all([
+  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures, redeemablePreferred, preferredConversionShares] = await Promise.all([
     resolveRevenueTtm(source, cik),
     fetchConcept(source, cik, OPERATING_CASH_FLOW_CONCEPTS, "annual"),
     fetchConcept(source, cik, SEC_CONCEPTS.acquisitions),
     fetchConcept(source, cik, SEC_CONCEPTS.divestitures),
     fetchConcept(source, cik, SEC_CONCEPTS.redeemablePreferred),
+    fetchConcept(source, cik, SEC_CONCEPTS.preferredConversionShares, "quarterly"),
   ]);
 
   // A multi-class issuer files its share counts by class only; the
@@ -331,5 +334,10 @@ export async function fundamentalsForCik(
     // the company's claim today; an old one is a preferred since redeemed.
     redeemablePreferred:
       redeemablePreferred && cash && redeemablePreferred.periodEnd === cash.periodEnd ? redeemablePreferred : null,
+    // The quarter the diluted count describes, or it says nothing about it.
+    preferredConversionShares:
+      preferredConversionShares && weightedDilutedShares && preferredConversionShares.periodEnd === weightedDilutedShares.periodEnd
+        ? preferredConversionShares
+        : null,
   };
 }

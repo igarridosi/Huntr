@@ -274,6 +274,21 @@ export interface SourcedDCFFields {
 }
 
 /**
+ * Whether redeemable preferred is a claim to subtract, decided from the
+ * filing rather than asked of the user.
+ *
+ * The diluted count adds shares for preferred that converts, and says so
+ * under its own tag. When the latest quarter shows any, the preferred is
+ * already in the denominator and subtracting it too would charge the same
+ * claim twice - Instacart's 5.8M in Q2 2026. With none, the preferred is a
+ * senior claim like debt.
+ */
+export function preferredIsDebt(sec: Pick<SECFundamentals, "redeemablePreferred" | "preferredConversionShares"> | null): boolean {
+  if (!sec?.redeemablePreferred || !(sec.redeemablePreferred.value > 0)) return false;
+  return !(sec.preferredConversionShares && sec.preferredConversionShares.value > 0);
+}
+
+/**
  * Assembles the balance-sheet side of the model, field by field, with sources.
  *
  * The share count is always the diluted one where EDGAR has it. Basic counts
@@ -292,8 +307,6 @@ export function buildSourcedFields(params: {
   price: number;
   reportedMarketCap: number;
   includeLeases?: boolean;
-  /** Whether redeemable preferred is subtracted as debt. Off by default: see `buildNetDebt`. */
-  includePreferred?: boolean;
   /**
    * Figures the user supplied by hand, which win over both sources.
    *
@@ -414,7 +427,7 @@ export function buildSourcedFields(params: {
     cash: cash.value,
     includeLeases: params.includeLeases,
     redeemablePreferred: redeemablePreferred.value,
-    includePreferred: params.includePreferred,
+    includePreferred: preferredIsDebt(sec),
   });
 
   return {

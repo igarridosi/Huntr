@@ -98,15 +98,6 @@ export interface DCFScenarioSet {
   base: DCFScenarioPreset;
   bull: DCFScenarioPreset;
   waccEstimate: WACCEstimate;
-  /**
-   * Whether stock compensation is deducted. Stored with the set because the
-   * margins are kept before SBC and the deduction is applied by the engine:
-   * a set saved with the switch on and reopened with it off would otherwise
-   * come back worth more than it was saved at. Absent on sets saved before
-   * the switch moved into the engine, whose margins already carry whatever
-   * deduction was made at the time.
-   */
-  deductSBC?: boolean;
 }
 
 /**

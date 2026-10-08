@@ -1,11 +1,9 @@
 "use client";
 
 import { CheckCircle2, CircleDashed, XCircle } from "lucide-react";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { cn, formatCompactNumber, formatPercent } from "@/lib/utils";
 import type { FieldProvenance } from "@/lib/dcf/provenance";
 import type { ValuationGate } from "@/lib/dcf/gate";
-import type { CashFlowBasis, InterestAddBack } from "@/lib/dcf/cash-flow-basis";
 
 const FIELD_LABEL: Record<FieldProvenance["field"], string> = {
   baseRevenue: "Revenue base",
@@ -21,9 +19,6 @@ const fmt = (p: FieldProvenance) =>
 interface DCFProvenanceProps {
   provenance: FieldProvenance[];
   gate: ValuationGate;
-  basis: CashFlowBasis;
-  addBack: InterestAddBack | null;
-  onBasisChange: (basis: CashFlowBasis) => void;
 }
 
 /**
@@ -35,7 +30,7 @@ interface DCFProvenanceProps {
  * this before the number in the middle column, because it is the part
  * that has been wrong.
  */
-export function DCFProvenance({ provenance, gate, basis, addBack, onBasisChange }: DCFProvenanceProps) {
+export function DCFProvenance({ provenance, gate }: DCFProvenanceProps) {
   return (
     <div className="space-y-4">
       <div className="space-y-2">
@@ -86,33 +81,6 @@ export function DCFProvenance({ provenance, gate, basis, addBack, onBasisChange 
             </li>
           ))}
         </ul>
-      </div>
-
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] font-medium uppercase tracking-[0.09em] text-mist/60">Cash flow basis</p>
-        </div>
-        <SegmentedTabs<CashFlowBasis>
-          size="sm"
-          className="grid w-full grid-cols-2"
-          ariaLabel="Cash flow basis"
-          value={basis}
-          onChange={onBasisChange}
-          items={[
-            { key: "unlevered", label: "Unlevered" },
-            { key: "levered", label: "Levered" },
-          ]}
-        />
-        <p className="text-[10px] leading-relaxed text-mist/70">
-          {basis === "unlevered" ? (
-            <>
-              After-tax interest added back
-              {addBack ? ` (${formatPercent(addBack.marginPoints, 2)} of revenue: $${formatCompactNumber(addBack.interestExpense)} at a ${formatPercent(addBack.taxRate, 0)} ${addBack.taxRateSource} tax rate)` : ""}; net debt subtracted from the discounted flows. The pairing the two-stage model is built for.
-            </>
-          ) : (
-            <>Flows as reported, after interest, and net debt <span className="text-mist">not</span> subtracted — the model runs with debt and cash at zero. Discounted at the same rate; a simplification, stated.</>
-          )}
-        </p>
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 import { buildNetDebt, debtClaims, type SECFact } from "@/lib/api/sec-edgar";
 import { runDCF, type DCFInputs } from "@/lib/calculations/dcf";
 import { composeCash } from "@/lib/sec/fundamentals";
+import { preferredIsDebt } from "@/lib/calculations/dcf-inputs-source";
 import { engineInputsFor, interestIncomeStrip, marginAdjustment } from "../cash-flow-basis";
 import type { IncomeStatement } from "@/types/financials";
 
@@ -125,7 +126,20 @@ describe("Reddit and Instacart — current marketable securities are cash", () =
   });
 });
 
-describe("Instacart — redeemable preferred is shown, and counted only when asked", () => {
+describe("Instacart — whether preferred is debt is read from the filing", () => {
+  const preferred = fact(200 * M, "2026-06-30", "TemporaryEquityCarryingAmountAttributableToParent");
+
+  it("leaves it out when the diluted count already converts it (5.8M incremental shares in Q2 2026)", () => {
+    expect(preferredIsDebt({ redeemablePreferred: preferred, preferredConversionShares: fact(5.833 * M, "2026-06-30", "IncrementalCommonSharesAttributableToConversionOfPreferredStock") })).toBe(false);
+  });
+
+  it("subtracts it when nothing in the count converts it", () => {
+    expect(preferredIsDebt({ redeemablePreferred: preferred, preferredConversionShares: null })).toBe(true);
+    expect(preferredIsDebt({ redeemablePreferred: null, preferredConversionShares: null })).toBe(false);
+  });
+});
+
+describe("Instacart — redeemable preferred is shown, and counted only when it is a claim", () => {
   const parts = { financialDebt: 0, operatingLeases: 34 * M, cash: 885 * M, redeemablePreferred: 200 * M };
 
   it("carries the $200M without subtracting it by default", () => {

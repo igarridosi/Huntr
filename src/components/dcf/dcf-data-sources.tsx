@@ -7,19 +7,10 @@ import type {
   SourcedValue,
   ZeroSuspectField,
 } from "@/lib/calculations/dcf-inputs-source";
-import type { LeaseTreatment } from "@/lib/api/sec-edgar";
 import { AlertTriangle, ChevronDown, FileText, Globe } from "lucide-react";
 
 interface DCFDataSourcesProps {
   fields: SourcedDCFFields | null;
-  includeLeases: boolean;
-  onIncludeLeasesChange: (include: boolean) => void;
-  /** Whether capitalising is available, and why not when it is not. */
-  leaseTreatment: LeaseTreatment;
-  deductSBC: boolean;
-  onDeductSBCChange: (deduct: boolean) => void;
-  includePreferred: boolean;
-  onIncludePreferredChange: (include: boolean) => void;
   /** Revenue, so the two FCF margins can be shown side by side. */
   baseRevenue: number;
   /** Free cash flow *before* any stock-compensation deduction: the slider's margin times revenue. */
@@ -41,13 +32,6 @@ interface DCFDataSourcesProps {
  */
 export function DCFDataSources({
   fields,
-  includeLeases,
-  onIncludeLeasesChange,
-  leaseTreatment,
-  deductSBC,
-  onDeductSBCChange,
-  includePreferred,
-  onIncludePreferredChange,
   baseRevenue,
   freeCashFlow,
   overrides,
@@ -61,12 +45,9 @@ export function DCFDataSources({
   const { netDebt, marketCapCheck } = fields;
   const capMismatch = marketCapCheck !== null && !marketCapCheck.agrees;
 
-  const sbc = fields.shareBasedCompensation.value;
+  const sbc = Math.max(0, fields.shareBasedCompensation.value);
   const rawMargin = baseRevenue > 0 ? freeCashFlow / baseRevenue : 0;
-  const adjustedMargin = baseRevenue > 0 ? (freeCashFlow - sbc) / baseRevenue : 0;
-  // Nothing to offer when the charge could not be read. A toggle that changes
-  // nothing is worse than no toggle: it implies an adjustment was applied.
-  const canDeductSBC = sbc > 0;
+  const sbcMargin = baseRevenue > 0 ? sbc / baseRevenue : 0;
 
   return (
     <div className="space-y-3">
@@ -175,13 +156,13 @@ export function DCFDataSources({
               <DebtLine
                 label="+ Lease liabilities"
                 value={netDebt.operatingLeases}
-                muted={!includeLeases}
+                muted={!netDebt.includesLeases}
               />
               {netDebt.redeemablePreferred > 0 ? (
                 <DebtLine
                   label="+ Redeemable preferred"
                   value={netDebt.redeemablePreferred}
-                  muted={!includePreferred}
+                  muted={!netDebt.includesPreferred}
                 />
               ) : null}
               <DebtLine label="− Cash &amp; short-term investments" value={-netDebt.cash} />
@@ -205,29 +186,19 @@ export function DCFDataSources({
                 </p>
               ) : null}
 
-              {/* Off by default. Under ASC 842 the rent is already out of
-                  operating cash flow, so counting the liability as debt as
-                  well discounts the same obligation twice - and doing only
-                  that, without returning the rent, is the one combination
-                  that is simply wrong. */}
-              <Toggle
-                checked={includeLeases}
-                onChange={onIncludeLeasesChange}
-                disabled={!leaseTreatment.canCapitalise}
-                label="Capitalise operating leases"
-                hint={
-                  leaseTreatment.canCapitalise
-                    ? "Operating leases are already deducted from operating cash flow. Counting them as debt too discounts them twice, so turning this on also returns the interest on the liability to free cash flow to compensate."
-                    : (leaseTreatment.reason ?? "")
-                }
-              />
+              {netDebt.operatingLeases > 0 ? (
+                <p className="text-[10px] leading-relaxed text-mist/70">
+                  Lease liabilities are shown, not subtracted: the rent is already
+                  out of operating cash flow, so counting them as debt too would
+                  discount the same obligation twice.
+                </p>
+              ) : null}
               {netDebt.redeemablePreferred > 0 ? (
-                <Toggle
-                  checked={includePreferred}
-                  onChange={onIncludePreferredChange}
-                  label={`Count redeemable preferred as debt (${formatCompactNumber(netDebt.redeemablePreferred)})`}
-                  hint="A claim that ranks ahead of the common shareholder. A convertible preferred is usually already in the diluted share count, so counting it here too charges it twice. Turn on for a preferred that does not convert, or one the diluted count leaves out."
-                />
+                <p className="text-[10px] leading-relaxed text-mist/70">
+                  {netDebt.includesPreferred
+                    ? "Redeemable preferred is subtracted: the filing shows no conversion shares in the diluted count, so it is a claim ahead of the common shareholder."
+                    : "Redeemable preferred is shown, not subtracted: the filing adds conversion shares to the diluted count, so it is already in the per-share figures."}
+                </p>
               ) : null}
             </div>
 
@@ -238,7 +209,7 @@ export function DCFDataSources({
               </p>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-[11px] text-mist">
-                  Reported FCF margin
+                  Base margin, as reported
                 </span>
                 <span className="font-mono text-xs tabular-nums text-mist">
                   {formatPercent(rawMargin, 1)}
@@ -246,32 +217,25 @@ export function DCFDataSources({
               </div>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-[11px] text-mist">
-                  After stock compensation
+                  − Stock compensation{sbc > 0 ? ` (${formatCompactNumber(sbc)} a year)` : ""}
                 </span>
-                <span
-                  className={cn(
-                    "font-mono text-xs tabular-nums",
-                    deductSBC ? "text-snow-peak" : "text-mist/50"
-                  )}
-                >
-                  {formatPercent(adjustedMargin, 1)}
+                <span className="font-mono text-xs tabular-nums text-mist">
+                  {sbc > 0 ? formatPercent(-sbcMargin, 1) : "—"}
                 </span>
               </div>
-              <Toggle
-                checked={deductSBC}
-                disabled={!canDeductSBC}
-                onChange={onDeductSBCChange}
-                label={
-                  canDeductSBC
-                    ? `Deduct stock compensation (${formatCompactNumber(sbc)} a year)`
-                    : "Deduct stock compensation"
-                }
-                hint={
-                  canDeductSBC
-                    ? "Operating cash flow adds share-based pay back because no cash left the building. None did, but ownership did — the shareholder pays for it in dilution. Enter margins before SBC: the switch takes it off both margins of all three scenarios as the model runs them."
-                    : "The annual stock compensation charge is not in this filing, so there is nothing to deduct."
-                }
-              />
+              <div className="flex items-baseline justify-between gap-3 border-t border-wolf-border/25 pt-1.5">
+                <span className="text-[11px] font-medium text-snow-peak">
+                  Before capital-structure adjustments
+                </span>
+                <span className="font-mono text-xs tabular-nums text-snow-peak">
+                  {formatPercent(rawMargin - sbcMargin, 1)}
+                </span>
+              </div>
+              <p className="text-[10px] leading-relaxed text-mist/70">
+                {sbc > 0
+                  ? "Enter margins as reported, the same basis as the record under the sliders. Stock compensation is always deducted, on both margins of all three scenarios: no cash left the building, but ownership did."
+                  : "No stock compensation charge was found in the filings, so nothing is deducted."}
+              </p>
             </div>
 
             {/* ── Provenance, field by field ── */}
@@ -426,42 +390,5 @@ function SourceLine({ label, field }: { label: string; field: SourcedValue }) {
         </p>
       ) : null}
     </div>
-  );
-}
-
-function Toggle({
-  checked,
-  onChange,
-  label,
-  hint,
-  disabled = false,
-}: {
-  checked: boolean;
-  onChange: (checked: boolean) => void;
-  label: string;
-  hint: string;
-  disabled?: boolean;
-}) {
-  return (
-    <label
-      className={cn(
-        "mt-2 flex items-start gap-2.5 rounded-lg bg-snow-peak/[0.03] p-2.5 ring-1 ring-inset ring-wolf-border/40",
-        disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer"
-      )}
-    >
-      <input
-        type="checkbox"
-        checked={checked && !disabled}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-3.5 w-3.5 shrink-0 cursor-pointer accent-sunset-orange disabled:cursor-not-allowed"
-      />
-      <span className="min-w-0">
-        <span className="block text-[11px] font-medium text-snow-peak">{label}</span>
-        <span className="mt-0.5 block text-[10px] leading-relaxed text-mist/70">
-          {hint}
-        </span>
-      </span>
-    </label>
   );
 }
