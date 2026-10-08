@@ -104,6 +104,8 @@ import { DCFProvenance } from "@/components/dcf/dcf-provenance";
 import { ValuationCover } from "@/components/dcf/valuation-cover";
 import { DCFRegime } from "@/components/dcf/dcf-regime";
 import { debtPaydown, detectRegimes, isMaterialDeal, PERIMETER_MONTHS } from "@/lib/dcf/regime";
+import { assessReliability } from "@/lib/dcf/reliability";
+import { DCFReliability } from "@/components/dcf/dcf-reliability";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 import { track } from "@/lib/analytics/track";
 
@@ -1346,6 +1348,43 @@ export default function DcfCalculatorPage() {
     [result, inputs.totalDebt]
   );
 
+  // How far the value can be trusted, from everything above: provenance,
+  // the checks, the regimes, the record, and how fragile the result is.
+  // Read off the settled inputs, like the other heavy surfaces.
+  const reliability = useMemo(() => {
+    if (!settledResult || !(settledResult.intrinsicValuePerShare > 0)) return null;
+    const record = revenueHistory.marginHistory;
+    const value = settledResult.intrinsicValuePerShare;
+    const plusOne = runDCF({ ...settledInputs, wacc: settledInputs.wacc + 0.01 }).intrinsicValuePerShare;
+    const scenarioValue = (key: "bear" | "base" | "bull") =>
+      engineScenarios ? runDCF(engineScenarios[key].inputs).intrinsicValuePerShare : null;
+    const [bear, base, bull] = [scenarioValue("bear"), scenarioValue("base"), scenarioValue("bull")];
+    const growthBand = anchorContext.bands?.growthPhase1 ?? null;
+    const terminalBand = anchorContext.bands?.terminalMargin ?? null;
+    return assessReliability({
+      provenance,
+      unresolved: sourcedFields?.unresolved.length ?? 0,
+      checks: gate.checks,
+      regimes: regimes.map((r) => r.id),
+      converted: !!adrBasis,
+      marginRecord: record
+        ? {
+            years: record.series.length,
+            comparable: record.comparable,
+            volatile: record.flags.includes("volatile"),
+            negativeYears: record.series.filter((y) => y.freeCashFlow < 0).length,
+            latestNegative: (record.series.at(-1)?.freeCashFlow ?? 0) < 0,
+          }
+        : null,
+      terminalWeight: settledResult.enterpriseValue > 0 ? settledResult.pvTerminalValue / settledResult.enterpriseValue : null,
+      spread: settledInputs.wacc - settledInputs.terminalGrowthRate,
+      waccSensitivity: value > 0 ? Math.max(0, (value - plusOne) / value) : null,
+      growthAboveRecord: !!growthBand && inputs.growthRatePhase1 > growthBand.max,
+      terminalMarginAboveRecord: !!terminalBand && inputs.terminalFCFMargin > terminalBand.max,
+      dispersion: bear !== null && bull !== null && base !== null && base > 0 ? (bull - bear) / base : null,
+    });
+  }, [settledResult, settledInputs, revenueHistory.marginHistory, engineScenarios, anchorContext.bands, provenance, sourcedFields, gate.checks, regimes, adrBasis, inputs.growthRatePhase1, inputs.terminalFCFMargin]);
+
   const handleExportScenarios = useCallback(() => {
     if (!ticker || !scenarios) return;
 
@@ -1381,6 +1420,14 @@ export default function DcfCalculatorPage() {
         marginShift: engineMarginShift,
       },
       gate: { checks: gate.checks, blocked: gate.blocked, uncoveredByReader: gate.blocked && valueUncovered },
+      reliability: reliability
+        ? {
+            score: reliability.score,
+            grade: reliability.grade,
+            blocks: reliability.blocks.map((b) => ({ id: b.id, label: b.label, weight: b.weight, score: Math.round(b.score), deductions: b.deductions.map((d) => ({ label: d.label, points: Math.round(d.points * 10) / 10 })) })),
+            detractors: reliability.detractors.map((d) => ({ label: d.label, totalPoints: Math.round(d.totalPoints * 10) / 10, ...(d.fix ? { fix: d.fix } : {}) })),
+          }
+        : undefined,
       regimes: regimes.map((r) => ({ id: r.id, label: r.label, detail: r.detail, recommendation: r.recommendation, tab: r.tab })),
       warnings: [
         ...gate.reasons.map((r) => `Check failed — ${r}`),
@@ -1430,6 +1477,7 @@ export default function DcfCalculatorPage() {
     gate,
     valueUncovered,
     regimes,
+    reliability,
   ]);
 
   const handleReset = useCallback(() => {
@@ -2062,6 +2110,7 @@ export default function DcfCalculatorPage() {
                 </CardHeader>
                 <CardContent className="scroll-quiet lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:pr-3">
                   <DCFDiagnostics
+                    reliability={isPopulated && reliability ? <DCFReliability reliability={reliability} /> : null}
                     anchorWarnings={anchorContext.warnings}
                     coherenceWarnings={coherenceWarnings}
                     fields={sourcedFields}

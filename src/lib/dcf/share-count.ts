@@ -1,4 +1,5 @@
 import type { SourcedDCFFields } from "@/lib/calculations/dcf-inputs-source";
+import { shareCountReconciles } from "./share-reconcile";
 
 /** A filed count this far from the market's own arithmetic is worth a line. */
 export const SHARE_COUNT_DRIFT = 0.01;
@@ -34,6 +35,9 @@ export function shareCountDrift(fields: SourcedDCFFields | null | undefined): Sh
   if (!sc || sc.basis !== "filings" || sc.filed === null || sc.implied === null || !(sc.filed > 0) || !(sc.implied > 0)) return null;
   const deviation = sc.filed / sc.implied - 1;
   if (Math.abs(deviation) <= SHARE_COUNT_DRIFT) return null;
+  // A diluted count above the basic one by less than the dilution allowance
+  // is options and units, not buybacks the average has missed.
+  if (fields?.dilutedCount && shareCountReconciles(deviation, true) && deviation > 0) return null;
   return { filed: sc.filed, implied: sc.implied, deviation, bias: deviation > 0 ? "downward" : "upward" };
 }
 

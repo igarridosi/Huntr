@@ -93,6 +93,13 @@ export interface DCFScenarioExport {
      */
     marginShift?: number;
   };
+  /** How far the calculation can be trusted, 0-100 with a grade, by block, and the deductions that cost most. Informative only. */
+  reliability?: {
+    score: number;
+    grade: "A" | "B" | "C" | "D";
+    blocks: Array<{ id: string; label: string; weight: number; score: number; deductions: Array<{ label: string; points: number }> }>;
+    detractors: Array<{ label: string; totalPoints: number; fix?: string }>;
+  };
   /** The five checks run before the value was shown, and whether the reader uncovered a blocked one. */
   gate?: { checks: Array<{ id: string; label: string; status: "pass" | "fail" | "unverifiable"; detail: string }>; blocked: boolean; uncoveredByReader: boolean };
   /** What kind of company the statements say this is, and the tab that fits. Empty when nothing stands out. */
@@ -286,6 +293,7 @@ export function buildScenarioExport(params: {
   revenueBase?: DCFScenarioExport["revenueBase"];
   provenance?: DCFScenarioExport["provenance"];
   cashFlowBasis?: DCFScenarioExport["cashFlowBasis"];
+  reliability?: DCFScenarioExport["reliability"];
   gate?: DCFScenarioExport["gate"];
   regimes?: DCFScenarioExport["regimes"];
   now?: Date;
@@ -308,6 +316,7 @@ export function buildScenarioExport(params: {
     revenueBase,
     provenance,
     cashFlowBasis,
+    reliability,
     gate,
     regimes,
     now = new Date(),
@@ -481,6 +490,7 @@ export function buildScenarioExport(params: {
     ...(revenueBase ? { revenueBase } : {}),
     ...(provenance ? { provenance } : {}),
     ...(cashFlowBasis ? { cashFlowBasis } : {}),
+    ...(reliability ? { reliability } : {}),
     ...(gate ? { gate } : {}),
     ...(regimes ? { regimes } : {}),
     integrity: {
