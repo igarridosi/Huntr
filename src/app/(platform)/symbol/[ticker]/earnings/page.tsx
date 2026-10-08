@@ -19,7 +19,8 @@ import {
 import { fetchEarningsDetailData } from "@/app/actions/stock";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+import { EarningsLoader } from "@/components/stock/earnings-loader";
+import { useStockProfile, useStockQuote } from "@/hooks/use-stock-data";
 import type { EarningsHistoryPoint } from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
 
@@ -281,6 +282,9 @@ export default function SymbolEarningsPage() {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [hoverSeries, setHoverSeries] = useState<HoverSeries | null>(null);
   const c = useChartColors();
+  // Cached by the ticker layout already, so this costs no request.
+  const { data: profile } = useStockProfile(ticker);
+  const { data: quote } = useStockQuote(ticker);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["symbol", "earnings-detail", ticker],
@@ -347,18 +351,7 @@ export default function SymbolEarningsPage() {
   };
 
   if (isLoading) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Earnings</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Skeleton className="h-16 w-full" />
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-48 w-full" />
-        </CardContent>
-      </Card>
-    );
+    return <EarningsLoader ticker={ticker} profile={profile} quote={quote} />;
   }
 
   if (isError || !data || rowsDesc.length === 0) {
