@@ -30,6 +30,17 @@
  *  6. QUALITY FLAGS — automatic inference of divergence signals:
  *     "non_recurring_charges", "high_cash_quality", "value_creator",
  *     "margin_compression", "leverage_risk".
+ *
+ * Rigour rules (v2.1):
+ *  - A figure that is missing is left out of its average, never filled in
+ *    with a made-up score. Before, a missing metric scored a fixed 25, 40,
+ *    50, 60 or 70, and a dimension with no data scored 0 and dragged the
+ *    overall grade down for a gap in the feed, not in the business.
+ *  - Price plays no part. FCF yield was a Cash Generation input, so a great
+ *    business at a high price graded as a worse business; that is valuation,
+ *    and the Valuation tab covers it.
+ *  - No claim the data cannot back: the "Top X% in sector" line was a fixed
+ *    table from score to rank, not a percentile of any peer group.
  */
 
 import type { CompanyFinancials, IncomeStatement, BalanceSheet, CashFlowStatement } from "@/types/financials";
@@ -65,6 +76,9 @@ export interface QualityDimension {
   key: string;
   name: string;
   score: number;
+  /** True when the data has none of this dimension's figures: it is shown
+   *  as such and left out of the overall score. */
+  insufficient?: boolean;
   grade: QualityGrade;
   metrics: QualityMetric[];
   summary: string;
@@ -74,9 +88,7 @@ export interface QualityScoreResult {
   overall: number;
   grade: QualityGrade;
   headline: string;
-  /** e.g. 12 → "Top 12% in Technology" */
-  sectorPercentile: number;
-  /** Human-readable sector label, e.g. "Technology" */
+  /** Human-readable label of the sector benchmarks used, e.g. "Technology" */
   sector: string;
   mode: QualityMode;
   flags: QualityFlag[];
@@ -275,9 +287,15 @@ const clamp = (v: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, v));
 
 function lerp(a: number, b: number, t: number) { return a + (b - a) * clamp(t, 0, 1); }
 
-function weightedAvg(scores: [number, number][]): number {
-  const tw = scores.reduce((s, [, w]) => s + w, 0);
-  return tw === 0 ? 0 : scores.reduce((s, [v, w]) => s + v * w, 0) / tw;
+/**
+ * Weighted mean of the scores that exist. A null is a figure the data does
+ * not have: it is left out and the remaining weights are renormalised,
+ * rather than being scored as if it were known. Null when nothing is known.
+ */
+export function weightedAvg(scores: [number | null, number][]): number | null {
+  const known = scores.filter((entry): entry is [number, number] => entry[0] !== null && Number.isFinite(entry[0]));
+  const tw = known.reduce((s, [, w]) => s + w, 0);
+  return tw === 0 ? null : known.reduce((s, [v, w]) => s + v * w, 0) / tw;
 }
 
 export function gradeFromScore(s: number): QualityGrade {
@@ -287,17 +305,6 @@ export function gradeFromScore(s: number): QualityGrade {
   if (s >= 50) return "C";
   if (s >= 35) return "D";
   return "F";
-}
-
-/** Maps overall score → approximate top-X% sector rank. */
-function scoreToSectorPercentile(s: number): number {
-  if (s >= 90) return 5;
-  if (s >= 80) return 10;
-  if (s >= 70) return 20;
-  if (s >= 60) return 35;
-  if (s >= 50) return 50;
-  if (s >= 40) return 65;
-  return 80;
 }
 
 /**
@@ -390,7 +397,7 @@ function estimateWACC(
 // ─── Earnings quality analysis ────────────────────────────────────────────────
 
 interface EarningsQuality {
-  avgConversion: number;   // mean FCF / Net Income
+  avgConversion: number | null;   // mean FCF / Net Income; null with no profitable year
   isHighQuality: boolean;  // conversion > 1.0 in ≥75% of years
   hasDivergence: boolean;  // revenue & FCF up but EPS down (non-recurring signal)
 }
@@ -406,9 +413,9 @@ function analyzeEarningsQuality(
     const fcf = cashflow[i]!.free_cash_flow;
     if (ni > 0 && Number.isFinite(fcf)) ratios.push(fcf / ni);
   }
-  const avgConversion = ratios.length ? ratios.reduce((s, v) => s + v, 0) / ratios.length : 1;
+  const avgConversion = ratios.length ? ratios.reduce((s, v) => s + v, 0) / ratios.length : null;
   const highQualityYears = ratios.filter(r => r > 0.8).length;
-  const isHighQuality = avgConversion > 1.0 && highQualityYears >= ratios.length * 0.70;
+  const isHighQuality = avgConversion !== null && avgConversion > 1.0 && highQualityYears >= ratios.length * 0.70;
 
   // Divergence: revenue & FCF growing, EPS shrinking
   let hasDivergence = false;
@@ -469,23 +476,23 @@ function scoreProfitability(
   const roicWaccSpread = roic !== null ? roic - wacc : null;
 
   // Sector-relative scores
-  const grossScore = grossMargin !== null ? spScore(grossMargin, bm.grossMargin) : 50;
-  const opScore    = opMargin    !== null ? spScore(opMargin,    bm.opMargin)    : 50;
-  const roicScore  = roic        !== null ? spScore(roic,        bm.roic)        : 50;
+  const grossScore = grossMargin !== null ? spScore(grossMargin, bm.grossMargin) : null;
+  const opScore    = opMargin    !== null ? spScore(opMargin,    bm.opMargin)    : null;
+  const roicScore  = roic        !== null ? spScore(roic,        bm.roic)        : null;
 
   // Net margin score — but boost if FCF quality is high (earnings are understated)
-  let netScore = netMargin !== null ? spScore(netMargin, bm.netMargin) : 50;
-  if (eq.isHighQuality && netScore < 60) {
+  let netScore = netMargin !== null ? spScore(netMargin, bm.netMargin) : null;
+  if (netScore !== null && eq.isHighQuality && netScore < 60) {
     // FCF/NI > 1: GAAP earnings are understated → soft floor of 50
     netScore = Math.max(netScore, 50);
   }
-  if (eq.hasDivergence && netScore < 55) {
+  if (netScore !== null && eq.hasDivergence && netScore < 55) {
     // Revenue & FCF growing despite depressed EPS → non-recurring charge
     netScore = Math.max(netScore, 55);
   }
 
   // ROIC vs WACC spread score (0–100)
-  let spreadScore = 50;
+  let spreadScore: number | null = null;
   if (roicWaccSpread !== null) {
     if (roicWaccSpread >= 0.20) spreadScore = 100;
     else if (roicWaccSpread >= 0.10) spreadScore = lerp(80, 100, (roicWaccSpread - 0.10) / 0.10);
@@ -496,7 +503,7 @@ function scoreProfitability(
   }
 
   // Margin trend (recent 2 years vs prior 2 years)
-  let marginTrendScore = 50;
+  let marginTrendScore: number | null = null;
   if (income.length >= 4) {
     const recentMargins = income.slice(-2).map(is => is.revenue > 0 ? is.net_income / is.revenue : null).filter((v): v is number => v !== null);
     const olderMargins  = income.slice(0, 2).map(is => is.revenue > 0 ? is.net_income / is.revenue : null).filter((v): v is number => v !== null);
@@ -520,18 +527,18 @@ function scoreProfitability(
 
   // Weights: ROIC spread is the king metric (40%), then ROIC absolute (20%),
   // op margin (15%), gross margin (10%), net margin (10%), trend (5%)
-  const score = clamp(
-    weightedAvg([
-      [spreadScore, 40],
-      [roicScore,   20],
-      [opScore,     15],
-      [grossScore,  10],
-      [netScore,    10],
-      [marginTrendScore, 5],
-    ]) + consistencyBonus
-  );
+  const base = weightedAvg([
+    [spreadScore, 40],
+    [roicScore,   20],
+    [opScore,     15],
+    [grossScore,  10],
+    [netScore,    10],
+    [marginTrendScore, 5],
+  ]);
+  if (base === null) return emptyDimension("profitability", "Profitability");
+  const score = clamp(base + consistencyBonus);
 
-  const trendLabel = marginTrendScore >= 65 ? "Improving" : marginTrendScore >= 45 ? "Stable" : "Declining";
+  const trendLabel = marginTrendScore === null ? "N/A" : marginTrendScore >= 65 ? "Improving" : marginTrendScore >= 45 ? "Stable" : "Declining";
   return {
     key: "profitability", name: "Profitability",
     score, grade: gradeFromScore(score),
@@ -540,39 +547,39 @@ function scoreProfitability(
       {
         label: "ROIC vs WACC Spread",
         value: roicWaccSpread !== null ? `${roicWaccSpread >= 0 ? "+" : ""}${pct(roicWaccSpread)}` : "N/A",
-        score: spreadScore,
+        score: spreadScore ?? 0,
         tooltip: `ROIC minus estimated WACC (${pct(wacc, 1)}). Positive spread = the business earns more on capital than it costs → economic value creation. Primary profitability signal.`,
       },
       {
         label: "ROIC (Return on Invested Capital)",
         value: pct(roic),
-        score: roicScore,
+        score: roicScore ?? 0,
         tooltip: "NOPAT ÷ Invested Capital. Sector-relative percentile. Reflects true capital efficiency regardless of accounting choices.",
       },
       {
         label: "Operating Margin",
         value: pct(opMargin),
-        score: opScore,
+        score: opScore ?? 0,
         tooltip: `Operating income ÷ Revenue. Scored vs ${bm.label} sector peers. Reflects business efficiency before financing costs.`,
       },
       {
         label: "Gross Margin",
         value: pct(grossMargin),
-        score: grossScore,
+        score: grossScore ?? 0,
         tooltip: `Gross Profit ÷ Revenue. Scored vs ${bm.label} sector peers. High gross margins indicate pricing power and structural competitive advantage.`,
       },
       {
         label: "Net Margin",
         value: pct(netMargin),
-        score: netScore,
+        score: netScore ?? 0,
         tooltip: eq.isHighQuality
-          ? `Net Income ÷ Revenue. Score floored upward: FCF/NI conversion (${eq.avgConversion.toFixed(2)}×) indicates earnings are understated by non-cash charges.`
+          ? `Net Income ÷ Revenue. Score floored upward: FCF/NI conversion (${(eq.avgConversion ?? 0).toFixed(2)}×) indicates earnings are understated by non-cash charges.`
           : `Net Income ÷ Revenue. Sector-relative percentile vs ${bm.label} peers.`,
       },
       {
         label: "Margin Trend",
         value: trendLabel,
-        score: marginTrendScore,
+        score: marginTrendScore ?? 0,
         tooltip: "Compares average net margin of the most recent 2 years vs the earliest 2 years in the analysis window.",
       },
     ],
@@ -587,9 +594,14 @@ function scoreGrowth(
   bm: SectorBenchmarks,
   mode: QualityMode
 ): QualityDimension {
+  // Whole series, in order. Filtering out the negative years first (as this
+  // did) and then taking "the last 3 years" measured a different, longer
+  // window whenever a year was dropped. A CAGR from or to a loss is not
+  // defined, so it comes out null and is left out of the score.
   const revSeries = income.map(is => is.revenue);
-  const epsSeries = income.map(is => is.eps_diluted).filter(v => v > 0);
-  const fcfSeries = cashflow.map(cf => cf.free_cash_flow).filter(v => v > 0);
+  const epsSeries = income.map(is => is.eps_diluted);
+  const fcfSeries = cashflow.map(cf => cf.free_cash_flow);
+  const endsPositive = (series: number[]) => (series.at(-1) ?? 0) > 0;
 
   // Choose best available CAGR window depending on mode
   const maxYears  = mode === "deep" ? 5 : 3;
@@ -601,12 +613,12 @@ function scoreGrowth(
     return calculateCAGR(series, 3);
   };
 
-  const revCAGR = tryWindow(revSeries);
-  const epsCAGR = tryWindow(epsSeries);
-  const fcfCAGR = tryWindow(fcfSeries);
+  const revCAGR = endsPositive(revSeries) ? tryWindow(revSeries) : null;
+  const epsCAGR = endsPositive(epsSeries) ? tryWindow(epsSeries) : null;
+  const fcfCAGR = endsPositive(fcfSeries) ? tryWindow(fcfSeries) : null;
 
   // Deep mode extras: 10Y CAGR durability + consistency score
-  let consistencyScore = 50;
+  let consistencyScore: number | null = null;
   if (mode === "deep" && income.length >= 8) {
     const positiveGrowthYears = income.slice(1).filter((is, idx) => is.revenue > income[idx]!.revenue).length;
     const growthRate = positiveGrowthYears / (income.length - 1);
@@ -615,24 +627,29 @@ function scoreGrowth(
 
   const window = mode === "deep" ? "5Y" : "3Y";
 
-  const revScore = revCAGR !== null ? spScore(revCAGR, bm.revCagr) : 25;
-  const fcfScore = fcfCAGR !== null ? spScore(fcfCAGR, bm.fcfCagr) : 25;
+  // A series that ends in a loss is a fact about growth, not a gap: it
+  // scores at the bottom. A series too short to measure is a gap: null.
+  const scoreGrowthOf = (cagr: number | null, series: number[], p: MetricP) =>
+    cagr !== null ? spScore(cagr, p) : series.length >= 4 && !endsPositive(series) ? 0 : null;
+  const revScore = scoreGrowthOf(revCAGR, revSeries, bm.revCagr);
+  const fcfScore = scoreGrowthOf(fcfCAGR, fcfSeries, bm.fcfCagr);
 
-  // EPS growth score — FCF prioritized (EPS can be distorted)
-  // We blend EPS score with FCF score; if EPS is negative but FCF is growing, FCF dominates
-  let epsScore = epsCAGR !== null ? spScore(epsCAGR, bm.revCagr) : 25;
-  if (fcfCAGR !== null && fcfCAGR > 0.05 && (epsCAGR === null || epsCAGR < 0)) {
-    // FCF growing strongly but EPS depressed → use FCF score as floor for EPS component
-    epsScore = Math.max(epsScore, fcfScore * 0.7);
+  // EPS growth, against the earnings-growth (FCF) benchmarks rather than
+  // revenue's, whose spread is narrower. FCF is weighted more heavily: if
+  // EPS is falling while FCF grows strongly, FCF sets a floor for EPS.
+  let epsScore = scoreGrowthOf(epsCAGR, epsSeries, bm.fcfCagr);
+  if (fcfScore !== null && fcfCAGR !== null && fcfCAGR > 0.05 && (epsCAGR === null || epsCAGR < 0)) {
+    epsScore = Math.max(epsScore ?? 0, fcfScore * 0.7);
   }
 
-  const weights: [number, number][] = [
+  const growthBase = weightedAvg([
     [revScore,         30],
     [fcfScore,         35], // FCF CAGR is gold standard
     [epsScore,         20],
-    [consistencyScore, 15], // consistency only counts in deep mode (else fixed 50)
-  ];
-  const score = clamp(weightedAvg(weights));
+    [consistencyScore, 15], // deep mode only; left out otherwise
+  ]);
+  if (growthBase === null) return emptyDimension("growth", "Growth");
+  const score = clamp(growthBase);
 
   return {
     key: "growth", name: "Growth",
@@ -642,19 +659,19 @@ function scoreGrowth(
       {
         label: `FCF Growth (${window} CAGR)`,
         value: pct(fcfCAGR),
-        score: fcfScore,
+        score: fcfScore ?? 0,
         tooltip: `Compound Annual Growth Rate of Free Cash Flow over ${window}. Harder to manipulate than earnings — the gold standard of quality growth. Scored vs ${bm.label} peers.`,
       },
       {
         label: `Revenue Growth (${window} CAGR)`,
         value: pct(revCAGR),
-        score: revScore,
+        score: revScore ?? 0,
         tooltip: `Compound Annual Growth Rate of Revenue over ${window}. Scored vs ${bm.label} sector peers. Persistent top-line growth validates business momentum.`,
       },
       {
         label: `EPS Growth (${window} CAGR)`,
         value: pct(epsCAGR),
-        score: epsScore,
+        score: epsScore ?? 0,
         tooltip: epsCAGR !== null && epsCAGR < 0 && fcfCAGR !== null && fcfCAGR > 0.05
           ? "EPS is negative/declining while FCF is growing — likely non-recurring charges. Score adjusted upward based on FCF quality."
           : `Diluted EPS CAGR over ${window}. Scored alongside FCF growth to weight cash earnings more heavily.`,
@@ -664,7 +681,7 @@ function scoreGrowth(
         value: income.length >= 2
           ? `${Math.round((income.slice(1).filter((is, idx) => is.revenue > income[idx]!.revenue).length / (income.length - 1)) * 100)}% of years`
           : "N/A",
-        score: consistencyScore,
+        score: consistencyScore ?? 0,
         tooltip: "Percentage of years (over the 10Y window) in which revenue grew vs the prior year. Consistent growers score highest.",
       }] : []),
     ],
@@ -684,7 +701,8 @@ function scoreFinancialHealth(
   if (!latestBal) return emptyDimension("financialHealth", "Financial Health");
 
   const debtEquity     = latestBal.total_equity > 0 ? latestBal.long_term_debt / latestBal.total_equity : null;
-  const netDebt        = latestBal.long_term_debt - latestBal.cash_and_equivalents;
+  // Cash includes short-term investments, as everywhere else on the page.
+  const netDebt        = latestBal.long_term_debt - latestBal.cash_and_equivalents - (latestBal.short_term_investments ?? 0);
   const netDebtEBITDA  = latestInc && latestInc.ebitda > 0 ? netDebt / latestInc.ebitda : null;
   const intCoverage    = latestInc && Math.abs(latestInc.interest_expense) > 0
     ? latestInc.operating_income / Math.abs(latestInc.interest_expense) : null;
@@ -692,30 +710,33 @@ function scoreFinancialHealth(
     ? latestBal.total_current_assets / latestBal.total_current_liabilities : null;
 
   // D/E: sector-relative (Financials/Utilities tolerate higher leverage)
-  const deScore = debtEquity !== null ? spScore(debtEquity, bm.debtEquity, true) : 50;
+  const deScore = debtEquity !== null ? spScore(debtEquity, bm.debtEquity, true) : null;
 
-  // Net Debt / EBITDA: absolute thresholds (universal concept)
-  let ndScore = 60;
-  if (netDebtEBITDA !== null) {
-    ndScore = netDebt <= 0
-      ? 100
-      : clamp(scoreAbsolute(netDebtEBITDA, [[0, 100], [1, 85], [2, 70], [3, 50], [4, 30], [6, 10]]));
+  // Net Debt / EBITDA: absolute thresholds (universal concept). Net cash is
+  // the best case whatever EBITDA is.
+  let ndScore: number | null = null;
+  if (netDebt <= 0) ndScore = 100;
+  else if (netDebtEBITDA !== null) {
+    ndScore = clamp(scoreAbsolute(netDebtEBITDA, [[0, 100], [1, 85], [2, 70], [3, 50], [4, 30], [6, 10]]));
   }
 
-  // Interest coverage: absolute (>5× is universally safe)
-  let covScore = 70; // assume safe if no interest expense
+  // Interest coverage: absolute (>5× is universally safe). No interest
+  // expense with no debt is safe for certain; with debt it is a gap.
+  let covScore: number | null = null;
   if (intCoverage !== null) {
     covScore = clamp(scoreAbsolute(intCoverage, [[0, 5], [2, 20], [3, 40], [5, 60], [8, 75], [12, 90], [20, 100]]));
+  } else if (latestBal.long_term_debt <= 0) {
+    covScore = 100;
   }
 
   // Current ratio
-  let crScore = 60;
+  let crScore: number | null = null;
   if (currentRatio !== null) {
     crScore = clamp(scoreAbsolute(currentRatio, [[0.5, 10], [0.8, 30], [1.0, 55], [1.5, 80], [2.0, 95], [3.0, 100]]));
   }
 
   // Deep mode: leverage trend (is debt/equity improving over time?)
-  let leverageTrendScore = 50;
+  let leverageTrendScore: number | null = null;
   if (mode === "deep" && balance.length >= 4) {
     const deHistory = balance
       .filter(b => b.total_equity > 0)
@@ -727,11 +748,13 @@ function scoreFinancialHealth(
     }
   }
 
-  const weights: [number, number][] = mode === "deep"
-    ? [[deScore, 25], [ndScore, 28], [covScore, 22], [crScore, 13], [leverageTrendScore, 12]]
-    : [[deScore, 30], [ndScore, 30], [covScore, 25], [crScore, 15]];
-
-  const score = clamp(weightedAvg(weights));
+  const healthBase = weightedAvg(
+    mode === "deep"
+      ? [[deScore, 25], [ndScore, 28], [covScore, 22], [crScore, 13], [leverageTrendScore, 12]]
+      : [[deScore, 30], [ndScore, 30], [covScore, 25], [crScore, 15]]
+  );
+  if (healthBase === null) return emptyDimension("financialHealth", "Financial Health");
+  const score = clamp(healthBase);
 
   return {
     key: "financialHealth", name: "Financial Health",
@@ -743,31 +766,31 @@ function scoreFinancialHealth(
       {
         label: "Debt / Equity",
         value: debtEquity !== null ? `${debtEquity.toFixed(1)}x` : "N/A",
-        score: deScore,
+        score: deScore ?? 0,
         tooltip: `Long-term Debt ÷ Equity. Scored relative to ${bm.label} sector peers — capital-intensive sectors naturally carry more leverage.`,
       },
       {
         label: "Net Debt / EBITDA",
         value: netDebt <= 0 ? "Net Cash" : fmtX(netDebtEBITDA),
-        score: ndScore,
+        score: ndScore ?? 0,
         tooltip: "Years of EBITDA needed to repay net debt. Universal threshold: < 2× healthy, > 4× concerning. Net cash position scores 100.",
       },
       {
         label: "Interest Coverage",
         value: intCoverage !== null ? `${intCoverage.toFixed(1)}x` : "No interest expense",
-        score: covScore,
+        score: covScore ?? 0,
         tooltip: "Operating Income ÷ Interest Expense. > 5× provides a comfortable safety margin. Companies with no debt score as safe.",
       },
       {
         label: "Current Ratio",
         value: fmtX(currentRatio),
-        score: crScore,
+        score: crScore ?? 0,
         tooltip: "Current Assets ÷ Current Liabilities. > 1.5× suggests healthy short-term liquidity.",
       },
       ...(mode === "deep" ? [{
         label: "Leverage Trend (10Y)",
-        value: leverageTrendScore >= 65 ? "Improving" : leverageTrendScore >= 40 ? "Stable" : "Increasing",
-        score: leverageTrendScore,
+        value: leverageTrendScore === null ? "N/A" : leverageTrendScore >= 65 ? "Improving" : leverageTrendScore >= 40 ? "Stable" : "Increasing",
+        score: leverageTrendScore ?? 0,
         tooltip: "Whether the D/E ratio has improved (decreased) over the 10-year window vs earlier periods.",
       }] : []),
     ],
@@ -779,7 +802,6 @@ function scoreFinancialHealth(
 function scoreCashGeneration(
   income: IncomeStatement[],
   cashflow: CashFlowStatement[],
-  quote: StockQuote,
   bm: SectorBenchmarks,
   eq: EarningsQuality,
   mode: QualityMode
@@ -789,20 +811,19 @@ function scoreCashGeneration(
 
   const fcfMargin = latestInc && latestCF && latestInc.revenue > 0
     ? latestCF.free_cash_flow / latestInc.revenue : null;
-  const fcfYield = latestCF && quote.price > 0 && quote.shares_outstanding > 0
-    ? latestCF.free_cash_flow / (quote.price * quote.shares_outstanding) : null;
+  // FCF yield is not here on purpose: it moves with the share price, and a
+  // quality score has to grade the business, not what the market pays for it.
 
-  const fcfMarginScore = fcfMargin !== null ? spScore(fcfMargin, bm.fcfMargin)  : 30;
-  const fcfYieldScore  = fcfYield  !== null
-    ? clamp(scoreAbsolute(fcfYield, [[0.01, 20], [0.02, 40], [0.03, 55], [0.04, 70], [0.06, 85], [0.08, 95], [0.10, 100]]))
-    : 40;
+  const fcfMarginScore = fcfMargin !== null ? spScore(fcfMargin, bm.fcfMargin) : null;
 
-  // FCF / NI conversion (higher = better cash quality)
-  const convScore = clamp(scoreAbsolute(eq.avgConversion,
-    [[0.4, 10], [0.6, 30], [0.8, 55], [0.95, 70], [1.05, 82], [1.2, 92], [1.5, 100]]));
+  // FCF / NI conversion (higher = better cash quality); null when no year
+  // had a positive net income to convert.
+  const convScore = eq.avgConversion !== null
+    ? clamp(scoreAbsolute(eq.avgConversion, [[0.4, 10], [0.6, 30], [0.8, 55], [0.95, 70], [1.05, 82], [1.2, 92], [1.5, 100]]))
+    : null;
 
   // FCF trend (recent 2 vs earlier 2)
-  let fcfTrendScore = 50;
+  let fcfTrendScore: number | null = null;
   if (cashflow.length >= 4) {
     const recent = cashflow.slice(-2).map(c => c.free_cash_flow);
     const older  = cashflow.slice(0, 2).map(c => c.free_cash_flow);
@@ -812,53 +833,49 @@ function scoreCashGeneration(
   }
 
   // Deep mode: FCF stability (coefficient of variation)
-  let stabilityScore = 50;
+  let stabilityScore: number | null = null;
   if (mode === "deep" && cashflow.length >= 6) {
     const fcfValues = cashflow.map(c => c.free_cash_flow).filter(v => v > 0);
     const cv = coefficientOfVariation(fcfValues);
     // Low CV = stable = high score
-    stabilityScore = cv === null ? 50 : clamp(lerp(100, 0, cv / 1.5));
+    stabilityScore = cv === null ? null : clamp(lerp(100, 0, cv / 1.5));
   }
 
-  const weights: [number, number][] = mode === "deep"
-    ? [[fcfMarginScore, 25], [fcfYieldScore, 20], [convScore, 25], [fcfTrendScore, 15], [stabilityScore, 15]]
-    : [[fcfMarginScore, 30], [fcfYieldScore, 30], [convScore, 25], [fcfTrendScore, 15]];
-
-  const score = clamp(weightedAvg(weights));
+  const cashBase = weightedAvg(
+    mode === "deep"
+      ? [[fcfMarginScore, 35], [convScore, 30], [fcfTrendScore, 20], [stabilityScore, 15]]
+      : [[fcfMarginScore, 45], [convScore, 35], [fcfTrendScore, 20]]
+  );
+  if (cashBase === null) return emptyDimension("cashGeneration", "Cash Generation");
+  const score = clamp(cashBase);
 
   return {
     key: "cashGeneration", name: "Cash Generation",
     score, grade: gradeFromScore(score),
-    summary: `FCF Margin ${pct(fcfMargin)} · FCF Yield ${pct(fcfYield)} · Conversion ${eq.avgConversion.toFixed(1)}×`,
+    summary: `FCF Margin ${pct(fcfMargin)} · Conversion ${eq.avgConversion !== null ? `${eq.avgConversion.toFixed(1)}×` : "N/A"}`,
     metrics: [
       {
         label: "FCF Margin",
         value: pct(fcfMargin),
-        score: fcfMarginScore,
+        score: fcfMarginScore ?? 0,
         tooltip: `Free Cash Flow ÷ Revenue. Scored vs ${bm.label} sector peers. > 15% generally signals a capital-light, highly profitable business.`,
       },
       {
-        label: "FCF Yield",
-        value: pct(fcfYield),
-        score: fcfYieldScore,
-        tooltip: "FCF ÷ Market Cap. Functions as a real-earnings yield. > 4% is attractive relative to current bond yields.",
-      },
-      {
         label: "FCF / Net Income Conversion",
-        value: `${eq.avgConversion.toFixed(2)}×`,
-        score: convScore,
+        value: eq.avgConversion !== null ? `${eq.avgConversion.toFixed(2)}×` : "N/A",
+        score: convScore ?? 0,
         tooltip: "Average FCF ÷ Net Income over the analysis window. > 1× means cash generation exceeds reported earnings — strong earnings quality signal. < 0.8× may indicate aggressive accruals.",
       },
       {
         label: "FCF Trend",
-        value: fcfTrendScore >= 65 ? "Improving" : fcfTrendScore >= 40 ? "Stable" : "Declining",
-        score: fcfTrendScore,
+        value: fcfTrendScore === null ? "N/A" : fcfTrendScore >= 65 ? "Improving" : fcfTrendScore >= 40 ? "Stable" : "Declining",
+        score: fcfTrendScore ?? 0,
         tooltip: "Compares average FCF of the most recent 2 years vs the earliest 2 years in the window.",
       },
       ...(mode === "deep" ? [{
         label: "FCF Stability (10Y)",
-        value: stabilityScore >= 70 ? "High" : stabilityScore >= 45 ? "Moderate" : "Low",
-        score: stabilityScore,
+        value: stabilityScore === null ? "N/A" : stabilityScore >= 70 ? "High" : stabilityScore >= 45 ? "Moderate" : "Low",
+        score: stabilityScore ?? 0,
         tooltip: "Coefficient of variation of annual FCF over 10 years. Low volatility in cash generation commands a premium — it means the business model is durable.",
       }] : []),
     ],
@@ -900,10 +917,10 @@ function scoreCapitalAllocation(
   // Buyback score
   const buybackScore = shareReduction !== null
     ? clamp(scoreAbsolute(shareReduction, [[-0.05, 10], [0.0, 30], [0.02, 50], [0.05, 70], [0.10, 90], [0.15, 100]]))
-    : 40;
+    : null;
 
   // Dynamic payout score — sector-aware
-  let payoutScore = 60;
+  let payoutScore: number | null = null;
   if (fcfPayoutRatio !== null) {
     const maxOk = bm.maxPayoutFcf;
     if (fcfPayoutRatio <= 0.001) {
@@ -921,26 +938,31 @@ function scoreCapitalAllocation(
     }
   }
 
+  // Returning more than the free cash flow earned (> 100%) means funding it
+  // with debt or cash on hand: it used to score a flat 75 above 90%, which
+  // contradicted its own tooltip. The curve now falls away past 100%.
   const returnRatioScore = returnRatio !== null
-    ? clamp(scoreAbsolute(returnRatio, [[0, 30], [0.1, 45], [0.3, 65], [0.5, 80], [0.7, 90], [0.9, 75]]))
-    : 50;
+    ? clamp(scoreAbsolute(returnRatio, [[0, 30], [0.1, 45], [0.3, 65], [0.5, 80], [0.7, 90], [0.9, 85], [1.0, 70], [1.3, 40], [1.8, 15]]))
+    : null;
 
   const capexScore = capexEff !== null
     ? clamp(scoreAbsolute(capexEff, [[0, 10], [0.5, 40], [0.7, 65], [0.8, 80], [0.9, 92], [0.95, 100]]))
-    : 50;
+    : null;
 
   // Deep mode: buyback consistency
-  let buybackConsistency = 50;
+  let buybackConsistency: number | null = null;
   if (mode === "deep" && cashflow.length >= 6) {
     const buybackYears = cashflow.filter(cf => Math.abs(cf.share_repurchases) > 0).length;
     buybackConsistency = lerp(0, 100, buybackYears / cashflow.length);
   }
 
-  const weights: [number, number][] = mode === "deep"
-    ? [[buybackScore, 25], [payoutScore, 20], [returnRatioScore, 20], [capexScore, 20], [buybackConsistency, 15]]
-    : [[buybackScore, 30], [payoutScore, 20], [returnRatioScore, 25], [capexScore, 25]];
-
-  const score = clamp(weightedAvg(weights));
+  const allocationBase = weightedAvg(
+    mode === "deep"
+      ? [[buybackScore, 25], [payoutScore, 20], [returnRatioScore, 20], [capexScore, 20], [buybackConsistency, 15]]
+      : [[buybackScore, 30], [payoutScore, 20], [returnRatioScore, 25], [capexScore, 25]]
+  );
+  if (allocationBase === null) return emptyDimension("capitalAllocation", "Capital Allocation");
+  const score = clamp(allocationBase);
 
   const buybackLabel = shareReduction !== null
     ? shareReduction > 0.05 ? "Active buybacks" : shareReduction > 0.01 ? "Modest buybacks" : "Share dilution"
@@ -960,31 +982,31 @@ function scoreCapitalAllocation(
         value: shareReduction !== null
           ? `${shareReduction >= 0 ? "−" : "+"}${pct(Math.abs(shareReduction))} ${shareReduction >= 0 ? "(reduction)" : "(dilution)"}`
           : "N/A",
-        score: buybackScore,
+        score: buybackScore ?? 0,
         tooltip: `Change in shares outstanding across the ${mode === "deep" ? "10Y" : "4Y"} analysis window. Reduction signals buybacks (shareholder-friendly); dilution may indicate equity financing.`,
       },
       {
         label: "Dividend Payout (vs FCF)",
         value: fcfPayoutRatio !== null ? pct(fcfPayoutRatio) : "No dividend",
-        score: payoutScore,
+        score: payoutScore ?? 0,
         tooltip: `Dividends paid ÷ Free Cash Flow. Evaluated dynamically: max acceptable FCF payout for ${bm.label} sector = ${pct(bm.maxPayoutFcf)}. Payout vs FCF (not net income) avoids accounting distortions.`,
       },
       {
         label: "Returns / FCF",
         value: pct(returnRatio),
-        score: returnRatioScore,
+        score: returnRatioScore ?? 0,
         tooltip: "(Dividends + Buybacks) ÷ Free Cash Flow. 30–90% is healthy. > 100% means the company is returning more than it earns — not sustainable long term.",
       },
       {
         label: "CapEx Efficiency",
         value: pct(capexEff),
-        score: capexScore,
+        score: capexScore ?? 0,
         tooltip: "Free Cash Flow ÷ Operating Cash Flow. High values indicate that little capital is consumed sustaining the business — a capital-light model.",
       },
       ...(mode === "deep" ? [{
         label: "Buyback Consistency (10Y)",
         value: `${cashflow.filter(cf => Math.abs(cf.share_repurchases) > 0).length} / ${cashflow.length} years`,
-        score: buybackConsistency,
+        score: buybackConsistency ?? 0,
         tooltip: "Number of years (out of 10) in which the company repurchased shares. Consistent buybacks signal capital discipline and confidence in the business.",
       }] : []),
     ],
@@ -1010,7 +1032,7 @@ function scoreAbsolute(value: number, breakpoints: [number, number][]): number {
 // ─── Empty dimension fallback ─────────────────────────────────────────────────
 
 function emptyDimension(key: string, name: string): QualityDimension {
-  return { key, name, score: 0, grade: "F", metrics: [], summary: "Insufficient data" };
+  return { key, name, score: 0, grade: "F", metrics: [], summary: "Insufficient data", insufficient: true };
 }
 
 // ─── Quality flags ────────────────────────────────────────────────────────────
@@ -1090,7 +1112,7 @@ export function calculateQualityScore(
   const roic      = latestInc && latestBal ? computeROIC(latestInc, latestBal) : null;
 
   // Net debt for leverage flag
-  const netDebt = latestBal ? latestBal.long_term_debt - latestBal.cash_and_equivalents : 0;
+  const netDebt = latestBal ? latestBal.long_term_debt - latestBal.cash_and_equivalents - (latestBal.short_term_investments ?? 0) : 0;
   const ebitda  = latestInc?.ebitda ?? 0;
 
   // Margin compression flag
@@ -1113,12 +1135,14 @@ export function calculateQualityScore(
     scoreProfitability(income, balance, bm, wacc, eq, mode),
     scoreGrowth(income, cashflow, bm, mode),
     scoreFinancialHealth(income, balance, bm, mode),
-    scoreCashGeneration(income, cashflow, quote, bm, eq, mode),
+    scoreCashGeneration(income, cashflow, bm, eq, mode),
     scoreCapitalAllocation(income, balance, cashflow, bm, mode),
   ] as QualityScoreResult["dimensions"];
 
+  // A dimension the data cannot score is left out and the other weights
+  // renormalised; it is not counted as a zero.
   const overall = clamp(
-    dimensions.reduce((sum, dim, i) => sum + dim.score * DIMENSION_WEIGHTS[i], 0)
+    weightedAvg(dimensions.map((dim, i) => [dim.insufficient ? null : dim.score, DIMENSION_WEIGHTS[i]])) ?? 0
   );
   const grade = gradeFromScore(overall);
 
@@ -1126,7 +1150,6 @@ export function calculateQualityScore(
     overall,
     grade,
     headline: HEADLINES[grade],
-    sectorPercentile: scoreToSectorPercentile(overall),
     sector: bm.label,
     mode,
     flags,

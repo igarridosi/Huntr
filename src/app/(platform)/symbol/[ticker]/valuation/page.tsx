@@ -1,671 +1,509 @@
 "use client";
 
+import Link from "next/link";
+import { useMemo, type CSSProperties, type ReactNode } from "react";
 import { useParams } from "next/navigation";
-import {
-  useStockQuote,
-  useFinancials,
-} from "@/hooks/use-stock-data";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Tooltip } from "@/components/ui/tooltip";
-import { MetricChart } from "@/components/financials/metric-chart";
+import { ArrowRight } from "lucide-react";
+import { useBatchDailyHistory, useFinancials, useStockQuote } from "@/hooks/use-stock-data";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  ComposedChart,
-  Area,
-  Line,
-  ReferenceLine,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip as RechartTooltip,
-  ResponsiveContainer,
-} from "recharts";
-import {
-  formatPercent,
-  formatCompactNumber,
-} from "@/lib/utils";
-import { cn } from "@/lib/utils";
-import { useChartColors } from "@/hooks/use-chart-colors";
-import {
-  calculateROIC,
-  calculateFCFYield,
-  calculateAllCAGRs,
-} from "@/lib/calculations";
+import { Tooltip } from "@/components/ui/tooltip";
+import { ROUTES } from "@/lib/constants";
+import { cn, formatCurrency, formatPercent } from "@/lib/utils";
+import { cagrOf, impliedFcfGrowth, positionIn, priceOn, spreadOf, type Spread } from "@/lib/valuation/snapshot";
+import type { CompanyFinancials } from "@/types/financials";
+import type { StockQuote } from "@/types/stock";
 
-function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
-  return rows
-    .slice()
-    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+/**
+ * Is the price reasonable? Four answers, on one screen:
+ *
+ * - What the company is worth by each multiple's own range (a football
+ *   field: the range of values, today's price across it).
+ * - What growth the price already assumes (a reverse DCF on free cash flow),
+ *   set against the growth the company has delivered.
+ * - Where each multiple stands against its own past.
+ * - The growth itself, year by year.
+ *
+ * Every past multiple uses the price on the day the fiscal year closed (see
+ * lib/valuation/snapshot for why the previous page's numbers were wrong).
+ */
+const DISCOUNT_RATE = 0.09;
+const TERMINAL_GROWTH = 0.03;
+const PROJECTION_YEARS = 10;
+
+type MultipleKey = "pe" | "ps" | "pfcf" | "evEbitda";
+
+const MULTIPLE_LABEL: Record<MultipleKey, string> = {
+  pe: "P/E",
+  ps: "P/S",
+  pfcf: "P/FCF",
+  evEbitda: "EV/EBITDA",
+};
+
+const MULTIPLE_HELP: Record<MultipleKey, string> = {
+  pe: "Price over earnings per share.",
+  ps: "Market cap over revenue.",
+  pfcf: "Market cap over free cash flow.",
+  evEbitda: "Market cap plus debt less cash, over EBITDA.",
+};
+
+interface Analysis {
+  years: number;
+  fiscalLabel: string;
+  now: Partial<Record<MultipleKey, number>>;
+  history: Partial<Record<MultipleKey, Spread>>;
+  /** Per-share value of the company at each multiple's min, median and max. */
+  field: Array<{ key: MultipleKey; low: number; mid: number; high: number }>;
+  implied: number | null;
+  fcfTtm: number | null;
+  ev: number;
+  growth: Array<{ label: string; values: Array<{ year: string; value: number }>; cagr: number | null; yoy: number | null; money: boolean }>;
+}
+
+const byDate = <T extends { date: string }>(rows: T[]) =>
+  rows.slice().sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+function sameYear(a: string, b: string) {
+  return Math.abs(new Date(a).getTime() - new Date(b).getTime()) < 45 * 86_400_000;
+}
+
+function ttm<T extends { date: string }>(quarterly: T[], annual: T[], pick: (row: T) => number): number | null {
+  const q = byDate(quarterly).slice(-4);
+  if (q.length === 4) return q.reduce((sum, row) => sum + (pick(row) ?? 0), 0);
+  const last = byDate(annual).at(-1);
+  return last ? pick(last) : null;
+}
+
+function analyse(quote: StockQuote, fin: CompanyFinancials, history: Array<{ date: string; close: number }>): Analysis {
+  const income = byDate(fin.income_statement.annual);
+  const balance = byDate(fin.balance_sheet.annual);
+  const cash = byDate(fin.cash_flow.annual);
+  const shares = quote.shares_outstanding > 0 ? quote.shares_outstanding : quote.market_cap / quote.price;
+
+  // ---- each fiscal year at its own closing price ----
+  const past: Record<MultipleKey, number[]> = { pe: [], ps: [], pfcf: [], evEbitda: [] };
+  for (const is of income) {
+    const price = priceOn(history, is.date);
+    if (!price) continue;
+    const s = is.shares_outstanding_diluted > 0 ? is.shares_outstanding_diluted : shares;
+    const cf = cash.find((row) => sameYear(row.date, is.date));
+    const bs = balance.find((row) => sameYear(row.date, is.date));
+    const cap = price * s;
+    if (is.eps_diluted > 0) past.pe.push(price / is.eps_diluted);
+    if (is.revenue > 0) past.ps.push(cap / is.revenue);
+    if (cf && cf.free_cash_flow > 0) past.pfcf.push(cap / cf.free_cash_flow);
+    if (bs && is.ebitda > 0) past.evEbitda.push((cap + bs.long_term_debt - bs.cash_and_equivalents) / is.ebitda);
+  }
+
+  // ---- today, on the last twelve months ----
+  const q = fin.income_statement.quarterly;
+  const revenue = ttm(q, income, (r) => r.revenue);
+  const netIncome = ttm(q, income, (r) => r.net_income);
+  const ebitda = ttm(q, income, (r) => r.ebitda);
+  const fcf = ttm(fin.cash_flow.quarterly, cash, (r) => r.free_cash_flow);
+  const latestBs = byDate([...fin.balance_sheet.quarterly, ...balance]).at(-1);
+  const debt = latestBs?.long_term_debt ?? 0;
+  const cashNow = (latestBs?.cash_and_equivalents ?? 0) + (latestBs?.short_term_investments ?? 0);
+  const cap = quote.market_cap;
+  const ev = cap + debt - cashNow;
+
+  const now: Analysis["now"] = {};
+  if (quote.pe_ratio > 0) now.pe = quote.pe_ratio;
+  else if (netIncome && netIncome > 0) now.pe = cap / netIncome;
+  if (revenue && revenue > 0) now.ps = cap / revenue;
+  if (fcf && fcf > 0) now.pfcf = cap / fcf;
+  if (ebitda && ebitda > 0) now.evEbitda = ev / ebitda;
+
+  const historySpread: Analysis["history"] = {};
+  (Object.keys(past) as MultipleKey[]).forEach((key) => {
+    const spread = past[key].length >= 2 ? spreadOf(past[key]) : null;
+    if (spread) historySpread[key] = spread;
+  });
+
+  // ---- what each multiple's range says the company is worth, per share ----
+  const perShare: Partial<Record<MultipleKey, (m: number) => number>> = {};
+  if (netIncome && netIncome > 0) perShare.pe = (m) => (m * netIncome) / shares;
+  if (revenue && revenue > 0) perShare.ps = (m) => (m * revenue) / shares;
+  if (fcf && fcf > 0) perShare.pfcf = (m) => (m * fcf) / shares;
+  if (ebitda && ebitda > 0) perShare.evEbitda = (m) => (m * ebitda - debt + cashNow) / shares;
+
+  const field: Analysis["field"] = [];
+  (Object.keys(historySpread) as MultipleKey[]).forEach((key) => {
+    const spread = historySpread[key]!;
+    const value = perShare[key];
+    if (!value) return;
+    field.push({ key, low: value(spread.min), mid: value(spread.median), high: value(spread.max) });
+  });
+
+  const series = (label: string, values: Array<{ year: string; value: number }>, money: boolean) => ({
+    label,
+    values,
+    money,
+    cagr: cagrOf(values.map((v) => v.value)),
+    yoy: values.length >= 2 && values.at(-2)!.value > 0 ? values.at(-1)!.value / values.at(-2)!.value - 1 : null,
+  });
+  const year = (d: string) => String(new Date(d).getUTCFullYear());
+
+  return {
+    years: income.length,
+    fiscalLabel: income.at(-1)?.period ?? "",
+    now,
+    history: historySpread,
+    field,
+    implied: fcf ? impliedFcfGrowth({ fcf, enterpriseValue: ev, discountRate: DISCOUNT_RATE, terminalGrowth: TERMINAL_GROWTH, years: PROJECTION_YEARS }) : null,
+    fcfTtm: fcf,
+    ev,
+    growth: [
+      series("Revenue", income.map((r) => ({ year: year(r.date), value: r.revenue })), true),
+      series("EPS", income.map((r) => ({ year: year(r.date), value: r.eps_diluted })), false),
+      series("Free cash flow", cash.map((r) => ({ year: year(r.date), value: r.free_cash_flow })), true),
+    ],
+  };
 }
 
 export default function ValuationPage() {
   const params = useParams<{ ticker: string }>();
   const ticker = (params.ticker ?? "").toUpperCase();
 
-  const c = useChartColors();
   const { data: quote, isLoading: qLoading } = useStockQuote(ticker);
   const { data: financials, isLoading: fLoading } = useFinancials(ticker);
+  // The same query as the price chart, so it is usually cached already.
+  const { data: historyMap, isLoading: hLoading } = useBatchDailyHistory([ticker], "ALL", !!ticker);
+  const history = useMemo(() => historyMap?.[ticker] ?? [], [historyMap, ticker]);
 
-  const isLoading = qLoading || fLoading;
+  const analysis = useMemo(
+    () => (quote && financials ? analyse(quote, financials, history) : null),
+    [quote, financials, history]
+  );
 
-  if (isLoading) return <ValuationSkeleton />;
+  if (qLoading || fLoading || (hLoading && history.length === 0)) return <ValuationSkeleton />;
 
-  if (!quote || !financials) {
-    return (
-      <p className="text-sm text-mist py-8 text-center">
-        No valuation data found for {ticker}.
+  if (!quote || !analysis) {
+    return <p className="py-8 text-center text-sm text-mist">No valuation data found for {ticker}.</p>;
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <Panel
+          className="xl:col-span-7"
+          delay={0}
+          title="What it is worth, by its own multiples"
+          subtitle={`Each bar is the share price the company would have at the low, median and high of that multiple over its last ${analysis.years} fiscal years, applied to the last twelve months.`}
+        >
+          <FootballField analysis={analysis} price={quote.price} />
+        </Panel>
+        <Panel className="xl:col-span-5" delay={60} title="What the price assumes" subtitle="The free cash flow growth today's price needs, against what the company has done.">
+          <ImpliedGrowth analysis={analysis} />
+        </Panel>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <Panel className="xl:col-span-7" delay={120} title="Multiples against their own history" subtitle={`Today, on the last twelve months, against each fiscal year-end over ${analysis.years} years.`}>
+          <MultiplesTable analysis={analysis} />
+        </Panel>
+        <Panel className="xl:col-span-5" delay={180} title="Growth" subtitle={`Fiscal years to ${analysis.fiscalLabel || "the latest"}, compounded.`}>
+          <GrowthBlock analysis={analysis} />
+        </Panel>
+      </div>
+
+      <p className="text-[11px] text-mist/70">
+        GAAP figures from the filings, prices at each fiscal year-end. A reference, not a price target: check it against the
+        DCF and the quality score before acting on it.
       </p>
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  children,
+  className,
+  delay,
+}: {
+  title: string;
+  subtitle: string;
+  children: ReactNode;
+  className?: string;
+  delay: number;
+}) {
+  return (
+    <section
+      className={cn("symbol-enter flex min-w-0 flex-col rounded-xl border border-wolf-border/50 bg-wolf-surface p-5", className)}
+      style={{ "--d": `${delay}ms` } as CSSProperties}
+    >
+      <h2 className="text-[16px] font-semibold tracking-[-0.01em] text-snow-peak">{title}</h2>
+      <p className="mt-1 max-w-[70ch] text-[12.5px] leading-relaxed text-mist">{subtitle}</p>
+      <div className="mt-5 flex-1">{children}</div>
+    </section>
+  );
+}
+
+// ─── Football field ────────────────────────────────────────────────────────
+
+function FootballField({ analysis, price }: { analysis: Analysis; price: number }) {
+  const rows = analysis.field;
+  if (rows.length === 0) {
+    return <Empty>Not enough fiscal years with positive figures to build a range.</Empty>;
+  }
+
+  const lo = Math.min(price, ...rows.map((r) => r.low)) * 0.88;
+  const hi = Math.max(price, ...rows.map((r) => r.high)) * 1.06;
+  const at = (v: number) => `${((v - lo) / (hi - lo)) * 100}%`;
+  const below = rows.filter((r) => price < r.mid).length;
+  const midOfMids = spreadOf(rows.map((r) => r.mid))!.median;
+  const gap = midOfMids / price - 1;
+
+  return (
+    <div>
+      <p className="text-[13.5px] text-snow-peak">
+        The price is <span className={below >= rows.length / 2 ? "text-bullish" : "text-bearish"}>{below >= rows.length / 2 ? "below" : "above"}</span>{" "}
+        the median value on {below >= rows.length / 2 ? below : rows.length - below} of {rows.length} multiples.
+        <span className="ml-1.5 text-mist">
+          Median of medians {formatCurrency(midOfMids)} ({gap >= 0 ? "+" : ""}
+          {formatPercent(gap, 1)}).
+        </span>
+      </p>
+
+      <div className="relative mt-8 space-y-3">
+        {/* Today's price, labelled once above the rows; the track starts
+            after the 5.5rem label column and its 0.75rem gap. */}
+        <span
+          className="absolute -top-6 -translate-x-1/2 rounded-md bg-sunset-orange px-1.5 py-0.5 font-mono text-[10.5px] font-semibold tabular-nums text-wolf-black"
+          style={{ left: `calc(6.25rem + (100% - 6.25rem) * ${((price - lo) / (hi - lo)).toFixed(4)})` }}
+        >
+          Today {formatCurrency(price, { decimals: 0 })}
+        </span>
+        {rows.map((row) => (
+          <div key={row.key} className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-center gap-3">
+            <Tooltip content={MULTIPLE_HELP[row.key]} side="top">
+              <span className="cursor-help text-[12.5px] font-medium text-mist">{MULTIPLE_LABEL[row.key]}</span>
+            </Tooltip>
+            <div className="relative h-9">
+              <div
+                className="symbol-field-bar absolute top-1.5 h-6 rounded-md bg-sunset-orange/18 ring-1 ring-inset ring-sunset-orange/35"
+                style={{ left: at(row.low), width: `calc(${at(row.high)} - ${at(row.low)})` }}
+              />
+              <span className="absolute top-1 h-7 w-0.5 -translate-x-1/2 rounded-full bg-snow-peak/85" style={{ left: at(row.mid) }} />
+              <span className="absolute -bottom-1.5 -translate-x-full pr-1.5 font-mono text-[10.5px] tabular-nums text-mist" style={{ left: at(row.low) }}>
+                {formatCurrency(row.low, { decimals: 0 })}
+              </span>
+              <span className="absolute -bottom-1.5 pl-1.5 font-mono text-[10.5px] tabular-nums text-mist" style={{ left: at(row.high) }}>
+                {formatCurrency(row.high, { decimals: 0 })}
+              </span>
+              {/* Today's price, the same line through every row. */}
+              <span className="absolute -inset-y-1.5 w-0.5 -translate-x-1/2 rounded-full bg-sunset-orange" style={{ left: at(price) }} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1 text-[11px] text-mist">
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-5 rounded-sm bg-sunset-orange/18 ring-1 ring-inset ring-sunset-orange/35" /> Low to high
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-0.5 rounded-full bg-snow-peak/85" /> Median
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-3 w-px bg-sunset-orange" /> Price today {formatCurrency(price)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Implied growth (reverse DCF) ──────────────────────────────────────────
+
+function ImpliedGrowth({ analysis }: { analysis: Analysis }) {
+  const { implied } = analysis;
+  const fcfRecord = analysis.growth.find((g) => g.label === "Free cash flow")?.cagr ?? null;
+  const revenueRecord = analysis.growth.find((g) => g.label === "Revenue")?.cagr ?? null;
+
+  if (implied == null) {
+    return (
+      <Empty>
+        {analysis.fcfTtm != null && analysis.fcfTtm <= 0
+          ? "Free cash flow over the last twelve months is not positive, so there is no growth rate that prices it."
+          : "The price is out of reach of any growth between -30% and 80% a year."}
+      </Empty>
     );
   }
 
-  const annualIncome = sortByDateAsc(financials.income_statement.annual);
-  const annualBalance = sortByDateAsc(financials.balance_sheet.annual);
-  const annualCashFlow = sortByDateAsc(financials.cash_flow.annual);
-
-  const latest = annualIncome.at(-1);
-  const latestBal = annualBalance.at(-1);
-  const latestCF = annualCashFlow.at(-1);
-
-  // ---- Valuation Metrics ----
-  const marketCap = quote.market_cap;
-  const ps = latest ? marketCap / latest.revenue : null;
-  const pb = latestBal && latestBal.total_equity > 0
-    ? marketCap / latestBal.total_equity
-    : null;
-  const evEbitda = (() => {
-    if (!latest || !latestBal || latest.ebitda <= 0) return null;
-    const ev =
-      marketCap +
-      latestBal.long_term_debt -
-      latestBal.cash_and_equivalents;
-    return ev / latest.ebitda;
-  })();
-
-  const roic =
-    latest && latestBal
-      ? calculateROIC({
-          operating_income: latest.operating_income,
-          income_tax: latest.income_tax,
-          pre_tax_income: latest.pre_tax_income,
-          total_equity: latestBal.total_equity,
-          long_term_debt: latestBal.long_term_debt,
-          cash_and_equivalents: latestBal.cash_and_equivalents,
-        })
-      : null;
-
-  const fcfYield = latestCF
-    ? calculateFCFYield(
-        latestCF.free_cash_flow,
-        quote.price,
-        quote.shares_outstanding
-      )
-    : null;
-
-  // Rule 1 — P/E anomaly check (< 5x on large-cap → potential one-time gain distortion)
-  const peValue = quote.pe_ratio > 0 ? quote.pe_ratio : null;
-  const peAnomaly = peValue !== null && peValue < 5 && marketCap >= 10_000_000_000;
-
-  // Rule 4 — Fundamentals period label
-  const latestPeriod = latest?.period ?? annualIncome.at(-1)?.period ?? "Latest available";
-
-  const metrics = [
-    // Rule 1 — explicit TTM + anomaly flag
-    {
-      label: peAnomaly ? "P/E (TTM) ⚠" : "P/E (TTM, GAAP)",
-      value: peValue !== null ? `${peValue.toFixed(1)}x` : "N/A",
-      note: peAnomaly ? "< 5x — verify for one-time non-operating gains" : undefined,
-    },
-    { label: "P/S (TTM)", value: ps !== null ? `${ps.toFixed(1)}x` : "N/A" },
-    { label: "P/B (TTM)", value: pb !== null ? `${pb.toFixed(1)}x` : "N/A" },
-    { label: "EV/EBITDA (TTM)", value: evEbitda !== null ? `${evEbitda.toFixed(1)}x` : "N/A" },
-    { label: "ROIC (TTM)", value: roic !== null ? formatPercent(roic) : "N/A" },
-    { label: "FCF Yield (TTM)", value: fcfYield !== null ? formatPercent(fcfYield) : "N/A" },
-    { label: "Market Cap", value: formatCompactNumber(marketCap) },
-    {
-      label: "Enterprise Value",
-      value: latestBal
-        ? formatCompactNumber(
-            marketCap + latestBal.long_term_debt - latestBal.cash_and_equivalents
-          )
-        : "N/A",
-    },
+  const bars = [
+    { label: "Priced in", value: implied, tone: "bg-sunset-orange" },
+    { label: `FCF, last ${analysis.years - 1} years`, value: fcfRecord, tone: "bg-snow-peak/70" },
+    { label: `Revenue, last ${analysis.years - 1} years`, value: revenueRecord, tone: "bg-snow-peak/40" },
   ];
-
-  // ---- Historical P/E (approximate: current price ÷ historical EPS) ----
-  // Note: uses current price as proxy — shows how today's price compares to
-  // each year's earnings power, approximating historical P/E expansion/contraction.
-  const historicalPE = sortByDateAsc(annualIncome)
-    .filter((is) => is.eps_diluted > 0)
-    .map((is) => ({
-      period: is.period.replace("FY", ""),
-      pe: +(quote.price / is.eps_diluted).toFixed(1),
-      date: is.date,
-    }));
-
-  const currentPE = quote.pe_ratio > 0 ? quote.pe_ratio : null;
-
-  const avgPE =
-    historicalPE.length > 0
-      ? historicalPE.reduce((sum, h) => sum + h.pe, 0) / historicalPE.length
-      : null;
-
-  const stdDevPE = (() => {
-    if (historicalPE.length < 3 || avgPE === null) return null;
-    const variance =
-      historicalPE.reduce((s, h) => s + (h.pe - avgPE) ** 2, 0) /
-      historicalPE.length;
-    return Math.sqrt(variance);
-  })();
-
-  const minPE = historicalPE.length > 0
-    ? Math.min(...historicalPE.map((h) => h.pe))
-    : null;
-  const maxPE = historicalPE.length > 0
-    ? Math.max(...historicalPE.map((h) => h.pe))
-    : null;
-
-  // Percentile of current P/E vs history
-  const pePercentile = (() => {
-    if (!currentPE || historicalPE.length < 3) return null;
-    const below = historicalPE.filter((h) => h.pe <= currentPE).length;
-    return Math.round((below / historicalPE.length) * 100);
-  })();
-
-  // Implied fair value range based on avg ± 1σ P/E × current EPS
-  const latestEPS = annualIncome.at(-1)?.eps_diluted ?? null;
-  const impliedFairValue = (() => {
-    if (!latestEPS || latestEPS <= 0 || !avgPE) return null;
-    return {
-      low: avgPE && stdDevPE ? +((avgPE - stdDevPE) * latestEPS).toFixed(2) : null,
-      mid: +(avgPE * latestEPS).toFixed(2),
-      high: avgPE && stdDevPE ? +((avgPE + stdDevPE) * latestEPS).toFixed(2) : null,
-    };
-  })();
-
-  // Valuation bands chart data: each year + band region
-  const bandsChartData = historicalPE.map((h) => ({
-    period: h.period,
-    pe: h.pe,
-    avgBand: avgPE
-      ? [
-          stdDevPE ? +(avgPE - stdDevPE).toFixed(1) : avgPE,
-          stdDevPE ? +(avgPE + stdDevPE).toFixed(1) : avgPE,
-        ]
-      : [h.pe, h.pe],
-  }));
-
-  // ---- CAGR Indicators ----
-  const revenueSeries = annualIncome.map((is) => is.revenue);
-  const epsSeries = annualIncome.map((is) => is.eps_diluted);
-  const fcfSeries = annualCashFlow.map((cf) => cf.free_cash_flow);
-
-  const revenueChartData = annualIncome.map((is) => ({
-    period: is.period.replace("FY", ""),
-    value: is.revenue,
-  }));
-  const epsChartData = annualIncome.map((is) => ({
-    period: is.period.replace("FY", ""),
-    value: is.eps_diluted,
-  }));
-  const fcfChartData = annualCashFlow.map((cf) => ({
-    period: cf.period.replace("FY", ""),
-    value: cf.free_cash_flow,
-  }));
-
-  const revenueCAGRs = calculateAllCAGRs(revenueSeries);
-  const epsCAGRs = calculateAllCAGRs(epsSeries);
-  const fcfCAGRs = calculateAllCAGRs(fcfSeries);
-
-  // The page's conclusion, computed once so it can lead instead of trail.
-  const fairValueGap =
-    impliedFairValue && quote.price > 0
-      ? impliedFairValue.mid / quote.price - 1
-      : null;
+  const scale = Math.max(...bars.map((b) => Math.abs(b.value ?? 0)), 0.01);
+  const easier = fcfRecord != null && implied < fcfRecord;
 
   return (
-    <div className="space-y-6">
-      {/* Verdict — the answer first, the evidence below.
-          The implied range used to sit at the foot of the bands card in 14px
-          text, after the chart; Market Cap, which is a size fact rather than a
-          valuation judgement, outranked it. This puts "what is it worth against
-          what it costs" where the eye lands first. */}
-      {impliedFairValue && (
-        <Card className="insight-enter">
-          <CardContent className="p-5">
-            <div className="flex flex-wrap items-end justify-between gap-6">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
-                  Implied fair value
-                </p>
-                <p className="mt-2 font-mono text-[30px] font-bold leading-none tracking-[-0.02em] tabular-nums text-golden-hour">
-                  ${impliedFairValue.mid}
-                </p>
-                <p className="mt-2.5 text-[11px] text-mist/60">
-                  Avg P/E × current EPS
-                  {impliedFairValue.low && impliedFairValue.high && (
-                    <span className="ml-1.5 font-mono tabular-nums text-mist/80">
-                      ${impliedFairValue.low} – ${impliedFairValue.high}
-                    </span>
-                  )}
-                </p>
-              </div>
+    <div className="flex h-full flex-col">
+      <p className="font-mono text-[34px] font-bold leading-none tracking-[-0.03em] text-snow-peak">
+        {implied >= 0 ? "+" : ""}
+        {formatPercent(implied, 1)}
+        <span className="ml-2 font-sans text-[13px] font-medium tracking-normal text-mist">a year, for {PROJECTION_YEARS} years</span>
+      </p>
+      {fcfRecord != null ? (
+        <p className={cn("mt-2 text-[13px]", easier ? "text-bullish" : "text-golden-hour")}>
+          {easier ? "Less than the company has delivered: the price asks for a slowdown." : "More than the company has delivered: the price asks it to speed up."}
+        </p>
+      ) : null}
 
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
-                  Current price
-                </p>
-                <p className="mt-2 font-mono text-[30px] font-bold leading-none tracking-[-0.02em] tabular-nums text-snow-peak">
-                  ${quote.price.toFixed(2)}
-                </p>
-                {fairValueGap !== null && (
-                  <p
-                    className={cn(
-                      "mt-2.5 font-mono text-[13px] font-semibold tabular-nums",
-                      fairValueGap > 0 ? "text-bullish" : "text-bearish"
-                    )}
-                  >
-                    {fairValueGap > 0 ? "+" : ""}
-                    {formatPercent(fairValueGap, 1)}
-                    <span className="ml-1.5 font-sans text-[11px] font-normal text-mist/60">
-                      {fairValueGap > 0 ? "upside to base case" : "above base case"}
-                    </span>
-                  </p>
-                )}
-              </div>
-
-              {pePercentile !== null && (
-                <div className="ml-auto">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
-                    vs own history
-                  </p>
-                  <p
-                    className={cn(
-                      "mt-2 text-[15px] font-semibold",
-                      pePercentile < 35
-                        ? "text-bullish"
-                        : pePercentile > 65
-                          ? "text-bearish"
-                          : "text-golden-hour"
-                    )}
-                  >
-                    {pePercentile < 35
-                      ? "Historically cheap"
-                      : pePercentile > 65
-                        ? "Historically expensive"
-                        : "Near average"}
-                  </p>
-                  <p className="mt-2 font-mono text-[11px] tabular-nums text-mist/60">
-                    P{pePercentile} over {historicalPE.length}Y
-                  </p>
-                </div>
-              )}
-            </div>
-
-            <p className="mt-4 text-[11px] leading-relaxed text-mist/45">
-              A single-method estimate from this company&apos;s own P/E history. It is a
-              reference point, not a price target — cross-check it against the DCF and
-              the quality score before acting on it.
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Valuation Metrics Grid */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">
-              Valuation Multiples
-            </CardTitle>
-            {/* Rule 4 — data freshness */}
-            <span className="text-[10px] text-mist/50 font-mono">
-              Fundamentals: {latestPeriod} (GAAP) · Price: real-time
+      <div className="mt-5 space-y-2.5">
+        {bars.map((bar) => (
+          <div key={bar.label} className="grid grid-cols-[9.5rem_minmax(0,1fr)_4.5rem] items-center gap-3 text-[12px]">
+            <span className="truncate text-mist">{bar.label}</span>
+            <span className="h-2">
+              {bar.value != null ? (
+                <span
+                  className={cn("symbol-field-bar block h-2 rounded-full", bar.value >= 0 ? bar.tone : "bg-bearish/70")}
+                  style={{ width: `${(Math.abs(bar.value) / scale) * 100}%` }}
+                />
+              ) : null}
             </span>
+            <span className="text-right font-mono tabular-nums text-snow-peak">{bar.value != null ? formatPercent(bar.value, 1) : "N/A"}</span>
           </div>
-          {/* Rule 1 — P/E anomaly global alert */}
-          {peAnomaly && (
-            <div className="mt-2 flex items-start gap-2 rounded-md border border-golden-hour/25 bg-golden-hour/8 px-3 py-2">
-              <span className="text-golden-hour text-xs font-semibold shrink-0">⚠ P/E Anomaly</span>
-              <p className="text-[11px] text-mist/80">
-                P/E below 5x on a large-cap company typically signals a one-time non-operating gain
-                (e.g. asset sale, M&A accounting). The reported EPS may not reflect normalized earnings power.
-                Consider using Forward P/E or Operating EPS for valuation.
-              </p>
-            </div>
-          )}
-        </CardHeader>
-        <CardContent>
-          {/* Split deliberately: the first four answer "what is being paid per
-              unit of business", the last four "what the business earns and how
-              big it is". They were one undifferentiated grid, which gave Market
-              Cap the same weight as P/E. */}
-          {[
-            { heading: "Multiples", items: metrics.slice(0, 4) },
-            { heading: "Returns & size", items: metrics.slice(4) },
-          ].map((group, groupIndex) => (
-            <div key={group.heading} className={groupIndex > 0 ? "mt-5" : undefined}>
-              <p className="mb-2.5 text-[10px] uppercase tracking-[0.09em] text-mist/45">
-                {group.heading}
-              </p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                {group.items.map((m, index) => (
-                  <div
-                    key={m.label}
-                    className={cn(
-                      "insight-enter space-y-1.5 rounded-xl p-3 ring-1 ring-inset",
-                      m.note
-                        ? "bg-golden-hour/[0.06] ring-golden-hour/25"
-                        : "bg-snow-peak/[0.025] ring-wolf-border/40"
-                    )}
-                    style={
-                      { "--enter-delay": `${(groupIndex * 4 + index) * 25}ms` } as React.CSSProperties
-                    }
-                  >
-                    <p
-                      className={cn(
-                        "text-[10px] uppercase tracking-[0.09em]",
-                        m.note ? "text-golden-hour/80" : "text-mist/60"
-                      )}
-                    >
-                      {m.label}
-                    </p>
-                    <p
-                      className={cn(
-                        "font-mono text-[15px] font-semibold tabular-nums",
-                        m.note ? "text-golden-hour" : "text-snow-peak"
-                      )}
-                    >
-                      {m.value}
-                    </p>
-                    {m.note && (
-                      <p className="text-[9px] leading-tight text-golden-hour/70">{m.note}</p>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-        </CardContent>
-      </Card>
-
-      {/* Valuation Bands — P/E vs Historical Range */}
-      {historicalPE.length > 1 && (
-        <Card>
-          <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-4 flex-wrap">
-              <div>
-                {/* Rule 1 — Explicit P/E type label */}
-                <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/70">P/E (TTM, GAAP) — Historical Bands</CardTitle>
-                <p className="text-xs text-mist mt-0.5">
-                  Trailing P/E using current price ÷ annual diluted EPS per period.
-                  <span className="ml-1 text-mist/60">Note: uses reported GAAP EPS — may include one-time items.</span>
-                </p>
-              </div>
-
-              {/* Valuation verdict badge */}
-              {pePercentile !== null && (
-                <Tooltip
-                  content={`Current P/E is in the ${pePercentile}th percentile of its ${historicalPE.length}-year history. ${pePercentile < 35 ? "Trading below historical norms." : pePercentile > 65 ? "Trading above historical norms." : "Near historical average."}`}
-                  side="left"
-                >
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold cursor-help",
-                      pePercentile < 35
-                        ? "border-bullish/30 bg-bullish/10 text-bullish"
-                        : pePercentile > 65
-                          ? "border-bearish/30 bg-bearish/10 text-bearish"
-                          : "border-golden-hour/30 bg-golden-hour/10 text-golden-hour"
-                    )}
-                  >
-                    {pePercentile < 35 ? "Historically Cheap" : pePercentile > 65 ? "Historically Expensive" : "Near Average"}
-                    <span className="font-mono opacity-70">· P{pePercentile}</span>
-                  </span>
-                </Tooltip>
-              )}
-            </div>
-
-            {/* Key stats row */}
-            {avgPE !== null && (
-              <div className="mt-3 flex flex-wrap gap-4">
-                {[
-                  { label: "Current P/E", value: currentPE ? `${currentPE.toFixed(1)}x` : "N/A", highlight: true },
-                  { label: `${historicalPE.length}Y Average`, value: `${avgPE.toFixed(1)}x` },
-                  { label: "Min", value: minPE ? `${minPE.toFixed(1)}x` : "N/A" },
-                  { label: "Max", value: maxPE ? `${maxPE.toFixed(1)}x` : "N/A" },
-                  stdDevPE ? { label: "Std Dev", value: `±${stdDevPE.toFixed(1)}x` } : null,
-                ].filter(Boolean).map((stat) => (
-                  <div key={stat!.label} className="space-y-0.5">
-                    <p className="text-[10px] uppercase tracking-[0.09em] text-mist/55">{stat!.label}</p>
-                    <p className={cn("font-mono text-[15px] font-semibold tabular-nums", stat!.highlight ? "text-sunset-orange" : "text-snow-peak")}>
-                      {stat!.value}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardHeader>
-
-          <CardContent className="pt-0 space-y-4">
-            {/* Bands chart */}
-            <ResponsiveContainer width="100%" height={220}>
-              <ComposedChart data={bandsChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={c.grid} opacity={0.3} />
-                <XAxis
-                  dataKey="period"
-                  tick={{ fill: c.tick, fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={{ stroke: c.grid }}
-                />
-                <YAxis
-                  tick={{ fill: c.tick, fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `${v}x`}
-                  width={36}
-                />
-                <RechartTooltip
-                  contentStyle={{
-                    background: c.tooltipBg,
-                    border: `1px solid ${c.tooltipBorder}`,
-                    borderRadius: 8,
-                    fontSize: 11,
-                  }}
-                  // The ±1σ series is a Recharts range: its value is a
-                  // [low, high] tuple, not a number. `v as number` asserted it
-                  // away and the tooltip threw on the first hover.
-                  formatter={(v: unknown, name: unknown) => {
-                    const label = typeof name === "string" ? name : "";
-
-                    if (Array.isArray(v)) {
-                      const [low, high] = v;
-                      return typeof low === "number" && typeof high === "number"
-                        ? [`${low.toFixed(1)}x – ${high.toFixed(1)}x`, "±1σ band"]
-                        : ["N/A", label];
-                    }
-
-                    return typeof v === "number"
-                      ? [`${v.toFixed(1)}x`, label]
-                      : ["N/A", label];
-                  }}
-                />
-                {/* ±1σ band */}
-                {stdDevPE && avgPE && (
-                  <Area
-                    type="monotone"
-                    dataKey="avgBand"
-                    stroke="none"
-                    fill="#FFBF69"
-                    fillOpacity={0.08}
-                    isAnimationActive={false}
-                  />
-                )}
-                {/* P/E line */}
-                <Line
-                  type="monotone"
-                  dataKey="pe"
-                  stroke="#FFBF69"
-                  strokeWidth={2}
-                  dot={{ fill: "#FFBF69", r: 3 }}
-                  activeDot={{ r: 5 }}
-                  name="P/E"
-                />
-                {/* Average reference line */}
-                {avgPE && (
-                  <ReferenceLine
-                    y={avgPE}
-                    stroke={c.tick}
-                    strokeDasharray="4 3"
-                    label={{ value: `Avg ${avgPE.toFixed(1)}x`, position: "right", fill: c.tick, fontSize: 10 }}
-                  />
-                )}
-                {/* Current P/E reference line */}
-                {currentPE && (
-                  <ReferenceLine
-                    y={currentPE}
-                    stroke="#FF8C42"
-                    strokeDasharray="3 2"
-                    label={{ value: `Now ${currentPE.toFixed(1)}x`, position: "insideTopRight", fill: "#FF8C42", fontSize: 10 }}
-                  />
-                )}
-              </ComposedChart>
-            </ResponsiveContainer>
-
-            {/* Percentile slider bar */}
-            {pePercentile !== null && (
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between text-[10px] text-mist">
-                  <span>Cheapest ({minPE?.toFixed(1)}x)</span>
-                  <span>P/E Percentile: {pePercentile}th</span>
-                  <span>Most Expensive ({maxPE?.toFixed(1)}x)</span>
-                </div>
-                <div className="relative h-2 w-full rounded-full overflow-hidden bg-wolf-border/40">
-                  {/* Cheap zone */}
-                  <div className="absolute inset-y-0 left-0 w-1/3 bg-bullish/20" />
-                  {/* Expensive zone */}
-                  <div className="absolute inset-y-0 right-0 w-1/3 bg-bearish/20" />
-                  {/* Current position */}
-                  <div
-                    className="absolute top-0 h-full w-1 rounded-full bg-sunset-orange shadow-[0_0_4px_rgba(255,140,66,0.6)]"
-                    style={{ left: `calc(${pePercentile}% - 2px)` }}
-                  />
-                </div>
-              </div>
-            )}
-
-            {/* The implied range now leads the page, so repeating it here would
-                say the same thing twice in one scroll. */}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* CAGR Indicators — Rule 2: explicit window labels */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <div>
-              <CardTitle className="text-base">Growth Rates — CAGR</CardTitle>
-              <p className="text-xs text-mist mt-0.5">
-                Compound Annual Growth Rate calculated from annual GAAP figures.
-                Windows shown: 3Y, 5Y, 10Y.
-              </p>
-            </div>
-            <span className="text-[10px] text-mist/50 font-mono">
-              Based on: {latestPeriod} annual data
-            </span>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-            {/* Rule 2 — "Revenue CAGR" label is already clear, but add "(GAAP)" note */}
-            <CAGRBlock
-              label="Revenue CAGR (GAAP)"
-              cagrs={revenueCAGRs}
-              chartData={revenueChartData}
-              color="#FF8C42"
-            />
-            <CAGRBlock
-              label="EPS Diluted CAGR (GAAP)"
-              cagrs={epsCAGRs}
-              chartData={epsChartData}
-              color="#9FD5CC"
-            />
-            <CAGRBlock
-              label="FCF CAGR (GAAP)"
-              cagrs={fcfCAGRs}
-              chartData={fcfChartData}
-              color="#4DC990"
-            />
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-// ---- CAGR Block ----
-
-function CAGRBlock({
-  label,
-  cagrs,
-  chartData,
-  color,
-}: {
-  label: string;
-  cagrs: { cagr3Y: number | null; cagr5Y: number | null; cagr10Y: number | null };
-  chartData: { period: string; value: number }[];
-  color: string;
-}) {
-  const windows = [
-    { label: "3Y", value: cagrs.cagr3Y },
-    { label: "5Y", value: cagrs.cagr5Y },
-    { label: "10Y", value: cagrs.cagr10Y },
-  ];
-
-  return (
-    <div className="space-y-2">
-      <MetricChart
-        title={label}
-        data={chartData}
-        dataKey="value"
-        type="area"
-        color={color}
-      />
-      <div className="flex items-center gap-2">
-        {windows.map((w) => (
-          <Badge
-            key={w.label}
-            variant={
-              w.value === null
-                ? "secondary"
-                : w.value > 0
-                  ? "bullish"
-                  : "bearish"
-            }
-            className="font-mono text-xs"
-          >
-            {w.label}:{" "}
-            {w.value !== null ? formatPercent(w.value, 1) : "N/A"}
-          </Badge>
         ))}
       </div>
+
+      <p className="mt-auto pt-5 text-[11px] leading-relaxed text-mist/80">
+        {formatPercent(DISCOUNT_RATE, 0)} discount rate, {formatPercent(TERMINAL_GROWTH, 0)} growth after year {PROJECTION_YEARS}, free cash flow{" "}
+        {formatCurrency(analysis.fcfTtm ?? 0, { compact: true })} over the last twelve months, enterprise value{" "}
+        {formatCurrency(analysis.ev, { compact: true })}.{" "}
+        <Link href={ROUTES.APP_DCF_CALCULATOR} className="inline-flex items-center gap-0.5 font-medium text-sunset-orange hover:text-golden-hour">
+          Build your own DCF <ArrowRight className="h-3 w-3" />
+        </Link>
+      </p>
     </div>
   );
 }
 
-// ---- Skeleton ----
+// ─── Multiples against history ─────────────────────────────────────────────
+
+function MultiplesTable({ analysis }: { analysis: Analysis }) {
+  const keys = (Object.keys(MULTIPLE_LABEL) as MultipleKey[]).filter((k) => analysis.now[k] != null || analysis.history[k]);
+
+  return (
+    <div>
+      <div className="grid grid-cols-[5.5rem_4.5rem_4.5rem_minmax(0,1fr)_6.5rem] gap-3 border-b border-wolf-border/35 pb-2 text-[11px] text-mist/80">
+        <span>Multiple</span>
+        <span className="text-right">Today</span>
+        <span className="text-right">Median</span>
+        <span className="pl-2">Low to high</span>
+        <span className="text-right">Reads</span>
+      </div>
+      {keys.map((key) => {
+        const now = analysis.now[key];
+        const spread = analysis.history[key];
+        const ratio = now != null && spread ? now / spread.median : null;
+        const read = ratio == null ? null : ratio < 0.85 ? "cheaper" : ratio > 1.15 ? "richer" : "in line";
+        return (
+          <div key={key} className="grid grid-cols-[5.5rem_4.5rem_4.5rem_minmax(0,1fr)_6.5rem] items-center gap-3 border-b border-wolf-border/25 py-2.5 text-[13px] last:border-b-0">
+            <Tooltip content={MULTIPLE_HELP[key]} side="top">
+              <span className="cursor-help font-medium text-snow-peak">{MULTIPLE_LABEL[key]}</span>
+            </Tooltip>
+            <span className="text-right font-mono font-semibold tabular-nums text-snow-peak">{now != null ? `${now.toFixed(1)}x` : "N/A"}</span>
+            <span className="text-right font-mono tabular-nums text-mist">{spread ? `${spread.median.toFixed(1)}x` : "N/A"}</span>
+            <span className="pl-2">
+              {spread && now != null ? <RangeStrip spread={spread} now={now} /> : <span className="text-[11px] text-mist/70">Not enough years</span>}
+            </span>
+            <span
+              className={cn(
+                "text-right text-[12px] font-medium",
+                read === "cheaper" ? "text-bullish" : read === "richer" ? "text-bearish" : "text-mist"
+              )}
+            >
+              {read === "in line" ? "in line" : read ? `${read} than usual` : ""}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function RangeStrip({ spread, now }: { spread: Spread; now: number }) {
+  const median = positionIn(spread, spread.median) * 100;
+  const pos = positionIn(spread, now) * 100;
+  const outside = now < spread.min ? "below" : now > spread.max ? "above" : null;
+  return (
+    <span className="relative flex h-4 items-center" title={`${spread.min.toFixed(1)}x to ${spread.max.toFixed(1)}x`}>
+      <span className="absolute inset-x-0 h-px bg-wolf-border" />
+      <span className="absolute h-2.5 w-px bg-mist/60" style={{ left: "0%" }} />
+      <span className="absolute h-2.5 w-px bg-mist/60" style={{ left: "100%" }} />
+      <span className="absolute h-3 w-0.5 -translate-x-1/2 rounded-full bg-snow-peak/70" style={{ left: `${median}%` }} />
+      <span
+        className={cn(
+          "absolute h-2.5 w-2.5 -translate-x-1/2 rounded-full ring-2 ring-wolf-surface",
+          outside ? "bg-golden-hour" : "bg-sunset-orange"
+        )}
+        style={{ left: `${pos}%` }}
+      />
+    </span>
+  );
+}
+
+// ─── Growth ────────────────────────────────────────────────────────────────
+
+function GrowthBlock({ analysis }: { analysis: Analysis }) {
+  return (
+    <div className="space-y-4">
+      {analysis.growth.map((series) => {
+        const max = Math.max(...series.values.map((v) => Math.abs(v.value)), 1e-9);
+        return (
+          <div key={series.label} className="grid grid-cols-[minmax(0,1fr)_7.5rem] items-end gap-4">
+            <div className="min-w-0">
+              <p className="text-[12.5px] text-mist">{series.label}</p>
+              <div className="mt-1.5 flex h-10 items-end gap-1.5">
+                {series.values.map((v, i) => (
+                  <Tooltip key={v.year} content={`${v.year}: ${series.money ? formatCurrency(v.value, { compact: true }) : formatCurrency(v.value)}`} side="top">
+                    <span
+                      className={cn(
+                        "symbol-bar block flex-1 origin-bottom rounded-t-[3px]",
+                        v.value < 0 ? "bg-bearish/60" : i === series.values.length - 1 ? "bg-sunset-orange" : "bg-snow-peak/20"
+                      )}
+                      style={{ height: `${Math.max(6, (Math.abs(v.value) / max) * 100)}%`, "--i": i * 3 } as CSSProperties}
+                    />
+                  </Tooltip>
+                ))}
+              </div>
+            </div>
+            <div className="text-right">
+              <p className={cn("font-mono text-[17px] font-semibold tabular-nums", series.cagr == null ? "text-mist" : series.cagr >= 0 ? "text-bullish" : "text-bearish")}>
+                {series.cagr == null ? "N/A" : `${series.cagr >= 0 ? "+" : ""}${formatPercent(series.cagr, 1)}`}
+              </p>
+              <p className="text-[11px] text-mist">
+                a year
+                {series.yoy != null ? `, ${series.yoy >= 0 ? "+" : ""}${formatPercent(series.yoy, 0)} last` : ""}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Empty({ children }: { children: ReactNode }) {
+  return <p className="rounded-lg border border-dashed border-wolf-border/50 px-4 py-6 text-center text-[12.5px] text-mist">{children}</p>;
+}
 
 function ValuationSkeleton() {
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        {Array.from({ length: 8 }).map((_, i) => (
-          <Skeleton key={i} className="h-20 rounded-lg" />
-        ))}
-      </div>
-      <Skeleton className="h-72 rounded-xl" />
-      <Skeleton className="h-40 rounded-xl" />
+    <div aria-hidden className="space-y-5">
+      {[0, 1].map((row) => (
+        <div key={row} className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+          {[7, 5].map((span) => (
+            <div key={span} className={cn("rounded-xl border border-wolf-border/50 bg-wolf-surface p-5", span === 7 ? "xl:col-span-7" : "xl:col-span-5")}>
+              <Skeleton shape="line" className="h-5 w-56" />
+              <Skeleton shape="line" className="mt-2 h-3 w-80" />
+              <Skeleton className="mt-6 h-40 w-full rounded-lg" />
+            </div>
+          ))}
+        </div>
+      ))}
     </div>
   );
 }

@@ -129,6 +129,9 @@ export function mapToStockQuote(
     .filter((v): v is Date => v !== null)
     .sort((a, b) => a.getTime() - b.getTime());
 
+  const sameCurrency =
+    !financial?.financialCurrency || !price?.currency || financial.financialCurrency === price.currency;
+
   const now = Date.now();
   const dividendDate = parseMaybeDate(data.calendarEvents?.dividends?.dividendDate);
   const exDividendDate = parseMaybeDate(detail?.exDividendDate);
@@ -165,6 +168,12 @@ export function mapToStockQuote(
     fifty_two_week_low: n(detail?.fiftyTwoWeekLow),
     avg_volume: n(detail?.averageVolume) > 0 ? n(detail?.averageVolume) : n(detail?.averageVolume10days),
     beta: n(detail?.beta),
+    // Ratios of the price to a per-share figure from the statements: only
+    // meaningful when the two are in the same currency (an ADR quoted in
+    // USD reporting in another currency would read wildly off). The batch
+    // quote applies the same rule.
+    forward_pe: sameCurrency && detail?.forwardPE && detail.forwardPE > 0 ? detail.forwardPE : null,
+    price_to_book: sameCurrency && stats?.priceToBook && stats.priceToBook > 0 ? stats.priceToBook : null,
   };
 }
 

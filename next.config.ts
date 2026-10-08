@@ -85,6 +85,10 @@ const nextConfig: NextConfig = {
     // Reproduced locally; a build without the cache was correct. The cost is
     // a slower cold build.
     turbopackFileSystemCacheForBuild: false,
+    // The dev server's cache did the same: across restarts it went on
+    // serving edited files (globals.css, page components) as they were
+    // before the edit, so a change looked as if it had not been made.
+    turbopackFileSystemCacheForDev: false,
   },
   // Transcripts became Tracks — insiders now, transcripts later, same
   // section. Old links keep working.
