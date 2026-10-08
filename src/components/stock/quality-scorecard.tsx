@@ -110,29 +110,29 @@ function DimensionRow({ dimension }: { dimension: QualityDimension }) {
         <span
           className={cn(
             "inline-flex h-6 w-8 shrink-0 items-center justify-center rounded-md border font-mono text-[11px] font-bold tabular-nums",
-            GRADE_CHIP[dimension.grade]
+            dimension.insufficient ? "border-wolf-border/40 bg-wolf-border/15 text-mist" : GRADE_CHIP[dimension.grade]
           )}
         >
-          {dimension.grade}
+          {dimension.insufficient ? "N/A" : dimension.grade}
         </span>
 
         {/* Name */}
-        <span className="w-28 shrink-0 text-[12.5px] font-semibold tracking-[-0.01em] text-snow-peak">
+        <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold tracking-[-0.01em] text-snow-peak @[34rem]:w-28 @[34rem]:flex-none">
           {dimension.name}
         </span>
 
         {/* Summary */}
-        <span className="hidden flex-1 truncate text-[11px] text-mist/85 sm:block">
+        <span className="hidden flex-1 truncate text-[11px] text-mist/85 @[34rem]:block">
           {dimension.summary}
         </span>
 
         {/* Score bar + number */}
         <div className="flex shrink-0 items-center gap-2.5">
-          <div className="hidden w-20 md:block">
-            <ScoreBar score={dimension.score} h="h-1" />
+          <div className="hidden w-16 @[22rem]:block @[34rem]:w-20">
+            <ScoreBar score={dimension.insufficient ? 0 : dimension.score} h="h-1" />
           </div>
           <span className="w-7 text-right font-mono text-[13px] font-semibold tabular-nums text-snow-peak">
-            {Math.round(dimension.score)}
+            {dimension.insufficient ? "-" : Math.round(dimension.score)}
           </span>
           {expanded
             ? <ChevronUp  className="h-3.5 w-3.5 text-mist/85" />
@@ -280,9 +280,10 @@ function ModeBadge({ mode }: { mode: QualityMode }) {
 interface QualityScorecardProps {
   result: QualityScoreResult;
   compact?: boolean;
+  className?: string;
 }
 
-export function QualityScorecard({ result, compact = false }: QualityScorecardProps) {
+export function QualityScorecard({ result, compact = false, className }: QualityScorecardProps) {
   if (compact) {
     return (
       <Tooltip
@@ -320,7 +321,11 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
   const sourceLabel  = result.mode === "deep" ? "AlphaVantage" : "Yahoo Finance";
 
   return (
-    <Card className="border-wolf-border/50 bg-wolf-surface">
+    // A container: it lays itself out by its own width, since it sits in a
+    // narrow column beside the price chart on wide screens and spans the
+    // page on narrow ones. The dimension summaries need room, so they only
+    // show when the card has it.
+    <Card className={cn("@container border-wolf-border/50 bg-wolf-surface", className)}>
       <CardContent className="space-y-4 p-5">
 
         {/* ── Header ── */}
@@ -334,7 +339,7 @@ export function QualityScorecard({ result, compact = false }: QualityScorecardPr
 
             {/* Sector percentile */}
             <p className="mt-1.5 text-[12px] text-mist/85">
-              Top {result.sectorPercentile}% in {result.sector} · {windowLabel} analysis
+              Scored against {result.sector} benchmarks · {windowLabel} analysis
             </p>
 
             {/* Overall score bar */}
