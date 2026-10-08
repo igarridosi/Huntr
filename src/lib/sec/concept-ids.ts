@@ -53,4 +53,6 @@ export const SEC_CONCEPT_IDS: ReadonlyArray<readonly [id: number, taxonomy: SECT
   [45, "us-gaap", "AvailableForSaleSecuritiesDebtSecuritiesCurrent"],
   [46, "us-gaap", "TemporaryEquityCarryingAmountAttributableToParent"],
   [47, "us-gaap", "IncrementalCommonSharesAttributableToConversionOfPreferredStock"],
+  [48, "ifrs-full", "PaymentsOfLeaseLiabilitiesClassifiedAsFinancingActivities"],
+  [49, "ifrs-full", "AdjustmentsForSharebasedPayments"],
 ];

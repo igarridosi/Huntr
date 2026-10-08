@@ -139,7 +139,23 @@ export const SEC_CONCEPTS = {
 
 export type SECConceptKey = keyof typeof SEC_CONCEPTS;
 
-export type SECTaxonomy = "us-gaap" | "dei";
+export type SECTaxonomy = "us-gaap" | "dei" | "ifrs-full";
+
+/**
+ * Lease principal paid, from an IFRS filer's cash flow statement.
+ *
+ * Under IFRS 16 it is a financing outflow, so operating cash flow is struck
+ * before it - unlike US GAAP, where operating-lease rent stays in operating
+ * cash flow. On paid CHF 69.9M in 2025; Haleon £60M.
+ */
+export const IFRS_LEASE_PRINCIPAL_CONCEPTS = ["PaymentsOfLeaseLiabilitiesClassifiedAsFinancingActivities"] as const;
+
+/**
+ * Share-based payments added back in an IFRS filer's operating cash flow:
+ * the IFRS counterpart of us-gaap ShareBasedCompensation. Without it an IFRS
+ * filer had no stock compensation to deduct at all - On's CHF 66.6M.
+ */
+export const IFRS_SBC_CONCEPTS = ["AdjustmentsForSharebasedPayments"] as const;
 
 /** Operating cash flow of the fiscal year, for verifying the margin's numerator. */
 export const OPERATING_CASH_FLOW_CONCEPTS = [

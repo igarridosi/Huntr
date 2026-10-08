@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   convertFinancials,
   convertSecFundamentals,
+  describeAdrBasis,
   detectAdrRatio,
   receiptShareCount,
   resolveAdrBasis,
@@ -33,6 +34,13 @@ describe("resolveAdrBasis", () => {
   it("needs none in one currency, and gives none without a rate", () => {
     expect(resolveAdrBasis({ ...base, financialCurrency: "usd" })).toBeNull();
     expect(resolveAdrBasis({ ...base, fx: null })).toBeNull();
+  });
+  it("converts a direct listing in another currency at one share per unit, and says it assumed it (On)", () => {
+    // On: francs, class A trading in dollars; the filed class A count 296.9M
+    // against 334.2M implied fits no depositary ratio.
+    const onon = resolveAdrBasis({ priceCurrency: "USD", financialCurrency: "CHF", fx: 1.24, filedShares: 296.87e6, impliedShares: 334.21e6 });
+    expect(onon).toEqual({ from: "CHF", to: "USD", fx: 1.24, ratio: 1, ratioAssumed: true });
+    expect(describeAdrBasis(onon!)).toMatch(/one share per unit is assumed/);
   });
 });
 

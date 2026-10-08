@@ -15,6 +15,8 @@ interface DCFDataSourcesProps {
   sbcAmount: number;
   /** "TTM" when the trailing twelve months were composed from the filings, "FY" for the last 10-K. */
   sbcPeriod: "TTM" | "FY";
+  /** IFRS lease principal as a share of revenue, taken out by the engine; 0 for a US GAAP filer. */
+  leasePrincipalPoints?: number;
   /** Revenue, so the two FCF margins can be shown side by side. */
   baseRevenue: number;
   /** Free cash flow *before* any stock-compensation deduction: the slider's margin times revenue. */
@@ -38,6 +40,7 @@ export function DCFDataSources({
   fields,
   sbcAmount,
   sbcPeriod,
+  leasePrincipalPoints = 0,
   baseRevenue,
   freeCashFlow,
   overrides,
@@ -194,9 +197,9 @@ export function DCFDataSources({
 
               {netDebt.operatingLeases > 0 ? (
                 <p className="text-[10px] leading-relaxed text-mist/70">
-                  Lease liabilities are shown, not subtracted: the rent is already
-                  out of operating cash flow, so counting them as debt too would
-                  discount the same obligation twice.
+                  {leasePrincipalPoints > 0
+                    ? "Lease liabilities are shown, not subtracted: under IFRS 16 the principal paid each year is taken out of free cash flow instead (below), and counting the liability as debt too would charge it twice."
+                    : "Lease liabilities are shown, not subtracted: the rent is already out of operating cash flow, so counting them as debt too would discount the same obligation twice."}
                 </p>
               ) : null}
               {netDebt.redeemablePreferred > 0 ? (
@@ -229,12 +232,18 @@ export function DCFDataSources({
                   {sbc > 0 ? formatPercent(-sbcMargin, 1) : "—"}
                 </span>
               </div>
+              {leasePrincipalPoints > 0 ? (
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="text-[11px] text-mist">− Lease principal (IFRS 16)</span>
+                  <span className="font-mono text-xs tabular-nums text-mist">{formatPercent(-leasePrincipalPoints, 1)}</span>
+                </div>
+              ) : null}
               <div className="flex items-baseline justify-between gap-3 border-t border-wolf-border/25 pt-1.5">
                 <span className="text-[11px] font-medium text-snow-peak">
                   Before capital-structure adjustments
                 </span>
                 <span className="font-mono text-xs tabular-nums text-snow-peak">
-                  {formatPercent(rawMargin - sbcMargin, 1)}
+                  {formatPercent(rawMargin - sbcMargin - leasePrincipalPoints, 1)}
                 </span>
               </div>
               <p className="text-[10px] leading-relaxed text-mist/70">

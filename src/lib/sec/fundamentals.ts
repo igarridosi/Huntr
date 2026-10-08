@@ -6,7 +6,7 @@
  * choice among them is made here, once, for both.
  */
 
-import { OPERATING_CASH_FLOW_CONCEPTS, SEC_CONCEPTS, type SECTaxonomy } from "./concepts";
+import { IFRS_LEASE_PRINCIPAL_CONCEPTS, IFRS_SBC_CONCEPTS, OPERATING_CASH_FLOW_CONCEPTS, SEC_CONCEPTS, type SECTaxonomy } from "./concepts";
 import { extractFactRows, pickFresher, selectLatestFact, sumFacts, type FactPeriod, type SECFact } from "./facts";
 import { composeRevenueTtm, type SECRevenueTtm } from "./revenue-ttm";
 
@@ -114,6 +114,8 @@ export interface SECFundamentals {
   redeemablePreferred?: SECFact | null;
   /** Shares the latest quarter's diluted count adds for preferred conversion; positive means the preferred is in the count. */
   preferredConversionShares?: SECFact | null;
+  /** Lease principal paid in the last fiscal year, for an IFRS filer: outside its operating cash flow, so taken out of free cash flow. */
+  leasePrincipal?: SECFact | null;
 }
 
 /**
@@ -329,6 +331,12 @@ export async function fundamentalsForCik(
     fetchConcept(source, cik, SEC_CONCEPTS.redeemablePreferred),
     fetchConcept(source, cik, SEC_CONCEPTS.preferredConversionShares, "quarterly"),
   ]);
+  // Annual, like the free cash flow it is taken from.
+  const leasePrincipal = await fetchConcept(source, cik, IFRS_LEASE_PRINCIPAL_CONCEPTS, "annual", "ifrs-full");
+  // An IFRS filer files no us-gaap stock compensation; its counterpart is the
+  // share-based payments added back in operating cash flow.
+  const shareBasedCompensationAny =
+    shareBasedCompensation ?? (await fetchConcept(source, cik, IFRS_SBC_CONCEPTS, "annual", "ifrs-full"));
 
   // A multi-class issuer files its share counts by class only; the
   // filing itself is the only place the as-converted count exists.
@@ -343,7 +351,7 @@ export async function fundamentalsForCik(
     cash,
     operatingLeases: sumFacts(leaseNoncurrent, leaseCurrent),
     operatingLeaseExpense,
-    shareBasedCompensation,
+    shareBasedCompensation: shareBasedCompensationAny,
     revenueTtm,
     shareBasedCompensationTtm,
     operatingCashFlowAnnual,
@@ -358,5 +366,6 @@ export async function fundamentalsForCik(
       preferredConversionShares && weightedDilutedShares && preferredConversionShares.periodEnd === weightedDilutedShares.periodEnd
         ? preferredConversionShares
         : null,
+    leasePrincipal,
   };
 }
