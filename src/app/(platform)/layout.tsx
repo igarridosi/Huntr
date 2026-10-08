@@ -29,8 +29,9 @@ export default function PlatformLayout({
 
   // Insights keeps the full sidebar beside the page; the other sections get
   // the rail, which leaves them the width and keeps the menu one click away.
+  // The ticker pages too: a company's charts and figures want every pixel.
   const isInsightsRoute = pathname === ROUTES.APP_INSIGHTS;
-  const useDock = pathname.startsWith("/app") && !isInsightsRoute;
+  const useDock = (pathname.startsWith("/app") && !isInsightsRoute) || pathname.startsWith("/symbol/");
 
   const handleSearchClick = useCallback(() => {
     setSearchOpen(true);

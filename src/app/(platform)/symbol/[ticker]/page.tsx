@@ -9,15 +9,12 @@ import {
   useStockQuote,
 } from "@/hooks/use-stock-data";
 import dynamic from "next/dynamic";
-import {
-  CategorizedMetrics,
-  CategorizedMetricsSkeleton,
-} from "@/components/stock/categorized-metrics";
+import { KeyStats, KeyStatsSkeleton } from "@/components/stock/key-stats";
 import type { MetricChartCardData } from "@/components/stock/metric-chart-card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DataHuntingLoader } from "@/components/stock/data-hunting-loader";
 import { PeriodToggle } from "@/components/financials/period-toggle";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CompanyAbout } from "@/components/stock/company-about";
 import { Spinner } from "@/components/ui/spinner";
 import { Check, LineChart } from "lucide-react";
 import { FeedbackToast, type FeedbackToastVariant } from "@/components/ui/feedback-toast";
@@ -67,31 +64,6 @@ function sortByDateAsc<T extends { date: string }>(rows: T[]): T[] {
   return rows
     .slice()
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-}
-
-function getMostRecentByDate<T extends { date: string }>(rows: T[]): T | null {
-  if (!rows.length) return null;
-  return rows.reduce<T | null>((latest, current) => {
-    if (!latest) return current;
-    return new Date(current.date).getTime() > new Date(latest.date).getTime()
-      ? current
-      : latest;
-  }, null);
-}
-
-function pickMostRecentPeriod<T extends { date: string }>(
-  annualRows: T[],
-  quarterlyRows: T[]
-): T | null {
-  const annualLatest = getMostRecentByDate(annualRows);
-  const quarterlyLatest = getMostRecentByDate(quarterlyRows);
-
-  if (!annualLatest) return quarterlyLatest;
-  if (!quarterlyLatest) return annualLatest;
-
-  return new Date(quarterlyLatest.date).getTime() > new Date(annualLatest.date).getTime()
-    ? quarterlyLatest
-    : annualLatest;
 }
 
 type YearRange = 5 | 10 | 15 | 20;
@@ -148,8 +120,10 @@ export default function OverviewPage() {
   const { user } = useSupabase();
   const { openGate } = useAuthGate();
 
-  const [periodType, setPeriodType] = useState<PeriodType>("annual");
-  const [yearRange, setYearRange] = useState<YearRange>(10);
+  // Quarterly over five years by default: the recent trend, at the
+  // resolution it is reported in.
+  const [periodType, setPeriodType] = useState<PeriodType>("quarterly");
+  const [yearRange, setYearRange] = useState<YearRange>(5);
   const [deepFinancials, setDeepFinancials] = useState<CompanyFinancials | null>(null);
   const [isLoadingDeepFinancials, setIsLoadingDeepFinancials] = useState(false);
   const [deepFinancialsError, setDeepFinancialsError] = useState<string | null>(null);
@@ -230,30 +204,6 @@ export default function OverviewPage() {
       setIsLoadingDeepFinancials(false);
     }
   };
-
-  const latestIncome = useMemo(() => {
-    if (!financials) return null;
-    return pickMostRecentPeriod(
-      financials.income_statement.annual,
-      financials.income_statement.quarterly
-    );
-  }, [financials]);
-
-  const latestBalance = useMemo(() => {
-    if (!financials) return null;
-    return pickMostRecentPeriod(
-      financials.balance_sheet.annual,
-      financials.balance_sheet.quarterly
-    );
-  }, [financials]);
-
-  const latestCashFlow = useMemo(() => {
-    if (!financials) return null;
-    return pickMostRecentPeriod(
-      financials.cash_flow.annual,
-      financials.cash_flow.quarterly
-    );
-  }, [financials]);
 
   // Build all chart series from selected period
   const charts = useMemo(() => {
@@ -473,14 +423,26 @@ export default function OverviewPage() {
       return acc;
     }, []);
 
-    const roicQuarterly: MetricChartCardData[] = incomeQuarterly.reduce<MetricChartCardData[]>((acc, is) => {
+    // A return is a yearly rate: one quarter's income over the capital
+    // reads about a quarter of the annual figure (NVDA's ROE showed ~0.3
+    // quarterly against ~1.0 annual). Each quarter therefore uses the last
+    // four quarters' income, and when fewer are on record, the quarter
+    // annualised.
+    const annualIncomeAt = (index: number) => {
+      if (index >= 3) {
+        return incomeQuarterly.slice(index - 3, index + 1).reduce((sum, row) => sum + row.net_income, 0);
+      }
+      return incomeQuarterly[index].net_income * 4;
+    };
+
+    const roicQuarterly: MetricChartCardData[] = incomeQuarterly.reduce<MetricChartCardData[]>((acc, is, index) => {
       const bs = findNearestBalanceRow(balanceQuarterly, is.date);
       if (!bs) return acc;
       const investedCapital = bs.total_assets - bs.total_current_liabilities;
       if (!Number.isFinite(investedCapital) || Math.abs(investedCapital) < 1e-9) return acc;
       acc.push({
         period: fmt(is.period, "quarterly"),
-        value: is.net_income / investedCapital,
+        value: annualIncomeAt(index) / investedCapital,
         date: is.date,
       });
       return acc;
@@ -497,12 +459,12 @@ export default function OverviewPage() {
       return acc;
     }, []);
 
-    const roeQuarterly: MetricChartCardData[] = incomeQuarterly.reduce<MetricChartCardData[]>((acc, is) => {
+    const roeQuarterly: MetricChartCardData[] = incomeQuarterly.reduce<MetricChartCardData[]>((acc, is, index) => {
       const bs = findNearestBalanceRow(balanceQuarterly, is.date);
       if (!bs || Math.abs(bs.total_equity) < 1e-9) return acc;
       acc.push({
         period: fmt(is.period, "quarterly"),
-        value: is.net_income / bs.total_equity,
+        value: annualIncomeAt(index) / bs.total_equity,
         date: is.date,
       });
       return acc;
@@ -687,7 +649,7 @@ export default function OverviewPage() {
     }).format(v);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <FeedbackToast
         open={!!toast}
         title={toast?.title ?? ""}
@@ -697,29 +659,59 @@ export default function OverviewPage() {
         durationMs={7000}
       />
 
-      {/* Categorized Metrics Bar — Rule 4: pass fundamentals period for data freshness footer */}
-      {quote ? (
-        <CategorizedMetrics
+      {/* The price beside the verdict on the business: what it costs and
+          whether it is any good are the first two questions. The chart no
+          longer waits for the fundamentals before it shows. Quality: standard
+          mode uses Yahoo's 4 years, deep mode (10Y) switches on once Alpha
+          Vantage data is loaded; the profile feeds sector-relative scoring. */}
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-12">
+        <div className="symbol-enter min-w-0 xl:col-span-8" style={{ "--d": "180ms" } as React.CSSProperties}>
+          <StockPriceCard ticker={ticker} quote={quote ?? null} />
+        </div>
+        {/* On wide screens the score fills the height the chart sets and
+            scrolls inside it: opening a dimension never resizes the row. */}
+        <div className="symbol-enter relative min-h-0 min-w-0 xl:col-span-4" style={{ "--d": "240ms" } as React.CSSProperties}>
+          <div className="xl:absolute xl:inset-0">
+          {finLoading && !financials ? (
+            <QualityScorecardSkeleton />
+          ) : (stockData?.financials ?? financials) && quote ? (
+            <QualityScorecard
+              className="scroll-quiet h-full xl:overflow-y-auto"
+              result={calculateQualityScore(
+                deepFinancials ?? stockData?.financials ?? financials!,
+                quote,
+                profile
+              )}
+            />
+          ) : null}
+          </div>
+        </div>
+      </div>
+
+      {/* Key figures, grouped (Qualtrim's summary is the model). */}
+      {quote && !(finLoading && !financials) ? (
+        <KeyStats
           quote={quote}
-          income={latestIncome}
-          balance={latestBalance}
-          cashFlow={latestCashFlow}
-          fundamentalsPeriod={latestIncome?.period ?? latestBalance?.period ?? undefined}
+          financials={financials ?? null}
+          className="symbol-enter"
+          style={{ "--d": "300ms" } as React.CSSProperties}
         />
       ) : (
-        <CategorizedMetricsSkeleton />
+        <KeyStatsSkeleton />
       )}
 
-      {/* Charts Grid — 5 columns × 2 rows */}
-      {finLoading && !charts ? (
-        <DataHuntingLoader ticker={ticker} profile={profile} compact />
-      ) : charts ? (
-        <div className="flex flex-col gap-6">
-          <StockPriceCard ticker={ticker} quote={quote ?? null} />
-
-          {/* Wraps on narrow screens — justify-end with no wrap pushed the
-              first control off the left edge of the viewport. */}
-          <div className="flex flex-wrap items-center justify-start gap-2 sm:justify-end sm:gap-3">
+      {/* Fifteen metrics over time, with the controls on the title's line. */}
+      <section aria-labelledby="fundamentals-title" className="space-y-4 pt-2">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 id="fundamentals-title" className="text-[17px] font-semibold tracking-[-0.015em] text-snow-peak">
+              Fundamentals
+            </h2>
+            <p className="mt-0.5 text-[12.5px] text-mist">
+              {periodType === "annual" ? "Fiscal years" : "Quarters"}, the last {yearRange} years. Open any chart in Chart Builder.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 sm:justify-end sm:gap-3">
             {deepFinancialsError ? (
               <p className="w-full text-xs text-golden-hour sm:w-auto">{deepFinancialsError}</p>
             ) : null}
@@ -779,7 +771,11 @@ export default function OverviewPage() {
             </div>
             <PeriodToggle value={periodType} onChange={setPeriodType} />
           </div>
+        </div>
 
+        {finLoading && !charts ? (
+          <DataHuntingLoader ticker={ticker} profile={profile} compact />
+        ) : charts ? (
           <ChartErrorBoundary label="Financial charts">
           {/* Cards carry their own `insight-enter`; the shared delay makes the
               ten of them settle as one wave instead of ten separate arrivals. */}
@@ -965,54 +961,14 @@ export default function OverviewPage() {
           />
         </div>
           </ChartErrorBoundary>
-          </div>
+        ) : null}
+      </section>
 
-      ) : null}
-
-      {/* Quality Scorecard
-           Standard mode (4Y): Yahoo data — score is stable regardless of chart range.
-           Deep mode (10Y): automatically activated when AlphaVantage data is loaded
-           (annual.length ≥ 8). Profile is passed for sector-relative percentile scoring. */}
-      {finLoading && !financials ? (
-        <QualityScorecardSkeleton />
-      ) : (stockData?.financials ?? financials) && quote ? (
-        <QualityScorecard
-          result={calculateQualityScore(
-            deepFinancials ?? stockData?.financials ?? financials!,
-            quote,
-            profile
-          )}
-        />
-      ) : null}
-
-      {/* Insider activity — loads from EDGAR only once scrolled into view */}
+      {/* Then who has been trading it from the inside (loads from EDGAR only
+          once scrolled into view), and last, the company in words. */}
       <InsiderCard ticker={ticker} />
 
-      {/* Company Description */}
-      {profile?.description && (
-        <Card className="insight-enter">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">
-              About {profile.name}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-[13.5px] leading-[1.75] text-mist/85">
-              {profile.description}
-            </p>
-            {profile.website && (
-              <a
-                href={profile.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 inline-flex min-h-9 items-center text-[12px] font-medium text-sunset-orange transition-colors hover:text-golden-hour"
-              >
-                {profile.website.replace(/^https?:\/\//, "")} →
-              </a>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {profile ? <CompanyAbout profile={profile} /> : null}
     </div>
   );
 }

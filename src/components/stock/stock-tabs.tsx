@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
@@ -8,6 +8,10 @@ import { ROUTES } from "@/lib/constants";
 
 interface StockTabsProps {
   ticker: string;
+  /** The company in brief (logo, ticker, price), shown at the bar's end. */
+  summary?: ReactNode;
+  /** Whether the summary shows: once the full header has scrolled away. */
+  summaryVisible?: boolean;
 }
 
 const tabs = [
@@ -18,7 +22,7 @@ const tabs = [
   { label: "Earnings", href: (t: string) => ROUTES.SYMBOL_EARNINGS(t) },
 ];
 
-export function StockTabs({ ticker }: StockTabsProps) {
+export function StockTabs({ ticker, summary, summaryVisible = false }: StockTabsProps) {
   const pathname = usePathname();
   const scrollerRef = useRef<HTMLDivElement | null>(null);
   const activeRef = useRef<HTMLAnchorElement | null>(null);
@@ -77,7 +81,10 @@ export function StockTabs({ ticker }: StockTabsProps) {
   }, [pathname]);
 
   return (
-    <div className="relative">
+    // Sticky under the topbar (h-14), full-bleed across the page's padding,
+    // so the sections stay one click away however far down the reader is.
+    <div className="sticky top-14 z-20 -mx-4 bg-wolf-black/85 px-4 backdrop-blur-md lg:-mx-8 lg:px-8">
+    <div className="relative flex items-center gap-4">
       {/* A soft edge rather than a hard rule under the whole row. */}
       <div
         aria-hidden
@@ -86,7 +93,7 @@ export function StockTabs({ ticker }: StockTabsProps) {
       <div
         ref={scrollerRef}
         className={cn(
-          "relative flex items-center gap-1 overflow-x-auto overscroll-x-contain",
+          "relative flex min-w-0 flex-1 items-center gap-1 overflow-x-auto overscroll-x-contain",
           "[scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden",
           "[mask-image:linear-gradient(to_right,transparent_0,black_12px,black_calc(100%-20px),transparent_100%)] sm:[mask-image:none]"
         )}
@@ -122,7 +129,7 @@ export function StockTabs({ ticker }: StockTabsProps) {
                 "transition-[color,transform] duration-150 ease-out active:scale-[0.97]",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sunset-orange/60",
                 "motion-reduce:transition-none motion-reduce:active:scale-100",
-                "sm:px-4 sm:py-2.5",
+                "sm:px-4 sm:py-4",
                 isActive ? "text-sunset-orange" : "text-mist hover:text-snow-peak"
               )}
             >
@@ -131,6 +138,21 @@ export function StockTabs({ ticker }: StockTabsProps) {
           );
         })}
       </div>
+
+      {summary ? (
+        // Fades in once the full header is gone, so the price never leaves
+        // the screen. It sits at the end of the bar, so the tabs do not move.
+        <div
+          aria-hidden={!summaryVisible}
+          className={cn(
+            "hidden shrink-0 transition-[opacity,transform] duration-200 ease-[var(--ease-entrance)] sm:block motion-reduce:transition-none",
+            summaryVisible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-1 opacity-0"
+          )}
+        >
+          {summary}
+        </div>
+      ) : null}
+    </div>
     </div>
   );
 }

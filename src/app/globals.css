@@ -334,6 +334,239 @@ select optgroup {
   animation-delay: var(--enter-delay, 0ms);
 }
 
+/* Ticker page entrance. The page people open most, so it is quick and
+ * small: 280 ms, 8 px, one section after another (--d, 60 ms apart) in
+ * reading order: who the company is, what it costs, its figures. It only
+ * plays when the page mounts; switching tabs keeps the header still.
+ * Transform and opacity only, on the existing --ease-entrance curve. */
+@keyframes symbol-enter {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* The identity and price row: it carries the page's LCP (the price), so it
+ * settles into place without ever being transparent. */
+@keyframes symbol-settle {
+  from { transform: translate3d(0, 6px, 0); }
+  to   { transform: none; }
+}
+
+
+.symbol-enter {
+  animation: symbol-enter 280ms var(--ease-entrance) both;
+  animation-delay: var(--d, 0ms);
+}
+
+.symbol-settle {
+  animation: symbol-settle 280ms var(--ease-entrance) both;
+  animation-delay: var(--d, 0ms);
+}
+
+/* The price map's bars rise from the floor once, a quick left-to-right
+ * sweep: the shape of the year drawing itself, then still. */
+@keyframes symbol-bar-rise {
+  from { transform: scaleY(0.08); }
+  to   { transform: none; }
+}
+
+.symbol-bar {
+  animation: symbol-bar-rise 420ms var(--ease-entrance) both;
+  animation-delay: calc(220ms + var(--i, 0) * 10ms);
+}
+
+/* Valuation bars grow from where they start, once: a range or a rate
+ * drawing itself out to its value. */
+@keyframes symbol-field-grow {
+  from { transform: scaleX(0.04); }
+  to   { transform: none; }
+}
+
+/* Price chart, wiped in and out left to right through a soft edge: a mask
+ * 2.5 times the chart's width, solid on one side and clear on the other
+ * with a feathered band between, slid across it. Moving the mask from 100%
+ * to 0% walks the band from left to right; which side is solid decides
+ * whether that reveals the chart (in) or takes it away (out).
+ *   first: opening the page, 650 ms
+ *   in / out: a range change, the old chart out in 220 ms, the new one in
+ *   480 ms, starting 90 ms behind it. */
+@keyframes price-wipe {
+  from { mask-position: 100% 0; -webkit-mask-position: 100% 0; }
+  to   { mask-position: 0 0;    -webkit-mask-position: 0 0; }
+}
+
+.price-wipe-first,
+.price-wipe-in {
+  mask-image: linear-gradient(90deg, #000 0 40%, transparent 60% 100%);
+  -webkit-mask-image: linear-gradient(90deg, #000 0 40%, transparent 60% 100%);
+  mask-size: 250% 100%;
+  -webkit-mask-size: 250% 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.price-wipe-out {
+  mask-image: linear-gradient(90deg, transparent 0 40%, #000 60% 100%);
+  -webkit-mask-image: linear-gradient(90deg, transparent 0 40%, #000 60% 100%);
+  mask-size: 250% 100%;
+  -webkit-mask-size: 250% 100%;
+  mask-repeat: no-repeat;
+  -webkit-mask-repeat: no-repeat;
+}
+
+.price-wipe-first {
+  animation: price-wipe 650ms var(--ease-entrance) both;
+}
+
+.price-wipe-in {
+  animation: price-wipe 480ms var(--ease-entrance) 90ms both;
+}
+
+.price-wipe-out {
+  animation: price-wipe 220ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+/* The figures above renew with the range: a short rise into place. */
+@keyframes price-figures-in {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.price-figures {
+  animation: price-figures-in 260ms var(--ease-entrance) both;
+}
+
+@keyframes price-ghost {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 1; }
+}
+
+/* A loading indicator, so it loops; slow, so it reads as waiting, not alarm. */
+.price-ghost {
+  animation: price-ghost 1.6s ease-in-out infinite;
+}
+
+.symbol-field-bar {
+  transform-origin: left center;
+  animation: symbol-field-grow 520ms var(--ease-entrance) both;
+  animation-delay: 200ms;
+}
+
+/* Earnings loader: one round of the chart being built, on repeat while the
+ * data is on its way. Each quarter's estimate ring appears, then its result
+ * drops onto it; the stagger (--q) walks left to right, and the round fades
+ * out together before the next. A loading indicator, so it loops. */
+@keyframes earnings-loader-ring {
+  0%       { opacity: 0; transform: scale(0.6); }
+  14%, 82% { opacity: 1; transform: none; }
+  100%     { opacity: 0; transform: none; }
+}
+
+@keyframes earnings-loader-dot {
+  0%, 18%  { opacity: 0; transform: translate3d(0, -10px, 0); }
+  30%, 82% { opacity: 1; transform: none; }
+  100%     { opacity: 0; transform: none; }
+}
+
+@keyframes earnings-loader-next {
+  0%, 100% { opacity: 0.25; transform: scale(0.75); }
+  50%      { opacity: 1; transform: scale(1.1); }
+}
+
+.earnings-loader-ring,
+.earnings-loader-dot,
+.earnings-loader-next {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.earnings-loader-ring {
+  animation: earnings-loader-ring 3.2s var(--ease-entrance) infinite both;
+  animation-delay: calc(var(--q, 0) * 110ms);
+}
+
+.earnings-loader-dot {
+  animation: earnings-loader-dot 3.2s var(--ease-entrance) infinite both;
+  animation-delay: calc(var(--q, 0) * 110ms);
+}
+
+.earnings-loader-next {
+  animation: earnings-loader-next 1.6s ease-in-out infinite;
+}
+
+.earnings-loader-caption {
+  animation: insight-row-fade 300ms ease both;
+}
+
+/* The trend line through the results draws in after the dots land, then
+ * the round fades together with them. pathLength=1 on the path. */
+@keyframes earnings-loader-trend {
+  0%, 30%  { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 1; }
+  70%, 82% { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: 1; }
+  100%     { stroke-dasharray: 1; stroke-dashoffset: 0; opacity: 0; }
+}
+
+.earnings-loader-trend {
+  animation: earnings-loader-trend 3.2s var(--ease-entrance) infinite both;
+}
+
+/* Each fact arrives from slightly below, the old one already gone. */
+@keyframes earnings-fact-in {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.earnings-fact {
+  animation: earnings-fact-in 360ms var(--ease-entrance) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The loader holds its finished chart instead of replaying it. */
+  .earnings-loader-ring,
+  .earnings-loader-dot,
+  .earnings-loader-next,
+  .earnings-loader-trend {
+    animation: none;
+  }
+
+  .earnings-fact {
+    animation: insight-row-fade 200ms ease both;
+  }
+
+  /* No movement; the sections still fade in, at once. */
+  .symbol-enter {
+    animation: insight-row-fade 160ms ease both;
+    animation-delay: 0ms;
+  }
+
+  .symbol-settle,
+  .symbol-bar,
+  .symbol-field-bar {
+    animation: none;
+  }
+
+  /* No wiping: the chart is simply there, and the outgoing one leaves at once. */
+  .price-wipe-first,
+  .price-wipe-in {
+    animation: insight-row-fade 120ms ease both;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .price-wipe-out {
+    animation: insight-row-fade 1ms reverse both;
+    mask-image: none;
+    -webkit-mask-image: none;
+  }
+
+  .price-figures {
+    animation: insight-row-fade 120ms ease both;
+  }
+
+  .price-ghost {
+    animation: none;
+  }
+}
+
 /* Landing entrance. One sequence of CSS animations, started by the page
  * once it is ready (data-hero-ready on <html>, set by HeroForest).
  *

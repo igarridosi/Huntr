@@ -16,7 +16,7 @@ import { cn, formatCompactNumber, formatCurrency } from "@/lib/utils";
  * opened yet costs a burst of SEC requests, and a reader who never gets
  * this far down the page should not pay for it.
  */
-export function InsiderCard({ ticker }: { ticker: string }) {
+export function InsiderCard({ ticker, className }: { ticker: string; className?: string }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const [seen, setSeen] = useState(false);
 
@@ -38,7 +38,7 @@ export function InsiderCard({ ticker }: { ticker: string }) {
   const s = data?.summary;
 
   return (
-    <Card ref={ref} className="insight-enter">
+    <Card ref={ref} className={cn("insight-enter", className)}>
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 pb-3">
         <CardTitle className="text-[10px] font-semibold uppercase tracking-[0.11em] text-mist/85">Insider activity · 12 months</CardTitle>
         <Link
