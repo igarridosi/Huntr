@@ -20,6 +20,8 @@ export interface IncomeStatement extends FinancialPeriod {
   operating_expenses: number;
   operating_income: number;
   interest_expense: number;
+  /** Interest earned on cash and securities. Optional: older cached rows and some vendors do not carry it. */
+  interest_income?: number;
   pre_tax_income: number;
   income_tax: number;
   net_income: number;

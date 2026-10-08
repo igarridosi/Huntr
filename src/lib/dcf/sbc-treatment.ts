@@ -1,15 +1,15 @@
 /**
  * Stock-based compensation, deducted once.
  *
- * The "deduct SBC" switch lowers the base margin by SBC over revenue —
- * Adobe: 34.0% less 8.2% is 25.8%. The margin it lowers has to be the
- * one before the deduction. When the slider already stands at a
- * post-SBC level (typed in from a broker note that had it deducted, or a
- * scenario saved with the switch on and reloaded with it off), flipping
+ * The "deduct SBC" switch takes SBC over revenue off both margins as the
+ * engine runs them — Adobe: 34.0% less 8.2% is 25.8% — leaving the
+ * sliders as reported, before the deduction. When a slider already
+ * stands at a post-SBC level (typed in from a broker note that had it
+ * deducted, or a scenario saved before the switch moved into the engine),
  * the switch deducts the same charge twice and the model runs on a
  * margin no statement supports. The switch cannot know what the user
  * had in mind; it can tell when the number on the slider is already the
- * deducted one, and say so before subtracting again.
+ * deducted one, and say so.
  */
 
 /** How close the slider has to sit to the post-SBC margin to be taken as already deducted, in margin points. */
@@ -40,7 +40,7 @@ export function sbcTreatment(input: SbcTreatmentInput): SbcTreatment {
     deductedMargin,
     alreadyDeducted,
     warning: alreadyDeducted
-      ? `The margin on the slider (${pct(input.currentMargin)}) already sits at or below the statements' margin less stock-based compensation (${pct(input.rawMargin)} − ${pct(input.sbcMargin)} = ${pct(deductedMargin)}). Deducting SBC again would take the same charge off twice. The switch has been applied to the statements' margin instead of the slider's.`
+      ? `The margin on the slider (${pct(input.currentMargin)}) already sits at or below the statements' margin less stock-based compensation (${pct(input.rawMargin)} − ${pct(input.sbcMargin)} = ${pct(deductedMargin)}). The switch deducts SBC on top of the sliders, so if this margin was entered after SBC it is now being taken off twice: enter margins before SBC, or turn the switch off.`
       : null,
   };
 }

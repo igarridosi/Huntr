@@ -18,15 +18,11 @@ interface DCFDataSourcesProps {
   leaseTreatment: LeaseTreatment;
   deductSBC: boolean;
   onDeductSBCChange: (deduct: boolean) => void;
+  includePreferred: boolean;
+  onIncludePreferredChange: (include: boolean) => void;
   /** Revenue, so the two FCF margins can be shown side by side. */
   baseRevenue: number;
-  /**
-   * Free cash flow *before* any stock-compensation deduction.
-   *
-   * Passed explicitly rather than derived from the live margin: the toggle
-   * moves that margin, so deriving both lines from it showed the same number
-   * twice and made the adjustment look like it did nothing.
-   */
+  /** Free cash flow *before* any stock-compensation deduction: the slider's margin times revenue. */
   freeCashFlow: number;
   /** Figures typed in by hand, keyed by field. */
   overrides: Partial<Record<ZeroSuspectField, number>>;
@@ -50,6 +46,8 @@ export function DCFDataSources({
   leaseTreatment,
   deductSBC,
   onDeductSBCChange,
+  includePreferred,
+  onIncludePreferredChange,
   baseRevenue,
   freeCashFlow,
   overrides,
@@ -179,7 +177,14 @@ export function DCFDataSources({
                 value={netDebt.operatingLeases}
                 muted={!includeLeases}
               />
-              <DebtLine label="− Cash &amp; equivalents" value={-netDebt.cash} />
+              {netDebt.redeemablePreferred > 0 ? (
+                <DebtLine
+                  label="+ Redeemable preferred"
+                  value={netDebt.redeemablePreferred}
+                  muted={!includePreferred}
+                />
+              ) : null}
+              <DebtLine label="− Cash &amp; short-term investments" value={-netDebt.cash} />
               <div className="flex items-baseline justify-between gap-3 border-t border-wolf-border/25 pt-1.5">
                 <span className="text-xs font-medium text-snow-peak">
                   {netDebt.isNetCash ? "Net cash" : "Net debt"}
@@ -216,6 +221,14 @@ export function DCFDataSources({
                     : (leaseTreatment.reason ?? "")
                 }
               />
+              {netDebt.redeemablePreferred > 0 ? (
+                <Toggle
+                  checked={includePreferred}
+                  onChange={onIncludePreferredChange}
+                  label={`Count redeemable preferred as debt (${formatCompactNumber(netDebt.redeemablePreferred)})`}
+                  hint="A claim that ranks ahead of the common shareholder. A convertible preferred is usually already in the diluted share count, so counting it here too charges it twice. Turn on for a preferred that does not convert, or one the diluted count leaves out."
+                />
+              ) : null}
             </div>
 
             {/* ── Stock compensation ── */}
@@ -255,7 +268,7 @@ export function DCFDataSources({
                 }
                 hint={
                   canDeductSBC
-                    ? "Operating cash flow adds share-based pay back because no cash left the building. None did, but ownership did — the shareholder pays for it in dilution."
+                    ? "Operating cash flow adds share-based pay back because no cash left the building. None did, but ownership did — the shareholder pays for it in dilution. Enter margins before SBC: the switch takes it off both margins of all three scenarios as the model runs them."
                     : "The annual stock compensation charge is not in this filing, so there is nothing to deduct."
                 }
               />

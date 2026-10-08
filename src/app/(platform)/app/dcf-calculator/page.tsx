@@ -72,6 +72,7 @@ import {
 import {
   adjustFCFForLeases,
   buildNetDebt,
+  debtClaims,
   resolveLeaseTreatment,
 } from "@/lib/api/sec-edgar";
 import { DCFDataSources } from "@/components/dcf/dcf-data-sources";
@@ -93,7 +94,7 @@ import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from 
 import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
 import { sbcTreatment } from "@/lib/dcf/sbc-treatment";
 import { statementFreeCashFlow } from "@/lib/dcf/free-cash-flow";
-import { engineInputsFor, interestAddBack, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
+import { engineInputsFor, interestAddBack, interestIncomeStrip, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
 import { buildProvenance } from "@/lib/dcf/provenance";
 import { valuationGate } from "@/lib/dcf/gate";
 import { DCFProvenance } from "@/components/dcf/dcf-provenance";
@@ -204,6 +205,9 @@ export default function DcfCalculatorPage() {
   // deliberate act.
   const [includeLeases, setIncludeLeases] = useState(false);
   const [deductSBC, setDeductSBC] = useState(false);
+  // Off by default for the same kind of reason: a convertible preferred is
+  // usually already in the diluted share count.
+  const [includePreferred, setIncludePreferred] = useState(false);
   /**
    * Balance-sheet figures the user supplied, including confirmed zeros.
    *
@@ -423,11 +427,14 @@ export default function DcfCalculatorPage() {
           adrBasis
         ),
         totalDebt: latestBalance?.long_term_debt ?? null,
-        cash: latestBalance?.cash_and_equivalents ?? null,
+        // Cash and the short-term investments held beside it, as the filings
+        // path counts them.
+        cash: latestBalance ? latestBalance.cash_and_equivalents + (latestBalance.short_term_investments ?? 0) : null,
       },
       price: quote.price,
       reportedMarketCap: quote.market_cap,
       includeLeases,
+      includePreferred,
       overrides: balanceOverrides,
       // One criterion: the diluted count of the latest 10-Q. The market-cap
       // cross-check reports how far it drifts and which way; it does not
@@ -439,6 +446,7 @@ export default function DcfCalculatorPage() {
     secFundamentals,
     companyFinancials,
     includeLeases,
+    includePreferred,
     balanceOverrides,
     shareCountBasis,
     adrBasis,
@@ -531,6 +539,8 @@ export default function DcfCalculatorPage() {
           sourcedFields.netDebt.operatingLeases,
           sourcedFields.netDebt.cash,
           sourcedFields.netDebt.includesLeases,
+          sourcedFields.netDebt.redeemablePreferred,
+          sourcedFields.netDebt.includesPreferred,
           sourcedFields.sharesOutstanding.value,
         ])
       : null;
@@ -580,6 +590,8 @@ export default function DcfCalculatorPage() {
         operatingLeases: sourcedFields.netDebt.operatingLeases,
         cash: sourcedFields.netDebt.cash,
         includeLeases: next,
+        redeemablePreferred: sourcedFields.netDebt.redeemablePreferred,
+        includePreferred: sourcedFields.netDebt.includesPreferred,
       });
 
       applyAccountingTreatment((previous) => {
@@ -616,9 +628,7 @@ export default function DcfCalculatorPage() {
 
         return {
           ...previous,
-          totalDebt:
-            rebuilt.financialDebt +
-            (rebuilt.includesLeases ? rebuilt.operatingLeases : 0),
+          totalDebt: debtClaims(rebuilt),
           cashAndEquivalents: rebuilt.cash,
           baseFCFMargin: revenue > 0 ? previous.baseFCFMargin + shift : previous.baseFCFMargin,
           terminalFCFMargin:
@@ -633,37 +643,35 @@ export default function DcfCalculatorPage() {
   // Done in the handler rather than an effect watching the flag: the two
   // always change together, and an effect would cost a second render and a
   // frame where the panel and the valuation disagree.
+  //
+  // The switch no longer writes onto the sliders. The margins on screen stay
+  // as reported, before stock compensation, and the deduction is applied with
+  // the other adjustments where the engine inputs are built - to both margins
+  // of all three scenarios, whenever they were typed. Subtracting at the
+  // click left any margin typed afterwards undeducted: Instacart's Base and
+  // Bull ran at 25% and 27% against post-SBC terminals of 18% and 22%.
   const handleDeductSBCChange = useCallback(
     (next: boolean) => {
       setDeductSBC(next);
+      setSbcNotice(null);
       const sbc = sourcedFields?.shareBasedCompensation.value ?? 0;
-      if (sbc <= 0) return;
-      if (!next) setSbcNotice(null);
+      if (!next || sbc <= 0 || !(inputs.baseRevenue > 0)) return;
 
-      // The statements' own margin, before SBC: what the deduction is taken
-      // from when the slider already stands at a deducted level.
+      // A slider that already sits at the statements' margin less SBC was
+      // most likely deducted by hand, or saved that way before the switch
+      // moved into the engine. Deducting again would take it off twice, so
+      // say so; the figure is the user's to change, not ours.
       const latestCashFlow = [...(companyFinancials?.cash_flow.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
       const statementFcf = latestCashFlow ? statementFreeCashFlow(latestCashFlow, "annual").value : null;
-
-      applyAccountingTreatment((previous) => {
-        if (previous.baseRevenue <= 0) return previous;
-        const sbcMargin = sbc / previous.baseRevenue;
-        if (next && statementFcf !== null) {
-          const treatment = sbcTreatment({ currentMargin: previous.baseFCFMargin, rawMargin: statementFcf / previous.baseRevenue, sbcMargin });
-          if (treatment.alreadyDeducted) {
-            // Once, from the statements, not again from a slider that has
-            // already had it taken off.
-            setSbcNotice(treatment.warning);
-            return { ...previous, baseFCFMargin: treatment.deductedMargin };
-          }
-        }
-        // Deducting subtracts it once; restoring adds the same amount back, so
-        // flipping the toggle twice returns to exactly where it started.
-        const shift = next ? -sbcMargin : sbcMargin;
-        return { ...previous, baseFCFMargin: previous.baseFCFMargin + shift };
+      if (statementFcf === null) return;
+      const treatment = sbcTreatment({
+        currentMargin: inputs.baseFCFMargin,
+        rawMargin: statementFcf / inputs.baseRevenue,
+        sbcMargin: sbc / inputs.baseRevenue,
       });
+      setSbcNotice(treatment.warning);
     },
-    [sourcedFields, applyAccountingTreatment, companyFinancials]
+    [sourcedFields, companyFinancials, inputs.baseFCFMargin, inputs.baseRevenue]
   );
 
   /**
@@ -740,10 +748,13 @@ export default function DcfCalculatorPage() {
   }, [companyFinancials, profile?.sector, profile?.industry]);
 
   /** After-tax interest over revenue, from the latest annual income statement: what unlevering adds back. */
-  const addBack = useMemo(
-    () => interestAddBack([...(companyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1)),
+  const latestAnnualIncome = useMemo(
+    () => [...(companyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1),
     [companyFinancials]
   );
+  const addBack = useMemo(() => interestAddBack(latestAnnualIncome), [latestAnnualIncome]);
+  /** After-tax interest income over revenue: taken out of unlevered flows, because the cash it is earned on is added separately. */
+  const incomeStrip = useMemo(() => interestIncomeStrip(latestAnnualIncome), [latestAnnualIncome]);
 
   // The realised ranges drawn under the sliders, and the checks that compare
   // the assumptions against them.
@@ -1012,6 +1023,7 @@ export default function DcfCalculatorPage() {
     // preferences: leaving a lease capitalisation on across a switch applies
     // the previous company's treatment to the new one's balance sheet.
     setIncludeLeases(false);
+    setIncludePreferred(false);
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
@@ -1050,7 +1062,11 @@ export default function DcfCalculatorPage() {
 
     setTicker(normalizedTicker);
     setIncludeLeases(false);
-    setDeductSBC(false);
+    setIncludePreferred(false);
+    // The margins were saved before SBC with the switch recorded beside them;
+    // older sets carry their deduction in the margins and record nothing.
+    setDeductSBC(payload.scenarios.deductSBC ?? false);
+    setSbcNotice(null);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
     // Named after whichever basis the stored figure matches, so a set saved
@@ -1106,6 +1122,7 @@ export default function DcfCalculatorPage() {
 
     const scenariosToSave: DCFScenarioSet = {
       ...scenarios,
+      deductSBC,
       bear: {
         ...scenarios.bear,
         inputs: sanitizeCurrentPrice(scenarios.bear.inputs),
@@ -1135,7 +1152,7 @@ export default function DcfCalculatorPage() {
     // price and the balance sheet on screen, on all three.
     setScenarios(withCompanyFacts(scenariosToSave, liveFacts(inputs, inputs.currentPrice)));
     setSaveStatus(ok ? "saved" : "error");
-  }, [activeScenario, inputs, openGate, saveScenario, scenarios, ticker, user, waccEstimate]);
+  }, [activeScenario, deductSBC, inputs, openGate, saveScenario, scenarios, ticker, user, waccEstimate]);
 
   const handleDeleteSavedScenario = useCallback(async (savedTicker: string) => {
     await deleteScenario(savedTicker);
@@ -1165,20 +1182,37 @@ export default function DcfCalculatorPage() {
     });
   }, [quote, companyFinancials]);
 
-  // What the engine runs on: the live inputs, or, on the levered basis,
-  // the same with net debt at zero so flows after interest are never
-  // also charged the debt.
-  const engineInputs = useMemo(() => engineInputsFor(inputs, cashFlowBasis, addBack?.marginPoints ?? 0),
-    [inputs, cashFlowBasis, addBack]
+  // Every adjustment between the margins as reported and the margins the
+  // engine discounts, for a given revenue base. SBC is a currency amount,
+  // so its points depend on the revenue it is taken against.
+  const sbcAmount = deductSBC ? Math.max(0, sourcedFields?.shareBasedCompensation.value ?? 0) : 0;
+  const adjustmentsFor = useCallback(
+    (baseRevenue: number) => ({
+      interestPoints: addBack?.marginPoints ?? 0,
+      interestIncomePoints: incomeStrip,
+      sbcPoints: baseRevenue > 0 ? sbcAmount / baseRevenue : 0,
+    }),
+    [addBack, incomeStrip, sbcAmount]
+  );
+  // What the engine runs on: the live inputs with the adjustments applied
+  // to both margins, or, on the levered basis, net debt at zero so flows
+  // after interest are never also charged the debt.
+  const engineInputs = useMemo(
+    () => engineInputsFor(inputs, cashFlowBasis, adjustmentsFor(inputs.baseRevenue)),
+    [inputs, cashFlowBasis, adjustmentsFor]
   );
   // The three scenarios as the engine runs them: the margins on the tabs are
-  // as reported, the interest add-back goes on here for all three at once.
+  // as reported, every adjustment goes on here for all three at once.
   const engineScenarios = useMemo(() => {
     if (!scenarios) return null;
-    const points = addBack?.marginPoints ?? 0;
-    const run = (preset: DCFScenarioSet["bear"]) => ({ ...preset, inputs: engineInputsFor(preset.inputs, cashFlowBasis, points) });
+    const run = (preset: DCFScenarioSet["bear"]) => ({
+      ...preset,
+      inputs: engineInputsFor(preset.inputs, cashFlowBasis, adjustmentsFor(preset.inputs.baseRevenue)),
+    });
     return { ...scenarios, bear: run(scenarios.bear), base: run(scenarios.base), bull: run(scenarios.bull) };
-  }, [scenarios, cashFlowBasis, addBack]);
+  }, [scenarios, cashFlowBasis, adjustmentsFor]);
+  /** Engine margin less the margin on the slider: what the reverse DCF has to undo to speak in reported terms. */
+  const engineMarginShift = engineInputs.baseFCFMargin - inputs.baseFCFMargin;
   const result: DCFResult | null = useMemo(() => {
     if (engineInputs.baseRevenue <= 0 || engineInputs.sharesOutstanding <= 0) return null;
     return runDCF(engineInputs);
@@ -1434,7 +1468,16 @@ export default function DcfCalculatorPage() {
       scoreReference: simulation?.reference ?? null,
       revenueBase: revenueBaseRecord,
       provenance,
-      cashFlowBasis: { basis: cashFlowBasis, interestAddBackPoints: addBack?.marginPoints ?? null, taxRate: addBack?.taxRate ?? null, taxRateSource: addBack?.taxRateSource ?? null },
+      cashFlowBasis: {
+        basis: cashFlowBasis,
+        interestAddBackPoints: addBack?.marginPoints ?? null,
+        taxRate: addBack?.taxRate ?? null,
+        taxRateSource: addBack?.taxRateSource ?? null,
+        interestIncomeStripPoints: cashFlowBasis === "unlevered" ? incomeStrip : null,
+        sbcDeducted: deductSBC,
+        sbcPoints: deductSBC ? adjustmentsFor(inputs.baseRevenue).sbcPoints : null,
+        marginShift: engineMarginShift,
+      },
       gate: { checks: gate.checks, blocked: gate.blocked, uncoveredByReader: gate.blocked && valueUncovered },
       regimes: regimes.map((r) => ({ id: r.id, label: r.label, detail: r.detail, recommendation: r.recommendation, tab: r.tab })),
       warnings: [
@@ -1479,6 +1522,10 @@ export default function DcfCalculatorPage() {
     provenance,
     cashFlowBasis,
     addBack,
+    incomeStrip,
+    deductSBC,
+    adjustmentsFor,
+    engineMarginShift,
     gate,
     valueUncovered,
     regimes,
@@ -1488,6 +1535,7 @@ export default function DcfCalculatorPage() {
     setTicker("");
     setInputs(DEFAULT_INPUTS);
     setIncludeLeases(false);
+    setIncludePreferred(false);
     setDeductSBC(false);
     setBalanceOverrides({});
     setShareCountBasis(undefined);
@@ -1728,6 +1776,7 @@ export default function DcfCalculatorPage() {
                 revenueCAGR10Y={revenueHistory.cagr10}
                 fcfMargin5Y={revenueHistory.fcfMargin5}
                 marginHistory={revenueHistory.marginHistory}
+                marginShift={engineMarginShift}
               />
             </CardContent>
           </Card>
@@ -2164,18 +2213,15 @@ export default function DcfCalculatorPage() {
                         leaseTreatment={leaseTreatment}
                         deductSBC={deductSBC}
                         onDeductSBCChange={handleDeductSBCChange}
+                        includePreferred={includePreferred}
+                        onIncludePreferredChange={setIncludePreferred}
                         baseRevenue={inputs.baseRevenue}
                         overrides={balanceOverrides}
                         onOverride={handleBalanceOverride}
                         freeCashFlow={
-                          // Undo the deduction before handing it over, so the
-                          // panel can show both figures. Deriving both lines
-                          // from the live margin printed the same number twice
-                          // and made the adjustment look inert.
-                          inputs.baseRevenue * inputs.baseFCFMargin +
-                          (deductSBC
-                            ? (sourcedFields?.shareBasedCompensation.value ?? 0)
-                            : 0)
+                          // The slider is before SBC; the panel takes the
+                          // deduction off itself to show both figures.
+                          inputs.baseRevenue * inputs.baseFCFMargin
                         }
                         isLoading={secFetching}
                       />

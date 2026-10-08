@@ -37,6 +37,19 @@ describe("anchorWings", () => {
     expect(bull.wacc - bull.terminalGrowthRate).toBeGreaterThanOrEqual(0.01 - 1e-12);
   });
 
+  it("keeps the Bull's exit multiple within reach of the Base's (Haleon: 5.5% against 3.25% was 44x)", () => {
+    // The Base Ibai set: 7.5% and 3%, a 22x exit. The generated Bull ran at
+    // 5.5% and 3.25% and put 82% of a $38 value in the terminal year.
+    const base = inputs({ wacc: 0.075, terminalGrowthRate: 0.03 });
+    const { bull } = anchorWings({ bear: inputs({ wacc: 0.08, terminalGrowthRate: 0.02 }), base, bull: inputs({ wacc: 0.055, terminalGrowthRate: 0.0325 }) });
+    const spread = bull.wacc - bull.terminalGrowthRate;
+    expect(spread).toBeCloseTo(0.03, 10);
+    // The growth that makes it a Bull is kept; the discount rate gave way.
+    expect(bull.terminalGrowthRate).toBeCloseTo(0.0325, 10);
+    expect(bull.wacc).toBeLessThan(base.wacc);
+    expect(1 / spread).toBeLessThan(35);
+  });
+
   it("leaves wings already on their side exactly as they are", () => {
     const set = {
       bear: inputs({ baseFCFMargin: 0.14, terminalFCFMargin: 0.15, growthRatePhase1: 0.01, growthRatePhase2: 0.015, terminalGrowthRate: 0.02, wacc: 0.08 }),

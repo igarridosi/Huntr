@@ -76,7 +76,23 @@ export interface DCFScenarioExport {
     note: string;
   }>;
   /** Whether the flows are unlevered (after-tax interest added back, net debt subtracted) or levered (as reported, no net debt subtracted). */
-  cashFlowBasis?: { basis: "unlevered" | "levered"; interestAddBackPoints: number | null; taxRate: number | null; taxRateSource: "effective" | "statutory" | null };
+  cashFlowBasis?: {
+    basis: "unlevered" | "levered";
+    interestAddBackPoints: number | null;
+    taxRate: number | null;
+    taxRateSource: "effective" | "statutory" | null;
+    /** After-tax interest income taken out of unlevered flows, because the cash is added to equity separately. */
+    interestIncomeStripPoints?: number | null;
+    /** Whether stock compensation is deducted, and by how many points, on both margins of every scenario. */
+    sbcDeducted?: boolean;
+    sbcPoints?: number | null;
+    /**
+     * The scenario margins in this export are the ones the engine discounts:
+     * the sliders as reported, plus the interest add-back, less the interest
+     * income strip and SBC. Subtract `marginShift` to get back to the sliders.
+     */
+    marginShift?: number;
+  };
   /** The five checks run before the value was shown, and whether the reader uncovered a blocked one. */
   gate?: { checks: Array<{ id: string; label: string; status: "pass" | "fail" | "unverifiable"; detail: string }>; blocked: boolean; uncoveredByReader: boolean };
   /** What kind of company the statements say this is, and the tab that fits. Empty when nothing stands out. */
@@ -106,6 +122,9 @@ export interface DCFScenarioExport {
     cash: number;
     netDebt: number;
     leasesCapitalised: boolean;
+    /** Redeemable preferred and other temporary equity, and whether it is in the debt subtracted. */
+    redeemablePreferred?: number;
+    preferredCountedAsDebt?: boolean;
     sharesOutstanding: number;
     /** Anything known to be imprecise, in the words the panel uses. */
     caveats: string[];
@@ -346,7 +365,9 @@ export function buildScenarioExport(params: {
         yearsPhase2: inputs.yearsPhase2,
         baseFCFMargin: inputs.baseFCFMargin,
         terminalFCFMargin: inputs.terminalFCFMargin,
-        fcfMarginMode: inputs.fcfMarginMode,
+        // Spelled out even at the default, so a reader of the file knows the
+        // path rather than having to know what an absent field means.
+        fcfMarginMode: inputs.fcfMarginMode ?? "linear",
         wacc: inputs.wacc,
         terminalGrowthRate: inputs.terminalGrowthRate,
         midYearConvention: inputs.midYearConvention ?? false,
@@ -394,6 +415,8 @@ export function buildScenarioExport(params: {
           cash: sourcedFields.netDebt.cash,
           netDebt: sourcedFields.netDebt.netDebt,
           leasesCapitalised: sourcedFields.netDebt.includesLeases,
+          redeemablePreferred: sourcedFields.netDebt.redeemablePreferred,
+          preferredCountedAsDebt: sourcedFields.netDebt.includesPreferred,
           sharesOutstanding: sourcedFields.sharesOutstanding.value,
           caveats,
           marketCapAgrees: sourcedFields.marketCapCheck?.agrees ?? null,

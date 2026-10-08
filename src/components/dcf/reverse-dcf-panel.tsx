@@ -36,6 +36,18 @@ interface ReverseDCFPanelProps {
    * the panel presented all of them the same way, with a green verdict on top.
    */
   marginHistory?: MarginHistory | null;
+  /**
+   * The engine's margin less the reported one: the interest add-back, less
+   * the interest income strip and stock compensation, in margin points.
+   *
+   * The solve runs on the engine's inputs, so the margin it finds is the one
+   * the engine discounts. The record beside it is free cash flow as
+   * reported. Comparing the two put Reddit's implied 29.6% - already net of
+   * twelve points of SBC - next to a 31.1% that was not, and called the
+   * market cautious. The implied figure is moved back onto the reported
+   * basis before it is shown or compared.
+   */
+  marginShift?: number;
 }
 
 const VARIABLES: ReadonlyArray<{
@@ -91,14 +103,27 @@ export function ReverseDCFPanel({
   revenueCAGR10Y,
   fcfMargin5Y,
   marginHistory = null,
+  marginShift = 0,
 }: ReverseDCFPanelProps) {
   // A history that cannot be compared against is not a weaker benchmark, it is
   // not a benchmark. The implied figure still stands on its own.
   const historyIsUsable = marginHistory ? marginHistory.comparable : true;
+  // The inputs as the sentences describe them: margins as reported.
+  const reportedInputs = useMemo(
+    () =>
+      marginShift === 0
+        ? inputs
+        : { ...inputs, baseFCFMargin: inputs.baseFCFMargin - marginShift, terminalFCFMargin: inputs.terminalFCFMargin - marginShift },
+    [inputs, marginShift]
+  );
   const solves = useMemo(
     () =>
       VARIABLES.map((variable) => {
-        const solved = solveReverseDCF(inputs, variable.key);
+        const raw = solveReverseDCF(inputs, variable.key);
+        const solved =
+          raw && variable.key === "terminalFCFMargin" && marginShift !== 0
+            ? { ...raw, impliedValue: raw.impliedValue - marginShift }
+            : raw;
 
         // Only growth and margin have a company record to be judged against. A
         // discount rate is a property of the market's appetite, not of the
@@ -115,7 +140,7 @@ export function ReverseDCFPanel({
 
         return { variable, solved, comparison };
       }),
-    [inputs, revenueCAGR5Y, revenueCAGR10Y, fcfMargin5Y, historyIsUsable]
+    [inputs, revenueCAGR5Y, revenueCAGR10Y, fcfMargin5Y, historyIsUsable, marginShift]
   );
 
   if (!(inputs.currentPrice > 0) || !(inputs.baseRevenue > 0)) {
@@ -171,9 +196,14 @@ export function ReverseDCFPanel({
             hint={variable.hint}
             solved={solved}
             comparison={comparison}
-            inputs={inputs}
+            inputs={reportedInputs}
             marginHistory={
               variable.key === "terminalFCFMargin" ? marginHistory : null
+            }
+            adjustmentNote={
+              variable.key === "terminalFCFMargin" && solved && Math.abs(marginShift) >= 0.0005
+                ? `As reported, before SBC and interest. The model discounts ${formatPercent(solved.impliedValue + marginShift, 1)} after ${marginShift < 0 ? "taking off" : "adding back"} ${formatPercent(Math.abs(marginShift), 1)}.`
+                : null
             }
           />
         ))}
@@ -189,6 +219,7 @@ function SolveCard({
   comparison,
   inputs,
   marginHistory,
+  adjustmentNote = null,
 }: {
   label: string;
   hint: string;
@@ -196,6 +227,7 @@ function SolveCard({
   comparison: ReturnType<typeof compareToHistory> | null;
   inputs: DCFInputs;
   marginHistory?: MarginHistory | null;
+  adjustmentNote?: string | null;
 }) {
   return (
     <div className="flex flex-col gap-2.5 rounded-xl bg-snow-peak/[0.025] p-3.5 ring-1 ring-inset ring-wolf-border/35">
@@ -266,6 +298,10 @@ function SolveCard({
           <p className="font-mono text-2xl font-semibold tabular-nums tracking-[-0.03em] text-sunset-orange">
             {formatPercent(solved.impliedValue, 1)}
           </p>
+
+          {adjustmentNote ? (
+            <p className="-mt-1.5 text-[10px] leading-relaxed text-mist/60">{adjustmentNote}</p>
+          ) : null}
 
           {comparison && comparison.history5Y !== null ? (
             <RecordComparison

@@ -58,21 +58,72 @@ export function interestAddBack(income: IncomeStatement | null | undefined): Int
 }
 
 /**
+ * After-tax interest income over revenue: what a company with cash in the
+ * bank earns on it, sitting inside its reported free cash flow.
+ *
+ * On the unlevered basis the model adds the cash to equity value at the
+ * end. Leaving the interest it earns in the flows as well counts the same
+ * cash twice: Reddit's $2.8B earned roughly $100M a year, about 3.5
+ * points of margin, discounted forever on top of the $2.8B itself.
+ */
+export function interestIncomeStrip(income: IncomeStatement | null | undefined): number {
+  if (!income || !(income.revenue > 0)) return 0;
+  const interestIncome = Math.max(0, income.interest_income ?? 0);
+  if (interestIncome === 0) return 0;
+  const effective = income.pre_tax_income > 0 && income.income_tax >= 0 ? income.income_tax / income.pre_tax_income : NaN;
+  const taxRate = Number.isFinite(effective) && effective >= 0 && effective <= 0.4 ? effective : STATUTORY_TAX_RATE;
+  return (interestIncome * (1 - taxRate)) / income.revenue;
+}
+
+/** Every adjustment between the margin as reported and the margin the engine discounts, in margin points. */
+export interface MarginAdjustments {
+  /** After-tax interest expense, added back on the unlevered basis. */
+  interestPoints?: number;
+  /** After-tax interest income, taken out on the unlevered basis because the cash is added separately. */
+  interestIncomePoints?: number;
+  /** Stock-based compensation over revenue, deducted on either basis when the switch is on. */
+  sbcPoints?: number;
+}
+
+/**
+ * The points the engine adds to both margins, for a basis.
+ *
+ * Levered flows keep their interest, both paid and earned, because net debt
+ * is not subtracted; stock compensation is a cost on either basis.
+ */
+export function marginAdjustment(basis: CashFlowBasis, adjustments: MarginAdjustments = {}): number {
+  const sbc = Math.max(0, adjustments.sbcPoints ?? 0);
+  if (basis === "levered") return sbc > 0 ? -sbc : 0;
+  return Math.max(0, adjustments.interestPoints ?? 0) - Math.max(0, adjustments.interestIncomePoints ?? 0) - sbc;
+}
+
+/**
  * The inputs the engine runs on for a basis.
  *
- * The margins on screen are free cash flow as reported, which is levered
- * (after interest). Levered flows go in without net debt to subtract;
- * unlevered ones keep net debt and get the after-tax interest back on both
- * margins here, not on the sliders. It used to be added once, at populate,
- * so a margin typed by hand afterwards - Haleon's 20.26% - reached the
- * engine without the 2.46 points while net debt was still subtracted.
+ * The margins on screen are free cash flow as reported: levered (after
+ * interest) and before stock compensation. Every adjustment between that
+ * and what the model discounts is applied here, to both margins of every
+ * scenario, never written onto the sliders. Writing them onto the sliders
+ * is what broke twice: Haleon's interest add-back was added once at
+ * populate, so a margin typed afterwards reached the engine without it;
+ * the SBC switch subtracted once at the click, so Instacart's Base and
+ * Bull, typed after the click, ran with no deduction at all while its Bear
+ * carried one.
+ *
+ * Levered flows go in without net debt to subtract.
  */
 export function engineInputsFor<T extends { totalDebt: number; cashAndEquivalents: number; baseFCFMargin: number; terminalFCFMargin: number }>(
   inputs: T,
   basis: CashFlowBasis,
-  interestPoints = 0
+  adjustments: number | MarginAdjustments = 0
 ): T {
-  if (basis === "levered") return { ...inputs, totalDebt: 0, cashAndEquivalents: 0 };
-  if (!(interestPoints > 0)) return inputs;
-  return { ...inputs, baseFCFMargin: inputs.baseFCFMargin + interestPoints, terminalFCFMargin: inputs.terminalFCFMargin + interestPoints };
+  const shift = marginAdjustment(basis, typeof adjustments === "number" ? { interestPoints: adjustments } : adjustments);
+  const balance = basis === "levered" ? { totalDebt: 0, cashAndEquivalents: 0 } : null;
+  if (shift === 0) return balance ? { ...inputs, ...balance } : inputs;
+  return {
+    ...inputs,
+    ...balance,
+    baseFCFMargin: inputs.baseFCFMargin + shift,
+    terminalFCFMargin: inputs.terminalFCFMargin + shift,
+  };
 }

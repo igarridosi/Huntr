@@ -261,6 +261,7 @@ function mapTsIncomeRow(
     operating_expenses: tsn(row, "operatingExpense"),
     operating_income: tsn(row, "operatingIncome"),
     interest_expense: tsn(row, "interestExpense"),
+    interest_income: tsn(row, "interestIncome"),
     pre_tax_income: tsn(row, "pretaxIncome"),
     income_tax: tsn(row, "taxProvision"),
     net_income: tsn(row, "netIncome"),
