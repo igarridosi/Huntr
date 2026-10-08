@@ -167,6 +167,22 @@ describe("Phase 2 — false alarms that blocked sound valuations", () => {
   });
 });
 
+describe("Phase 3 — On: IFRS lease principal comes out of free cash flow", () => {
+  // On, 20-F 2025: CHF 69.9M of lease principal (financing under IFRS 16)
+  // against CHF 3,014M of revenue: 2.3 points the reported FCF did not pay.
+  const points = (69.9 * M) / (3_014 * M);
+
+  it("takes it off on either basis, with SBC, and leaves the interest to the unlevered one", () => {
+    expect(marginAdjustment("unlevered", { leasePrincipalPoints: points })).toBeCloseTo(-points, 10);
+    expect(marginAdjustment("levered", { leasePrincipalPoints: points, sbcPoints: 0.022 })).toBeCloseTo(-(points + 0.022), 10);
+    expect(marginAdjustment("unlevered", { leasePrincipalPoints: points, sbcPoints: 0.022, interestIncomePoints: 0.01 })).toBeCloseTo(-(points + 0.022 + 0.01), 10);
+  });
+
+  it("is zero for a US GAAP filer, whose rent is already in operating cash flow", () => {
+    expect(marginAdjustment("unlevered", { leasePrincipalPoints: 0 })).toBe(0);
+  });
+});
+
 describe("Instacart — whether preferred is debt is read from the filing", () => {
   const preferred = fact(200 * M, "2026-06-30", "TemporaryEquityCarryingAmountAttributableToParent");
 

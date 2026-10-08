@@ -1088,13 +1088,21 @@ export default function DcfCalculatorPage() {
   // Every adjustment between the margins as reported and the margins the
   // engine discounts, for a given revenue base. SBC is a currency amount,
   // so its points depend on the revenue it is taken against.
+  // The IFRS lease principal is an annual figure from the 20-F; measured
+  // against the revenue of the same fiscal year, as a share of revenue.
+  const leasePrincipal = secFundamentals?.leasePrincipal ?? null;
+  const leasePrincipalPoints =
+    leasePrincipal && leasePrincipal.value > 0 && latestAnnualIncome && latestAnnualIncome.revenue > 0
+      ? leasePrincipal.value / latestAnnualIncome.revenue
+      : 0;
   const adjustmentsFor = useCallback(
     (baseRevenue: number) => ({
       interestPoints: addBack?.marginPoints ?? 0,
       interestIncomePoints: incomeStrip,
       sbcPoints: baseRevenue > 0 ? sbcAmount / baseRevenue : 0,
+      leasePrincipalPoints,
     }),
-    [addBack, incomeStrip, sbcAmount]
+    [addBack, incomeStrip, sbcAmount, leasePrincipalPoints]
   );
   // What the engine runs on: the live inputs with the adjustments applied
   // to both margins, or, on the levered basis, net debt at zero so flows
@@ -1417,6 +1425,7 @@ export default function DcfCalculatorPage() {
         interestIncomeStripPoints: incomeStrip,
         sbcDeducted: sbcAmount > 0,
         sbcPoints: sbcAmount > 0 ? adjustmentsFor(inputs.baseRevenue).sbcPoints : null,
+        leasePrincipalPoints: leasePrincipalPoints > 0 ? leasePrincipalPoints : null,
         marginShift: engineMarginShift,
       },
       gate: { checks: gate.checks, blocked: gate.blocked, uncoveredByReader: gate.blocked && valueUncovered },
@@ -1472,6 +1481,7 @@ export default function DcfCalculatorPage() {
     addBack,
     incomeStrip,
     sbcAmount,
+    leasePrincipalPoints,
     adjustmentsFor,
     engineMarginShift,
     gate,
@@ -1711,6 +1721,14 @@ export default function DcfCalculatorPage() {
               </p>
             </CardHeader>
             <CardContent>
+              {/* Solving against a price in another currency than the
+                  statements answers a question in the wrong unit: On's panels
+                  read francs against dollars. Held back like the value. */}
+              {valuationGuard.reason === "currency-mismatch" ? (
+                <p className="rounded-xl bg-golden-hour/[0.08] p-3 text-[11px] leading-relaxed text-mist/85 ring-1 ring-inset ring-golden-hour/30">
+                  {valuationGuard.message} The reverse DCF solves against the price, so it is held back too until the exchange rate is available.
+                </p>
+              ) : (
               <ReverseDCFPanel
                 inputs={settledInputs}
                 ticker={ticker}
@@ -1722,6 +1740,7 @@ export default function DcfCalculatorPage() {
                 marginHistory={revenueHistory.marginHistory}
                 marginShift={engineMarginShift}
               />
+              )}
             </CardContent>
           </Card>
         </div>
@@ -2157,6 +2176,7 @@ export default function DcfCalculatorPage() {
                       <DCFDataSources
                         fields={sourcedFields}
                         sbcAmount={sbcAmount}
+                        leasePrincipalPoints={leasePrincipalPoints}
                         sbcPeriod={revenueBasis !== "fiscal_year" && sbcTtm !== null && sbcTtm > 0 ? "TTM" : "FY"}
                         baseRevenue={inputs.baseRevenue}
                         overrides={balanceOverrides}

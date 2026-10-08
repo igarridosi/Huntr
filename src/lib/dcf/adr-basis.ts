@@ -30,6 +30,14 @@ export interface AdrBasis {
   fx: number;
   /** Ordinary shares per receipt: 2 for Haleon, 0.5 when a receipt is half a share. */
   ratio: number;
+  /**
+   * True when no depositary ratio fit the share count and one share per
+   * unit was assumed. A foreign company listed directly - On, Swiss, filing
+   * in francs, its class A shares trading in dollars on the NYSE - has no
+   * receipt and no ratio; its filed count can still miss the market's by a
+   * class (On's class B), which the share-count check reports on its own.
+   */
+  ratioAssumed?: boolean;
 }
 
 /** Ratios depositary banks use. */
@@ -75,7 +83,11 @@ export function resolveAdrBasis(params: {
   // The count is converted first: the filed count is in ordinary shares, the
   // implied one in receipts, whatever the currencies.
   const ratio = detectAdrRatio(params.filedShares, params.impliedShares);
-  if (ratio === null) return null;
+  // No ratio fits: a direct listing in another currency, or a count that
+  // misses a class. The money is converted all the same - refusing left On
+  // with no valuation at all, while its reverse DCF ran in francs against a
+  // dollar price - and the count is left to the share-count check.
+  if (ratio === null) return { from, to, fx: params.fx, ratio: 1, ratioAssumed: true };
   return { from, to, fx: params.fx, ratio };
 }
 
@@ -124,6 +136,9 @@ export function convertSecFundamentals(sec: SECFundamentals, b: AdrBasis): SECFu
 
 /** "Converted from GBP at 1.34 USD/GBP; 1 ADR = 2 ordinary shares." */
 export function describeAdrBasis(b: AdrBasis): string {
+  if (b.ratioAssumed) {
+    return `Statements converted from ${b.from} at ${b.fx.toFixed(4)} ${b.to}/${b.from}. No depositary ratio fits the share count, so one share per unit is assumed: if the filed count misses a share class, switch to the count the market cap implies.`;
+  }
   const ratio =
     b.ratio === 1
       ? "one share per unit"

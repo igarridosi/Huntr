@@ -110,7 +110,8 @@
       "0000320193-26-000020"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -559,7 +560,8 @@
       "0001403161-26-000079"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -927,7 +929,8 @@
     "divestitures": null,
     "redeemablePreferred": null,
     "preferredConversionShares": null,
-    "shareBasedCompensationTtm": null
+    "shareBasedCompensationTtm": null,
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1178,7 +1181,8 @@
       "0001652044-26-000071"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1605,7 +1609,8 @@
       "0001652044-26-000071"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -1964,7 +1969,8 @@
     "divestitures": null,
     "redeemablePreferred": null,
     "preferredConversionShares": null,
-    "shareBasedCompensationTtm": null
+    "shareBasedCompensationTtm": null,
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2083,7 +2089,8 @@
     "divestitures": null,
     "redeemablePreferred": null,
     "preferredConversionShares": null,
-    "shareBasedCompensationTtm": null
+    "shareBasedCompensationTtm": null,
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2218,7 +2225,8 @@
     "divestitures": null,
     "redeemablePreferred": null,
     "preferredConversionShares": null,
-    "shareBasedCompensationTtm": null
+    "shareBasedCompensationTtm": null,
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2502,7 +2510,8 @@
       "0001397187-26-000127"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {
@@ -2881,7 +2890,8 @@
       "0000037996-26-000086"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": null,
@@ -3221,7 +3231,8 @@
       "0000829224-26-000130"
      ],
      "concept": "ShareBasedCompensation"
-    }
+    },
+    "leasePrincipal": null
    },
    "perConcept": {
     "sharesOutstandingCover:any": {

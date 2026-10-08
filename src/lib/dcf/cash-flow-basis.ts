@@ -81,8 +81,15 @@ export interface MarginAdjustments {
   interestPoints?: number;
   /** After-tax interest income, taken out on the unlevered basis because the cash is added separately. */
   interestIncomePoints?: number;
-  /** Stock-based compensation over revenue, deducted on either basis when the switch is on. */
+  /** Stock-based compensation over revenue, deducted on either basis. */
   sbcPoints?: number;
+  /**
+   * Lease principal over revenue, for an IFRS filer. IFRS 16 puts it in
+   * financing, so operating cash flow is struck before the rent a US GAAP
+   * filer has already paid out of it. Deducted on either basis: it is the
+   * cost of the stores and offices, not of the capital structure.
+   */
+  leasePrincipalPoints?: number;
 }
 
 /**
@@ -92,9 +99,9 @@ export interface MarginAdjustments {
  * is not subtracted; stock compensation is a cost on either basis.
  */
 export function marginAdjustment(basis: CashFlowBasis, adjustments: MarginAdjustments = {}): number {
-  const sbc = Math.max(0, adjustments.sbcPoints ?? 0);
-  if (basis === "levered") return sbc > 0 ? -sbc : 0;
-  return Math.max(0, adjustments.interestPoints ?? 0) - Math.max(0, adjustments.interestIncomePoints ?? 0) - sbc;
+  const operating = Math.max(0, adjustments.sbcPoints ?? 0) + Math.max(0, adjustments.leasePrincipalPoints ?? 0);
+  if (basis === "levered") return operating > 0 ? -operating : 0;
+  return Math.max(0, adjustments.interestPoints ?? 0) - Math.max(0, adjustments.interestIncomePoints ?? 0) - operating;
 }
 
 /**

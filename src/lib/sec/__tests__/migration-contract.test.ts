@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { describe, expect, it } from "vitest";
 import { SEC_CONCEPT_IDS } from "../concept-ids";
-import { OPERATING_CASH_FLOW_CONCEPTS, SEC_CONCEPTS } from "../concepts";
+import { IFRS_LEASE_PRINCIPAL_CONCEPTS, IFRS_SBC_CONCEPTS, OPERATING_CASH_FLOW_CONCEPTS, SEC_CONCEPTS } from "../concepts";
 import { REVIEWED_FORMS } from "../forms";
 
 // The table the ingest pipeline fills is read back by the app, so the two
@@ -11,9 +11,9 @@ import { REVIEWED_FORMS } from "../forms";
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), "supabase/migrations", file), "utf8");
 // 011 creates the tables and the form check; later migrations only add concepts.
 const sql = read("011_sec_company_facts.sql");
-const seeds = [sql, read("014_sec_concepts_marketable_securities.sql")].join("\n");
+const seeds = [sql, read("014_sec_concepts_marketable_securities.sql"), read("015_sec_concepts_ifrs_lease_principal.sql")].join("\n");
 
-describe("migrations 011 and 014 agree with src/lib/sec", () => {
+describe("migrations 011, 014 and 015 agree with src/lib/sec", () => {
   it("accepts exactly the reviewed forms", () => {
     const check = /form\s+TEXT\s+CHECK \(form IS NULL OR form IN \(([^)]*)\)\)/.exec(sql);
     expect(check).not.toBeNull();
@@ -22,20 +22,22 @@ describe("migrations 011 and 014 agree with src/lib/sec", () => {
   });
 
   it("seeds exactly the concepts the app reads", () => {
-    const seeded = [...seeds.matchAll(/\(\s*\d+,\s*'(us-gaap|dei)',\s*'([A-Za-z]+)'\)/g)].map((m) => `${m[1]}:${m[2]}`);
+    const seeded = [...seeds.matchAll(/\(\s*\d+,\s*'(us-gaap|dei|ifrs-full)',\s*'([A-Za-z]+)'\)/g)].map((m) => `${m[1]}:${m[2]}`);
     const read = [
       ...SEC_CONCEPTS.sharesOutstandingCover.map((c) => `dei:${c}`),
       ...Object.entries(SEC_CONCEPTS)
         .filter(([key]) => key !== "sharesOutstandingCover")
         .flatMap(([, list]) => list.map((c) => `us-gaap:${c}`)),
       ...OPERATING_CASH_FLOW_CONCEPTS.map((c) => `us-gaap:${c}`),
+      ...IFRS_LEASE_PRINCIPAL_CONCEPTS.map((c) => `ifrs-full:${c}`),
+      ...IFRS_SBC_CONCEPTS.map((c) => `ifrs-full:${c}`),
     ];
     expect(new Set(seeded).size).toBe(seeded.length);
     expect([...seeded].sort()).toEqual([...new Set(read)].sort());
   });
 
   it("gives every concept the id the migration seeded", () => {
-    const seeded = [...seeds.matchAll(/\(\s*(\d+),\s*'(us-gaap|dei)',\s*'([A-Za-z]+)'\)/g)].map((m) => [Number(m[1]), m[2], m[3]]);
+    const seeded = [...seeds.matchAll(/\(\s*(\d+),\s*'(us-gaap|dei|ifrs-full)',\s*'([A-Za-z]+)'\)/g)].map((m) => [Number(m[1]), m[2], m[3]]);
     expect(SEC_CONCEPT_IDS.map((row) => [...row])).toEqual(seeded);
   });
 });

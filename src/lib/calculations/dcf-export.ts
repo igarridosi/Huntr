@@ -86,6 +86,8 @@ export interface DCFScenarioExport {
     /** Whether stock compensation is deducted, and by how many points, on both margins of every scenario. */
     sbcDeducted?: boolean;
     sbcPoints?: number | null;
+    /** IFRS lease principal taken out of free cash flow, as a share of revenue (IFRS filers only). */
+    leasePrincipalPoints?: number | null;
     /**
      * The scenario margins in this export are the ones the engine discounts:
      * the sliders as reported, plus the interest add-back, less the interest
