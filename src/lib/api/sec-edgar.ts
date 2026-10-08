@@ -122,8 +122,15 @@ export interface NetDebtBreakdown {
   financialDebt: number;
   operatingLeases: number;
   cash: number;
+  /**
+   * Redeemable preferred stock and other temporary equity: a claim that ranks
+   * ahead of the common shareholder, filed between liabilities and equity.
+   * Instacart carries $200M of it and the panel used to show none.
+   */
+  redeemablePreferred: number;
   netDebt: number;
   includesLeases: boolean;
+  includesPreferred: boolean;
   /** True when the company holds more cash than debt. */
   isNetCash: boolean;
 }
@@ -133,6 +140,13 @@ export function buildNetDebt(params: {
   operatingLeases: number;
   cash: number;
   includeLeases?: boolean;
+  redeemablePreferred?: number;
+  /**
+   * Off by default. A convertible preferred is usually in the diluted share
+   * count already; subtracting it as well charges the same claim twice. On
+   * for a preferred that does not convert, or one the diluted count leaves out.
+   */
+  includePreferred?: boolean;
 }): NetDebtBreakdown {
   // Option B by default. Under ASC 842 the operating lease charge is already
   // deducted from operating cash flow, so the FCF the model discounts is
@@ -145,18 +159,34 @@ export function buildNetDebt(params: {
   const financialDebt = Math.max(0, params.financialDebt || 0);
   const operatingLeases = Math.max(0, params.operatingLeases || 0);
   const cash = Math.max(0, params.cash || 0);
+  const redeemablePreferred = Math.max(0, params.redeemablePreferred || 0);
+  const includesPreferred = (params.includePreferred ?? false) && redeemablePreferred > 0;
 
   const netDebt =
-    financialDebt + (includesLeases ? operatingLeases : 0) - cash;
+    financialDebt +
+    (includesLeases ? operatingLeases : 0) +
+    (includesPreferred ? redeemablePreferred : 0) -
+    cash;
 
   return {
     financialDebt,
     operatingLeases,
     cash,
+    redeemablePreferred,
     netDebt,
     includesLeases,
+    includesPreferred,
     isNetCash: netDebt < 0,
   };
+}
+
+/** What the engine subtracts as debt: borrowings, plus leases and preferred where they are counted. */
+export function debtClaims(netDebt: NetDebtBreakdown): number {
+  return (
+    netDebt.financialDebt +
+    (netDebt.includesLeases ? netDebt.operatingLeases : 0) +
+    (netDebt.includesPreferred ? netDebt.redeemablePreferred : 0)
+  );
 }
 
 /**

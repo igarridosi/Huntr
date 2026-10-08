@@ -27,8 +27,16 @@ const RULES: Record<Field, { direction: 1 | -1; gap: (base: number) => number }>
   wacc: { direction: -1, gap: () => 0.005 },
 };
 
-/** Terminal growth this far under the discount rate at the least. */
-const MIN_TERMINAL_SPREAD = 0.01;
+/**
+ * The narrowest gap between the discount rate and terminal growth a wing may
+ * run on. The exit multiple is 1 / (WACC − g), so the spread is the multiple:
+ * Haleon's automatic Bull, at 5.5% against 3.25%, sold the terminal year at
+ * 44 times free cash flow and put 82% of a $38 value in it. A wing may be
+ * more generous than the Base, but by a point and a half of spread at most,
+ * and never under 2.5% (40x).
+ */
+export const MIN_WING_SPREAD = 0.025;
+export const MAX_SPREAD_GIVEAWAY = 0.015;
 
 function wing(side: "bear" | "bull", inputs: DCFInputs, base: DCFInputs): DCFInputs {
   const out = { ...inputs };
@@ -38,8 +46,16 @@ function wing(side: "bear" | "bull", inputs: DCFInputs, base: DCFInputs): DCFInp
     const bound = base[field] + sign * rule.gap(base[field]);
     out[field] = sign > 0 ? Math.max(out[field], bound) : Math.min(out[field], bound);
   }
-  if (out.wacc - out.terminalGrowthRate < MIN_TERMINAL_SPREAD) {
-    out.terminalGrowthRate = out.wacc - MIN_TERMINAL_SPREAD;
+  const minSpread = Math.max(MIN_WING_SPREAD, base.wacc - base.terminalGrowthRate - MAX_SPREAD_GIVEAWAY);
+  if (out.wacc - out.terminalGrowthRate < minSpread) {
+    // Raise the discount rate first, as far as its own side of the Base
+    // allows, so the wing keeps the growth that makes it a Bull; whatever
+    // spread is still missing comes off terminal growth.
+    const waccCeiling = side === "bull" ? base.wacc - RULES.wacc.gap(base.wacc) : Infinity;
+    out.wacc = Math.max(out.wacc, Math.min(out.terminalGrowthRate + minSpread, waccCeiling));
+    if (out.wacc - out.terminalGrowthRate < minSpread) {
+      out.terminalGrowthRate = out.wacc - minSpread;
+    }
   }
   return out;
 }

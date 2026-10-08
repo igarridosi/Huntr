@@ -5,6 +5,7 @@ import {
   type SECFundamentals,
   buildNetDebt,
   checkMarketCap,
+  debtClaims,
   selectShareCount,
   MARKET_CAP_TOLERANCE,
   factAgeInDays,
@@ -253,6 +254,8 @@ export interface SourcedDCFFields {
   financialDebt: SourcedValue;
   cash: SourcedValue;
   operatingLeases: SourcedValue;
+  /** Redeemable preferred and other temporary equity; zero when the filings carry none. */
+  redeemablePreferred: SourcedValue;
   shareBasedCompensation: SourcedValue;
   netDebt: NetDebtBreakdown;
   marketCapCheck: MarketCapCheck | null;
@@ -268,6 +271,21 @@ export interface SourcedDCFFields {
    * back as an override.
    */
   unresolved: ZeroSuspectField[];
+}
+
+/**
+ * Whether redeemable preferred is a claim to subtract, decided from the
+ * filing rather than asked of the user.
+ *
+ * The diluted count adds shares for preferred that converts, and says so
+ * under its own tag. When the latest quarter shows any, the preferred is
+ * already in the denominator and subtracting it too would charge the same
+ * claim twice - Instacart's 5.8M in Q2 2026. With none, the preferred is a
+ * senior claim like debt.
+ */
+export function preferredIsDebt(sec: Pick<SECFundamentals, "redeemablePreferred" | "preferredConversionShares"> | null): boolean {
+  if (!sec?.redeemablePreferred || !(sec.redeemablePreferred.value > 0)) return false;
+  return !(sec.preferredConversionShares && sec.preferredConversionShares.value > 0);
 }
 
 /**
@@ -375,6 +393,11 @@ export function buildSourcedFields(params: {
   const operatingLeases = pickSourced(sec?.operatingLeases ?? null, 0, now, {
     allowZero: true,
   });
+  // Most companies have none, and Yahoo has no field for it: zero is the
+  // honest answer when the filings carry nothing.
+  const redeemablePreferred = pickSourced(sec?.redeemablePreferred ?? null, 0, now, {
+    allowZero: true,
+  });
   const shareBasedCompensation = pickSourced(
     sec?.shareBasedCompensation ?? null,
     yahoo.shareBasedCompensation,
@@ -403,6 +426,8 @@ export function buildSourcedFields(params: {
     operatingLeases: operatingLeases.value,
     cash: cash.value,
     includeLeases: params.includeLeases,
+    redeemablePreferred: redeemablePreferred.value,
+    includePreferred: preferredIsDebt(sec),
   });
 
   return {
@@ -410,6 +435,7 @@ export function buildSourcedFields(params: {
     financialDebt,
     cash,
     operatingLeases,
+    redeemablePreferred,
     shareBasedCompensation,
     netDebt,
     // Always measured against the *filed* count, never the one in use.
@@ -451,12 +477,11 @@ export function applySourcedBalanceSheet<
 >(inputs: T, fields: SourcedDCFFields): T {
   return {
     ...inputs,
-    // Net debt is expressed to the model as debt-minus-cash, so leases ride in
-    // on the debt side and the cash line stays what it is. Passing the netted
-    // figure straight through would lose the breakdown the panel shows.
-    totalDebt:
-      fields.netDebt.financialDebt +
-      (fields.netDebt.includesLeases ? fields.netDebt.operatingLeases : 0),
+    // Net debt is expressed to the model as debt-minus-cash, so leases and
+    // preferred ride in on the debt side and the cash line stays what it is.
+    // Passing the netted figure straight through would lose the breakdown the
+    // panel shows.
+    totalDebt: debtClaims(fields.netDebt),
     cashAndEquivalents: fields.netDebt.cash,
     sharesOutstanding:
       fields.sharesOutstanding.value > 0

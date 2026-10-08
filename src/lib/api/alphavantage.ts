@@ -912,6 +912,7 @@ export function mapIncome(
         operating_expenses: opex,
         operating_income: operatingIncome,
         interest_expense: firstNumber(row, "interestExpense", "interestAndDebtExpense"),
+        interest_income: parseNumber(row.interestIncome),
         pre_tax_income: parseNumber(row.incomeBeforeTax),
         income_tax: parseNumber(row.incomeTaxExpense),
         net_income: netIncome,

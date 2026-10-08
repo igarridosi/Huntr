@@ -1,6 +1,6 @@
 /**
  * SEC EDGAR — the ids under which sec_concepts stores the concepts the app
- * reads. Fixed by migration 011; a contract test keeps the two equal.
+ * reads. Fixed by migrations 011 and 014; a contract test keeps them equal.
  */
 
 import type { SECTaxonomy } from "./concepts";
@@ -48,4 +48,9 @@ export const SEC_CONCEPT_IDS: ReadonlyArray<readonly [id: number, taxonomy: SECT
   [40, "us-gaap", "ProceedsFromSaleOfBusinessesNetOfCashDivested"],
   [41, "us-gaap", "NetCashProvidedByUsedInOperatingActivities"],
   [42, "us-gaap", "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations"],
+  [43, "us-gaap", "ShortTermInvestments"],
+  [44, "us-gaap", "MarketableSecuritiesCurrent"],
+  [45, "us-gaap", "AvailableForSaleSecuritiesDebtSecuritiesCurrent"],
+  [46, "us-gaap", "TemporaryEquityCarryingAmountAttributableToParent"],
+  [47, "us-gaap", "IncrementalCommonSharesAttributableToConversionOfPreferredStock"],
 ];
