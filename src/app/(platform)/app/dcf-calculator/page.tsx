@@ -103,7 +103,7 @@ import { valuationGate } from "@/lib/dcf/gate";
 import { DCFProvenance } from "@/components/dcf/dcf-provenance";
 import { ValuationCover } from "@/components/dcf/valuation-cover";
 import { DCFRegime } from "@/components/dcf/dcf-regime";
-import { debtPaydown, detectRegimes, PERIMETER_MONTHS } from "@/lib/dcf/regime";
+import { debtPaydown, detectRegimes, isMaterialDeal, PERIMETER_MONTHS } from "@/lib/dcf/regime";
 import { buildMarginHistory } from "@/lib/calculations/margin-history";
 import { track } from "@/lib/analytics/track";
 
@@ -554,7 +554,14 @@ export default function DcfCalculatorPage() {
   // off both margins of all three scenarios. A switch only added a question
   // nobody could answer the same way twice: before the scenarios or after,
   // margins typed with it or without it.
-  const sbcAmount = Math.max(0, sourcedFields?.shareBasedCompensation.value ?? 0);
+  //
+  // Measured over the same period as the revenue it is set against: the
+  // trailing twelve months unless the closed year was chosen.
+  const sbcTtm = secFundamentals?.shareBasedCompensationTtm?.value ?? null;
+  const sbcAmount = Math.max(
+    0,
+    revenueBasis !== "fiscal_year" && sbcTtm !== null && sbcTtm > 0 ? sbcTtm : (sourcedFields?.shareBasedCompensation.value ?? 0)
+  );
   // A slider that already sits at the statements' margin less SBC was most
   // likely deducted by hand, or saved that way under the old switch.
   // Deducting again would take it off twice, so say so; the figure is the
@@ -628,11 +635,19 @@ export default function DcfCalculatorPage() {
       .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .at(-1);
     const lender = looksLikeLender({ industry: profile?.industry, balance: latestBalanceRow ?? null, income: sortedIncomeRows.at(-1) ?? null });
+    // Known only once the filings are read: until then a step in the record
+    // is still treated as a possible change of perimeter.
+    const latestRevenue = sortedIncomeRows.at(-1)?.revenue ?? null;
+    const perimeterEvent = secFundamentals
+      ? isMaterialDeal(secFundamentals.acquisitions?.value, latestRevenue) ||
+        isMaterialDeal(secFundamentals.divestitures?.value, latestRevenue)
+      : undefined;
     const marginHistory = buildMarginHistory({
       revenues: sortedIncomeRows,
       cashFlows,
       sector: lender ? profile?.sector : null,
       years: 5,
+      perimeterEvent,
     });
 
     return {
@@ -641,8 +656,9 @@ export default function DcfCalculatorPage() {
       fcfMargin5: marginHistory.median,
       marginHistory,
       lender,
+      perimeterEvent,
     };
-  }, [companyFinancials, profile?.sector, profile?.industry]);
+  }, [companyFinancials, profile?.sector, profile?.industry, secFundamentals]);
 
   /** After-tax interest over revenue, from the latest annual income statement: what unlevering adds back. */
   const latestAnnualIncome = useMemo(
@@ -728,6 +744,14 @@ export default function DcfCalculatorPage() {
       terminalMargin: buildHistoricalBand(margins, inputs.terminalFCFMargin),
     };
 
+    // The last four quarters against the four before, when eight are on file.
+    const quarters = [...(companyFinancials?.income_statement.quarterly ?? [])]
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((row) => row.revenue);
+    const lastFour = quarters.slice(-4).reduce((sum, v) => sum + v, 0);
+    const priorFour = quarters.slice(-8, -4).reduce((sum, v) => sum + v, 0);
+    const ttmGrowth = quarters.length >= 8 && priorFour > 0 && quarters.slice(-8).every((v) => v > 0) ? lastFour / priorFour - 1 : null;
+
     const warnings = collectAnchorWarnings({
       growthPhase1: inputs.growthRatePhase1,
       baseMargin: inputs.baseFCFMargin,
@@ -735,6 +759,7 @@ export default function DcfCalculatorPage() {
       growthBand: bands.growthPhase1,
       capexToRevenue,
       capexTrend,
+      ttmGrowth,
     });
 
     return { bands, warnings };
@@ -1248,13 +1273,15 @@ export default function DcfCalculatorPage() {
     () =>
       valuationGate({
         shares: inputs.sharesOutstanding,
+        // Diluted when the count in use is the filed weighted-diluted one.
+        dilutedShares: !!sourcedFields?.dilutedCount && sourcedFields.shareCount.basis === "filings",
         price: inputs.currentPrice,
         reportedMarketCap: quote?.market_cap ?? null,
         cashFlow: { annual: companyFinancials?.cash_flow.annual ?? [], quarterly: companyFinancials?.cash_flow.quarterly ?? [] },
         debtInUse: inputs.totalDebt,
         debtSource: sourcedFields?.financialDebt.source ?? null,
         filedDebt: secFundamentals?.financialDebt ?? null,
-        revenue: { basis: revenueBasis, divergence: revenueDivergence, perimeterConfirmed },
+        revenue: { basis: revenueBasis, divergence: revenueDivergence, perimeterConfirmed, organic: revenueHistory.perimeterEvent === false },
         marginHistory: revenueHistory.marginHistory,
         lender: revenueHistory.lender,
       }),
@@ -1311,7 +1338,7 @@ export default function DcfCalculatorPage() {
       terminalWeight: result && result.enterpriseValue > 0 ? result.pvTerminalValue / result.enterpriseValue : null,
       debtToEbitda: income && income.ebitda > 0 ? inputs.totalDebt / income.ebitda : null,
       fcfMargin: fcf !== null && income && income.revenue > 0 ? fcf / income.revenue : null,
-      perimeter: { divergence: revenueDivergence?.deviation ?? null, acquisitions: recent(secFundamentals?.acquisitions), divestitures: recent(secFundamentals?.divestitures) },
+      perimeter: { divergence: revenueDivergence?.deviation ?? null, acquisitions: recent(secFundamentals?.acquisitions), divestitures: recent(secFundamentals?.divestitures), revenue: income?.revenue ?? null },
     });
   }, [latestAnnualRows, revenueHistory.lender, result, inputs.totalDebt, revenueDivergence, secFundamentals, companyFinancials]);
   const paydown = useMemo(
@@ -2063,10 +2090,13 @@ export default function DcfCalculatorPage() {
                     scenarioTable={
                       scenarios ? (
                         <DCFScenarioTable
-                          scenarios={engineScenarios ?? scenarios}
+                          // The same basis as the sliders: margins as
+                          // reported. Showing the engine's margins here put
+                          // Instacart's 8.8% next to a slider reading 20.1%.
+                          scenarios={scenarios}
                           activeScenario={activeScenario}
                           onScenarioChange={handleScenarioChange}
-                          liveInputs={engineInputs}
+                          liveInputs={inputs}
                         />
                       ) : null
                     }
@@ -2077,6 +2107,8 @@ export default function DcfCalculatorPage() {
                     balanceSheet={
                       <DCFDataSources
                         fields={sourcedFields}
+                        sbcAmount={sbcAmount}
+                        sbcPeriod={revenueBasis !== "fiscal_year" && sbcTtm !== null && sbcTtm > 0 ? "TTM" : "FY"}
                         baseRevenue={inputs.baseRevenue}
                         overrides={balanceOverrides}
                         onOverride={handleBalanceOverride}

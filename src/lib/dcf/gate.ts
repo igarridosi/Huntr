@@ -1,6 +1,7 @@
 import type { CashFlowStatement } from "@/types/financials";
 import type { MarginHistory } from "@/lib/calculations/margin-history";
 import type { SECFact } from "@/lib/api/sec-edgar";
+import { MARKET_CAP_TOLERANCE, shareCountReconciles } from "./share-reconcile";
 import { statementFreeCashFlow } from "./free-cash-flow";
 import type { RevenueBaseDivergence, RevenueBasis } from "./revenue-base";
 
@@ -33,12 +34,15 @@ export interface ValuationGate {
   reasons: string[];
 }
 
-export const MARKET_CAP_TOLERANCE = 0.01;
+/** One tolerance for the whole app; a diluted count gets the dilution allowance on top. */
+export { MARKET_CAP_TOLERANCE };
 export const FCF_QUARTERS_TOLERANCE = 0.02;
 export const DEBT_TOLERANCE = 0.02;
 
 export interface GateInput {
   shares: number;
+  /** True when `shares` is the diluted count, which may run above the basic count behind the market cap. */
+  dilutedShares?: boolean;
   price: number;
   reportedMarketCap: number | null;
   /** The annual cash-flow rows and the quarterly ones the four-quarter check sums. */
@@ -47,7 +51,13 @@ export interface GateInput {
   debtInUse: number;
   debtSource: string | null;
   filedDebt: SECFact | null;
-  revenue: { basis: RevenueBasis; divergence: RevenueBaseDivergence | null; perimeterConfirmed: boolean };
+  revenue: {
+    basis: RevenueBasis;
+    divergence: RevenueBaseDivergence | null;
+    perimeterConfirmed: boolean;
+    /** True when the filings were read and show no material acquisition or disposal. */
+    organic?: boolean;
+  };
   marginHistory: MarginHistory | null;
   lender: boolean;
 }
@@ -80,11 +90,13 @@ export function valuationGate(input: GateInput): ValuationGate {
     } else {
       const implied = input.shares * input.price;
       const dev = implied / cap - 1;
+      const pass = shareCountReconciles(dev, input.dilutedShares ?? false, MARKET_CAP_TOLERANCE);
+      const dilution = pass && input.dilutedShares && dev > MARKET_CAP_TOLERANCE;
       checks.push({
         id: "marketCap",
         label: "Market cap = shares × price",
-        status: Math.abs(dev) <= MARKET_CAP_TOLERANCE ? "pass" : "fail",
-        detail: `${m(implied)} from ${(input.shares / 1e6).toFixed(1)}M shares at $${input.price.toFixed(2)} against ${m(cap)} reported: ${(Math.abs(dev) * 100).toFixed(1)}% ${dev >= 0 ? "above" : "below"}.`,
+        status: pass ? "pass" : "fail",
+        detail: `${m(implied)} from ${(input.shares / 1e6).toFixed(1)}M shares at $${input.price.toFixed(2)} against ${m(cap)} reported: ${(Math.abs(dev) * 100).toFixed(1)}% ${dev >= 0 ? "above" : "below"}.${dilution ? " The count is diluted and the market cap basic: the gap is options and units, within the dilution allowance." : ""}`,
       });
     }
   }
@@ -134,6 +146,11 @@ export function valuationGate(input: GateInput): ValuationGate {
     const d = input.revenue.divergence;
     if (!d) {
       checks.push({ id: "revenuePerimeter", label: "Revenue period matches today's perimeter", status: "pass", detail: "Trailing twelve months and the closed year agree within 10%: no sign of a changed perimeter." });
+    } else if (input.revenue.organic && input.revenue.basis === "ttm") {
+      // Reddit's TTM 26% above its closed year was growth, and the filings
+      // said so: no material deal. Nothing to confirm when the base in use
+      // is already the trailing twelve months.
+      checks.push({ id: "revenuePerimeter", label: "Revenue period matches today's perimeter", status: "pass", detail: `Trailing twelve months ${(Math.abs(d.deviation) * 100).toFixed(1)}% ${d.deviation >= 0 ? "above" : "below"} the closed year with no material acquisition or disposal in the filings: growth, and the base in use is the trailing twelve months.` });
     } else if (input.revenue.perimeterConfirmed) {
       checks.push({ id: "revenuePerimeter", label: "Revenue period matches today's perimeter", status: "pass", detail: `Bases ${(Math.abs(d.deviation) * 100).toFixed(1)}% apart; the reader confirmed the base in use describes today's perimeter.` });
     } else {
@@ -158,7 +175,9 @@ export function valuationGate(input: GateInput): ValuationGate {
         id: "marginRecord",
         label: "Usable margin record",
         status: h.comparable ? "pass" : "fail",
-        detail: h.comparable ? `${h.series.length} years of realised margin, median ${((h.median ?? 0) * 100).toFixed(1)}%.` : h.reasons.join(" "),
+        detail: h.comparable
+          ? `${h.series.length} years of realised margin, median ${((h.median ?? 0) * 100).toFixed(1)}%.${h.flags.includes("volatile") ? ` ${h.reasons.join(" ")}` : ""}`
+          : h.reasons.join(" "),
       });
     }
   }

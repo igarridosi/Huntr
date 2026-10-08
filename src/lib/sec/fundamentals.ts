@@ -103,6 +103,8 @@ export interface SECFundamentals {
   shareBasedCompensation: SECFact | null;
   /** Trailing twelve months of revenue from the filings, for verifying the model's base. */
   revenueTtm?: SECRevenueTtm | null;
+  /** Stock compensation over the trailing twelve months, composed the same way as the revenue. */
+  shareBasedCompensationTtm?: SECRevenueTtm | null;
   /** Operating cash flow of the last fiscal year, from the 10-K, for verifying the margin's numerator. */
   operatingCashFlowAnnual?: SECFact | null;
   /** The latest business acquisition and disposal on file, whatever their age; the reader of the regime decides if they are recent. */
@@ -253,11 +255,26 @@ export function composeCash(parts: {
 }
 
 export async function resolveRevenueTtm(source: FactsSource, cik: string): Promise<SECRevenueTtm | null> {
+  return resolveDurationTtm(source, cik, SEC_CONCEPTS.revenue);
+}
+
+/**
+ * Stock compensation over the same trailing twelve months as the revenue
+ * base. The annual figure is the last 10-K's: against TTM revenue it
+ * describes a different year, and Instacart's $352M for 2025 sat beside
+ * TTM revenue whose own twelve months carried $401M - 1.2 points of margin
+ * the deduction missed.
+ */
+export async function resolveShareBasedCompensationTtm(source: FactsSource, cik: string): Promise<SECRevenueTtm | null> {
+  return resolveDurationTtm(source, cik, SEC_CONCEPTS.shareBasedCompensation);
+}
+
+async function resolveDurationTtm(source: FactsSource, cik: string, concepts: readonly string[]): Promise<SECRevenueTtm | null> {
   const facts = await source.companyFacts(cik);
   const scope = facts?.["us-gaap"];
   if (!scope) return null;
   let best: SECRevenueTtm | null = null;
-  for (const concept of SEC_CONCEPTS.revenue) {
+  for (const concept of concepts) {
     const entry = scope[concept];
     if (!entry) continue;
     const got = composeRevenueTtm(extractFactRows(entry), concept);
@@ -303,8 +320,9 @@ export async function fundamentalsForCik(
     fetchConcept(source, cik, SEC_CONCEPTS.operatingLeaseExpense, "annual"),
     fetchConcept(source, cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
-  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures, redeemablePreferred, preferredConversionShares] = await Promise.all([
+  const [revenueTtm, shareBasedCompensationTtm, operatingCashFlowAnnual, acquisitions, divestitures, redeemablePreferred, preferredConversionShares] = await Promise.all([
     resolveRevenueTtm(source, cik),
+    resolveShareBasedCompensationTtm(source, cik),
     fetchConcept(source, cik, OPERATING_CASH_FLOW_CONCEPTS, "annual"),
     fetchConcept(source, cik, SEC_CONCEPTS.acquisitions),
     fetchConcept(source, cik, SEC_CONCEPTS.divestitures),
@@ -327,6 +345,7 @@ export async function fundamentalsForCik(
     operatingLeaseExpense,
     shareBasedCompensation,
     revenueTtm,
+    shareBasedCompensationTtm,
     operatingCashFlowAnnual,
     acquisitions,
     divestitures,

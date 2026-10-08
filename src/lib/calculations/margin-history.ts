@@ -38,7 +38,9 @@ export type MarginHistoryFlag =
   | "margin-discontinuity"
   | "implausible-level"
   | "sector-mismatch"
-  | "too-short";
+  | "too-short"
+  /** Large organic swings: informative, does not make the record incomparable. */
+  | "volatile";
 
 export interface MarginHistory {
   /** Year by year, oldest first. Empty when nothing could be paired. */
@@ -121,6 +123,16 @@ export interface MarginHistoryInput {
   sector?: string | null;
   /** How many years to read, most recent first. */
   years?: number;
+  /**
+   * Whether the filings show a material acquisition or disposal in the window.
+   *
+   * `true` or `false` when the filings were read; `undefined` when they were
+   * not, in which case a large step is still treated as a possible change of
+   * perimeter. Read as `false`, a step is the business moving - Reddit going
+   * from −10.6% to 16.6%, On from −25% to 10% on its inventory - and the
+   * record stays comparable, with the swing named.
+   */
+  perimeterEvent?: boolean;
 }
 
 /**
@@ -188,13 +200,23 @@ export function buildMarginHistory(input: MarginHistoryInput): MarginHistory {
   }
 
   const margins = recent.map((entry) => entry.margin);
+  // With the filings read and no material deal in them, a step is the
+  // business itself moving, not a different company.
+  const organic = input.perimeterEvent === false;
 
   for (let index = 1; index < recent.length; index += 1) {
     const previous = recent[index - 1];
     const current = recent[index];
 
     if (Math.abs(current.margin - previous.margin) > MARGIN_DISCONTINUITY) {
-      if (!flags.includes("margin-discontinuity")) {
+      if (organic) {
+        if (!flags.includes("volatile")) {
+          flags.push("volatile");
+          reasons.push(
+            `The FCF margin moved from ${pct(previous.margin)} to ${pct(current.margin)} between ${previous.year} and ${current.year}, with no material acquisition or disposal in the filings. The record stands, but it swings: read the years, not only the median.`
+          );
+        }
+      } else if (!flags.includes("margin-discontinuity")) {
         flags.push("margin-discontinuity");
         reasons.push(
           `The FCF margin moved from ${pct(previous.margin)} to ${pct(current.margin)} between ${previous.year} and ${current.year}. A step that size is usually a change in what is being measured — a disposal, an acquisition or a restatement — rather than a change in the business.`
@@ -206,7 +228,8 @@ export function buildMarginHistory(input: MarginHistoryInput): MarginHistory {
       previous.revenue > 0
         ? Math.abs(current.revenue - previous.revenue) / previous.revenue
         : 0;
-    if (revenueChange > REVENUE_DISCONTINUITY) {
+    // Organic growth this fast is a growth company, not a new perimeter.
+    if (revenueChange > REVENUE_DISCONTINUITY && !organic) {
       if (!flags.includes("revenue-discontinuity")) {
         flags.push("revenue-discontinuity");
         reasons.push(
@@ -232,7 +255,8 @@ export function buildMarginHistory(input: MarginHistoryInput): MarginHistory {
         : null,
     min: margins.length > 0 ? Math.min(...margins) : null,
     max: margins.length > 0 ? Math.max(...margins) : null,
-    comparable: flags.length === 0,
+    // A volatile record is still a record of this company.
+    comparable: flags.every((flag) => flag === "volatile"),
     flags,
     reasons,
   };

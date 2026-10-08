@@ -11,6 +11,10 @@ import { AlertTriangle, ChevronDown, FileText, Globe } from "lucide-react";
 
 interface DCFDataSourcesProps {
   fields: SourcedDCFFields | null;
+  /** The stock compensation the engine deducts, over the same period as the revenue base. */
+  sbcAmount: number;
+  /** "TTM" when the trailing twelve months were composed from the filings, "FY" for the last 10-K. */
+  sbcPeriod: "TTM" | "FY";
   /** Revenue, so the two FCF margins can be shown side by side. */
   baseRevenue: number;
   /** Free cash flow *before* any stock-compensation deduction: the slider's margin times revenue. */
@@ -32,6 +36,8 @@ interface DCFDataSourcesProps {
  */
 export function DCFDataSources({
   fields,
+  sbcAmount,
+  sbcPeriod,
   baseRevenue,
   freeCashFlow,
   overrides,
@@ -45,7 +51,7 @@ export function DCFDataSources({
   const { netDebt, marketCapCheck } = fields;
   const capMismatch = marketCapCheck !== null && !marketCapCheck.agrees;
 
-  const sbc = Math.max(0, fields.shareBasedCompensation.value);
+  const sbc = Math.max(0, sbcAmount);
   const rawMargin = baseRevenue > 0 ? freeCashFlow / baseRevenue : 0;
   const sbcMargin = baseRevenue > 0 ? sbc / baseRevenue : 0;
 
@@ -217,7 +223,7 @@ export function DCFDataSources({
               </div>
               <div className="flex items-baseline justify-between gap-3">
                 <span className="text-[11px] text-mist">
-                  − Stock compensation{sbc > 0 ? ` (${formatCompactNumber(sbc)} a year)` : ""}
+                  − Stock compensation{sbc > 0 ? ` (${formatCompactNumber(sbc)}, ${sbcPeriod})` : ""}
                 </span>
                 <span className="font-mono text-xs tabular-nums text-mist">
                   {sbc > 0 ? formatPercent(-sbcMargin, 1) : "—"}

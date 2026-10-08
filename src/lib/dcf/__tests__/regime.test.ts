@@ -39,10 +39,10 @@ describe("detectRegimes", () => {
     expect(hln[0].tab).toBeNull();
   });
 
-  it("flags leverage above 2.5× EBITDA and demands the basis switch (FIS, Universal Health)", () => {
+  it("flags leverage above 2.5× EBITDA and points at the paydown (FIS, Universal Health)", () => {
     const [r] = detectRegimes({ ...quiet, debtToEbitda: 3.4 });
     expect(r).toMatchObject({ id: "leveraged", tab: "DCF" });
-    expect(r.recommendation).toMatch(/cash-flow basis switch/);
+    expect(r.recommendation).toMatch(/paydown schedule/);
     expect(r.detail).toBe("debt 3.4× EBITDA");
   });
 
@@ -63,8 +63,16 @@ describe("detectRegimes", () => {
     expect(spgi[0].detail).toBe("disposal of $3.00B to 2026-09-30");
   });
 
+  it("does not call growth or an immaterial deal a new perimeter (Reddit +26% TTM, Instacart's $29M)", () => {
+    expect(detectRegimes({ ...quiet, perimeter: { divergence: 0.262, acquisitions: null, divestitures: null, revenue: 2_200e6 } })).toEqual([]);
+    expect(detectRegimes({ ...quiet, perimeter: { divergence: 0.02, acquisitions: { value: 29e6, periodEnd: "2026-06-30" }, divestitures: null, revenue: 3_993e6 } })).toEqual([]);
+    // Celsius's $1.65B against about $2.5B of revenue is material.
+    const celh = detectRegimes({ ...quiet, perimeter: { divergence: 0.2115, acquisitions: { value: 1_650e6, periodEnd: "2025-12-31" }, divestitures: null, revenue: 2_500e6 } });
+    expect(celh[0].id).toBe("shiftingPerimeter");
+  });
+
   it("stacks the labels a company earns, in a fixed order", () => {
-    const all = detectRegimes({ lender: false, capexToRevenue: 0.3, terminalWeight: 0.7, debtToEbitda: 4, fcfMargin: 0.03, perimeter: { divergence: 0.2, acquisitions: null, divestitures: null } });
+    const all = detectRegimes({ lender: false, capexToRevenue: 0.3, terminalWeight: 0.7, debtToEbitda: 4, fcfMargin: 0.03, perimeter: { divergence: 0.2, acquisitions: { value: 500e6, periodEnd: "2026-06-30" }, divestitures: null, revenue: 2_000e6 } });
     expect(all.map((r) => r.id)).toEqual(["capexPeak", "leveraged", "thinMargin", "shiftingPerimeter"]);
   });
 });

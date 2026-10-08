@@ -64,7 +64,9 @@ export function shareCountAlert(fields: SourcedDCFFields | null | undefined): Sh
   const sc = fields?.shareCount;
   if (!check || !sc || sc.filed === null || sc.implied === null || !(sc.filed > 0) || !(sc.implied > 0)) return null;
   const deviation = sc.filed / sc.implied - 1;
-  if (check.agrees && Math.abs(deviation) <= SHARE_COUNT_UNRELIABLE) return null;
+  // A diluted count that reconciles within the dilution allowance is the
+  // options and units the market cap leaves out, not an unreliable count.
+  if (check.agrees && (fields?.dilutedCount || Math.abs(deviation) <= SHARE_COUNT_UNRELIABLE)) return null;
   const bias = deviation > 0 ? "downward" : "upward";
   const pct = `${(Math.abs(deviation) * 100).toFixed(1)}%`;
   const m = (v: number) => `${(v / 1e6).toFixed(1)}M`;
