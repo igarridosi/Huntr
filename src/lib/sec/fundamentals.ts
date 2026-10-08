@@ -108,6 +108,8 @@ export interface SECFundamentals {
   /** The latest business acquisition and disposal on file, whatever their age; the reader of the regime decides if they are recent. */
   acquisitions?: SECFact | null;
   divestitures?: SECFact | null;
+  /** Redeemable preferred and other temporary equity: a claim ahead of the common shareholder. */
+  redeemablePreferred?: SECFact | null;
 }
 
 /**
@@ -204,32 +206,48 @@ export interface SECFundamentals {
  * contains. Guessing a haircut would be worse than either.
  */
 export async function resolveCash(source: FactsSource, cik: string): Promise<SECFact | null> {
-  const [cash, restrictedCurrent, restrictedNoncurrent] = await Promise.all([
+  const [cash, restrictedCurrent, restrictedNoncurrent, marketable] = await Promise.all([
     fetchConcept(source, cik, SEC_CONCEPTS.cash),
     fetchConcept(source, cik, SEC_CONCEPTS.restrictedCash),
     fetchConcept(source, cik, SEC_CONCEPTS.restrictedCashNoncurrent),
+    fetchConcept(source, cik, SEC_CONCEPTS.marketableSecuritiesCurrent),
   ]);
+  return composeCash({ cash, restrictedCurrent, restrictedNoncurrent, marketable });
+}
 
+/**
+ * Cash available to repay debt, from the parts the issuer files: cash, less
+ * restricted cash where the tag folds it in, plus the current marketable
+ * securities held as a reserve. Every part has to describe the same
+ * balance-sheet date as the cash figure, or it is arithmetic on two
+ * different quarters.
+ */
+export function composeCash(parts: {
+  cash: SECFact | null;
+  restrictedCurrent: SECFact | null;
+  restrictedNoncurrent: SECFact | null;
+  marketable: SECFact | null;
+}): SECFact | null {
+  const { cash, restrictedCurrent, restrictedNoncurrent, marketable } = parts;
   if (!cash) return null;
 
-  const combinedTag = cash.concept.includes("RestrictedCash");
-  if (!combinedTag) return cash;
-
-  // Only halves describing the same balance-sheet date as the cash figure can
-  // be netted against it.
-  const restricted = [restrictedCurrent, restrictedNoncurrent]
-    .filter((fact): fact is SECFact => !!fact && fact.periodEnd === cash.periodEnd)
-    .reduce((sum, fact) => sum + fact.value, 0);
-
-  if (restricted <= 0) {
-    return { ...cash, includesRestricted: true };
+  let resolved: SECFact = cash;
+  if (cash.concept.includes("RestrictedCash")) {
+    // Only halves describing the same balance-sheet date as the cash figure
+    // can be netted against it.
+    const restricted = [restrictedCurrent, restrictedNoncurrent]
+      .filter((fact): fact is SECFact => !!fact && fact.periodEnd === cash.periodEnd)
+      .reduce((sum, fact) => sum + fact.value, 0);
+    resolved =
+      restricted > 0
+        ? { ...cash, value: Math.max(0, cash.value - restricted), concept: `${cash.concept} less restricted` }
+        : { ...cash, includesRestricted: true };
   }
 
-  return {
-    ...cash,
-    value: Math.max(0, cash.value - restricted),
-    concept: `${cash.concept} less restricted`,
-  };
+  if (marketable && marketable.value > 0 && marketable.periodEnd === cash.periodEnd) {
+    return { ...resolved, value: resolved.value + marketable.value, concept: `${resolved.concept} + ${marketable.concept}` };
+  }
+  return resolved;
 }
 
 export async function resolveRevenueTtm(source: FactsSource, cik: string): Promise<SECRevenueTtm | null> {
@@ -283,11 +301,12 @@ export async function fundamentalsForCik(
     fetchConcept(source, cik, SEC_CONCEPTS.operatingLeaseExpense, "annual"),
     fetchConcept(source, cik, SEC_CONCEPTS.shareBasedCompensation, "annual"),
   ]);
-  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures] = await Promise.all([
+  const [revenueTtm, operatingCashFlowAnnual, acquisitions, divestitures, redeemablePreferred] = await Promise.all([
     resolveRevenueTtm(source, cik),
     fetchConcept(source, cik, OPERATING_CASH_FLOW_CONCEPTS, "annual"),
     fetchConcept(source, cik, SEC_CONCEPTS.acquisitions),
     fetchConcept(source, cik, SEC_CONCEPTS.divestitures),
+    fetchConcept(source, cik, SEC_CONCEPTS.redeemablePreferred),
   ]);
 
   // A multi-class issuer files its share counts by class only; the
@@ -308,5 +327,9 @@ export async function fundamentalsForCik(
     operatingCashFlowAnnual,
     acquisitions,
     divestitures,
+    // Only a figure that describes the same balance sheet as the cash is
+    // the company's claim today; an old one is a preferred since redeemed.
+    redeemablePreferred:
+      redeemablePreferred && cash && redeemablePreferred.periodEnd === cash.periodEnd ? redeemablePreferred : null,
   };
 }

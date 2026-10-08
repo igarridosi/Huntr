@@ -5,6 +5,7 @@ import {
   type SECFundamentals,
   buildNetDebt,
   checkMarketCap,
+  debtClaims,
   selectShareCount,
   MARKET_CAP_TOLERANCE,
   factAgeInDays,
@@ -253,6 +254,8 @@ export interface SourcedDCFFields {
   financialDebt: SourcedValue;
   cash: SourcedValue;
   operatingLeases: SourcedValue;
+  /** Redeemable preferred and other temporary equity; zero when the filings carry none. */
+  redeemablePreferred: SourcedValue;
   shareBasedCompensation: SourcedValue;
   netDebt: NetDebtBreakdown;
   marketCapCheck: MarketCapCheck | null;
@@ -289,6 +292,8 @@ export function buildSourcedFields(params: {
   price: number;
   reportedMarketCap: number;
   includeLeases?: boolean;
+  /** Whether redeemable preferred is subtracted as debt. Off by default: see `buildNetDebt`. */
+  includePreferred?: boolean;
   /**
    * Figures the user supplied by hand, which win over both sources.
    *
@@ -375,6 +380,11 @@ export function buildSourcedFields(params: {
   const operatingLeases = pickSourced(sec?.operatingLeases ?? null, 0, now, {
     allowZero: true,
   });
+  // Most companies have none, and Yahoo has no field for it: zero is the
+  // honest answer when the filings carry nothing.
+  const redeemablePreferred = pickSourced(sec?.redeemablePreferred ?? null, 0, now, {
+    allowZero: true,
+  });
   const shareBasedCompensation = pickSourced(
     sec?.shareBasedCompensation ?? null,
     yahoo.shareBasedCompensation,
@@ -403,6 +413,8 @@ export function buildSourcedFields(params: {
     operatingLeases: operatingLeases.value,
     cash: cash.value,
     includeLeases: params.includeLeases,
+    redeemablePreferred: redeemablePreferred.value,
+    includePreferred: params.includePreferred,
   });
 
   return {
@@ -410,6 +422,7 @@ export function buildSourcedFields(params: {
     financialDebt,
     cash,
     operatingLeases,
+    redeemablePreferred,
     shareBasedCompensation,
     netDebt,
     // Always measured against the *filed* count, never the one in use.
@@ -451,12 +464,11 @@ export function applySourcedBalanceSheet<
 >(inputs: T, fields: SourcedDCFFields): T {
   return {
     ...inputs,
-    // Net debt is expressed to the model as debt-minus-cash, so leases ride in
-    // on the debt side and the cash line stays what it is. Passing the netted
-    // figure straight through would lose the breakdown the panel shows.
-    totalDebt:
-      fields.netDebt.financialDebt +
-      (fields.netDebt.includesLeases ? fields.netDebt.operatingLeases : 0),
+    // Net debt is expressed to the model as debt-minus-cash, so leases and
+    // preferred ride in on the debt side and the cash line stays what it is.
+    // Passing the netted figure straight through would lose the breakdown the
+    // panel shows.
+    totalDebt: debtClaims(fields.netDebt),
     cashAndEquivalents: fields.netDebt.cash,
     sharesOutstanding:
       fields.sharesOutstanding.value > 0

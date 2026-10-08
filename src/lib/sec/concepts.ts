@@ -47,6 +47,25 @@ export const SEC_CONCEPTS = {
     "RestrictedCashNoncurrent",
     "RestrictedCashAndCashEquivalentsNoncurrent",
   ],
+  /**
+   * Securities held as a cash reserve, current only. Liquid within the year
+   * and available to repay debt, so they belong in net cash: Reddit held
+   * $1.3B here beside $1.5B of cash, and leaving them out cost $6.43 a share.
+   * Alternatives, not parts: a total like ShortTermInvestments already holds
+   * the available-for-sale securities, so only one is ever taken.
+   * Long-term holdings stay out; they are not a reserve.
+   */
+  marketableSecuritiesCurrent: [
+    "ShortTermInvestments",
+    "MarketableSecuritiesCurrent",
+    "AvailableForSaleSecuritiesDebtSecuritiesCurrent",
+  ],
+  /**
+   * Redeemable preferred and other temporary equity attributable to the
+   * parent: a claim ahead of the common shareholder, filed between
+   * liabilities and equity. Instacart's $200M Series A sits here.
+   */
+  redeemablePreferred: ["TemporaryEquityCarryingAmountAttributableToParent"],
 
   /**
    * Debt, as two halves that must be added.
