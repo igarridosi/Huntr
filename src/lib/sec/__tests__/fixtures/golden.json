@@ -539,13 +539,13 @@
      "accession": "0001403161-25-000089"
     },
     "acquisitions": {
-     "value": 705000000,
+     "value": 906000000,
      "form": "10-Q",
-     "filed": "2026-04-29",
-     "periodEnd": "2026-03-31",
+     "filed": "2025-01-31",
+     "periodEnd": "2024-12-31",
      "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
-     "durationDays": 181,
-     "accession": "0001403161-26-000079"
+     "durationDays": 91,
+     "accession": "0001403161-25-000017"
     },
     "divestitures": null,
     "redeemablePreferred": null,
@@ -2489,13 +2489,13 @@
      "accession": "0001397187-26-000020"
     },
     "acquisitions": {
-     "value": 0,
+     "value": 154146000,
      "form": "10-K",
-     "filed": "2026-03-17",
-     "periodEnd": "2026-02-01",
+     "filed": "2025-03-27",
+     "periodEnd": "2025-02-02",
      "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
-     "durationDays": 363,
-     "accession": "0001397187-26-000020"
+     "durationDays": 370,
+     "accession": "0001397187-25-000013"
     },
     "divestitures": null,
     "redeemablePreferred": null,
@@ -3210,13 +3210,13 @@
      "accession": "0000829224-25-000114"
     },
     "acquisitions": {
-     "value": 0,
-     "form": "10-Q",
-     "filed": "2026-07-29",
-     "periodEnd": "2026-06-28",
+     "value": 177100000,
+     "form": "10-K",
+     "filed": "2025-11-14",
+     "periodEnd": "2025-09-28",
      "concept": "PaymentsToAcquireBusinessesNetOfCashAcquired",
-     "durationDays": 272,
-     "accession": "0000829224-26-000130"
+     "durationDays": 363,
+     "accession": "0000829224-25-000114"
     },
     "divestitures": null,
     "redeemablePreferred": null,

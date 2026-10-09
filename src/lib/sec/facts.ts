@@ -161,6 +161,47 @@ export function selectLatestFact(
 }
 
 /**
+ * The largest flow filed for a period ending inside a recent window.
+ *
+ * For a deal the latest fact is the wrong one: the year-to-date of the fiscal
+ * year after it reads zero. Synopsys paid $16.7B for Ansys in its 2025 fiscal
+ * year; its 2026 year-to-date carries 0, so the perimeter was put down to a
+ * $440M disposal and, without that, would have been called growth. Across a
+ * window the largest figure is the year that holds the deal - the full year
+ * where it is on file, which contains every year-to-date before it.
+ */
+export function selectLargestRecentFact(
+  facts: RawSECFact[],
+  windowDays: number,
+  concept: string = "unknown",
+  now: Date = new Date()
+): SECFact | null {
+  const oldestAcceptable = now.getTime() - windowDays * 24 * 60 * 60 * 1000;
+  const usable = facts.filter((fact) => {
+    if (typeof fact.val !== "number" || !Number.isFinite(fact.val)) return false;
+    if (typeof fact.end !== "string" || fact.end.length === 0) return false;
+    if (fact.form && !ACCEPTED_FORMS.includes(fact.form)) return false;
+    const end = new Date(fact.end).getTime();
+    return Number.isFinite(end) && end >= oldestAcceptable;
+  });
+  if (usable.length === 0) return null;
+  const best = usable.reduce((winner, candidate) => {
+    const byValue = (candidate.val as number) - (winner.val as number);
+    if (byValue !== 0) return byValue > 0 ? candidate : winner;
+    return (candidate.end ?? "").localeCompare(winner.end ?? "") > 0 ? candidate : winner;
+  });
+  return {
+    value: best.val as number,
+    form: best.form ?? "unknown",
+    filed: best.filed ?? (best.end as string),
+    periodEnd: best.end as string,
+    concept,
+    durationDays: durationInDays(best),
+    ...(best.accn ? { accession: best.accn } : {}),
+  };
+}
+
+/**
  * Flattens EDGAR's units object into one list.
  *
  * A concept is filed under a unit key - "USD" for money, "shares" for counts -

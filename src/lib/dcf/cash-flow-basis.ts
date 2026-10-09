@@ -25,6 +25,19 @@ export type CashFlowBasis = "unlevered" | "levered";
 /** The statutory rate used only when the statements give no effective one; named so the export can say so. */
 export const STATUTORY_TAX_RATE = 0.21;
 
+/**
+ * An effective rate below this is a quirk of the year, not a tax rate: On's
+ * statements gave 0.7%, which returned its interest to the flows untaxed.
+ * The statutory rate stands in, and says so.
+ */
+export const MIN_EFFECTIVE_TAX_RATE = 0.05;
+
+function effectiveTaxRate(income: IncomeStatement): { rate: number; source: "effective" | "statutory" } {
+  const effective = income.pre_tax_income > 0 && income.income_tax >= 0 ? income.income_tax / income.pre_tax_income : NaN;
+  const usable = Number.isFinite(effective) && effective >= MIN_EFFECTIVE_TAX_RATE && effective <= 0.4;
+  return usable ? { rate: effective, source: "effective" } : { rate: STATUTORY_TAX_RATE, source: "statutory" };
+}
+
 export interface InterestAddBack {
   /** After-tax interest over revenue: what unlevering adds to the margin. */
   marginPoints: number;
@@ -45,16 +58,73 @@ export interface InterestAddBack {
 export function interestAddBack(income: IncomeStatement | null | undefined): InterestAddBack | null {
   if (!income || !(income.revenue > 0)) return null;
   const interest = Math.abs(income.interest_expense || 0);
-  const effective = income.pre_tax_income > 0 && income.income_tax >= 0 ? income.income_tax / income.pre_tax_income : NaN;
-  const usable = Number.isFinite(effective) && effective >= 0 && effective <= 0.4;
-  const taxRate = usable ? effective : STATUTORY_TAX_RATE;
+  const { rate: taxRate, source } = effectiveTaxRate(income);
   return {
     marginPoints: (interest * (1 - taxRate)) / income.revenue,
     interestExpense: interest,
     taxRate,
-    taxRateSource: usable ? "effective" : "statutory",
+    taxRateSource: source,
     periodEnd: income.date,
   };
+}
+
+/**
+ * The last four quarters as one income statement, for a base struck on the
+ * trailing twelve months.
+ *
+ * The interest adjustments were read off the closed year and divided by its
+ * revenue, then applied to a trailing base. After a deal that is a different
+ * company: Synopsys's closed year carried $278M of interest earned on the
+ * cash it raised for Ansys before paying it out - 3.1 points stripped -
+ * against $69M over the last four quarters, 0.6 points. Its closed-year tax
+ * rate of 4% fell to the statutory floor besides; the trailing year's is 17%.
+ *
+ * Null - and the closed year stands - unless four consecutive quarters are on
+ * file, the latest after the closed year.
+ */
+export function trailingIncome(
+  quarterly: readonly IncomeStatement[] | null | undefined,
+  annual: IncomeStatement | null | undefined
+): IncomeStatement | null {
+  const quarters = [...(quarterly ?? [])].sort((a, b) => a.date.localeCompare(b.date)).slice(-4);
+  if (quarters.length < 4) return null;
+  const latest = quarters[3];
+  if (annual && latest.date <= annual.date) return null;
+  const spanDays = (Date.parse(latest.date) - Date.parse(quarters[0].date)) / 86_400_000;
+  if (!(spanDays >= 250 && spanDays <= 300)) return null;
+  const sum = (pick: (row: IncomeStatement) => number) => quarters.reduce((total, row) => total + (pick(row) || 0), 0);
+  const revenue = sum((row) => row.revenue);
+  if (!(revenue > 0)) return null;
+  // A line the quarters leave at zero while the closed year carries it is a
+  // line the vendor does not file quarterly, not interest that stopped: the
+  // closed year's amount stands for that line alone.
+  const interestExpense = sum((row) => Math.abs(row.interest_expense || 0));
+  const interestIncome = sum((row) => Math.max(0, row.interest_income ?? 0));
+  return {
+    ...latest,
+    revenue,
+    interest_expense: interestExpense > 0 || !annual ? interestExpense : Math.abs(annual.interest_expense || 0),
+    interest_income: interestIncome > 0 || !annual ? interestIncome : annual.interest_income,
+    pre_tax_income: sum((row) => row.pre_tax_income),
+    income_tax: sum((row) => row.income_tax),
+  };
+}
+
+/**
+ * The interest add-back that belongs to debt, for an IFRS filer.
+ *
+ * Under IFRS 16 the interest on lease liabilities sits in interest expense.
+ * The model takes the lease principal out of free cash flow and does not
+ * subtract the liability as debt, so adding that interest back would return
+ * part of the rent: On, with no financial debt, had 0.72 points of lease
+ * interest added back as if it were a cost of borrowing. With no financial
+ * debt, none of the interest is a cost of borrowing. With some, the
+ * interest cannot be split from the filings, so it is kept whole - an
+ * overstatement of at most the lease interest, named here.
+ */
+export function debtInterestPoints(points: number, params: { ifrsLeases: boolean; financialDebt: number }): number {
+  if (params.ifrsLeases && !(params.financialDebt > 0)) return 0;
+  return points;
 }
 
 /**
@@ -70,9 +140,7 @@ export function interestIncomeStrip(income: IncomeStatement | null | undefined):
   if (!income || !(income.revenue > 0)) return 0;
   const interestIncome = Math.max(0, income.interest_income ?? 0);
   if (interestIncome === 0) return 0;
-  const effective = income.pre_tax_income > 0 && income.income_tax >= 0 ? income.income_tax / income.pre_tax_income : NaN;
-  const taxRate = Number.isFinite(effective) && effective >= 0 && effective <= 0.4 ? effective : STATUTORY_TAX_RATE;
-  return (interestIncome * (1 - taxRate)) / income.revenue;
+  return (interestIncome * (1 - effectiveTaxRate(income).rate)) / income.revenue;
 }
 
 /** Every adjustment between the margin as reported and the margin the engine discounts, in margin points. */

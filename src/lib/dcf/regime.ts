@@ -28,6 +28,13 @@ export const CAPEX_PEAK_RATIO = 0.25;
 export const TERMINAL_WEIGHT_FRAGILE = 0.65;
 /** Latest capex over the median of the earlier years before it counts as a peak. */
 export const CAPEX_PEAK_VS_HISTORY = 1.25;
+/**
+ * The level a peak has to reach when the company's own history shows the
+ * jump. 25% stands alone because without a history only the level can tell;
+ * with one, Alphabet's 22.7% against 12% in earlier years is a peak however
+ * it compares with a semiconductor fab.
+ */
+export const CAPEX_PEAK_RATIO_WITH_HISTORY = 0.15;
 export const LEVERAGE_HIGH = 2.5;
 export const THIN_MARGIN = 0.06;
 export const PERIMETER_MONTHS = 24;
@@ -94,7 +101,8 @@ export function detectRegimes(input: RegimeInput): Regime[] {
   const history = (input.capexHistory ?? []).filter((v) => Number.isFinite(v) && v >= 0).sort((x, y) => x - y);
   const median = history.length ? history[Math.floor((history.length - 1) / 2)] / 2 + history[Math.ceil((history.length - 1) / 2)] / 2 : null;
   const capexPeak =
-    ratio !== null && ratio > CAPEX_PEAK_RATIO && (median === null || ratio > median * CAPEX_PEAK_VS_HISTORY);
+    ratio !== null &&
+    (median === null ? ratio > CAPEX_PEAK_RATIO : ratio > CAPEX_PEAK_RATIO_WITH_HISTORY && ratio > median * CAPEX_PEAK_VS_HISTORY);
   const terminalHeavy = input.terminalWeight !== null && input.terminalWeight > TERMINAL_WEIGHT_FRAGILE;
   if (capexPeak) {
     out.push({
