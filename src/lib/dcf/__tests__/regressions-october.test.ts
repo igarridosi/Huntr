@@ -11,7 +11,9 @@ import { buildMarginHistory } from "@/lib/calculations/margin-history";
 import { buildHistoricalBand, checkGrowthVsRecord } from "@/lib/calculations/dcf-anchors";
 import { runDCF, type DCFInputs } from "@/lib/calculations/dcf";
 import { composeCash } from "@/lib/sec/fundamentals";
-import { preferredIsDebt } from "@/lib/calculations/dcf-inputs-source";
+import { confirmNoDebt, preferredIsDebt } from "@/lib/calculations/dcf-inputs-source";
+import { isMaterialDeal } from "../regime";
+import { assessReliability } from "../reliability";
 import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, marginAdjustment, trailingIncome } from "../cash-flow-basis";
 import { selectLargestRecentFact } from "@/lib/sec/facts";
 import type { IncomeStatement } from "@/types/financials";
@@ -273,5 +275,67 @@ describe("Synopsys — interest read off the trailing year, and the Ansys deal f
     expect(deal.value).toBe(16_681_257_000);
     expect(deal.periodEnd).toBe("2025-07-31");
     expect(selectLargestRecentFact(rows.slice(0, 1), 730, "x", new Date("2026-10-09"))).toBeNull();
+  });
+});
+
+describe("Benchmark, 9 October — debt-free companies stop asking about debt", () => {
+  const yahooZero = { value: 0, source: "yahoo" as const, asOf: null, stale: false, resolved: true };
+  const filing = fact(678 * M, "2026-06-30", "CashAndCashEquivalentsAtCarryingValue");
+
+  it("takes the zero when the filings carry no debt and the company pays no interest (Lululemon, Reddit)", () => {
+    const confirmed = confirmNoDebt(yahooZero, { financialDebt: null, cash: filing, dilutedShares: null }, { interestToRevenue: 0, ifrsLeases: false });
+    expect(confirmed.resolved).toBe(true);
+    expect(confirmed.caveat).toContain("No debt line in the filings");
+  });
+
+  it("takes a debt tag filed at zero as the filings saying none (Chipotle)", () => {
+    const zeroTag = { ...fact(0, "2025-12-31", "LongTermDebt"), partial: true };
+    expect(confirmNoDebt(yahooZero, { financialDebt: zeroTag, cash: filing, dilutedShares: null }, { interestToRevenue: 0, ifrsLeases: false }).caveat).toBeDefined();
+  });
+
+  it("allows an IFRS filer its lease interest (On, 0.7% of revenue)", () => {
+    const onShares = fact(296.9 * M, "2025-12-31", "EntityCommonStockSharesOutstanding");
+    expect(confirmNoDebt(yahooZero, { financialDebt: null, cash: null, dilutedShares: onShares }, { interestToRevenue: 0.0071, ifrsLeases: true }).caveat).toBeDefined();
+    expect(confirmNoDebt(yahooZero, { financialDebt: null, cash: null, dilutedShares: onShares }, { interestToRevenue: 0.0071, ifrsLeases: false }).caveat).toBeUndefined();
+  });
+
+  it("keeps asking when interest is paid on debt nobody found (Honda), or the filings were not read", () => {
+    expect(confirmNoDebt(yahooZero, { financialDebt: null, cash: filing, dilutedShares: null }, { interestToRevenue: 0.03, ifrsLeases: false }).caveat).toBeUndefined();
+    expect(confirmNoDebt(yahooZero, null, { interestToRevenue: 0, ifrsLeases: false }).caveat).toBeUndefined();
+  });
+});
+
+describe("Benchmark, 9 October — an acquisition is material against the buyer's value too", () => {
+  it("drops deals small against market value (Mastercard's $2.65B for Recorded Future)", () => {
+    expect(isMaterialDeal(2.65e9, 30e9)).toBe(true);
+    expect(isMaterialDeal(2.65e9, 30e9, 480e9)).toBe(false);
+  });
+  it("keeps deals that change the company (Synopsys's $16.7B for Ansys, e.l.f.'s Rhode)", () => {
+    expect(isMaterialDeal(16.68e9, 7.05e9, 95e9)).toBe(true);
+    expect(isMaterialDeal(582 * M, 1_636 * M, 6.25e9)).toBe(true);
+  });
+});
+
+describe("Benchmark, 9 October — one cause, one deduction in the reliability score", () => {
+  it("counts e.l.f.'s deal once, not as a failed check, a regime and a broken record", () => {
+    const base = {
+      provenance: [],
+      unresolved: 0,
+      converted: false,
+      terminalWeight: null,
+      spread: null,
+      waccSensitivity: null,
+      growthAboveRecord: false,
+      terminalMarginAboveRecord: false,
+      dispersion: null,
+    };
+    const r = assessReliability({
+      ...base,
+      checks: [{ id: "marginRecord", label: "Usable margin record", status: "fail", detail: "" }],
+      regimes: ["shiftingPerimeter"],
+      marginRecord: { years: 5, comparable: false, volatile: false, negativeYears: 0, latestNegative: false },
+    });
+    const all = r.blocks.flatMap((b) => b.deductions.map((d) => d.label));
+    expect(all.filter((l) => /perimeter|Usable margin record|not comparable/.test(l))).toHaveLength(1);
   });
 });
