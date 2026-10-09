@@ -252,6 +252,42 @@ export function isUnreportedZero(
   return otherFigures.some((value) => Number.isFinite(value) && value !== 0);
 }
 
+/** Interest expense over revenue below which a company with no debt line in its filings has no debt. */
+export const NO_DEBT_INTEREST = 0.005;
+/** The same for an IFRS filer, whose interest line carries its lease interest. */
+export const IFRS_LEASE_INTEREST = 0.01;
+
+/**
+ * A zero debt the filings and the income statement both vouch for.
+ *
+ * Every company without borrowings - Lululemon, Reddit, Duolingo, Instacart,
+ * Chipotle - was stopped with "could not establish financial debt", because
+ * the zero came from Yahoo. The guard exists for Honda, whose debt tag was
+ * missing while it paid interest on 5tn of borrowings. Two facts tell the
+ * cases apart: the filings were read and carry no debt line at all, and the
+ * company pays next to no interest. Both, or the question stays open.
+ */
+export function confirmNoDebt(
+  debt: SourcedValue,
+  sec: Pick<SECFundamentals, "financialDebt" | "cash" | "dilutedShares"> | null,
+  borrowing: { interestToRevenue: number | null; ifrsLeases: boolean } | undefined
+): SourcedValue {
+  if (debt.source === "sec" || debt.value !== 0) return debt;
+  // The filings were read (a balance sheet or a share count came back) and
+  // carry no debt, or a debt tag filed at zero, as Chipotle's LongTermDebt.
+  if (!sec || !(sec.cash || sec.dilutedShares)) return debt;
+  if (sec.financialDebt && sec.financialDebt.value !== 0) return debt;
+  const ratio = borrowing?.interestToRevenue;
+  const ceiling = borrowing?.ifrsLeases ? IFRS_LEASE_INTEREST : NO_DEBT_INTEREST;
+  if (ratio === null || ratio === undefined || !(ratio >= 0) || ratio > ceiling) return debt;
+  return {
+    ...debt,
+    source: "sec",
+    resolved: true,
+    caveat: `No debt line in the filings and interest expense of ${(ratio * 100).toFixed(2)}% of revenue: taken as no borrowings.`,
+  };
+}
+
 export interface SourcedDCFFields {
   sharesOutstanding: SourcedValue;
   financialDebt: SourcedValue;
@@ -322,6 +358,13 @@ export function buildSourcedFields(params: {
   overrides?: Partial<Record<ZeroSuspectField, number>>;
   /** Which share count to divide by, when the user has picked one. */
   shareCountBasis?: "filings" | "implied";
+  /**
+   * What the income statement says about borrowing, for a company whose
+   * filings were read and carry no debt line. Interest expense below
+   * NO_DEBT_INTEREST of revenue (IFRS_LEASE_INTEREST for an IFRS filer,
+   * whose lease interest sits in the same line) confirms the zero.
+   */
+  borrowing?: { interestToRevenue: number | null; ifrsLeases: boolean };
   now?: Date;
 }): SourcedDCFFields {
   const {
@@ -398,7 +441,7 @@ export function buildSourcedFields(params: {
             resolved: true,
           }
         : sharesOutstandingSourced;
-  const financialDebt = withOverride("financialDebt", financialDebtSourced);
+  const financialDebt = withOverride("financialDebt", confirmNoDebt(financialDebtSourced, sec, params.borrowing));
   const cash = withOverride("cash", cashSourced);
   // A company with no leases legitimately reports nothing here, and there is no
   // Yahoo field to fall back to, so zero is the honest answer.

@@ -131,7 +131,10 @@ export const SEC_CONCEPTS = {
     "OperatingLeaseCost",
     "OperatingLeasePayments",
   ],
-  shareBasedCompensation: ["ShareBasedCompensation"],
+  // Some filers tag only the expense, not the cash-flow add-back: Shopify,
+  // AT&T and Caterpillar file AllocatedShareBasedCompensationExpense alone,
+  // which read as no stock compensation at all.
+  shareBasedCompensation: ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
   /** A business bought or sold: the perimeter of the history has moved. */
   acquisitions: ["PaymentsToAcquireBusinessesNetOfCashAcquired", "PaymentsToAcquireBusinessesGross"],
   divestitures: ["ProceedsFromDivestitureOfBusinesses", "ProceedsFromDivestitureOfBusinessesNetOfCashDivested", "ProceedsFromSaleOfBusinessesNetOfCashDivested"],
