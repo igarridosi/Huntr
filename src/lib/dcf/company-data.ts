@@ -76,7 +76,6 @@ export function assembleCompanyData(input: CompanyDataInput) {
   const interestStatement =
     (revenueBasis !== "fiscal_year" ? trailingIncome(financials?.income_statement.quarterly, latestAnnualIncome) : null) ?? latestAnnualIncome;
   const addBack: InterestAddBack | null = interestAddBack(interestStatement);
-  const incomeStrip = interestIncomeStrip(interestStatement);
 
   // The Yahoo fallback reads the balance sheet directly, never the inputs.
   let sourcedFields: SourcedDCFFields | null = null;
@@ -117,6 +116,8 @@ export function assembleCompanyData(input: CompanyDataInput) {
   if (!input.shareCountBasis && foreignFiler && sourcedFields?.marketCapCheck && !sourcedFields.marketCapCheck.agrees) {
     sourcedFields = sourceFields("implied");
   }
+
+  const incomeStrip = interestIncomeStrip(interestStatement, sourcedFields?.netDebt.cash ?? null);
 
   // Stock compensation is always a cost, so there is no switch for it. The
   // margins on screen are free cash flow as reported - the same basis as the

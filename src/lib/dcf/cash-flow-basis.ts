@@ -68,6 +68,11 @@ export function interestAddBack(income: IncomeStatement | null | undefined): Int
   };
 }
 
+/** A quarter of interest income this many times the median of the other three is a one-off, not interest. */
+export const INTEREST_OUTLIER = 5;
+/** The most a company's cash and securities can plausibly earn in a year. */
+export const MAX_CASH_YIELD = 0.06;
+
 /**
  * The last four quarters as one income statement, for a base struck on the
  * trailing twelve months.
@@ -99,7 +104,18 @@ export function trailingIncome(
   // line the vendor does not file quarterly, not interest that stopped: the
   // closed year's amount stands for that line alone.
   const interestExpense = sum((row) => Math.abs(row.interest_expense || 0));
-  const interestIncome = sum((row) => Math.max(0, row.interest_income ?? 0));
+  const interestIncome = quarters
+    .map((row) => Math.max(0, row.interest_income ?? 0))
+    .map((value, index, all) => {
+      // A one-off booked in the interest line is not interest: Netflix's
+      // first quarter of 2026 carried the $2.8B Warner Bros. termination fee
+      // there, 56 times the quarters around it, and the strip took 5.1
+      // points of margin for interest the company does not earn.
+      const others = all.filter((_, i) => i !== index).sort((a, b) => a - b);
+      const median = others[1];
+      return median > 0 && value > INTEREST_OUTLIER * median ? median : value;
+    })
+    .reduce((total, value) => total + value, 0);
   return {
     ...latest,
     revenue,
@@ -136,9 +152,12 @@ export function debtInterestPoints(points: number, params: { ifrsLeases: boolean
  * cash twice: Reddit's $2.8B earned roughly $100M a year, about 3.5
  * points of margin, discounted forever on top of the $2.8B itself.
  */
-export function interestIncomeStrip(income: IncomeStatement | null | undefined): number {
+export function interestIncomeStrip(income: IncomeStatement | null | undefined, cash?: number | null): number {
   if (!income || !(income.revenue > 0)) return 0;
-  const interestIncome = Math.max(0, income.interest_income ?? 0);
+  // No deposit pays more than MAX_CASH_YIELD: interest income above that on
+  // the cash held is something else filed under the same line.
+  const ceiling = typeof cash === "number" && cash > 0 ? cash * MAX_CASH_YIELD : Number.POSITIVE_INFINITY;
+  const interestIncome = Math.min(Math.max(0, income.interest_income ?? 0), ceiling);
   if (interestIncome === 0) return 0;
   return (interestIncome * (1 - effectiveTaxRate(income).rate)) / income.revenue;
 }

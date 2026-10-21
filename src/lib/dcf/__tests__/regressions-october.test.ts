@@ -339,3 +339,19 @@ describe("Benchmark, 9 October — one cause, one deduction in the reliability s
     expect(all.filter((l) => /perimeter|Usable margin record|not comparable/.test(l))).toHaveLength(1);
   });
 });
+
+describe("Netflix, 21 October — a termination fee is not interest", () => {
+  const q = (date: string, revenue: number, interestIncome: number) =>
+    income({ period: date, date, revenue: revenue * M, interest_expense: 200 * M, interest_income: interestIncome * M, pre_tax_income: 3_500 * M, income_tax: 500 * M });
+  const annual = income({ date: "2025-12-31", revenue: 45_183 * M, interest_income: 172 * M });
+  const quarters = [q("2025-09-30", 11_510, 36), q("2025-12-31", 12_051, 45), q("2026-03-31", 12_250, 2_852), q("2026-06-30", 12_560, 52)];
+
+  it("replaces the quarter carrying the $2.8B Warner Bros. fee with the median of the others", () => {
+    expect(trailingIncome(quarters, annual)!.interest_income).toBe((36 + 45 + 45 + 52) * M);
+  });
+
+  it("caps interest income at what the cash could earn", () => {
+    const fee = income({ revenue: 51_000 * M, interest_income: 3_000 * M, pre_tax_income: 15_000 * M, income_tax: 2_000 * M });
+    expect(interestIncomeStrip(fee, 8_200 * M)).toBeCloseTo((8_200 * M * 0.06 * (1 - 2 / 15)) / (51_000 * M), 8);
+  });
+});
