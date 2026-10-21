@@ -46,9 +46,24 @@ export const PERIMETER_MONTHS = 24;
  */
 export const MATERIAL_DEAL = 0.05;
 
-/** Whether a deal is large enough, against revenue, to change the perimeter. */
-export function isMaterialDeal(value: number | null | undefined, revenue: number | null | undefined): boolean {
+/**
+ * An acquisition smaller than this share of the buyer's market value does
+ * not change what its history describes, whatever it cost against revenue.
+ * Mastercard's $2.65B for Recorded Future is 9% of its revenue and half a
+ * percent of its value; Johnson & Johnson's $14.6B for Intra-Cellular 3%.
+ * Twelve large companies carried "Shifting perimeter" on deals like these.
+ */
+export const MATERIAL_DEAL_VALUE = 0.05;
+
+/**
+ * Whether a deal is large enough to change the perimeter: against revenue,
+ * and for an acquisition, against the buyer's market value when it is known.
+ * A disposal is measured against revenue alone - a business sold cheaply
+ * can still take a large share of the revenue with it.
+ */
+export function isMaterialDeal(value: number | null | undefined, revenue: number | null | undefined, marketValue?: number | null): boolean {
   if (!(typeof value === "number" && value > 0)) return false;
+  if (typeof marketValue === "number" && marketValue > 0 && value / marketValue < MATERIAL_DEAL_VALUE) return false;
   if (!(typeof revenue === "number" && revenue > 0)) return true; // no yardstick: assume it matters
   return value / revenue >= MATERIAL_DEAL;
 }
@@ -73,6 +88,8 @@ export interface RegimeInput {
     divestitures: { value: number; periodEnd: string } | null;
     /** Revenue of the latest year, the yardstick a deal is measured against. */
     revenue?: number | null;
+    /** Market capitalisation, the second yardstick for an acquisition. */
+    marketValue?: number | null;
   };
 }
 
@@ -152,11 +169,11 @@ export function detectRegimes(input: RegimeInput): Regime[] {
     });
   }
 
-  const { divergence, acquisitions, divestitures, revenue } = input.perimeter;
+  const { divergence, acquisitions, divestitures, revenue, marketValue } = input.perimeter;
   // Only a material deal changes the company. A trailing twelve months far
   // from the closed year is growth on its own; it is named here only beside
   // a deal that could explain it.
-  const bought = isMaterialDeal(acquisitions?.value, revenue);
+  const bought = isMaterialDeal(acquisitions?.value, revenue, marketValue);
   const sold = isMaterialDeal(divestitures?.value, revenue);
   if (bought || sold) {
     const parts = [

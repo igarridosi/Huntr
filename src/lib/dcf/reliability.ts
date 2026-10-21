@@ -167,6 +167,8 @@ export function assessReliability(input: ReliabilityInput): Reliability {
     });
   }
   for (const c of input.checks) {
+    // The margin record is a question of fit, counted there once.
+    if (c.id === "marginRecord") continue;
     if (c.status === "fail") data.push({ block: "data", label: `Check failed: ${c.label}`, points: 15 });
     else if (c.status === "unverifiable") data.push({ block: "data", label: `Not verifiable: ${c.label}`, points: 3 });
   }
@@ -174,17 +176,23 @@ export function assessReliability(input: ReliabilityInput): Reliability {
 
   // ── Fit ──────────────────────────────────────────────────
   const fit: ReliabilityDeduction[] = [];
+  const record = input.marginRecord;
+  // One cause, one deduction. A material deal that also leaves the record
+  // incomparable is the same fact twice: e.l.f. lost 15 for the failed check,
+  // 25 for the perimeter and 30 for the record, all for buying Rhode.
+  const dealBrokeRecord = input.regimes.includes("shiftingPerimeter") && !!record && record.years > 0 && !record.comparable;
   for (const id of input.regimes) {
+    if (id === "shiftingPerimeter" && dealBrokeRecord) continue;
     const penalty = REGIME_PENALTY[id];
     if (penalty) fit.push({ block: "fit", label: penalty.label, points: penalty.points, fix: penalty.fix });
   }
-  const record = input.marginRecord;
   if (!record || record.years === 0) {
     fit.push({ block: "fit", label: "No margin record to project from", points: 40 });
   } else {
     if (record.years < 3) fit.push({ block: "fit", label: `Only ${record.years} year${record.years === 1 ? "" : "s"} of margin record`, points: 30 });
     else if (record.years < 5) fit.push({ block: "fit", label: `${record.years} years of margin record, not five`, points: record.years === 3 ? 10 : 5 });
-    if (!record.comparable) fit.push({ block: "fit", label: "Margin record not comparable across the window", points: 30 });
+    if (dealBrokeRecord) fit.push({ block: "fit", label: "Material acquisition or disposal: the margin record describes another perimeter", points: 30 });
+    else if (!record.comparable) fit.push({ block: "fit", label: "Margin record not comparable across the window", points: 30 });
     else if (record.volatile) fit.push({ block: "fit", label: "Margin record swings by more than 15 points in a year", points: 10 });
     if (record.latestNegative) fit.push({ block: "fit", label: "Free cash flow negative in the latest year", points: 25 });
     else if (record.negativeYears > 0) fit.push({ block: "fit", label: `Free cash flow negative in ${record.negativeYears} year${record.negativeYears === 1 ? "" : "s"} of the record`, points: Math.min(20, 10 * record.negativeYears) });

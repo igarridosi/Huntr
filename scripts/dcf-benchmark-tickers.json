@@ -1,0 +1,9 @@
+{
+  "_comment": "Fixed DCF benchmark universe. Each group is a way the data layer has broken before; add a ticker when a new one breaks, never remove one that passes.",
+  "us_megacap": ["AAPL", "MSFT", "AMZN", "NVDA", "META", "V", "MA", "COST", "WMT", "KO", "PEP", "JNJ", "UNH"],
+  "us_multiclass": ["GOOGL", "BRK-B", "LULU", "NKE"],
+  "us_high_sbc": ["CRM", "NOW", "ADBE", "RDDT", "DUOL", "APP", "CART", "UBER", "NFLX"],
+  "us_acquirers_leveraged": ["SNPS", "ELF", "FIS", "T", "CELH", "SPGI"],
+  "us_old_tags_or_few_tags": ["F", "XOM", "SBUX", "CLX", "DE", "CAT", "CMG"],
+  "foreign_filers": ["ONON", "NVO", "TSM", "ASML", "HLN", "SAP", "SHOP"]
+}

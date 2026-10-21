@@ -33,7 +33,6 @@ import { useDCFScenarios } from "@/hooks/use-dcf-scenarios";
 import {
   runDCF,
   runMonteCarlo,
-  generateDCFScenarios,
   calculateCAGR,
   buildSimulationBundle,
   DEFAULT_MC_WEIGHTS,
@@ -56,16 +55,11 @@ import { useSECFundamentals } from "@/hooks/use-stock-data";
 import { useQuery } from "@tanstack/react-query";
 import { fetchFxRate } from "@/app/actions/stock";
 import {
-  convertFinancials,
-  convertSecFundamentals,
   describeAdrBasis,
-  receiptShareCount,
-  resolveAdrBasis,
   restateStaleRevenue,
 } from "@/lib/dcf/adr-basis";
 import {
   applySourcedBalanceSheet,
-  buildSourcedFields,
   readCompanyFacts,
   type ZeroSuspectField,
 } from "@/lib/calculations/dcf-inputs-source";
@@ -82,13 +76,13 @@ import {
 import { collectCoherenceWarnings } from "@/lib/calculations/dcf-scenario-coherence";
 import { liveFacts, withCompanyFacts } from "@/lib/dcf/live-price";
 import { anchorWings } from "@/lib/dcf/scenario-anchor";
-import { looksLikeLender } from "@/lib/dcf/business-model";
 import { shareCountAlert } from "@/lib/dcf/share-count";
-import { basisOf, revenueBaseDivergence, revenueBases, type RevenueBasis } from "@/lib/dcf/revenue-base";
+import { basisOf, revenueBases, type RevenueBasis } from "@/lib/dcf/revenue-base";
 import { RevenueBasePicker } from "@/components/dcf/revenue-base-picker";
 import { sbcTreatment } from "@/lib/dcf/sbc-treatment";
 import { statementFreeCashFlow } from "@/lib/dcf/free-cash-flow";
-import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStrip, trailingIncome, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
+import { engineInputsFor, type CashFlowBasis } from "@/lib/dcf/cash-flow-basis";
+import { assembleCompanyData, gateFor, populateScenarios, regimesFor } from "@/lib/dcf/company-data";
 
 /**
  * Always unlevered: after-tax interest added back, the interest earned on
@@ -99,14 +93,12 @@ import { debtInterestPoints, engineInputsFor, interestAddBack, interestIncomeStr
  */
 const CASH_FLOW_BASIS: CashFlowBasis = "unlevered";
 import { buildProvenance } from "@/lib/dcf/provenance";
-import { valuationGate } from "@/lib/dcf/gate";
 import { DCFProvenance } from "@/components/dcf/dcf-provenance";
 import { ValuationCover } from "@/components/dcf/valuation-cover";
 import { DCFRegime } from "@/components/dcf/dcf-regime";
-import { debtPaydown, detectRegimes, isMaterialDeal, PERIMETER_MONTHS } from "@/lib/dcf/regime";
+import { debtPaydown } from "@/lib/dcf/regime";
 import { assessReliability } from "@/lib/dcf/reliability";
 import { DCFReliability } from "@/components/dcf/dcf-reliability";
-import { buildMarginHistory } from "@/lib/calculations/margin-history";
 import { track } from "@/lib/analytics/track";
 
 // None of these four is on screen before a ticker is loaded, and three of
@@ -297,27 +289,41 @@ export default function DcfCalculatorPage() {
     enabled: needsFx,
     staleTime: 6 * 60 * 60 * 1000,
   });
-  const adrBasis = useMemo(() => {
-    if (!needsFx || !quote) return null;
-    const latestIncome = [...(rawCompanyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1);
-    const filed = rawSecFundamentals?.dilutedShares?.value ?? latestIncome?.shares_outstanding_diluted ?? null;
-    const implied = quote.price > 0 && quote.market_cap > 0 ? quote.market_cap / quote.price : null;
-    return resolveAdrBasis({ priceCurrency: fxTo, financialCurrency: fxFrom, fx: fxRate, filedShares: filed, impliedShares: implied });
-  }, [needsFx, fxFrom, fxTo, quote, fxRate, rawCompanyFinancials, rawSecFundamentals]);
+  // Everything derived from the company's raw data, in one place the
+  // benchmark reads too (src/lib/dcf/company-data.ts).
+  const companyData = useMemo(
+    () =>
+      assembleCompanyData({
+        ticker,
+        quote,
+        profile,
+        financials: rawCompanyFinancials,
+        sec: rawSecFundamentals,
+        fxRate,
+        revenueBasisChoice: revenueBasisChoice ?? undefined,
+        balanceOverrides,
+        shareCountBasis,
+      }),
+    [ticker, quote, profile, rawCompanyFinancials, rawSecFundamentals, fxRate, revenueBasisChoice, balanceOverrides, shareCountBasis]
+  );
+  const {
+    adrBasis,
+    financials: companyFinancials,
+    sec: secFundamentals,
+    bases,
+    revenueDivergence,
+    revenueBasis,
+    sourcedFields,
+    sbcTtm,
+    sbcAmount,
+    revenueHistory,
+    addBack,
+    incomeStrip,
+    leasePrincipalPoints,
+    interestPoints,
+    adjustmentsFor,
+  } = companyData;
   const adrNotice = adrBasis ? describeAdrBasis(adrBasis) : null;
-
-  const companyFinancials = useMemo(
-    () => (rawCompanyFinancials && adrBasis ? convertFinancials(rawCompanyFinancials, adrBasis) : rawCompanyFinancials),
-    [rawCompanyFinancials, adrBasis]
-  );
-  const secFundamentals = useMemo(
-    () => (rawSecFundamentals && adrBasis ? convertSecFundamentals(rawSecFundamentals, adrBasis) : rawSecFundamentals),
-    [rawSecFundamentals, adrBasis]
-  );
-
-  const bases = useMemo(() => revenueBases(companyFinancials), [companyFinancials]);
-  const revenueDivergence = useMemo(() => revenueBaseDivergence(bases), [bases]);
-  const revenueBasis: RevenueBasis = revenueBasisChoice ?? bases.recommended ?? "manual";
   const revenueBaseRecord = useMemo(() => {
     const option = revenueBasis === "ttm" ? bases.ttm : revenueBasis === "fiscal_year" ? bases.fiscalYear : null;
     return {
@@ -391,53 +397,6 @@ export default function DcfCalculatorPage() {
   }, []);
 
   // Auto-populate from real financials
-
-  const sourcedFields = useMemo(() => {
-    if (!quote) return null;
-
-    // The Yahoo fallback reads the balance sheet directly, not the inputs.
-    //
-    // It used to read inputs.totalDebt and inputs.cashAndEquivalents,
-    // which are the very fields populate writes back from this result. At
-    // populate time those are still the zeroed defaults, so a company whose
-    // debt concept EDGAR could not resolve fell through to a fallback of zero
-    // and reported it as a real figure from Yahoo. Afterwards the panel was
-    // reading whatever had been written into inputs while the engine kept its
-    // own copy, and the two drifted apart the moment the lease toggle moved.
-    const latestBalance = (companyFinancials?.balance_sheet.annual ?? [])
-      .slice()
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .at(-1);
-
-    return buildSourcedFields({
-      sec: secFundamentals ?? null,
-      yahoo: {
-        sharesOutstanding: receiptShareCount(
-          quote.shares_outstanding,
-          quote.price > 0 && quote.market_cap > 0 ? quote.market_cap / quote.price : null,
-          adrBasis
-        ),
-        totalDebt: latestBalance?.long_term_debt ?? null,
-        // Cash and the short-term investments held beside it, as the filings
-        // path counts them.
-        cash: latestBalance ? latestBalance.cash_and_equivalents + (latestBalance.short_term_investments ?? 0) : null,
-      },
-      price: quote.price,
-      reportedMarketCap: quote.market_cap,
-      overrides: balanceOverrides,
-      // One criterion: the diluted count of the latest 10-Q. The market-cap
-      // cross-check reports how far it drifts and which way; it does not
-      // switch the denominator on its own.
-      shareCountBasis: shareCountBasis ?? "filings",
-    });
-  }, [
-    quote,
-    secFundamentals,
-    companyFinancials,
-    balanceOverrides,
-    shareCountBasis,
-    adrBasis,
-  ]);
 
   const handleBalanceOverride = useCallback(
     (field: ZeroSuspectField, value: number | null) => {
@@ -568,20 +527,6 @@ export default function DcfCalculatorPage() {
   }
 
 
-  // Stock compensation is always a cost, so there is no switch for it. The
-  // margins on screen are free cash flow as reported - the same basis as the
-  // record under the sliders and the reverse DCF - and the engine takes SBC
-  // off both margins of all three scenarios. A switch only added a question
-  // nobody could answer the same way twice: before the scenarios or after,
-  // margins typed with it or without it.
-  //
-  // Measured over the same period as the revenue it is set against: the
-  // trailing twelve months unless the closed year was chosen.
-  const sbcTtm = secFundamentals?.shareBasedCompensationTtm?.value ?? null;
-  const sbcAmount = Math.max(
-    0,
-    revenueBasis !== "fiscal_year" && sbcTtm !== null && sbcTtm > 0 ? sbcTtm : (sourcedFields?.shareBasedCompensation.value ?? 0)
-  );
   // A slider that already sits at the statements' margin less SBC was most
   // likely deducted by hand, or saved that way under the old switch.
   // Deducting again would take it off twice, so say so; the figure is the
@@ -598,104 +543,6 @@ export default function DcfCalculatorPage() {
     }).warning;
   }, [sbcAmount, companyFinancials, inputs.baseFCFMargin, inputs.baseRevenue]);
 
-  /**
-   * What the company has actually managed, which is what makes the implied
-   * assumption meaningful rather than merely precise.
-   *
-   * Where the figures come from: `companyFinancials` is `getCompanyFinancials`
-   * — the Alpha Vantage bundle (`financials-alpha-v2`) while one is on file
-   * and under a week old, otherwise Yahoo's statements. Both feed the same
-   * two series here:
-   *
-   *  - "Realised FCF margin by year" and the 5Y median under the sliders
-   *    come from `buildMarginHistory`, which computes free cash flow itself
-   *    as operating cash flow less |capital_expenditures|, paired by fiscal
-   *    year. It never reads the vendor's `free_cash_flow` field, which is
-   *    why the capex sign bug in the Alpha Vantage mapper (FCF = OCF + capex,
-   *    fixed and repaired on read in `alpha-repair.ts`) never reached it.
-   *  - The generated scenarios' base margin (`generateDCFScenarios`) reads
-   *    the `free_cash_flow` field, and so did see the bug on a fresh bundle.
-   *
-   * Either way "capex" is what the vendor puts in it: Yahoo carries plant
-   * plus additions of intangibles; Alpha Vantage varies by row (see the
-   * note in `mapCashFlow`). The margins move with the source, not the code.
-   */
-  const revenueHistory = useMemo(() => {
-    const annual = companyFinancials?.income_statement.annual ?? [];
-    if (annual.length < 2) {
-      return { cagr5: null, cagr10: null, fcfMargin5: null, marginHistory: null, lender: false };
-    }
-
-    const sortedIncomeRows = annual
-      .slice()
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-    const revenues = sortedIncomeRows.map((row) => row.revenue).filter((v) => v > 0);
-
-    const cashFlows = (companyFinancials?.cash_flow.annual ?? [])
-      .slice()
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-    /**
-     * Paired by fiscal year, and judged before it is offered as a benchmark.
-     *
-     * This used to divide `cashFlows.slice(-5)[i]` by `revenues[len-5+i]` -
-     * position against position. The two statements do not always cover the
-     * same years, so that quietly divided one year's cash flow by another
-     * year's revenue and produced a margin belonging to neither. It also read
-     * a precomputed `free_cash_flow` field whose definition we do not control,
-     * while the anchor bands two hundred lines away computed it as operating
-     * cash flow less capex. Two definitions of one metric in one file.
-     */
-    // The "not a usable margin record" rule is a sector rule inside
-    // buildMarginHistory, and Yahoo's "Financial Services" holds S&P Global
-    // and Visa next to SoFi. The sector is passed only when the business
-    // itself looks like a lender — an unclassified balance sheet with thin
-    // equity, or an industry that names banking, insurance or lending.
-    const latestBalanceRow = [...(companyFinancials?.balance_sheet.annual ?? [])]
-      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      .at(-1);
-    const lender = looksLikeLender({ industry: profile?.industry, balance: latestBalanceRow ?? null, income: sortedIncomeRows.at(-1) ?? null });
-    // Known only once the filings are read: until then a step in the record
-    // is still treated as a possible change of perimeter.
-    const latestRevenue = sortedIncomeRows.at(-1)?.revenue ?? null;
-    const perimeterEvent = secFundamentals
-      ? isMaterialDeal(secFundamentals.acquisitions?.value, latestRevenue) ||
-        isMaterialDeal(secFundamentals.divestitures?.value, latestRevenue)
-      : undefined;
-    const marginHistory = buildMarginHistory({
-      revenues: sortedIncomeRows,
-      cashFlows,
-      sector: lender ? profile?.sector : null,
-      years: 5,
-      perimeterEvent,
-    });
-
-    return {
-      cagr5: calculateCAGR(revenues, 5),
-      cagr10: calculateCAGR(revenues, 10),
-      fcfMargin5: marginHistory.median,
-      marginHistory,
-      lender,
-      perimeterEvent,
-    };
-  }, [companyFinancials, profile?.sector, profile?.industry, secFundamentals]);
-
-  /** After-tax interest over revenue, from the latest annual income statement: what unlevering adds back. */
-  const latestAnnualIncome = useMemo(
-    () => [...(companyFinancials?.income_statement.annual ?? [])].sort((a, b) => a.date.localeCompare(b.date)).at(-1),
-    [companyFinancials]
-  );
-  // On a trailing base, the trailing four quarters: the closed year can
-  // describe a company before a deal, or before its cash was spent.
-  const interestIncomeStatement = useMemo(
-    () =>
-      (revenueBasis !== "fiscal_year" ? trailingIncome(companyFinancials?.income_statement.quarterly, latestAnnualIncome) : null) ??
-      latestAnnualIncome,
-    [revenueBasis, companyFinancials, latestAnnualIncome]
-  );
-  const addBack = useMemo(() => interestAddBack(interestIncomeStatement), [interestIncomeStatement]);
-  /** After-tax interest income over revenue: taken out of unlevered flows, because the cash it is earned on is added separately. */
-  const incomeStrip = useMemo(() => interestIncomeStrip(interestIncomeStatement), [interestIncomeStatement]);
 
   // The realised ranges drawn under the sliders, and the checks that compare
   // the assumptions against them.
@@ -796,36 +643,10 @@ export default function DcfCalculatorPage() {
   const handlePopulate = useCallback(() => {
     if (!quote || !companyFinancials) return;
 
-    const generated = generateDCFScenarios({
-      quote,
-      financials: companyFinancials,
-      sector: profile?.sector,
-    });
-
-    if (!generated) return;
-
-    // The generator produced the operating assumptions; the balance sheet is
-    // not an assumption, so the filed figures replace it in all three
-    // scenarios at once.
-    const sourced = sourcedFields
-      ? {
-          bear: { ...generated.bear, inputs: applySourcedBalanceSheet(generated.bear.inputs, sourcedFields) },
-          base: { ...generated.base, inputs: applySourcedBalanceSheet(generated.base.inputs, sourcedFields) },
-          bull: { ...generated.bull, inputs: applySourcedBalanceSheet(generated.bull.inputs, sourcedFields) },
-          waccEstimate: generated.waccEstimate,
-        }
-      : generated;
-
-    // The generator starts from the last closed fiscal year. The base in
-    // use is the trailing twelve months whenever quarters have been
-    // reported since — Celsius' closed 2025 was 21% short of the twelve
-    // months to June 2026, and every projected flow with it — on all
-    // three scenarios, so the reverse DCF and the export read the same
-    // figure as the sliders.
-    const chosen = bases.recommended === "ttm" ? bases.ttm : bases.fiscalYear;
-    const revenued = chosen
-      ? withCompanyFacts(sourced, { ...readCompanyFacts(sourced.base.inputs), baseRevenue: chosen.value })
-      : sourced;
+    // Generator, filed balance sheet and recommended revenue base, as the
+    // benchmark populates it (src/lib/dcf/company-data.ts).
+    const revenued = populateScenarios(companyData, quote, profile?.sector);
+    if (!revenued) return;
     setRevenueBasisChoice(null);
     // The margins stay as reported (levered); the after-tax interest goes
     // back on in the engine, for these and for any margin typed later.
@@ -849,10 +670,11 @@ export default function DcfCalculatorPage() {
     const latestIncome = annualIncome.at(-1);
     const latestCashFlow = annualCashFlow.at(-1);
 
-    const projectedYears = generated.base.inputs.yearsPhase1 + generated.base.inputs.yearsPhase2;
+    const generatedBase = revenued.base.inputs;
+    const projectedYears = generatedBase.yearsPhase1 + generatedBase.yearsPhase2;
     setCapitalProjectionYears(projectedYears >= 8 ? 10 : 5);
-    setCapitalRevenueGrowth(Math.max(-0.1, Math.min(0.5, generated.base.inputs.growthRatePhase1)));
-    setCapitalWacc(Math.max(0.04, Math.min(0.25, generated.base.inputs.wacc)));
+    setCapitalRevenueGrowth(Math.max(-0.1, Math.min(0.5, generatedBase.growthRatePhase1)));
+    setCapitalWacc(Math.max(0.04, Math.min(0.25, generatedBase.wacc)));
 
     if (latestIncome && latestIncome.revenue > 0 && latestCashFlow) {
       const nextOcfMargin = Math.max(0.05, Math.min(0.7, latestCashFlow.operating_cash_flow / latestIncome.revenue));
@@ -860,12 +682,12 @@ export default function DcfCalculatorPage() {
       setOcfMargin(nextOcfMargin);
       setCapexMargin(nextCapexMargin);
     } else {
-      const fallbackOcfMargin = Math.max(0.08, Math.min(0.65, generated.base.inputs.baseFCFMargin + 0.08));
-      const fallbackCapexMargin = Math.max(0.01, Math.min(0.35, fallbackOcfMargin - generated.base.inputs.baseFCFMargin));
+      const fallbackOcfMargin = Math.max(0.08, Math.min(0.65, generatedBase.baseFCFMargin + 0.08));
+      const fallbackCapexMargin = Math.max(0.01, Math.min(0.35, fallbackOcfMargin - generatedBase.baseFCFMargin));
       setOcfMargin(fallbackOcfMargin);
       setCapexMargin(fallbackCapexMargin);
     }
-  }, [quote, companyFinancials, profile, animateInputsTo, sourcedFields, bases]);
+  }, [quote, companyFinancials, profile, animateInputsTo, companyData]);
 
 
   /** A new revenue base goes on the live inputs and on all three scenarios at once. */
@@ -1111,31 +933,6 @@ export default function DcfCalculatorPage() {
     });
   }, [quote, companyFinancials]);
 
-  // Every adjustment between the margins as reported and the margins the
-  // engine discounts, for a given revenue base. SBC is a currency amount,
-  // so its points depend on the revenue it is taken against.
-  // The IFRS lease principal is an annual figure from the 20-F; measured
-  // against the revenue of the same fiscal year, as a share of revenue.
-  const leasePrincipal = secFundamentals?.leasePrincipal ?? null;
-  const leasePrincipalPoints =
-    leasePrincipal && leasePrincipal.value > 0 && latestAnnualIncome && latestAnnualIncome.revenue > 0
-      ? leasePrincipal.value / latestAnnualIncome.revenue
-      : 0;
-  // A debt-free IFRS filer's interest expense is lease interest, not a cost
-  // of borrowing: it stays out of the flows like the rest of the rent.
-  const interestPoints = debtInterestPoints(addBack?.marginPoints ?? 0, {
-    ifrsLeases: leasePrincipalPoints > 0,
-    financialDebt: sourcedFields?.netDebt.financialDebt ?? 0,
-  });
-  const adjustmentsFor = useCallback(
-    (baseRevenue: number) => ({
-      interestPoints,
-      interestIncomePoints: incomeStrip,
-      sbcPoints: baseRevenue > 0 ? sbcAmount / baseRevenue : 0,
-      leasePrincipalPoints,
-    }),
-    [interestPoints, incomeStrip, sbcAmount, leasePrincipalPoints]
-  );
   // What the engine runs on: the live inputs with the adjustments applied
   // to both margins, or, on the levered basis, net debt at zero so flows
   // after interest are never also charged the debt.
@@ -1312,23 +1109,10 @@ export default function DcfCalculatorPage() {
   );
 
   const gate = useMemo(
-    () =>
-      valuationGate({
-        shares: inputs.sharesOutstanding,
-        // Diluted when the count in use is the filed weighted-diluted one.
-        dilutedShares: !!sourcedFields?.dilutedCount && sourcedFields.shareCount.basis === "filings",
-        price: inputs.currentPrice,
-        reportedMarketCap: quote?.market_cap ?? null,
-        cashFlow: { annual: companyFinancials?.cash_flow.annual ?? [], quarterly: companyFinancials?.cash_flow.quarterly ?? [] },
-        debtInUse: inputs.totalDebt,
-        debtSource: sourcedFields?.financialDebt.source ?? null,
-        filedDebt: secFundamentals?.financialDebt ?? null,
-        revenue: { basis: revenueBasis, divergence: revenueDivergence, perimeterConfirmed, organic: revenueHistory.perimeterEvent === false },
-        marginHistory: revenueHistory.marginHistory,
-        lender: revenueHistory.lender,
-      }),
-    [inputs, quote?.market_cap, companyFinancials, sourcedFields, secFundamentals, revenueBasis, revenueDivergence, perimeterConfirmed, revenueHistory]
+    () => gateFor(companyData, quote, inputs, perimeterConfirmed),
+    [companyData, quote, inputs, perimeterConfirmed]
   );
+
   const valueCovered = isPopulated && gate.blocked && !valueUncovered;
 
   // One event per company once its valuation is on screen, and whether
@@ -1352,37 +1136,7 @@ export default function DcfCalculatorPage() {
   // The regime, from the statements: capex and margin off the latest
   // fiscal year on the defined basis, leverage off EBITDA, the terminal
   // weight off the current run, the perimeter off the filings.
-  const regimes = useMemo(() => {
-    const cash = latestAnnualRows.cash;
-    const income = latestAnnualRows.income;
-    const fcf = cash ? statementFreeCashFlow(cash, "annual").value : null;
-    // Measured from the latest statement on file, not the clock: a render
-    // is pure, and "recent" means recent relative to the history in use.
-    const asOf = latestAnnualRows.income?.date ?? latestAnnualRows.cash?.date ?? null;
-    const recent = (fact: { value: number; periodEnd: string } | null | undefined) => {
-      if (!fact || !(fact.value > 0) || !asOf) return null;
-      const ageMonths = (Date.parse(asOf) - Date.parse(fact.periodEnd)) / (30.44 * 86_400_000);
-      return ageMonths <= PERIMETER_MONTHS ? { value: fact.value, periodEnd: fact.periodEnd } : null;
-    };
-    // The earlier years' capex over revenue, matched by fiscal year end.
-    const revenueByDate = new Map((companyFinancials?.income_statement.annual ?? []).map((row) => [row.date, row.revenue]));
-    const capexHistory = (companyFinancials?.cash_flow.annual ?? [])
-      .filter((row) => row.date !== cash?.date)
-      .map((row) => {
-        const revenue = revenueByDate.get(row.date);
-        return revenue && revenue > 0 ? Math.abs(row.capital_expenditures) / revenue : NaN;
-      })
-      .filter((value) => Number.isFinite(value));
-    return detectRegimes({
-      lender: revenueHistory.lender,
-      capexToRevenue: cash && income && income.revenue > 0 ? Math.abs(cash.capital_expenditures) / income.revenue : null,
-      capexHistory,
-      terminalWeight: result && result.enterpriseValue > 0 ? result.pvTerminalValue / result.enterpriseValue : null,
-      debtToEbitda: income && income.ebitda > 0 ? inputs.totalDebt / income.ebitda : null,
-      fcfMargin: fcf !== null && income && income.revenue > 0 ? fcf / income.revenue : null,
-      perimeter: { divergence: revenueDivergence?.deviation ?? null, acquisitions: recent(secFundamentals?.acquisitions), divestitures: recent(secFundamentals?.divestitures), revenue: income?.revenue ?? null },
-    });
-  }, [latestAnnualRows, revenueHistory.lender, result, inputs.totalDebt, revenueDivergence, secFundamentals, companyFinancials]);
+  const regimes = useMemo(() => regimesFor(companyData, inputs.totalDebt, result), [companyData, inputs.totalDebt, result]);
   const paydown = useMemo(
     () => (result ? { ...debtPaydown(inputs.totalDebt, result.projections.map((p) => p.fcf)), debt: inputs.totalDebt } : null),
     [result, inputs.totalDebt]

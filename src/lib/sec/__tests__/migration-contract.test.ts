@@ -11,9 +11,9 @@ import { REVIEWED_FORMS } from "../forms";
 const read = (file: string) => fs.readFileSync(path.join(process.cwd(), "supabase/migrations", file), "utf8");
 // 011 creates the tables and the form check; later migrations only add concepts.
 const sql = read("011_sec_company_facts.sql");
-const seeds = [sql, read("014_sec_concepts_marketable_securities.sql"), read("015_sec_concepts_ifrs_lease_principal.sql")].join("\n");
+const seeds = [sql, read("014_sec_concepts_marketable_securities.sql"), read("015_sec_concepts_ifrs_lease_principal.sql"), read("016_sec_concepts_allocated_sbc.sql")].join("\n");
 
-describe("migrations 011, 014 and 015 agree with src/lib/sec", () => {
+describe("migrations 011 and 014-016 agree with src/lib/sec", () => {
   it("accepts exactly the reviewed forms", () => {
     const check = /form\s+TEXT\s+CHECK \(form IS NULL OR form IN \(([^)]*)\)\)/.exec(sql);
     expect(check).not.toBeNull();

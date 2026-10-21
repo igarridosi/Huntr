@@ -1,0 +1,2741 @@
+[
+ {
+  "ticker": "AAPL",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Apple Inc.",
+   "price": 340.42,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 466823000000,
+   "shares": {
+    "inUse": 14714676000,
+    "source": "sec",
+    "impliedDeviation": 0.0083
+   },
+   "debt": {
+    "financial": 84344000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 62399000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0294,
+    "interestPoints": 0,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0294
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 89,
+    "grade": "A",
+    "blocks": {
+     "data": 77,
+     "fit": 95,
+     "robustness": 100
+    }
+   },
+   "autofillBaseValue": 85.29
+  }
+ },
+ {
+  "ticker": "MSFT",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Capex peak: capex 34.9% of revenue; against 18.1% in earlier years"
+  ],
+  "summary": {
+   "name": "Microsoft Corporation",
+   "price": 522.61,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "fiscal_year",
+   "revenueBase": 331839000000,
+   "shares": {
+    "inUse": 7445000000,
+    "source": "sec",
+    "impliedDeviation": 0.0026
+   },
+   "debt": {
+    "financial": 40294000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 76843000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0374,
+    "interestPoints": 0.0074,
+    "interestIncomePoints": 0.008,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.038
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "capexPeak"
+   ],
+   "reliability": {
+    "score": 83,
+    "grade": "B",
+    "blocks": {
+     "data": 100,
+     "fit": 60,
+     "robustness": 89
+    }
+   },
+   "autofillBaseValue": 249.65
+  }
+ },
+ {
+  "ticker": "AMZN",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Autofill value implausible (-92% vs price): the model, not the data",
+   "Regime Capex peak: capex 18.4% of revenue; against 12.4% in earlier years",
+   "Regime Thin margin: FCF margin 1.1%"
+  ],
+  "summary": {
+   "name": "Amazon.com, Inc.",
+   "price": 254.06,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 742776000000,
+   "shares": {
+    "inUse": 10903000000,
+    "source": "sec",
+    "impliedDeviation": 0.0108
+   },
+   "debt": {
+    "financial": 132549000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 122988000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.026,
+    "interestPoints": 0.0027,
+    "interestIncomePoints": 0.0047,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.028
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "capexPeak",
+    "thinMargin"
+   ],
+   "reliability": {
+    "score": 61,
+    "grade": "C",
+    "blocks": {
+     "data": 80,
+     "fit": 25,
+     "robustness": 82
+    }
+   },
+   "autofillBaseValue": 20.57
+  }
+ },
+ {
+  "ticker": "NVDA",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "NVIDIA Corporation",
+   "price": 230.48,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 302969000000,
+   "shares": {
+    "inUse": 24285000000,
+    "source": "sec",
+    "impliedDeviation": 0.0057
+   },
+   "debt": {
+    "financial": 33366000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 22443000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0239,
+    "interestPoints": 0.0013,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0226
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 86,
+    "grade": "A",
+    "blocks": {
+     "data": 80,
+     "fit": 90,
+     "robustness": 90
+    }
+   },
+   "autofillBaseValue": 81.51
+  }
+ },
+ {
+  "ticker": "META",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Capex peak: capex 34.7% of revenue; against 22.6% in earlier years"
+  ],
+  "summary": {
+   "name": "Meta Platforms, Inc.",
+   "price": 720.89,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 228247000000,
+   "shares": {
+    "inUse": 2566000000,
+    "source": "sec",
+    "impliedDeviation": 0.0073
+   },
+   "debt": {
+    "financial": 84000000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 90260000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.1101,
+    "interestPoints": 0.0069,
+    "interestIncomePoints": 0.0088,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.112
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "capexPeak"
+   ],
+   "reliability": {
+    "score": 78,
+    "grade": "B",
+    "blocks": {
+     "data": 97,
+     "fit": 50,
+     "robustness": 85
+    }
+   },
+   "autofillBaseValue": 412.12
+  }
+ },
+ {
+  "ticker": "V",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Visa Inc.",
+   "price": 375.1,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 44488000000,
+   "shares": {
+    "inUse": 1898000000,
+    "source": "sec",
+    "impliedDeviation": 0.011
+   },
+   "debt": {
+    "financial": 23976000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 12404000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0207,
+    "interestPoints": 0.0146,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0061
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 90,
+    "grade": "A",
+    "blocks": {
+     "data": 87,
+     "fit": 95,
+     "robustness": 90
+    }
+   },
+   "autofillBaseValue": 183.06
+  }
+ },
+ {
+  "ticker": "MA",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Mastercard Incorporated",
+   "price": 574.76,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 35083000000,
+   "shares": {
+    "inUse": 883000000,
+    "source": "sec",
+    "impliedDeviation": 0.008
+   },
+   "debt": {
+    "financial": 24643000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 11291000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0175,
+    "interestPoints": 0.0172,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0003
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 93,
+    "grade": "A",
+    "blocks": {
+     "data": 97,
+     "fit": 95,
+     "robustness": 83
+    }
+   },
+   "autofillBaseValue": 353.34
+  }
+ },
+ {
+  "ticker": "COST",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Thin margin: FCF margin 2.8%"
+  ],
+  "summary": {
+   "name": "Costco Wholesale Corporation",
+   "price": 947.92,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 293587000000,
+   "shares": {
+    "inUse": 444430000,
+    "source": "sec",
+    "impliedDeviation": 0.0029
+   },
+   "debt": {
+    "financial": 6162000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 21301000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0031,
+    "interestPoints": 0.0004,
+    "interestIncomePoints": 0.0015,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0043
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "thinMargin"
+   ],
+   "reliability": {
+    "score": 76,
+    "grade": "B",
+    "blocks": {
+     "data": 77,
+     "fit": 70,
+     "robustness": 82
+    }
+   },
+   "autofillBaseValue": 426.26
+  }
+ },
+ {
+  "ticker": "WMT",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 67.4% of value in the terminal",
+   "Regime Thin margin: FCF margin 2.1%"
+  ],
+  "summary": {
+   "name": "Walmart Inc.",
+   "price": 110.56,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 735840000000,
+   "shares": {
+    "inUse": 7978000000,
+    "source": "sec",
+    "impliedDeviation": 0.0056
+   },
+   "debt": {
+    "financial": 50411000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 11529000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0049,
+    "interestPoints": 0.0025,
+    "interestIncomePoints": 0.0004,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0028
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy",
+    "thinMargin"
+   ],
+   "reliability": {
+    "score": 75,
+    "grade": "B",
+    "blocks": {
+     "data": 97,
+     "fit": 70,
+     "robustness": 48
+    }
+   },
+   "autofillBaseValue": 52.05
+  }
+ },
+ {
+  "ticker": "KO",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 72.0% of value in the terminal"
+  ],
+  "summary": {
+   "name": "The Coca-Cola Company",
+   "price": 87.77,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 50129000000,
+   "shares": {
+    "inUse": 4314000000,
+    "source": "sec",
+    "impliedDeviation": 0.0027
+   },
+   "debt": {
+    "financial": 43808000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 10574000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0054,
+    "interestPoints": 0.0261,
+    "interestIncomePoints": 0.014,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0067
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy"
+   ],
+   "reliability": {
+    "score": 76,
+    "grade": "B",
+    "blocks": {
+     "data": 87,
+     "fit": 95,
+     "robustness": 33
+    }
+   },
+   "autofillBaseValue": 47.53
+  }
+ },
+ {
+  "ticker": "PEP",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 72.2% of value in the terminal",
+   "Regime Leveraged: debt 3.3× EBITDA"
+  ],
+  "summary": {
+   "name": "PepsiCo, Inc.",
+   "price": 128.34,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 96904000000,
+   "shares": {
+    "inUse": 1367000000,
+    "source": "sec",
+    "impliedDeviation": 0.0007
+   },
+   "debt": {
+    "financial": 51881000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 11163000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0033,
+    "interestPoints": 0.0093,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.006
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy",
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 66,
+    "grade": "C",
+    "blocks": {
+     "data": 74,
+     "fit": 80,
+     "robustness": 33
+    }
+   },
+   "autofillBaseValue": 170.29
+  }
+ },
+ {
+  "ticker": "JNJ",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 72.6% of value in the terminal"
+  ],
+  "summary": {
+   "name": "Johnson & Johnson",
+   "price": 256.48,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 97929000000,
+   "shares": {
+    "inUse": 2440100000,
+    "source": "sec",
+    "impliedDeviation": 0.0125
+   },
+   "debt": {
+    "financial": 49036000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 20758000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0144,
+    "interestPoints": 0.0086,
+    "interestIncomePoints": 0.0078,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0136
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy"
+   ],
+   "reliability": {
+    "score": 75,
+    "grade": "B",
+    "blocks": {
+     "data": 74,
+     "fit": 95,
+     "robustness": 47
+    }
+   },
+   "autofillBaseValue": 260.06
+  }
+ },
+ {
+  "ticker": "UNH",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 69.5% of value in the terminal",
+   "Regime Leveraged: debt 3.2× EBITDA",
+   "Regime Thin margin: FCF margin 3.6%"
+  ],
+  "summary": {
+   "name": "UnitedHealth Group Incorporated",
+   "price": 370.95,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 450129000000,
+   "shares": {
+    "inUse": 906000000,
+    "source": "sec",
+    "impliedDeviation": 0.0094
+   },
+   "debt": {
+    "financial": 73328000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 31468000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0023,
+    "interestPoints": 0.0074,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0051
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy",
+    "leveraged",
+    "thinMargin"
+   ],
+   "reliability": {
+    "score": 71,
+    "grade": "B",
+    "blocks": {
+     "data": 97,
+     "fit": 55,
+     "robustness": 51
+    }
+   },
+   "autofillBaseValue": 1114.77
+  }
+ },
+ {
+  "ticker": "GOOGL",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Capex peak: capex 22.7% of revenue; against 11.1% in earlier years"
+  ],
+  "summary": {
+   "name": "Alphabet Inc.",
+   "price": 348.29,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 445867000000,
+   "shares": {
+    "inUse": 12309000000,
+    "source": "sec",
+    "impliedDeviation": 0.0065
+   },
+   "debt": {
+    "financial": 100164000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 242474000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0631,
+    "interestPoints": 0.0041,
+    "interestIncomePoints": 0.0093,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0683
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "capexPeak"
+   ],
+   "reliability": {
+    "score": 84,
+    "grade": "B",
+    "blocks": {
+     "data": 97,
+     "fit": 60,
+     "robustness": 97
+    }
+   },
+   "autofillBaseValue": 117.8
+  }
+ },
+ {
+  "ticker": "BRK-B",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Record: A lender's or insurer's operating cash flow moves with its book, not its profitability: no FCF margin record to project from.",
+   "Regime Lender or insurer: Thin equity against assets with interest as the business, or an unclassified balance sheet.",
+   "Regime Terminal-heavy: 72.6% of value in the terminal"
+  ],
+  "summary": {
+   "name": "Berkshire Hathaway Inc.",
+   "price": 511.05,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "fiscal_year",
+   "revenueBase": 410522000000,
+   "shares": {
+    "inUse": 2154664073,
+    "source": "sec",
+    "impliedDeviation": 0.0065
+   },
+   "debt": {
+    "financial": 125763000000,
+    "source": "yahoo"
+   },
+   "cash": {
+    "value": 41360000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0,
+    "interestPoints": 0.0101,
+    "interestIncomePoints": 0.0462,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0361
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "fail"
+   },
+   "regimes": [
+    "lender",
+    "terminalHeavy"
+   ],
+   "reliability": {
+    "score": 38,
+    "grade": "D",
+    "blocks": {
+     "data": 74,
+     "fit": 0,
+     "robustness": 32
+    }
+   },
+   "autofillBaseValue": 138.15
+  }
+ },
+ {
+  "ticker": "LULU",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "lululemon athletica inc.",
+   "price": 92.68,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 11093955000,
+   "shares": {
+    "inUse": 112919000,
+    "source": "sec",
+    "impliedDeviation": 0.02
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 1389737000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0082,
+    "interestPoints": 0,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0082
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 76,
+    "grade": "B",
+    "blocks": {
+     "data": 54,
+     "fit": 95,
+     "robustness": 85
+    }
+   },
+   "autofillBaseValue": 317.1
+  }
+ },
+ {
+  "ticker": "NKE",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Thin margin: FCF margin 4.7%"
+  ],
+  "summary": {
+   "name": "NIKE, Inc.",
+   "price": 34.74,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "fiscal_year",
+   "revenueBase": 46398000000,
+   "shares": {
+    "inUse": 1484200000,
+    "source": "sec",
+    "impliedDeviation": -0.0007
+   },
+   "debt": {
+    "financial": 7893000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 6903000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0154,
+    "interestPoints": 0,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0154
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "thinMargin"
+   ],
+   "reliability": {
+    "score": 84,
+    "grade": "B",
+    "blocks": {
+     "data": 90,
+     "fit": 70,
+     "robustness": 92
+    }
+   },
+   "autofillBaseValue": 26.17
+  }
+ },
+ {
+  "ticker": "CRM",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Leveraged: debt 3.1× EBITDA"
+  ],
+  "summary": {
+   "name": "Salesforce, Inc.",
+   "price": 227.8,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 43938000000,
+   "shares": {
+    "inUse": 821000000,
+    "source": "sec",
+    "impliedDeviation": -0.0024
+   },
+   "debt": {
+    "financial": 39288000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 11403000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0834,
+    "interestPoints": 0.014,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0694
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 91,
+    "grade": "A",
+    "blocks": {
+     "data": 97,
+     "fit": 80,
+     "robustness": 95
+    }
+   },
+   "autofillBaseValue": 156
+  }
+ },
+ {
+  "ticker": "NOW",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Perimeter: Trailing twelve months ($14.73B) and the closed year ($13.28B) are 11.0% apart — an acquisition, a spin-off or fast growth. Confirm which base describes today's perimeter.",
+   "Record: Revenue moved 23.8% between 2022 and 2023. If that came from a disposal or an acquisition rather than from trading, the years on either side are not describing the same company.",
+   "Regime Shifting perimeter: acquisition of $8.78B to 2026-06-30; trailing twelve months 11.0% above the closed year"
+  ],
+  "summary": {
+   "name": "ServiceNow, Inc.",
+   "price": 139.75,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 14732000000,
+   "shares": {
+    "inUse": 1034334000,
+    "source": "sec",
+    "impliedDeviation": 0.0005
+   },
+   "debt": {
+    "financial": 7517000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 4664000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.1483,
+    "interestPoints": 0.004,
+    "interestIncomePoints": 0.0183,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.1626
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "fail",
+    "marginRecord": "fail"
+   },
+   "regimes": [
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 77,
+    "grade": "B",
+    "blocks": {
+     "data": 79,
+     "fit": 65,
+     "robustness": 90
+    }
+   },
+   "autofillBaseValue": 29.62
+  }
+ },
+ {
+  "ticker": "ADBE",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Adobe Inc.",
+   "price": 241.05,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 25970000000,
+   "shares": {
+    "inUse": 395500000,
+    "source": "sec",
+    "impliedDeviation": 0.0162
+   },
+   "debt": {
+    "financial": 6363000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 5639000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0797,
+    "interestPoints": 0.0079,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0719
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 92,
+    "grade": "A",
+    "blocks": {
+     "data": 80,
+     "fit": 100,
+     "robustness": 100
+    }
+   },
+   "autofillBaseValue": 344.13
+  }
+ },
+ {
+  "ticker": "RDDT",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Reddit, Inc.",
+   "price": 156.47,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 2778834000,
+   "shares": {
+    "inUse": 202029721,
+    "source": "sec",
+    "impliedDeviation": 0.0501
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 2786357000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.1216,
+    "interestPoints": 0,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "statutory",
+    "marginShift": -0.1216
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 72,
+    "grade": "B",
+    "blocks": {
+     "data": 74,
+     "fit": 65,
+     "robustness": 79
+    }
+   },
+   "autofillBaseValue": 17.18
+  }
+ },
+ {
+  "ticker": "DUOL",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Duolingo, Inc.",
+   "price": 151.22,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 1145002000,
+   "shares": {
+    "inUse": 50031000,
+    "source": "sec",
+    "impliedDeviation": 0.0694
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 1180887000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.1264,
+    "interestPoints": 0,
+    "interestIncomePoints": 0.0324,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "statutory",
+    "marginShift": -0.1588
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 85,
+    "grade": "A",
+    "blocks": {
+     "data": 74,
+     "fit": 95,
+     "robustness": 87
+    }
+   },
+   "autofillBaseValue": 119.4
+  }
+ },
+ {
+  "ticker": "APP",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Perimeter: Trailing twelve months ($6.83B) and the closed year ($5.48B) are 24.6% apart — an acquisition, a spin-off or fast growth. Confirm which base describes today's perimeter.",
+   "Record: The FCF margin moved from 14.6% to 54.2% between 2022 and 2023. A step that size is usually a change in what is being measured — a disposal, an acquisition or a restatement — rather than a change in the business. Revenue moved 34.6% between 2022 and 2023. If that came from a disposal or an acquisition rather than from trading, the years on either side are not describing the same company. A free cash flow margin above 70.0% is higher than any operating business sustains. The revenue and the cash flow are probably not describing the same set of operations.",
+   "Regime Shifting perimeter: disposal of $425M to 2025-06-30; trailing twelve months 24.6% above the closed year"
+  ],
+  "summary": {
+   "name": "AppLovin Corporation",
+   "price": 280.12,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 6829124000,
+   "shares": {
+    "inUse": 337031000,
+    "source": "sec",
+    "impliedDeviation": 0.0071
+   },
+   "debt": {
+    "financial": 3550000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 3053306000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0413,
+    "interestPoints": 0.0254,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0159
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "fail",
+    "marginRecord": "fail"
+   },
+   "regimes": [
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 79,
+    "grade": "B",
+    "blocks": {
+     "data": 82,
+     "fit": 65,
+     "robustness": 95
+    }
+   },
+   "autofillBaseValue": 84.13
+  }
+ },
+ {
+  "ticker": "CART",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Maplebear Inc.",
+   "price": 46.3,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 3993000000,
+   "shares": {
+    "inUse": 248935000,
+    "source": "sec",
+    "impliedDeviation": 0.0489
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 850000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.1004,
+    "interestPoints": 0,
+    "interestIncomePoints": 0.0075,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.1079
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 83,
+    "grade": "B",
+    "blocks": {
+     "data": 74,
+     "fit": 95,
+     "robustness": 81
+    }
+   },
+   "autofillBaseValue": 48.69
+  }
+ },
+ {
+  "ticker": "UBER",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Uber Technologies, Inc.",
+   "price": 70.24,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 55227000000,
+   "shares": {
+    "inUse": 2050225000,
+    "source": "sec",
+    "impliedDeviation": 0.0038
+   },
+   "debt": {
+    "financial": 10590000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 5391000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0351,
+    "interestPoints": 0.0066,
+    "interestIncomePoints": 0.0106,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "statutory",
+    "marginShift": -0.0391
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 93,
+    "grade": "A",
+    "blocks": {
+     "data": 97,
+     "fit": 95,
+     "robustness": 83
+    }
+   },
+   "autofillBaseValue": 80.5
+  }
+ },
+ {
+  "ticker": "NFLX",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Netflix, Inc.",
+   "price": 71.57,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 48370764000,
+   "shares": {
+    "inUse": 4261300000,
+    "source": "sec",
+    "impliedDeviation": 0.0234
+   },
+   "debt": {
+    "financial": 16792758000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 9127910000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0101,
+    "interestPoints": 0.0145,
+    "interestIncomePoints": 0.0511,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0467
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 94,
+    "grade": "A",
+    "blocks": {
+     "data": 97,
+     "fit": 85,
+     "robustness": 100
+    }
+   },
+   "autofillBaseValue": 27.24
+  }
+ },
+ {
+  "ticker": "SNPS",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Perimeter: Trailing twelve months ($9.42B) and the closed year ($7.05B) are 33.5% apart — an acquisition, a spin-off or fast growth. Confirm which base describes today's perimeter.",
+   "Regime Leveraged: debt 4.0× EBITDA",
+   "Regime Shifting perimeter: acquisition of $16.68B to 2025-07-31; disposal of $1.45B to 2024-10-31; trailing twelve months 33.5% above the closed year"
+  ],
+  "summary": {
+   "name": "Synopsys, Inc.",
+   "price": 497.75,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 9416465000,
+   "shares": {
+    "inUse": 192319000,
+    "source": "sec",
+    "impliedDeviation": 0.0036
+   },
+   "debt": {
+    "financial": 10037360000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 3607669000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.1009,
+    "interestPoints": 0.0549,
+    "interestIncomePoints": 0.0061,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0521
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "fail",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "leveraged",
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 74,
+    "grade": "B",
+    "blocks": {
+     "data": 82,
+     "fit": 55,
+     "robustness": 89
+    }
+   },
+   "autofillBaseValue": 186.98
+  }
+ },
+ {
+  "ticker": "ELF",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Record: Revenue moved 76.9% between 2023 and 2024. If that came from a disposal or an acquisition rather than from trading, the years on either side are not describing the same company.",
+   "Regime Leveraged: debt 5.2× EBITDA",
+   "Regime Shifting perimeter: acquisition of $582M to 2026-03-31"
+  ],
+  "summary": {
+   "name": "e.l.f. Beauty, Inc.",
+   "price": 105.96,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 1762106000,
+   "shares": {
+    "inUse": 59727575,
+    "source": "sec",
+    "impliedDeviation": 0.0122
+   },
+   "debt": {
+    "financial": 831996000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 344241000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0549,
+    "interestPoints": 0.0186,
+    "interestIncomePoints": 0.0028,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0391
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "fail"
+   },
+   "regimes": [
+    "leveraged",
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 77,
+    "grade": "B",
+    "blocks": {
+     "data": 100,
+     "fit": 50,
+     "robustness": 78
+    }
+   },
+   "autofillBaseValue": 48.21
+  }
+ },
+ {
+  "ticker": "FIS",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Perimeter: Trailing twelve months ($12.20B) and the closed year ($10.68B) are 14.3% apart — an acquisition, a spin-off or fast growth. Confirm which base describes today's perimeter.",
+   "Record: The FCF margin moved from 6.4% to 36.2% between 2022 and 2023. A step that size is usually a change in what is being measured — a disposal, an acquisition or a restatement — rather than a change in the business.",
+   "Regime Leveraged: debt 6.1× EBITDA",
+   "Regime Shifting perimeter: acquisition of $7.86B to 2026-06-30; trailing twelve months 14.3% above the closed year"
+  ],
+  "summary": {
+   "name": "Fidelity National Information Services, Inc.",
+   "price": 34.34,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 12201000000,
+   "shares": {
+    "inUse": 517000000,
+    "source": "sec",
+    "impliedDeviation": 0.0002
+   },
+   "debt": {
+    "financial": 21174000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 744000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0152,
+    "interestPoints": 0.0367,
+    "interestIncomePoints": 0.0015,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.02
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "fail",
+    "marginRecord": "fail"
+   },
+   "regimes": [
+    "leveraged",
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 66,
+    "grade": "C",
+    "blocks": {
+     "data": 72,
+     "fit": 50,
+     "robustness": 80
+    }
+   },
+   "autofillBaseValue": 35.97
+  }
+ },
+ {
+  "ticker": "T",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 71.3% of value in the terminal",
+   "Regime Leveraged: debt 2.6× EBITDA"
+  ],
+  "summary": {
+   "name": "AT&T Inc.",
+   "price": 24.87,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 127239000000,
+   "shares": {
+    "inUse": 6946000000,
+    "source": "sec",
+    "impliedDeviation": 0.0137
+   },
+   "debt": {
+    "financial": 143954000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 17570000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0042,
+    "interestPoints": 0.0499,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0457
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy",
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 76,
+    "grade": "B",
+    "blocks": {
+     "data": 97,
+     "fit": 80,
+     "robustness": 39
+    }
+   },
+   "autofillBaseValue": 87.57
+  }
+ },
+ {
+  "ticker": "CELH",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Perimeter: Trailing twelve months ($3.05B) and the closed year ($2.52B) are 21.2% apart — an acquisition, a spin-off or fast growth. Confirm which base describes today's perimeter.",
+   "Record: Revenue moved 101.7% between 2022 and 2023. If that came from a disposal or an acquisition rather than from trading, the years on either side are not describing the same company.",
+   "Regime Leveraged: debt 3.3× EBITDA",
+   "Regime Shifting perimeter: acquisition of $1.28B to 2025-09-30; trailing twelve months 21.2% above the closed year"
+  ],
+  "summary": {
+   "name": "Celsius Holdings, Inc.",
+   "price": 27.4,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 3047274000,
+   "shares": {
+    "inUse": 256933000,
+    "source": "sec",
+    "impliedDeviation": 0.0154
+   },
+   "debt": {
+    "financial": 674850000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 631234000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0114,
+    "interestPoints": 0.0162,
+    "interestIncomePoints": 0.0047,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0001
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "fail",
+    "marginRecord": "fail"
+   },
+   "regimes": [
+    "leveraged",
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 68,
+    "grade": "C",
+    "blocks": {
+     "data": 82,
+     "fit": 50,
+     "robustness": 70
+    }
+   },
+   "autofillBaseValue": 93.25
+  }
+ },
+ {
+  "ticker": "SPGI",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Shifting perimeter: disposal of $1.55B to 2025-12-31"
+  ],
+  "summary": {
+   "name": "S&P Global Inc.",
+   "price": 402.73,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 16121000000,
+   "shares": {
+    "inUse": 297600000,
+    "source": "sec",
+    "impliedDeviation": 0.0095
+   },
+   "debt": {
+    "financial": 13318000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 1810000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0141,
+    "interestPoints": 0.0152,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.001
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "shiftingPerimeter"
+   ],
+   "reliability": {
+    "score": 82,
+    "grade": "B",
+    "blocks": {
+     "data": 87,
+     "fit": 70,
+     "robustness": 92
+    }
+   },
+   "autofillBaseValue": 293.39
+  }
+ },
+ {
+  "ticker": "F",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Leveraged: debt 29.1× EBITDA"
+  ],
+  "summary": {
+   "name": "Ford Motor Company",
+   "price": 12.25,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 187973000000,
+   "shares": {
+    "inUse": 4071000000,
+    "source": "sec",
+    "impliedDeviation": 0.0209
+   },
+   "debt": {
+    "financial": 106034000000,
+    "source": "yahoo"
+   },
+   "cash": {
+    "value": 30488000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0027,
+    "interestPoints": 0.0061,
+    "interestIncomePoints": 0.0058,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "statutory",
+    "marginShift": -0.0024
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 74,
+    "grade": "B",
+    "blocks": {
+     "data": 74,
+     "fit": 70,
+     "robustness": 79
+    }
+   },
+   "autofillBaseValue": 16.92
+  }
+ },
+ {
+  "ticker": "XOM",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 69.8% of value in the terminal"
+  ],
+  "summary": {
+   "name": "ExxonMobil Holdings Corporation",
+   "price": 168.5,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 361060000000,
+   "shares": {
+    "inUse": 4111911960,
+    "source": "sec",
+    "impliedDeviation": 0
+   },
+   "debt": {
+    "financial": 42368000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 10588000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0,
+    "interestPoints": 0.0016,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0016
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy"
+   ],
+   "reliability": {
+    "score": 77,
+    "grade": "B",
+    "blocks": {
+     "data": 77,
+     "fit": 95,
+     "robustness": 50
+    }
+   },
+   "autofillBaseValue": 151.93
+  }
+ },
+ {
+  "ticker": "SBUX",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Leveraged: debt 2.8× EBITDA"
+  ],
+  "summary": {
+   "name": "Starbucks Corporation",
+   "price": 93.21,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 38338300000,
+   "shares": {
+    "inUse": 1143800000,
+    "source": "sec",
+    "impliedDeviation": 0.0033
+   },
+   "debt": {
+    "financial": 13278600000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 3610300000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0095,
+    "interestPoints": 0.0094,
+    "interestIncomePoints": 0.002,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0021
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 78,
+    "grade": "B",
+    "blocks": {
+     "data": 77,
+     "fit": 80,
+     "robustness": 76
+    }
+   },
+   "autofillBaseValue": 46.37
+  }
+ },
+ {
+  "ticker": "CLX",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 70.4% of value in the terminal",
+   "Regime Leveraged: debt 3.5× EBITDA"
+  ],
+  "summary": {
+   "name": "The Clorox Company",
+   "price": 83.44,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "fiscal_year",
+   "revenueBase": 6720000000,
+   "shares": {
+    "inUse": 121787000,
+    "source": "sec",
+    "impliedDeviation": 0.0071
+   },
+   "debt": {
+    "financial": 4078000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 1187000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0,
+    "interestPoints": 0.0147,
+    "interestIncomePoints": 0.0009,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0138
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy",
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 69,
+    "grade": "C",
+    "blocks": {
+     "data": 77,
+     "fit": 80,
+     "robustness": 40
+    }
+   },
+   "autofillBaseValue": 97.51
+  }
+ },
+ {
+  "ticker": "DE",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Deere & Company",
+   "price": 652.58,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 46882000000,
+   "shares": {
+    "inUse": 270700000,
+    "source": "sec",
+    "impliedDeviation": 0.004
+   },
+   "debt": {
+    "financial": 17115000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 8928000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0035,
+    "interestPoints": 0.0466,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.0431
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 84,
+    "grade": "B",
+    "blocks": {
+     "data": 74,
+     "fit": 95,
+     "robustness": 83
+    }
+   },
+   "autofillBaseValue": 242.15
+  }
+ },
+ {
+  "ticker": "CAT",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Leveraged: debt 2.5× EBITDA"
+  ],
+  "summary": {
+   "name": "Caterpillar Inc.",
+   "price": 796.18,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 74729000000,
+   "shares": {
+    "inUse": 462500000,
+    "source": "sec",
+    "impliedDeviation": 0.0061
+   },
+   "debt": {
+    "financial": 36210000000,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 6713000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0034,
+    "interestPoints": 0.0054,
+    "interestIncomePoints": 0,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": 0.002
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 91,
+    "grade": "A",
+    "blocks": {
+     "data": 94,
+     "fit": 80,
+     "robustness": 100
+    }
+   },
+   "autofillBaseValue": 193.63
+  }
+ },
+ {
+  "ticker": "CMG",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Chipotle Mexican Grill, Inc.",
+   "price": 32.68,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 12423759000,
+   "shares": {
+    "inUse": 1279064000,
+    "source": "sec",
+    "impliedDeviation": 0.0108
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 677857000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.008,
+    "interestPoints": 0,
+    "interestIncomePoints": 0.003,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.011
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 92,
+    "grade": "A",
+    "blocks": {
+     "data": 94,
+     "fit": 95,
+     "robustness": 86
+    }
+   },
+   "autofillBaseValue": 27.86
+  }
+ },
+ {
+  "ticker": "ONON",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Share count from implied, not a filing",
+   "No depositary ratio fits: one share per unit assumed"
+  ],
+  "summary": {
+   "name": "On Holding AG",
+   "price": 34.04,
+   "currency": {
+    "statements": "CHF",
+    "listing": "USD",
+    "adrRatio": 1
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 3874258423,
+   "shares": {
+    "inUse": 334214708,
+    "source": "implied",
+    "impliedDeviation": -0.1117
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 1297113846,
+    "source": "yahoo"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0207,
+    "interestPoints": 0,
+    "interestIncomePoints": 0.0098,
+    "leasePrincipalPoints": 0.0232,
+    "taxRateSource": "effective",
+    "marginShift": -0.0537
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 71,
+    "grade": "B",
+    "blocks": {
+     "data": 53,
+     "fit": 75,
+     "robustness": 95
+    }
+   },
+   "autofillBaseValue": 21.61
+  }
+ },
+ {
+  "ticker": "NVO",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Capex peak: capex 29.2% of revenue; against 16.7% in earlier years; 75.1% of value in the terminal",
+   "Share count from implied, not a filing",
+   "Converted from DKK"
+  ],
+  "summary": {
+   "name": "Novo Nordisk A/S",
+   "price": 38.18,
+   "currency": {
+    "statements": "DKK",
+    "listing": "USD",
+    "adrRatio": 1
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 49454458442,
+   "shares": {
+    "inUse": 4414355109,
+    "source": "implied",
+    "impliedDeviation": -0.2435
+   },
+   "debt": {
+    "financial": 16769248432,
+    "source": "yahoo"
+   },
+   "cash": {
+    "value": 4047558088,
+    "source": "yahoo"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0044,
+    "interestPoints": 0.0223,
+    "interestIncomePoints": 0.0277,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0097
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "capexPeak"
+   ],
+   "reliability": {
+    "score": 52,
+    "grade": "D",
+    "blocks": {
+     "data": 53,
+     "fit": 60,
+     "robustness": 40
+    }
+   },
+   "autofillBaseValue": 113.36
+  }
+ },
+ {
+  "ticker": "TSM",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Converted from TWD"
+  ],
+  "summary": {
+   "name": "Taiwan Semiconductor Manufacturing Company Limited",
+   "price": 457.99,
+   "currency": {
+    "statements": "TWD",
+    "listing": "USD",
+    "adrRatio": 5
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 139148039838,
+   "shares": {
+    "inUse": 5186504904,
+    "source": "sec",
+    "impliedDeviation": 0
+   },
+   "debt": {
+    "financial": 28079153851,
+    "source": "yahoo"
+   },
+   "cash": {
+    "value": 98021683137,
+    "source": "yahoo"
+   },
+   "adjustments": {
+    "sbcPoints": 0,
+    "interestPoints": 0.0022,
+    "interestIncomePoints": 0.0214,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0192
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 74,
+    "grade": "B",
+    "blocks": {
+     "data": 59,
+     "fit": 85,
+     "robustness": 84
+    }
+   },
+   "autofillBaseValue": 178.03
+  }
+ },
+ {
+  "ticker": "ASML",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Converted from EUR"
+  ],
+  "summary": {
+   "name": "ASML Holding N.V.",
+   "price": 1769.79,
+   "currency": {
+    "statements": "EUR",
+    "listing": "USD",
+    "adrRatio": 1
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 39653719781,
+   "shares": {
+    "inUse": 385417665,
+    "source": "sec",
+    "impliedDeviation": 0.0034
+   },
+   "debt": {
+    "financial": 4928611370,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 14953305203,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0057,
+    "interestPoints": 0.0028,
+    "interestIncomePoints": 0.0052,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.0082
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "pass",
+    "totalDebt": "pass",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 87,
+    "grade": "A",
+    "blocks": {
+     "data": 85,
+     "fit": 85,
+     "robustness": 95
+    }
+   },
+   "autofillBaseValue": 581.61
+  }
+ },
+ {
+  "ticker": "HLN",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Regime Terminal-heavy: 71.2% of value in the terminal",
+   "Regime Leveraged: debt 2.7× EBITDA",
+   "Converted from GBP"
+  ],
+  "summary": {
+   "name": "Haleon plc",
+   "price": 9.26,
+   "currency": {
+    "statements": "GBP",
+    "listing": "USD",
+    "adrRatio": 2
+   },
+   "revenueBasis": "fiscal_year",
+   "revenueBase": 14604048694,
+   "shares": {
+    "inUse": 4476176824,
+    "source": "sec",
+    "impliedDeviation": 0.0179
+   },
+   "debt": {
+    "financial": 10146040357,
+    "source": "yahoo"
+   },
+   "cash": {
+    "value": 1668277548,
+    "source": "yahoo"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0078,
+    "interestPoints": 0.0246,
+    "interestIncomePoints": 0.004,
+    "leasePrincipalPoints": 0.0054,
+    "taxRateSource": "effective",
+    "marginShift": 0.0073
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [
+    "terminalHeavy",
+    "leveraged"
+   ],
+   "reliability": {
+    "score": 64,
+    "grade": "C",
+    "blocks": {
+     "data": 59,
+     "fit": 80,
+     "robustness": 49
+    }
+   },
+   "autofillBaseValue": 14.7
+  }
+ },
+ {
+  "ticker": "SAP",
+  "verdict": "warn",
+  "failures": [],
+  "warnings": [
+   "Share count from implied, not a filing",
+   "Converted from EUR"
+  ],
+  "summary": {
+   "name": "SAP SE",
+   "price": 212.4,
+   "currency": {
+    "statements": "EUR",
+    "listing": "USD",
+    "adrRatio": 1
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 42870130057,
+   "shares": {
+    "inUse": 1154204281,
+    "source": "implied",
+    "impliedDeviation": 0.0644
+   },
+   "debt": {
+    "financial": 4707598918,
+    "source": "yahoo"
+   },
+   "cash": {
+    "value": 10968683029,
+    "source": "yahoo"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0444,
+    "interestPoints": 0.0243,
+    "interestIncomePoints": 0.0287,
+    "leasePrincipalPoints": 0.0081,
+    "taxRateSource": "effective",
+    "marginShift": -0.0568
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 78,
+    "grade": "B",
+    "blocks": {
+     "data": 53,
+     "fit": 95,
+     "robustness": 94
+    }
+   },
+   "autofillBaseValue": 83.1
+  }
+ },
+ {
+  "ticker": "SHOP",
+  "verdict": "pass",
+  "failures": [],
+  "warnings": [],
+  "summary": {
+   "name": "Shopify Inc.",
+   "price": 164.56,
+   "currency": {
+    "statements": "USD",
+    "listing": "USD",
+    "adrRatio": null
+   },
+   "revenueBasis": "ttm",
+   "revenueBase": 13269000000,
+   "shares": {
+    "inUse": 1297940958,
+    "source": "sec",
+    "impliedDeviation": 0.0088
+   },
+   "debt": {
+    "financial": 0,
+    "source": "sec"
+   },
+   "cash": {
+    "value": 4947000000,
+    "source": "sec"
+   },
+   "adjustments": {
+    "sbcPoints": 0.0363,
+    "interestPoints": 0,
+    "interestIncomePoints": 0.0187,
+    "leasePrincipalPoints": 0,
+    "taxRateSource": "effective",
+    "marginShift": -0.055
+   },
+   "checks": {
+    "marketCap": "pass",
+    "fcfQuarters": "unverifiable",
+    "totalDebt": "unverifiable",
+    "revenuePerimeter": "pass",
+    "marginRecord": "pass"
+   },
+   "regimes": [],
+   "reliability": {
+    "score": 81,
+    "grade": "B",
+    "blocks": {
+     "data": 74,
+     "fit": 75,
+     "robustness": 100
+    }
+   },
+   "autofillBaseValue": 17.8
+  }
+ }
+]
