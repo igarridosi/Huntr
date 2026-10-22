@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { readStartPage, START_PAGE_COOKIE } from "@/lib/settings/preferences";
+import { forwardToCallback } from "@/lib/auth-callback";
 import { NextResponse, type NextRequest } from "next/server";
 
 /**
@@ -7,6 +8,12 @@ import { NextResponse, type NextRequest } from "next/server";
  * Refreshes the auth session on every request and protects routes.
  */
 export async function updateSession(request: NextRequest) {
+  // A confirmation link Supabase sent to the Site URL rather than to the
+  // callback (the callback missing from its allow-list): forward it there,
+  // before anything else, so the code is exchanged and leaves the URL.
+  const callback = forwardToCallback(request.nextUrl);
+  if (callback) return NextResponse.redirect(callback);
+
   let supabaseResponse = NextResponse.next({
     request,
   });
