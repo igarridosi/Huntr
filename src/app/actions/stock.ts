@@ -66,16 +66,6 @@ export async function fetchMarketIndices(): Promise<MarketIndexQuote[]> {
   return dataService.getMarketIndices();
 }
 
-const VALID_WINDOWS = new Set(["1D", "1W", "1M", "YTD", "1Y", "ALL"]);
-
-export async function fetchBatchPeriodPerformance(
-  tickers: string[],
-  window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL"
-): Promise<Record<string, number>> {
-  if (!VALID_WINDOWS.has(window)) throw new Error(`Invalid window: ${window}`);
-  return dataService.getBatchPeriodPerformance(sanitizeTickers(tickers), window);
-}
-
 const VALID_HISTORY_WINDOWS = new Set(["1W", "1M", "YTD", "1Y", "ALL"]);
 
 export async function fetchBatchDailyHistory(

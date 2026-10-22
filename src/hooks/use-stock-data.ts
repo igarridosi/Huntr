@@ -20,7 +20,6 @@ import {
   fetchStockQuote,
   fetchFullStockData,
   fetchAllQuotes,
-  fetchBatchPeriodPerformance,
   fetchBatchDailyHistory,
   fetchBatchIntradayTrend,
   fetchBatchEarningsInsights,
@@ -153,6 +152,22 @@ async function inChunks<T>(
   return Object.assign({}, ...parts);
 }
 
+/**
+ * Through a route handler, not a Server Action, like buyback strength below:
+ * the browser runs actions one at a time, and a window over the whole
+ * universe held search and the rest of the page behind it.
+ */
+async function fetchPeriodPerformance(
+  tickers: string[],
+  window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL"
+): Promise<Record<string, number>> {
+  const res = await fetch(
+    `/api/market/period-performance?window=${window}&tickers=${encodeURIComponent(tickers.join(","))}`
+  );
+  if (!res.ok) throw new Error(`Period performance failed: ${res.status}`);
+  return res.json();
+}
+
 export function useBatchPeriodPerformance(
   tickers: string[],
   window: "1D" | "1W" | "1M" | "YTD" | "1Y" | "ALL",
@@ -165,7 +180,7 @@ export function useBatchPeriodPerformance(
 
   return useQuery<Record<string, number>>({
     queryKey: QUERY_KEYS.STOCK_PERFORMANCE(window, tickersKey),
-    queryFn: () => inChunks(normalized, (chunk) => fetchBatchPeriodPerformance(chunk, window)),
+    queryFn: () => inChunks(normalized, (chunk) => fetchPeriodPerformance(chunk, window)),
     staleTime: STALE_TIMES.QUOTE,
     enabled: enabled && normalized.length > 0,
   });
