@@ -23,7 +23,6 @@ import {
   fetchBatchPeriodPerformance,
   fetchBatchDailyHistory,
   fetchBatchIntradayTrend,
-  fetchBatchBuybackStrength,
   fetchBatchEarningsInsights,
   fetchMarketIndices,
   fetchAllProfiles,
@@ -207,6 +206,17 @@ export function useBatchIntradayTrend(
   });
 }
 
+/**
+ * Through a route handler, not a Server Action: the browser runs actions one
+ * at a time, and a cold load of this one (a filing per company) held search
+ * and everything else on the page behind it. See the route for more.
+ */
+async function fetchBuybackStrength(tickers: string[]): Promise<Record<string, number>> {
+  const res = await fetch(`/api/market/buyback-strength?tickers=${encodeURIComponent(tickers.join(","))}`);
+  if (!res.ok) throw new Error(`Buyback strength failed: ${res.status}`);
+  return res.json();
+}
+
 export function useBatchBuybackStrength(
   tickers: string[],
   enabled: boolean = true
@@ -218,7 +228,7 @@ export function useBatchBuybackStrength(
 
   return useQuery<Record<string, number>>({
     queryKey: QUERY_KEYS.STOCK_BUYBACK(tickersKey),
-    queryFn: () => inChunks(normalized, fetchBatchBuybackStrength),
+    queryFn: () => inChunks(normalized, fetchBuybackStrength),
     staleTime: STALE_TIMES.STATIC,
     enabled: enabled && normalized.length > 0,
   });

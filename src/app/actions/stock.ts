@@ -93,12 +93,6 @@ export async function fetchBatchIntradayTrend(
   return dataService.getBatchIntradayTrend(sanitizeTickers(tickers));
 }
 
-export async function fetchBatchBuybackStrength(
-  tickers: string[]
-): Promise<Record<string, number>> {
-  return dataService.getBatchBuybackStrength(sanitizeTickers(tickers));
-}
-
 export async function fetchBatchEarningsInsights(
   tickers: string[]
 ): Promise<Record<string, EarningsInsight>> {
