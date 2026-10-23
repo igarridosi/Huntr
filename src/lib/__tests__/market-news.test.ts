@@ -100,6 +100,8 @@ describe("isMarketStory", () => {
     expect(isMarketStory(item({ title: "U.S. Stock Futures Fall on AI Trade Concerns" }))).toBe(true);
     expect(isMarketStory(item({ title: "3 Nasdaq Stocks to Buy Now" }))).toBe(false);
     expect(isMarketStory(item({ title: "Is Kroger Stock Increasing Your Market Risk?" }))).toBe(false);
+    expect(isMarketStory(item({ title: "Nasdaq Confirms Yimutian's Return to Compliance" }))).toBe(false);
+    expect(isMarketStory(item({ title: "XYZ receives notice from Nasdaq regarding listing requirements" }))).toBe(false);
   });
 });
 

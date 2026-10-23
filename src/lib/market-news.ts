@@ -148,8 +148,13 @@ const MARKET_RE = /\b(dow|s&p|nasdaq|stock market|wall street|stock futures|mark
 /** …and not a stock pick, a comparison or a teaser, which name companies without explaining a move. */
 const PICK_RE =
   /\b(to buy|buy now|should you|is it time|top \d+|best stocks?|\d+ stocks?|which stock|vs\.?|versus|little-known|best-kept|millionaire|could soar|forever|not \w+\.)(?=\W|$)/i;
-/** Wire data feeds ("BC-Gold Futures"), press releases and market-research filler. */
-const JUNK_RE = /^BC-|\bmarket (?:size|report|forecast)|\bforecast to 20\d\d\b|\bCAGR\b/i;
+/**
+ * Wire data feeds ("BC-Gold Futures"), market-research filler, and exchange
+ * notices ("Nasdaq confirms X's return to compliance"), which name an index's
+ * exchange without being about the market.
+ */
+const JUNK_RE =
+  /^BC-|\bmarket (?:size|report|forecast)|\bforecast to 20\d\d\b|\bCAGR\b|\bcompliance\b|\blisting (?:rule|requirement|standard)s?\b|\bdelisting\b|\bnotice from (?:nasdaq|nyse)\b/i;
 /** A headline that reports a move: what explains a card's percentage. */
 const MOVE_RE =
   /\b(rises?|rising|rose|falls?|falling|fell|jumps?|jumped|soars?|soared|sinks?|sank|slides?|slid|surges?|surged|drops?|dropped|climbs?|climbed|tumbles?|tumbled|plunges?|plunged|rall(?:y|ies|ied)|gains?|gained|slumps?|slumped|rebounds?|rebounded|skids?|spikes?|spiked|dips?|dipped|pops?|popped|sell-?off|shares? (?:up|down))\b|\d+(?:\.\d+)?%/i;
