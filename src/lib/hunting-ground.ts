@@ -19,6 +19,11 @@
  * Left out, and said so: banks, insurers and property, where free cash flow
  * does not measure the business; and companies without a quality score or a
  * comparable yield (a foreign listing reporting in another currency).
+ *
+ * One company, one point: share classes (GOOGL and GOOG, FOXA and FOX) are
+ * the same business, and two bubbles on one spot read as a glitch. The
+ * class with the larger market cap stands for the company; the others are
+ * named on its card.
  */
 
 export const HG_RULES = {
@@ -63,6 +68,8 @@ export interface HgPoint extends HgCompany, HgMetrics {
   quality: number;
   fcfYield: number;
   zone: HgZone;
+  /** The company's other share classes, folded into this point. */
+  otherClasses: string[];
 }
 
 export interface HuntingGround {
@@ -74,6 +81,22 @@ export interface HuntingGround {
 }
 
 const FINANCIAL_SECTOR = /financ|bank|insur|real estate|reit/i;
+
+/**
+ * A company's name without its share class or legal suffix, to tell when two
+ * tickers are one business: "Alphabet Inc. (Class A)" and "(Class C)" both
+ * read "alphabet"; "Fox Corporation - Class A Common Stock", "fox".
+ */
+export function companyKey(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b(class|series)\s+[a-z0-9]\b.*$/, " ")
+    .replace(/[-–—,.&']/g, " ")
+    .replace(/\b(common stock|ordinary shares|depositary shares|shares|inc|corp|corporation|plc|ltd|limited|holdings|co|company|the|n v|nv|s a|sa|ag)\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export function zoneOf(quality: number, fcfYield: number): HgZone {
   const good = quality >= HG_RULES.QUALITY_LINE;
@@ -101,6 +124,8 @@ export function buildHuntingGround(companies: HgCompany[], metrics: Record<strin
   let financials = 0;
   let unscored = 0;
   const points: HgPoint[] = [];
+  // Largest first, so the first class seen of a company is the one kept.
+  const byCompany = new Map<string, HgPoint>();
   for (const company of largest) {
     if (company.sector && FINANCIAL_SECTOR.test(company.sector)) {
       financials++;
@@ -111,7 +136,13 @@ export function buildHuntingGround(companies: HgCompany[], metrics: Record<strin
       unscored++;
       continue;
     }
-    points.push({
+    const key = companyKey(company.name) || company.ticker;
+    const kept = byCompany.get(key);
+    if (kept) {
+      kept.otherClasses.push(company.ticker);
+      continue;
+    }
+    const point: HgPoint = {
       ...company,
       quality: m.quality,
       fcfYield: m.fcfYield,
@@ -120,7 +151,10 @@ export function buildHuntingGround(companies: HgCompany[], metrics: Record<strin
       growth: m.growth ?? null,
       cashGeneration: m.cashGeneration ?? null,
       zone: zoneOf(m.quality, m.fcfYield),
-    });
+      otherClasses: [],
+    };
+    byCompany.set(key, point);
+    points.push(point);
   }
   return { points, financials, unscored };
 }

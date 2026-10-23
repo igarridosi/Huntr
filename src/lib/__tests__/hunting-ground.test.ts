@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHuntingGround, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
+import { buildHuntingGround, companyKey, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
 
 const B = 1_000_000_000;
 const company = (ticker: string, over: Partial<HgCompany> = {}): HgCompany => ({
@@ -67,5 +67,24 @@ describe("rankZone", () => {
     );
     expect(rankZone(points, "prime").map((p) => p.ticker)).toEqual(["B", "A"]);
     expect(rankZone(points, "avoid").map((p) => p.ticker)).toEqual(["C", "D"]);
+  });
+});
+
+describe("share classes", () => {
+  it("reads two classes of one company as one", () => {
+    expect(companyKey("Alphabet Inc. (Class A)")).toBe(companyKey("Alphabet Inc. (Class C)"));
+    expect(companyKey("Fox Corporation - Class A Common Stock")).toBe(companyKey("Fox Corporation - Class B Common Stock"));
+    expect(companyKey("Fox Corporation")).not.toBe(companyKey("Fox Factory Holding Corp."));
+  });
+
+  it("keeps the larger class and names the other on it", () => {
+    const { points } = buildHuntingGround(
+      [
+        company("GOOG", { name: "Alphabet Inc. (Class C)", marketCap: 1900 * B }),
+        company("GOOGL", { name: "Alphabet Inc. (Class A)", marketCap: 2000 * B }),
+      ],
+      { GOOG: { quality: 81, fcfYield: 0.0058 }, GOOGL: { quality: 81, fcfYield: 0.0057 } }
+    );
+    expect(points.map((p) => [p.ticker, p.otherClasses])).toEqual([["GOOGL", ["GOOG"]]]);
   });
 });

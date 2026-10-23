@@ -2,10 +2,12 @@
 
 import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Newspaper, Star, Target, X } from "lucide-react";
+import { ArrowUpRight, LayoutGrid, Newspaper, ScatterChart, Star, Target, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
+import { useStoredChoice } from "@/components/insights/use-stored-choice";
+import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ROUTES } from "@/lib/constants";
 import { cn, formatPercent } from "@/lib/utils";
 import { HG_RULES, HG_ZONES, rankZone, yPosition, type HgPoint, type HgZone, type HuntingGround } from "@/lib/hunting-ground";
@@ -47,7 +49,18 @@ const signed = (v: number, digits = 1) => {
  * its card; the sector chips dim the rest rather than remove it, so nothing
  * jumps. A dashed ring marks a company with a story in the news today. On a
  * phone, where a scatter cannot be read, each zone is a short list.
+ *
+ * Two views, the reader's choice (kept per browser): the map, and a simple
+ * one with the same zones and data as four ranked lists laid out where the
+ * zones sit on the map.
  */
+type HgView = "map" | "simple";
+const VIEWS: readonly HgView[] = ["map", "simple"];
+const VIEW_ITEMS = [
+  { key: "map", label: "Map", icon: <ScatterChart className="h-3.5 w-3.5" /> },
+  { key: "simple", label: "Simple", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+] as const;
+
 export function HuntingGroundCard({
   ground,
   loading,
@@ -66,6 +79,7 @@ export function HuntingGroundCard({
   className?: string;
 }) {
   const [sector, setSector] = useState<string | null>(null);
+  const [view, setView] = useStoredChoice<HgView>("huntr:hunting-view", VIEWS, "map");
   const points = useMemo(() => ground?.points ?? [], [ground]);
 
   const sectors = useMemo(() => {
@@ -89,7 +103,9 @@ export function HuntingGroundCard({
           icon={Target}
           title="The Hunting Ground"
           subtitle="Where the largest companies sit on quality and price"
-        />
+        >
+          <SegmentedTabs items={VIEW_ITEMS} value={view} onChange={setView} ariaLabel="Hunting Ground view" size="sm" />
+        </SectionHeader>
 
         {sectors.length > 0 ? (
           <div className="mt-4 flex gap-1.5 overflow-x-auto pb-0.5" style={{ scrollbarWidth: "none" }} role="radiogroup" aria-label="Sector">
@@ -118,25 +134,35 @@ export function HuntingGroundCard({
         ) : points.length === 0 ? (
           <p className="mt-6 text-[13px] text-mist">No company has both a quality score and a free-cash-flow yield yet.</p>
         ) : (
-          <>
-            <div className="mt-3 hidden min-h-[380px] flex-1 sm:block">
-              <Scatter points={points} sector={sector} counts={counts} newsTickers={newsTickers} onWatch={onWatch} isWatched={isWatched} />
-            </div>
-            <ZoneLists points={points} sector={sector} className="mt-3 sm:hidden" />
-          </>
+          view === "simple" ? (
+            <ZoneGrid points={points} sector={sector} counts={counts} newsTickers={newsTickers} className="mt-3 flex-1" />
+          ) : (
+            <>
+              <div className="mt-3 hidden min-h-[380px] flex-1 sm:block">
+                <Scatter points={points} sector={sector} counts={counts} newsTickers={newsTickers} onWatch={onWatch} isWatched={isWatched} />
+              </div>
+              <ZoneLists points={points} sector={sector} className="mt-3 sm:hidden" />
+            </>
+          )
         )}
 
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-mist">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-bullish/80" /> Up today
-          </span>
+          {view === "map" ? (
+            <>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-bullish/80" /> Up today
+              </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-bearish/80" /> Down today
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full border border-dashed border-sunset-orange" /> In the news
           </span>
-          <span>Size: market cap</span>
+              <span>Size: market cap</span>
+            </>
+          ) : (
+            <span>Same zones as the map: across is quality, up is cheaper. Best first in each.</span>
+          )}
           {left > 0 ? (
             <span className="ml-auto text-mist/70" title="Free cash flow does not measure banks, insurers or property; a company needs a quality score and a comparable yield to be placed.">
               {points.length} placed · {left} left out
@@ -189,7 +215,8 @@ function Scatter({
   const x = (q: number) => PAD.left + ((Math.max(Q_MIN, q) - Q_MIN) / (100 - Q_MIN)) * plotW;
   const y = (v: number) => PAD.top + (1 - yPosition(v)) * plotH;
   const maxCap = Math.max(...points.map((p) => p.marketCap));
-  const radius = (cap: number) => 3 + 12 * Math.sqrt(cap / maxCap);
+  // 5 to 20 px: big enough to see and to hit.
+  const radius = (cap: number) => 5 + 15 * Math.sqrt(cap / maxCap);
 
   // Biggest first, so the small ones sit on top and stay reachable.
   const drawn = useMemo(() => [...points].sort((a, b) => b.marketCap - a.marketCap), [points]);
@@ -247,15 +274,18 @@ function Scatter({
                 onPointerEnter={() => !dim && setHover(p.ticker)}
                 onClick={() => !dim && setPinned((t) => (t === p.ticker ? null : p.ticker))}
               >
-                <circle cx={cx} cy={cy} r={r} fill={fill.color} fillOpacity={fill.opacity} stroke="var(--color-wolf-surface)" strokeWidth={1} />
-                {newsTickers.has(p.ticker) ? (
-                  <circle cx={cx} cy={cy} r={r + 3.5} fill="none" stroke="var(--color-sunset-orange)" strokeWidth={1.25} strokeDasharray="3 2.5" />
-                ) : null}
-                {r >= 10 ? (
-                  <text x={cx} y={cy + 3} textAnchor="middle" className="pointer-events-none fill-snow-peak font-mono text-[8.5px] font-semibold">
-                    {p.ticker}
-                  </text>
-                ) : null}
+                {/* A wider, invisible target than the bubble itself. */}
+                <circle cx={cx} cy={cy} r={r + 4} fill="transparent" />
+                {/* Bubble, ring and label move as one, scaled about their shared centre. */}
+                <g className="hg-bubble-body">
+                  <circle cx={cx} cy={cy} r={r} fill={fill.color} fillOpacity={fill.opacity} stroke="var(--color-wolf-surface)" strokeWidth={1} />
+                  {newsTickers.has(p.ticker) ? <NewsRing cx={cx} cy={cy} r={r + 4} /> : null}
+                  {r >= 12 ? (
+                    <text x={cx} y={cy + 3} textAnchor="middle" className="pointer-events-none fill-snow-peak font-mono text-[9px] font-semibold">
+                      {p.ticker}
+                    </text>
+                  ) : null}
+                </g>
               </g>
             );
           })}
@@ -320,6 +350,28 @@ function Scatter({
   );
 }
 
+/**
+ * The "in the news" ring: dashes that divide the circle evenly, so no gap
+ * falls where a dash should and the ring reads as centred on its bubble.
+ */
+function NewsRing({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+  const circumference = 2 * Math.PI * r;
+  const dashes = Math.max(8, Math.round(circumference / 6));
+  const step = circumference / dashes;
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={r}
+      fill="none"
+      stroke="var(--color-sunset-orange)"
+      strokeWidth={1.5}
+      strokeDasharray={`${(step * 0.6).toFixed(2)} ${(step * 0.4).toFixed(2)}`}
+      className="pointer-events-none"
+    />
+  );
+}
+
 /** The company under the pointer (or tapped): what it is, why it sits there, the way to its page. */
 function CompanyCard({
   point,
@@ -356,7 +408,10 @@ function CompanyCard({
         <TickerLogo ticker={point.ticker} src={point.logo} className="h-8 w-8" imageClassName="rounded-lg" fallbackClassName="rounded-lg text-[9px]" />
         <div className="min-w-0 flex-1">
           <p className="text-[13.5px] font-semibold leading-tight text-snow-peak">{point.ticker}</p>
-          <p className="truncate text-[11px] text-mist">{point.name}</p>
+          <p className="truncate text-[11px] text-mist">
+            {point.name}
+            {point.otherClasses.length > 0 ? ` · also ${point.otherClasses.join(", ")}` : ""}
+          </p>
         </div>
         <span className={cn("font-mono text-[12.5px] font-semibold tabular-nums", point.change >= 0 ? "text-bullish" : "text-bearish")}>
           {signed(point.change)}
@@ -470,6 +525,88 @@ function ZoneLists({ points, sector, className }: { points: HgPoint[]; sector: s
                 ))}
               </ul>
             )}
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── The simple view ────────────────────────────────────────────────────────
+
+/** Where each zone sits on the map, so the simple view keeps its geography. */
+const GRID_ORDER: HgZone[] = ["trap", "prime", "avoid", "paying-up"];
+const GRID_ROWS = 7;
+
+/**
+ * The same zones and data as the map, as four ranked lists in the map's
+ * places: cheap on top, quality on the right. Each shows its count, its
+ * best seven (furthest into its corner) and how many more.
+ */
+function ZoneGrid({
+  points,
+  sector,
+  counts,
+  newsTickers,
+  className,
+}: {
+  points: HgPoint[];
+  sector: string | null;
+  counts: Record<HgZone, number>;
+  newsTickers: Set<string>;
+  className?: string;
+}) {
+  const shown = sector ? points.filter((p) => p.sector === sector) : points;
+  return (
+    <div className={cn("grid grid-cols-1 gap-2.5 sm:grid-cols-2", className)}>
+      {GRID_ORDER.map((zone) => {
+        const ranked = rankZone(shown, zone);
+        return (
+          <section
+            key={zone}
+            className="flex flex-col rounded-xl p-3 ring-1 ring-inset ring-wolf-border/40"
+            style={{ background: `color-mix(in srgb, ${ZONE_FILL[zone]} ${zone === "prime" ? 9 : 4}%, transparent)` }}
+          >
+            <header className="flex items-baseline justify-between gap-2">
+              <p className="flex items-baseline gap-1.5">
+                <span className="text-[13px] font-semibold" style={{ color: ZONE_FILL[zone] }}>
+                  {HG_ZONES[zone].label}
+                </span>
+                <span className="font-mono text-[11.5px] text-mist">{counts[zone]}</span>
+              </p>
+              <span className="truncate text-[11px] text-mist">{HG_ZONES[zone].line}</span>
+            </header>
+            {ranked.length === 0 ? (
+              <p className="mt-3 text-[11.5px] text-mist/70">None right now.</p>
+            ) : (
+              <ol className="mt-2 flex-1 space-y-0.5">
+                {ranked.slice(0, GRID_ROWS).map((p) => (
+                  <li key={p.ticker}>
+                    <Link
+                      href={ROUTES.SYMBOL(p.ticker)}
+                      className="grid grid-cols-[1.5rem_3.5rem_minmax(0,1fr)_3.25rem] items-center gap-2 rounded-lg px-1.5 py-1 transition-colors duration-150 hover:bg-snow-peak/[0.05]"
+                    >
+                      <TickerLogo ticker={p.ticker} src={p.logo} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[8px]" />
+                      <span className="flex items-center gap-1 text-[12px] font-semibold text-snow-peak">
+                        {p.ticker}
+                        {newsTickers.has(p.ticker) ? <Newspaper className="h-3 w-3 text-sunset-orange" aria-label="In today's news" /> : null}
+                      </span>
+                      <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-mist">
+                        <span className="shrink-0">Q {p.quality}</span>
+                        <span className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-snow-peak/[0.08]">
+                          <span className="block h-full rounded-full bg-sunset-orange/80" style={{ width: `${p.quality}%` }} />
+                        </span>
+                        <span className="truncate font-mono tabular-nums">FCF {formatPercent(p.fcfYield, 1)}</span>
+                      </span>
+                      <span className={cn("text-right font-mono text-[11.5px] tabular-nums", p.change >= 0 ? "text-bullish" : "text-bearish")}>
+                        {signed(p.change)}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {ranked.length > GRID_ROWS ? <p className="mt-1.5 px-1.5 text-[11px] text-mist/70">+{ranked.length - GRID_ROWS} more</p> : null}
           </section>
         );
       })}

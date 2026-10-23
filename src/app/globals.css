@@ -579,7 +579,7 @@ select optgroup {
 }
 
 /* Hunting Ground bubbles settle in, largest first, a few ms apart. The
- * circles animate, not their group: the group's opacity is the sector
+ * body animates, not the outer group: that group's opacity is the sector
  * filter's, which dims the rest without moving anything. */
 @keyframes hg-bubble-in {
   from { opacity: 0; transform: scale(0.6); }
@@ -590,7 +590,8 @@ select optgroup {
   transition: opacity 200ms var(--ease-entrance);
 }
 
-.hg-bubble > circle {
+/* The bubble's body (circle, news ring, label) scales about its shared centre. */
+.hg-bubble-body {
   transform-box: fill-box;
   transform-origin: center;
   animation: hg-bubble-in 380ms var(--ease-entrance) var(--hg-delay, 0ms) both;
@@ -612,7 +613,7 @@ select optgroup {
   .fg-needle-sweep { animation: none; }
   .hg-sweep { display: none; }
   .fg-history-line { animation: none; }
-  .hg-bubble > circle { animation: insight-row-fade 200ms ease both; }
+  .hg-bubble-body { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }
 }
 
