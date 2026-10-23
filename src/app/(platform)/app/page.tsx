@@ -15,6 +15,9 @@ import {
   useAllProfiles,
   useBatchPeriodPerformance,
   useBatchBuybackStrength,
+  useMarketIndices,
+  useMarketNews,
+  useNewsAssets,
 } from "@/hooks/use-stock-data";
 import { useWatchlist } from "@/hooks/use-watchlist";
 import { useSupabase } from "@/providers/supabase-provider";
@@ -33,6 +36,10 @@ import {
   type BreakoutMode,
   type PerformanceWindow,
 } from "@/components/insights/opportunity-radar";
+import { MarketNews } from "@/components/insights/market-news-row";
+import type { SymbolInfo } from "@/components/insights/news-preview";
+import { useNewsLayout } from "@/components/insights/use-news-layout";
+import { buildMarketCards, buildStockCards, MARKET_NEWS_SYMBOLS, pickNewsCandidates } from "@/lib/market-news";
 import { cn, formatCompactNumber, formatCurrency, formatPercent } from "@/lib/utils";
 import type { StockProfile, StockQuote } from "@/types/stock";
 
@@ -49,6 +56,7 @@ type InsightTab = "sp500" | "trending" | "growth" | "dividend";
  */
 /** Each Radar signal keeps its top twelve, shown four at a time. */
 const RADAR_DEPTH = 12;
+
 
 /** Value + Growth bands; see where the list is built. */
 const GARP_MIN_PE = 5;
@@ -221,6 +229,62 @@ export default function InsightsPage() {
     return { universe, valueGrowth };
   }, [quotes, profileMap]);
 
+  // "Why it's moving", two rows (src/lib/market-news.ts). Markets: the
+  // indices, gold, oil, the 10-year yield and bitcoin, asked for at once.
+  // Stocks: the news behind the day's standout moves among large companies,
+  // picked from the quotes already loaded.
+  // Hidden by the reader: nothing is fetched for it.
+  const [newsLayout, setNewsLayout] = useNewsLayout();
+  const showNews = newsLayout !== "hidden";
+  const { data: marketIndices = [] } = useMarketIndices();
+  const { data: newsAssets = [], isLoading: isAssetsLoading } = useNewsAssets(showNews);
+  const newsCandidates = useMemo(
+    () =>
+      pickNewsCandidates(
+        premiumSignals.universe.map((item) => ({
+          ticker: item.quote.ticker,
+          name: item.profile?.name ?? item.quote.ticker,
+          changePercent: item.dayChangePercent,
+          marketCap: item.quote.market_cap,
+          volumeRatio:
+            item.quote.avg_volume > 0 ? (item.quote.current_volume ?? 0) / item.quote.avg_volume : 0,
+        }))
+      ),
+    [premiumSignals.universe]
+  );
+  const marketNews = useMarketNews(MARKET_NEWS_SYMBOLS, showNews);
+  const stockNews = useMarketNews(
+    newsCandidates.map((candidate) => candidate.symbol),
+    showNews && newsCandidates.length > 0
+  );
+  // What the rows and the preview can say about a symbol a story mentions.
+  const newsSymbols = useMemo(() => {
+    const out: Record<string, SymbolInfo> = {};
+    for (const quote of quotes) {
+      out[quote.ticker] = {
+        name: profileMap[quote.ticker]?.name ?? quote.ticker,
+        change: quote.day_change_percent ?? 0,
+        logo: profileMap[quote.ticker]?.logo_url,
+      };
+    }
+    for (const index of [...marketIndices, ...newsAssets]) {
+      out[index.symbol] = { name: index.label, change: index.change_percent, isIndex: true };
+    }
+    return out;
+  }, [quotes, profileMap, marketIndices, newsAssets]);
+  // Built together so a story is shown once across both rows. Recency is
+  // judged at the moment the headlines were fetched. The Markets row waits
+  // for the assets' moves, which decide its order, rather than reshuffling.
+  const { marketCards, stockCards } = useMemo(() => {
+    const used = new Set<string>();
+    const market =
+      marketNews.data && !isAssetsLoading
+        ? buildMarketCards(marketNews.data, marketNews.dataUpdatedAt, (s) => newsSymbols[s]?.change, used)
+        : [];
+    const stock = stockNews.data ? buildStockCards(newsCandidates, stockNews.data, stockNews.dataUpdatedAt, used) : [];
+    return { marketCards: market, stockCards: stock };
+  }, [marketNews.data, marketNews.dataUpdatedAt, isAssetsLoading, newsSymbols, stockNews.data, stockNews.dataUpdatedAt, newsCandidates]);
+
   const performanceTickers = useMemo(
     () => premiumSignals.universe.map((item) => item.quote.ticker),
     [premiumSignals.universe]
@@ -336,6 +400,13 @@ export default function InsightsPage() {
     buybackStrength,
   ]);
 
+  // One object across renders, so the memoised Radar skips the page's
+  // unrelated re-renders.
+  const radarSignals = useMemo(
+    () => ({ ...rankedSignals, valueGrowth: premiumSignals.valueGrowth }),
+    [rankedSignals, premiumSignals.valueGrowth]
+  );
+
   const startItem =
     insightRows.length === 0 ? 0 : currentPage * PAGE_SIZE + 1;
   const endItem = Math.min((currentPage + 1) * PAGE_SIZE, insightRows.length);
@@ -412,6 +483,17 @@ export default function InsightsPage() {
           </p>
         </div>
       </div>
+
+      <MarketNews
+        marketCards={marketCards}
+        stockCards={stockCards}
+        symbols={newsSymbols}
+        marketLoading={marketNews.isLoading || isAssetsLoading}
+        stockLoading={isLoading || stockNews.isLoading}
+        now={Math.max(marketNews.dataUpdatedAt, stockNews.dataUpdatedAt)}
+        layout={newsLayout}
+        onLayoutChange={setNewsLayout}
+      />
 
       <Card>
         <CardHeader className="pb-3">
@@ -703,7 +785,7 @@ export default function InsightsPage() {
       </Dialog>
 
       <OpportunityRadar
-        signals={{ ...rankedSignals, valueGrowth: premiumSignals.valueGrowth }}
+        signals={radarSignals}
         performanceWindow={performanceWindow}
         onPerformanceWindowChange={setPerformanceWindow}
         breakoutMode={breakoutMode}

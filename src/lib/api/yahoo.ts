@@ -28,6 +28,7 @@ import type {
   EarningsInsight,
 } from "@/types/stock";
 import type { CompanyFinancials } from "@/types/financials";
+import { NEWS_ASSETS, type NewsItem } from "@/lib/market-news";
 import { buildTickerLogoUrl } from "@/lib/logo";
 import {
   getFinancialsFromAlphaVantage,
@@ -174,6 +175,7 @@ const TTL = {
   PERFORMANCE: 30 * 60 * 1000,         // 30 minutes — period performance
   INTRADAY_TREND: 2 * 60 * 1000,       // 2 minutes — watchlist sparkline
   BUYBACK: 24 * 60 * 60 * 1000,        // 24 hours — capital allocation changes slowly
+  NEWS: 15 * 60 * 1000,                // 15 minutes — headlines behind the day's moves
   EARNINGS_INSIGHT: 8 * 60 * 60 * 1000, // 8 hours — estimates/last results
   FINANCIALS: 24 * 60 * 60 * 1000,     // 24 hours — earnings cycle
   FINANCIALS_ALPHA: 12 * 60 * 60 * 1000, // 12 hours — refresh quickly after earnings releases
@@ -862,6 +864,35 @@ export async function getMarketIndices(): Promise<MarketIndexQuote[]> {
     price: 0,
     change_percent: 0,
   }));
+}
+
+/**
+ * Gold, crude oil, the 10-year Treasury yield and bitcoin, for the Markets
+ * row of the Insights news (their moves, beside their headlines). Cached a
+ * minute: the row is read, not traded on.
+ */
+export async function getNewsAssets(): Promise<MarketIndexQuote[]> {
+  const fresh = await resolveWithSWR<MarketIndexQuote[]>({
+    ticker: "market-news-assets",
+    cacheKey: "quotes",
+    ttlMs: 60 * 1000,
+    staleWhileRevalidateMs: 5 * 60 * 1000,
+    fetchFresh: async () => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw: any = await withSuppressedYahooWarnings(() => yahooFinance.quote(NEWS_ASSETS.map((a) => a.symbol)));
+      const rows: Record<string, unknown>[] = Array.isArray(raw) ? raw : [raw];
+      return NEWS_ASSETS.flatMap((asset) => {
+        const row = rows.find((r) => r.symbol === asset.symbol);
+        const price = Number(row?.regularMarketPrice);
+        const change = Number(row?.regularMarketChange);
+        const previous = Number(row?.regularMarketPreviousClose) || price - change;
+        if (!Number.isFinite(price) || !Number.isFinite(change) || !(previous > 0)) return [];
+        return [{ symbol: asset.symbol, label: asset.label, price, change_percent: change / previous } satisfies MarketIndexQuote];
+      });
+    },
+    onRefreshError: (error) => console.error("[Yahoo] News assets failed:", error),
+  });
+  return fresh ?? [];
 }
 
 /**
@@ -2188,4 +2219,53 @@ export async function getFxRate(from: string, to: string): Promise<number | null
     console.error(`[Yahoo] FX ${a}/${b} failed:`, error);
     return null;
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// News (Insights: the headlines behind the day's moves)
+// ─────────────────────────────────────────────────────────
+
+interface CachedNews {
+  fetchedAt: string;
+  items: NewsItem[];
+}
+
+/**
+ * Recent headlines Yahoo tags with a symbol (a ticker or an index). Cached
+ * per symbol for 15 minutes, served stale while it refreshes, so the row
+ * costs about one search per symbol per quarter hour whoever is reading.
+ * Only headline, publisher, time and link are kept; never the article.
+ */
+export async function getSymbolNews(symbol: string): Promise<NewsItem[]> {
+  const key = symbol.toUpperCase();
+  const cached = await resolveWithSWR<CachedNews>({
+    ticker: key,
+    cacheKey: "news-v1",
+    ttlMs: TTL.NEWS,
+    staleWhileRevalidateMs: TTL.NEWS,
+    // An empty list is an answer (no news today), worth caching too.
+    isUsable: (value): value is CachedNews => value != null && Array.isArray(value.items),
+    fetchFresh: async () => {
+      const raw = (await withSuppressedYahooWarnings(() =>
+        yahooFinance.search(key, { newsCount: 8, quotesCount: 0 })
+      )) as { news?: Array<Record<string, unknown>> };
+      const items = (raw.news ?? []).flatMap<NewsItem>((n) => {
+        const title = typeof n.title === "string" ? n.title.trim() : "";
+        const link = typeof n.link === "string" ? n.link : "";
+        const when = n.providerPublishTime instanceof Date ? n.providerPublishTime : new Date(String(n.providerPublishTime));
+        if (!title || !link.startsWith("https://") || Number.isNaN(when.getTime())) return [];
+        return [{
+          id: typeof n.uuid === "string" ? n.uuid : link,
+          title,
+          publisher: typeof n.publisher === "string" ? n.publisher : "",
+          link,
+          publishedAt: when.toISOString(),
+          related: Array.isArray(n.relatedTickers) ? n.relatedTickers.filter((t): t is string => typeof t === "string") : [],
+        }];
+      });
+      return { fetchedAt: new Date().toISOString(), items };
+    },
+    onRefreshError: (error) => console.error(`[Yahoo] News failed for ${key}:`, error),
+  });
+  return cached?.items ?? [];
 }

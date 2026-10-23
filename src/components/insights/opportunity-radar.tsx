@@ -21,6 +21,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
+import { SectionHeader } from "@/components/insights/section-header";
 import { cn, formatPercent } from "@/lib/utils";
 import type { StockProfile, StockQuote } from "@/types/stock";
 
@@ -92,7 +93,7 @@ function signedPercent(value: number) {
   return `${value > 0 ? "+" : ""}${formatPercent(value, 2)}`;
 }
 
-export function OpportunityRadar({
+function OpportunityRadarView({
   signals,
   performanceWindow,
   onPerformanceWindowChange,
@@ -115,38 +116,25 @@ export function OpportunityRadar({
   return (
     <Card>
       <CardContent className="p-4 sm:p-5">
-        {/* Header: what this is on the left, the one control that reshapes
-            the momentum signals on the right, where the eye ends the line. */}
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sunset-orange/[0.08] ring-1 ring-inset ring-sunset-orange/25">
-              <Radar className="h-5 w-5 text-sunset-orange" />
-
-            </div>
-            <div className="min-w-0">
-              <h2 className="text-[17px] font-semibold leading-tight tracking-[-0.015em] text-snow-peak">
-                Opportunity Radar
-              </h2>
-              <p className="mt-0.5 text-[12px] leading-snug text-mist">
-                {updating ? "Updating signals" : "Six signals"} across the largest caps
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 self-start sm:self-auto">
-            {updating && <Spinner size="xs" color="mist" />}
-            <span className="hidden text-[10px] font-semibold uppercase tracking-[0.1em] text-mist/60 md:inline">
-              Momentum
-            </span>
-            <SegmentedTabs
-              items={WINDOW_ITEMS}
-              value={performanceWindow}
-              onChange={onPerformanceWindowChange}
-              ariaLabel="Momentum window"
-              size="sm"
-            />
-          </div>
-        </div>
+        {/* What this is on the left; the one control that reshapes the
+            momentum signals on the right, where the eye ends the line. */}
+        <SectionHeader
+          icon={Radar}
+          title="Opportunity Radar"
+          subtitle={`${updating ? "Updating signals" : "Six signals"} across the largest caps`}
+        >
+          {updating && <Spinner size="xs" color="mist" />}
+          <span className="hidden text-[10px] font-semibold uppercase tracking-[0.1em] text-mist/60 md:inline">
+            Momentum
+          </span>
+          <SegmentedTabs
+            items={WINDOW_ITEMS}
+            value={performanceWindow}
+            onChange={onPerformanceWindowChange}
+            ariaLabel="Momentum window"
+            size="sm"
+          />
+        </SectionHeader>
 
         <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           <SignalCard
@@ -262,7 +250,7 @@ const SignalCard = memo(function SignalCard({
   return (
     <section
       aria-label={title}
-      className="flex flex-col rounded-2xl bg-snow-peak/[0.02] p-3.5 ring-1 ring-inset ring-wolf-border/40 transition-[box-shadow,background-color] duration-200 hover:bg-snow-peak/[0.03] hover:ring-wolf-border/60"
+      className="flex flex-col rounded-xl bg-snow-peak/[0.025] p-3.5 ring-1 ring-inset ring-wolf-border/40 transition-[box-shadow,background-color] duration-200 hover:bg-snow-peak/[0.035] hover:ring-wolf-border/60"
     >
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -430,3 +418,10 @@ function InfoTip({ label, text }: { label: string; text: string }) {
     </span>
   );
 }
+
+/**
+ * Memoised: the Insights page re-renders whenever any of its queries moves
+ * (the index quotes refresh every 10 seconds), and the Radar, six signal
+ * panels of logos and figures, need not follow unless its own props change.
+ */
+export const OpportunityRadar = memo(OpportunityRadarView);
