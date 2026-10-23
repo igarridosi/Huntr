@@ -502,20 +502,69 @@ select optgroup {
   animation: insight-row-fade 200ms var(--ease-entrance) both;
 }
 
-/* Fear & Greed needle: swings in from fear to the reading once, when the
- * data arrives (a measurement being taken), and eases to a new reading after.
- * A transition, so an hourly update moves it from where it was. */
-.fg-needle {
-  transform-box: view-box;
-  transform-origin: 120px 112px;
-  transform: rotate(var(--fg-angle));
-  transition: transform 750ms var(--ease-entrance);
+/* Fear & Greed needle. Its angle is an SVG attribute; this only adds the
+ * entrance: a swing in from fear to the reading, once, when the data
+ * arrives (a measurement being taken). If this never loads, the needle
+ * still points right. */
+@keyframes fg-needle-in {
+  from { transform: rotate(var(--fg-from, 0deg)); }
+  to   { transform: none; }
 }
 
-@starting-style {
-  .fg-needle {
-    transform: rotate(-90deg);
-  }
+.fg-needle-in {
+  transform-box: view-box;
+  transform-origin: 120px 112px;
+  animation: fg-needle-in 750ms var(--ease-entrance) both;
+}
+
+/* Loading: the unlit needle sweeps the dial, back and forth. */
+@keyframes fg-needle-sweep {
+  from { transform: rotate(-78deg); }
+  to   { transform: rotate(78deg); }
+}
+
+.fg-needle-sweep {
+  transform-box: view-box;
+  transform-origin: 120px 112px;
+  animation: fg-needle-sweep 1.8s cubic-bezier(0.77, 0, 0.175, 1) infinite alternate;
+}
+
+/* Loading: the history's stripes breathe in turn, left to right. */
+@keyframes fg-stripe {
+  0%, 100% { opacity: 0.03; }
+  50%      { opacity: 0.12; }
+}
+
+/* Faint before its turn comes (`both` holds the first frame through the
+ * stagger's delay), and faint where animation does not run. */
+.fg-stripes-ghost > span {
+  background: var(--color-mist);
+  opacity: 0.05;
+  animation: fg-stripe 1.6s ease-in-out infinite both;
+  animation-delay: calc(var(--i) * 70ms);
+}
+
+/* Loading the Hunting Ground: dots light up where companies will land, and
+ * a soft sweep crosses the ground, a radar looking. */
+@keyframes hg-dot {
+  0%, 100% { opacity: 0.08; transform: scale(0.85); }
+  50%      { opacity: 0.32; transform: none; }
+}
+
+.hg-ghost-dot {
+  opacity: 0.12;
+  animation: hg-dot 2.2s ease-in-out infinite both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes hg-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(340%); }
+}
+
+.hg-sweep {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-sunset-orange) 9%, transparent), transparent);
+  animation: hg-sweep 2.4s linear infinite;
 }
 
 /* The history line draws in, left to right as time runs, on each range. */
@@ -558,7 +607,10 @@ select optgroup {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .fg-needle { transition: none; }
+  .fg-needle-in { animation: none; }
+  .fg-needle-sweep, .fg-stripes-ghost > span, .hg-ghost-dot { animation-duration: 3s; }
+  .fg-needle-sweep { animation: none; }
+  .hg-sweep { display: none; }
   .fg-history-line { animation: none; }
   .hg-bubble > circle { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }

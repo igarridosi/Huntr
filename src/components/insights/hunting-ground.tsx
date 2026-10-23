@@ -4,7 +4,6 @@ import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowUpRight, Newspaper, Star, Target, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
 import { ROUTES } from "@/lib/constants";
@@ -115,7 +114,7 @@ export function HuntingGroundCard({
         ) : null}
 
         {loading && points.length === 0 ? (
-          <Skeleton className="mt-4 min-h-[380px] w-full flex-1 rounded-xl" />
+          <HuntingGroundLoader />
         ) : points.length === 0 ? (
           <p className="mt-6 text-[13px] text-mist">No company has both a quality score and a free-cash-flow yield yet.</p>
         ) : (
@@ -474,6 +473,52 @@ function ZoneLists({ points, sector, className }: { points: HgPoint[]; sector: s
           </section>
         );
       })}
+    </div>
+  );
+}
+
+// ── Loader ─────────────────────────────────────────────────────────────────
+
+/** Fixed spots for the loader's dots: where companies tend to sit, scattered. */
+const GHOST_DOTS = Array.from({ length: 34 }, (_, i) => {
+  const a = Math.sin(i * 12.9898) * 43758.5453;
+  const b = Math.sin(i * 78.233) * 12345.6789;
+  const fx = a - Math.floor(a);
+  const fy = b - Math.floor(b);
+  return { x: 30 + fx * 62, y: 18 + fy * 70, r: 3 + ((i * 7) % 9), d: (i * 137) % 1800 };
+});
+
+/**
+ * While the companies are placed: the ground itself, its four zones drawn
+ * and empty, dots lighting up where companies will land, and a sweep
+ * crossing it, a radar looking. It is a loading indicator, so it loops.
+ */
+function HuntingGroundLoader() {
+  return (
+    <div
+      className="relative mt-3 min-h-[380px] flex-1 overflow-hidden rounded-xl bg-snow-peak/[0.015] ring-1 ring-inset ring-wolf-border/30"
+      role="status"
+      aria-label="Mapping the largest companies"
+    >
+      <span className="absolute inset-y-3 left-[55%] w-px border-l border-dashed border-mist/25" aria-hidden />
+      <span className="absolute inset-x-3 top-[38%] h-px border-t border-dashed border-mist/25" aria-hidden />
+      <span className="absolute right-0 top-0 h-[38%] w-[45%] bg-bullish/[0.04]" aria-hidden />
+      {GHOST_DOTS.map((dot, i) => (
+        <span
+          key={i}
+          className="hg-ghost-dot absolute rounded-full bg-mist"
+          style={{
+            left: `${dot.x}%`,
+            top: `${dot.y}%`,
+            width: dot.r * 2,
+            height: dot.r * 2,
+            "--d": `${dot.d}ms`,
+          } as React.CSSProperties}
+          aria-hidden
+        />
+      ))}
+      <span className="hg-sweep absolute inset-y-0 w-[30%]" aria-hidden />
+      <p className="absolute inset-x-0 bottom-4 text-center text-[12.5px] text-mist">Mapping the largest companies…</p>
     </div>
   );
 }

@@ -289,7 +289,8 @@ export default function InsightsPage() {
         .map((q) => ({
           ticker: q.ticker,
           name: profileMap[q.ticker]?.name ?? q.ticker,
-          sector: profileMap[q.ticker]?.sector || null,
+          // "Unknown" is a profile without a sector, not a sector to filter by.
+          sector: profileMap[q.ticker]?.sector && profileMap[q.ticker]!.sector !== "Unknown" ? profileMap[q.ticker]!.sector : null,
           marketCap: q.market_cap,
           change: q.day_change_percent ?? 0,
           logo: profileMap[q.ticker]?.logo_url,
