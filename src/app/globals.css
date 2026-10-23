@@ -502,6 +502,68 @@ select optgroup {
   animation: insight-row-fade 200ms var(--ease-entrance) both;
 }
 
+/* Fear & Greed needle: swings in from fear to the reading once, when the
+ * data arrives (a measurement being taken), and eases to a new reading after.
+ * A transition, so an hourly update moves it from where it was. */
+.fg-needle {
+  transform-box: view-box;
+  transform-origin: 120px 112px;
+  transform: rotate(var(--fg-angle));
+  transition: transform 750ms var(--ease-entrance);
+}
+
+@starting-style {
+  .fg-needle {
+    transform: rotate(-90deg);
+  }
+}
+
+/* The history line draws in, left to right as time runs, on each range. */
+@keyframes fg-draw {
+  from { stroke-dashoffset: 1; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.fg-history-line {
+  stroke-dasharray: 1;
+  animation: fg-draw 450ms var(--ease-entrance) both;
+}
+
+/* Hunting Ground bubbles settle in, largest first, a few ms apart. The
+ * circles animate, not their group: the group's opacity is the sector
+ * filter's, which dims the rest without moving anything. */
+@keyframes hg-bubble-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-bubble {
+  transition: opacity 200ms var(--ease-entrance);
+}
+
+.hg-bubble > circle {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: hg-bubble-in 380ms var(--ease-entrance) var(--hg-delay, 0ms) both;
+}
+
+/* The company card: seen dozens of times while browsing, so barely moves. */
+@keyframes hg-card-in {
+  from { opacity: 0; transform: translate3d(0, 3px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-card {
+  animation: hg-card-in 140ms var(--ease-entrance) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fg-needle { transition: none; }
+  .fg-history-line { animation: none; }
+  .hg-bubble > circle { animation: insight-row-fade 200ms ease both; }
+  .hg-card { animation: none; }
+}
+
 /* The excerpt fades out over its last line, as an article's opening does
  * when the rest is behind a "continue reading". A fixed band, not a share
  * of the height, so a two-line excerpt keeps its first line whole. */

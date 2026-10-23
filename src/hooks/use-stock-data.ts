@@ -33,7 +33,8 @@ import {
   fetchTranscriptDocument,
   fetchScreenerMetrics,
 } from "@/app/actions/stock";
-import type { ScreenerMetrics } from "@/lib/api/cache";
+import type { HuntingGroundMetrics, ScreenerMetrics } from "@/lib/api/cache";
+import type { FearGreedPoint } from "@/lib/fear-greed";
 import type { NewsItem } from "@/lib/market-news";
 import { fetchSECFundamentals } from "@/app/actions/stock";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
@@ -140,6 +141,34 @@ export function useMarketNews(symbols: string[], enabled: boolean = true) {
     },
     staleTime: 5 * 60 * 1000,
     enabled: enabled && key.length > 0,
+  });
+}
+
+/** Huntr's Fear & Greed index, the last ~270 trading days (computed and cached hourly on the server). */
+export function useFearGreed() {
+  return useQuery<{ computedAt: string | null; points: FearGreedPoint[] }>({
+    queryKey: QUERY_KEYS.FEAR_GREED,
+    queryFn: async () => {
+      const res = await fetch("/api/market/fear-greed");
+      if (!res.ok) throw new Error(`Fear & Greed failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+/** Quality score and free-cash-flow yield for The Hunting Ground, from our caches only. */
+export function useHuntingGroundMetrics(tickers: string[]) {
+  const key = Array.from(new Set(tickers.map((t) => t.toUpperCase()))).sort().join(",");
+  return useQuery<Record<string, HuntingGroundMetrics>>({
+    queryKey: QUERY_KEYS.HUNTING_GROUND(key),
+    queryFn: async () => {
+      const res = await fetch(`/api/market/hunting-ground?tickers=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error(`Hunting Ground failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 30 * 60 * 1000,
+    enabled: key.length > 0,
   });
 }
 
