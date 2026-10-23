@@ -42,6 +42,9 @@ export const QUERY_KEYS = {
   TRANSCRIPT_DOCUMENT: (ticker: string, year: number, quarter: number) =>
     ["transcript", "document", ticker, year, quarter] as const,
   MARKET_INDICES: ["market", "indices"] as const,
+  MARKET_NEWS: (symbolsKey: string) => ["market", "news", symbolsKey] as const,
+  NEWS_SUMMARY: (symbol: string, id: string) => ["market", "news-summary", symbol, id] as const,
+  NEWS_ASSETS: ["market", "news-assets"] as const,
   FINANCIALS: (ticker: string) => ["financials", ticker] as const,
   WATCHLIST: (userId: string) => ["watchlist", userId] as const,
   SEARCH: (query: string) => ["search", query] as const,

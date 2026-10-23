@@ -445,6 +445,86 @@ select optgroup {
   animation: price-ghost 1.6s ease-in-out infinite;
 }
 
+/* News preview (Insights), a native <dialog>. Opened now and then, so a
+ * standard entrance: the panel rises 8px and settles from 98% while it fades
+ * in (220ms), and leaves faster than it came (160ms), back the way it came.
+ * Transitions, not keyframes: closing mid-open reverses from where it is.
+ * `display` and `overlay` are carried discretely so the dialog stays in the
+ * top layer until its exit has played; a browser without that just closes. */
+.news-preview {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 220ms var(--ease-entrance),
+    transform 220ms var(--ease-entrance),
+    overlay 220ms var(--ease-entrance) allow-discrete,
+    display 220ms var(--ease-entrance) allow-discrete;
+}
+
+.news-preview:not([open]) {
+  opacity: 0;
+  transform: translate3d(0, 6px, 0) scale(0.985);
+  transition-duration: 160ms;
+  /* While it fades out it is still laid out over the page: clicks go through. */
+  pointer-events: none;
+}
+
+@starting-style {
+  .news-preview[open] {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.98);
+  }
+}
+
+.news-preview::backdrop {
+  background-color: rgb(5 9 9 / 0.72);
+  backdrop-filter: blur(6px);
+  opacity: 1;
+  transition:
+    opacity 220ms var(--ease-entrance),
+    overlay 220ms var(--ease-entrance) allow-discrete,
+    display 220ms var(--ease-entrance) allow-discrete;
+}
+
+.news-preview:not([open])::backdrop {
+  opacity: 0;
+  transition-duration: 160ms;
+}
+
+@starting-style {
+  .news-preview[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* The summary arrives after the panel: it fades into the space held for it. */
+.news-preview-summary {
+  animation: insight-row-fade 200ms var(--ease-entrance) both;
+}
+
+/* The excerpt fades out over its last line, as an article's opening does
+ * when the rest is behind a "continue reading". A fixed band, not a share
+ * of the height, so a two-line excerpt keeps its first line whole. */
+.news-preview-excerpt {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.9em), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.9em), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Fade only: no rise, no scale. */
+  .news-preview,
+  .news-preview:not([open]),
+  .news-preview[open] {
+    transform: none;
+  }
+
+  @starting-style {
+    .news-preview[open] {
+      transform: none;
+    }
+  }
+}
+
 .symbol-field-bar {
   transform-origin: left center;
   animation: symbol-field-grow 520ms var(--ease-entrance) both;
