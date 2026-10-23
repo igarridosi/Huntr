@@ -567,15 +567,15 @@ select optgroup {
   animation: hg-sweep 2.4s linear infinite;
 }
 
-/* The history line draws in, left to right as time runs, on each range. */
-@keyframes fg-draw {
-  from { stroke-dashoffset: 1; }
-  to   { stroke-dashoffset: 0; }
+/* The history line is revealed left to right, as time runs, on every range:
+ * a clip on its layer, so the whole line always ends at its last point. */
+@keyframes fg-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
 }
 
-.fg-history-line {
-  stroke-dasharray: 1;
-  animation: fg-draw 450ms var(--ease-entrance) both;
+.fg-history-reveal {
+  animation: fg-reveal 500ms var(--ease-entrance) both;
 }
 
 /* Hunting Ground bubbles settle in, largest first, a few ms apart. The
@@ -612,7 +612,7 @@ select optgroup {
   .fg-needle-sweep, .fg-stripes-ghost > span, .hg-ghost-dot { animation-duration: 3s; }
   .fg-needle-sweep { animation: none; }
   .hg-sweep { display: none; }
-  .fg-history-line { animation: none; }
+  .fg-history-reveal { animation: none; }
   .hg-bubble-body { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }
 }

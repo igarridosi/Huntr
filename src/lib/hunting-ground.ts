@@ -175,3 +175,26 @@ export function rankZone(points: HgPoint[], zone: HgZone): HgPoint[] {
   };
   return points.filter((p) => p.zone === zone).sort((a, b) => score[zone](b) - score[zone](a));
 }
+
+/** Space between a bubble's edge and its card, and between the card and the chart's edge. */
+const CARD_GAP = 14;
+const CARD_MARGIN = 6;
+
+/**
+ * Where the card goes: beside its bubble, a gap from its edge, on the right
+ * when it fits and the left when not; centred on the bubble's height and
+ * kept inside the chart. The bubble itself is never covered.
+ */
+export function placeCard(
+  anchor: { x: number; y: number; r: number },
+  card: { width: number; height: number },
+  bounds: { width: number; height: number }
+): { left: number; top: number } {
+  const right = anchor.x + anchor.r + CARD_GAP;
+  const leftSide = anchor.x - anchor.r - CARD_GAP - card.width;
+  const fitsRight = right + card.width <= bounds.width - CARD_MARGIN;
+  const fitsLeft = leftSide >= CARD_MARGIN;
+  const left = fitsRight || !fitsLeft ? Math.min(right, bounds.width - CARD_MARGIN - card.width) : leftSide;
+  const top = Math.min(Math.max(anchor.y - card.height / 2, CARD_MARGIN), bounds.height - CARD_MARGIN - card.height);
+  return { left: Math.max(CARD_MARGIN, left), top: Math.max(CARD_MARGIN, top) };
+}

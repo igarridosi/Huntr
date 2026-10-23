@@ -279,19 +279,25 @@ function History({ points, range }: { points: FearGreedPoint[]; range: FearGreed
         {edges.map((v) => (
           <line key={v} x1={0} x2={H_W} y1={y(v)} y2={y(v)} stroke="var(--color-snow-peak)" strokeOpacity={0.18} strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />
         ))}
-        <path
-          key={`${range}-${points[0].date}-${n}`}
-          d={line}
-          fill="none"
-          stroke="var(--color-snow-peak)"
-          strokeWidth={2}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          vectorEffect="non-scaling-stroke"
-          pathLength={1}
-          className="fg-history-line"
-        />
       </svg>
+
+      {/* The line on its own layer, revealed left to right by a clip on this
+          box. It used to draw in with a dash over pathLength, which a
+          non-scaling stroke measures in screen units on a stretched chart:
+          the dash ended short and the line stopped before the last points. */}
+      <div key={`${range}-${points[0].date}-${n}`} className="fg-history-reveal pointer-events-none absolute inset-0">
+        <svg viewBox={`0 0 ${H_W} ${H_H}`} preserveAspectRatio="none" className="h-full w-full" aria-hidden>
+          <path
+            d={line}
+            fill="none"
+            stroke="var(--color-snow-peak)"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
+          />
+        </svg>
+      </div>
 
       {/* Zone edges inside the span, labelled at the right. */}
       {edges.map((v) => (
@@ -310,22 +316,29 @@ function History({ points, range }: { points: FearGreedPoint[]; range: FearGreed
           ))
         : null}
 
+      {/* The high's label sits above its point and the low's below, unless the
+          point is near that edge: then the label goes inside, so it is never
+          cut off by the box. */}
       {[
-        { i: hiIdx, p: extremes.high, above: true },
-        { i: loIdx, p: extremes.low, above: false },
-      ].map(({ i, p, above }) => (
-        <span
-          key={above ? "hi" : "lo"}
-          className={cn(
-            "pointer-events-none absolute whitespace-nowrap rounded bg-wolf-black/70 px-1 font-mono text-[9.5px] tabular-nums text-snow-peak/90",
-            above ? "-translate-y-[140%]" : "translate-y-[40%]",
-            i > n * 0.75 ? "-translate-x-full" : i < n * 0.25 ? "" : "-translate-x-1/2"
-          )}
-          style={{ left: pct(i), top: top(p.value) }}
-        >
-          {above ? "High" : "Low"} {p.value} · {dayLabel(p.date)}
-        </span>
-      ))}
+        { i: hiIdx, p: extremes.high, high: true },
+        { i: loIdx, p: extremes.low, high: false },
+      ].map(({ i, p, high }) => {
+        const fromTop = (hi - p.value) / (hi - lo);
+        const below = high ? fromTop < 0.25 : fromTop < 0.75;
+        return (
+          <span
+            key={high ? "hi" : "lo"}
+            className={cn(
+              "pointer-events-none absolute z-[1] whitespace-nowrap rounded bg-wolf-black/80 px-1 font-mono text-[9.5px] tabular-nums text-snow-peak/90",
+              below ? "translate-y-[45%]" : "-translate-y-[145%]",
+              i > n * 0.75 ? "-translate-x-full" : i < n * 0.25 ? "" : "-translate-x-1/2"
+            )}
+            style={{ left: pct(i), top: top(p.value) }}
+          >
+            {high ? "High" : "Low"} {p.value} · {dayLabel(p.date)}
+          </span>
+        );
+      })}
 
       {shown && hover != null ? (
         <>

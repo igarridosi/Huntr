@@ -10,7 +10,7 @@ import { useStoredChoice } from "@/components/insights/use-stored-choice";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ROUTES } from "@/lib/constants";
 import { cn, formatPercent } from "@/lib/utils";
-import { HG_RULES, HG_ZONES, rankZone, yPosition, type HgPoint, type HgZone, type HuntingGround } from "@/lib/hunting-ground";
+import { HG_RULES, HG_ZONES, placeCard, rankZone, yPosition, type HgPoint, type HgZone, type HuntingGround } from "@/lib/hunting-ground";
 
 /** The chart's least height; beside a taller card it grows to fill the row. */
 const MIN_HEIGHT = 380;
@@ -339,7 +339,8 @@ function Scatter({
         <CompanyCard
           point={active}
           inNews={newsTickers.has(active.ticker)}
-          side={x(active.quality) > width / 2 ? "left" : "right"}
+          anchor={{ x: x(active.quality), y: y(active.fcfYield), r: radius(active.marketCap) }}
+          bounds={{ width, height: HEIGHT }}
           pinned={pinned === active.ticker}
           onClose={() => setPinned(null)}
           watched={isWatched(active.ticker)}
@@ -376,7 +377,8 @@ function NewsRing({ cx, cy, r }: { cx: number; cy: number; r: number }) {
 function CompanyCard({
   point,
   inNews,
-  side,
+  anchor,
+  bounds,
   pinned,
   onClose,
   watched,
@@ -384,12 +386,21 @@ function CompanyCard({
 }: {
   point: HgPoint;
   inNews: boolean;
-  side: "left" | "right";
+  anchor: { x: number; y: number; r: number };
+  bounds: { width: number; height: number };
   pinned: boolean;
   onClose: () => void;
   watched: boolean;
   onWatch: () => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  // Measured before paint, so the card appears in its place, not first at a guess.
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (el) setSize({ width: el.offsetWidth, height: el.offsetHeight });
+  }, [point.ticker, inNews, pinned]);
+  const position = size ? placeCard(anchor, size, bounds) : null;
   const multiple = point.fcfYield > 0 ? 1 / point.fcfYield : null;
   const dims = [
     { label: "Profitability", value: point.profitability },
@@ -399,10 +410,9 @@ function CompanyCard({
   ];
   return (
     <div
-      className={cn(
-        "hg-card absolute top-3 z-10 w-[16.5rem] rounded-xl bg-wolf-black/95 p-3.5 shadow-2xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur",
-        side === "left" ? "left-12" : "right-3"
-      )}
+      ref={ref}
+      className="hg-card absolute z-10 w-[16.5rem] rounded-xl bg-wolf-black/95 p-3.5 shadow-2xl ring-1 ring-inset ring-wolf-border/70 backdrop-blur"
+      style={position ? { left: position.left, top: position.top } : { left: 0, top: 0, visibility: "hidden" }}
     >
       <div className="flex items-center gap-2.5">
         <TickerLogo ticker={point.ticker} src={point.logo} className="h-8 w-8" imageClassName="rounded-lg" fallbackClassName="rounded-lg text-[9px]" />

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHuntingGround, companyKey, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
+import { buildHuntingGround, companyKey, placeCard, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
 
 const B = 1_000_000_000;
 const company = (ticker: string, over: Partial<HgCompany> = {}): HgCompany => ({
@@ -86,5 +86,24 @@ describe("share classes", () => {
       { GOOG: { quality: 81, fcfYield: 0.0058 }, GOOGL: { quality: 81, fcfYield: 0.0057 } }
     );
     expect(points.map((p) => [p.ticker, p.otherClasses])).toEqual([["GOOGL", ["GOOG"]]]);
+  });
+});
+
+describe("placeCard", () => {
+  const card = { width: 264, height: 300 };
+  const bounds = { width: 800, height: 500 };
+
+  it("sits to the right of the bubble, a gap from its edge, centred on its height", () => {
+    expect(placeCard({ x: 200, y: 250, r: 10 }, card, bounds)).toEqual({ left: 224, top: 100 });
+  });
+
+  it("goes to the left when the right has no room, never covering the bubble", () => {
+    const { left } = placeCard({ x: 700, y: 250, r: 20 }, card, bounds);
+    expect(left + card.width).toBeLessThanOrEqual(700 - 20);
+  });
+
+  it("stays inside the chart near the top and bottom", () => {
+    expect(placeCard({ x: 200, y: 10, r: 8 }, card, bounds).top).toBe(6);
+    expect(placeCard({ x: 200, y: 495, r: 8 }, card, bounds).top).toBe(500 - 6 - 300);
   });
 });
