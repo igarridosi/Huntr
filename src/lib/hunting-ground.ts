@@ -16,9 +16,12 @@
  *   trap       cheap, for a reason
  *   avoid      weak and expensive
  *
- * Left out, and said so: banks, insurers and property, where free cash flow
- * does not measure the business; and companies without a quality score or a
- * comparable yield (a foreign listing reporting in another currency).
+ * Left out, and said so: banks, insurers, asset managers and property
+ * owners, where free cash flow does not measure the business (told apart by
+ * industry, not sector: Visa, Mastercard and the exchanges share the
+ * Financials sector with the banks, and their cash flow does measure them);
+ * and companies without a quality score or a free-cash-flow figure. A
+ * foreign filer's cash flow is converted to its quote currency first.
  *
  * One company, one point: share classes (GOOGL and GOOG, FOXA and FOX) are
  * the same business, and two bubbles on one spot read as a glitch. The
@@ -62,6 +65,10 @@ export interface HgMetrics {
   growth: number | null;
   cashGeneration: number | null;
   fcfYield: number | null;
+  /** Yahoo's industry, which decides whether a financial company is placed. */
+  industry?: string | null;
+  /** The currency the cash flow was converted from, for a foreign filer. */
+  fxFrom?: string | null;
 }
 
 export interface HgPoint extends HgCompany, HgMetrics {
@@ -74,13 +81,33 @@ export interface HgPoint extends HgCompany, HgMetrics {
 
 export interface HuntingGround {
   points: HgPoint[];
-  /** Left out because free cash flow does not measure them. */
+  /** How many of the largest companies were considered. */
+  considered: number;
+  /** Left out: banks, insurers, asset managers, property owners. */
   financials: number;
-  /** Left out for want of a quality score or a comparable yield. */
-  unscored: number;
+  /** Left out: no quality score yet. */
+  noQuality: number;
+  /** Left out: no free-cash-flow figure. */
+  noYield: number;
+  /** Share classes folded into another point. */
+  merged: number;
 }
 
-const FINANCIAL_SECTOR = /financ|bank|insur|real estate|reit/i;
+/** Sectors where the industry decides: lenders and landlords in, payment networks and exchanges out. */
+const FINANCIAL_SECTOR = /financ|real estate/i;
+/**
+ * Industries free cash flow does not measure (Yahoo's names): a bank's cash
+ * flow swings with its deposits and loans, an insurer's with its float.
+ */
+const UNMEASURED_INDUSTRY = /\b(banks?|insurance|reit|mortgage|capital markets|asset management|thrifts?|shell compan)|real estate - /i;
+
+/** Whether free cash flow cannot measure this company, so it stays off the map. */
+export function isUnmeasured(sector: string | null, industry: string | null | undefined): boolean {
+  if (industry) return UNMEASURED_INDUSTRY.test(industry);
+  // A financial or property company whose industry is unknown: left out
+  // rather than placed on a figure that may mean nothing.
+  return !!sector && FINANCIAL_SECTOR.test(sector);
+}
 
 /**
  * A company's name without its share class or legal suffix, to tell when two
@@ -122,24 +149,31 @@ export function buildHuntingGround(companies: HgCompany[], metrics: Record<strin
     .slice(0, HG_RULES.MAX_COMPANIES);
 
   let financials = 0;
-  let unscored = 0;
+  let noQuality = 0;
+  let noYield = 0;
+  let merged = 0;
   const points: HgPoint[] = [];
   // Largest first, so the first class seen of a company is the one kept.
   const byCompany = new Map<string, HgPoint>();
   for (const company of largest) {
-    if (company.sector && FINANCIAL_SECTOR.test(company.sector)) {
-      financials++;
-      continue;
-    }
     const m = metrics[company.ticker];
-    if (m?.quality == null || m.fcfYield == null || !Number.isFinite(m.fcfYield)) {
-      unscored++;
+    if (isUnmeasured(company.sector, m?.industry)) {
+      financials++;
       continue;
     }
     const key = companyKey(company.name) || company.ticker;
     const kept = byCompany.get(key);
     if (kept) {
       kept.otherClasses.push(company.ticker);
+      merged++;
+      continue;
+    }
+    if (m?.quality == null) {
+      noQuality++;
+      continue;
+    }
+    if (m.fcfYield == null || !Number.isFinite(m.fcfYield)) {
+      noYield++;
       continue;
     }
     const point: HgPoint = {
@@ -150,13 +184,15 @@ export function buildHuntingGround(companies: HgCompany[], metrics: Record<strin
       financialHealth: m.financialHealth ?? null,
       growth: m.growth ?? null,
       cashGeneration: m.cashGeneration ?? null,
+      industry: m.industry ?? null,
+      fxFrom: m.fxFrom ?? null,
       zone: zoneOf(m.quality, m.fcfYield),
       otherClasses: [],
     };
     byCompany.set(key, point);
     points.push(point);
   }
-  return { points, financials, unscored };
+  return { points, considered: largest.length, financials, noQuality, noYield, merged };
 }
 
 /**

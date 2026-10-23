@@ -451,7 +451,8 @@ select optgroup {
  * Transitions, not keyframes: closing mid-open reverses from where it is.
  * `display` and `overlay` are carried discretely so the dialog stays in the
  * top layer until its exit has played; a browser without that just closes. */
-.news-preview {
+.news-preview,
+.hg-dialog {
   opacity: 1;
   transform: none;
   transition:
@@ -461,7 +462,8 @@ select optgroup {
     display 220ms var(--ease-entrance) allow-discrete;
 }
 
-.news-preview:not([open]) {
+.news-preview:not([open]),
+.hg-dialog:not([open]) {
   opacity: 0;
   transform: translate3d(0, 6px, 0) scale(0.985);
   transition-duration: 160ms;
@@ -470,13 +472,15 @@ select optgroup {
 }
 
 @starting-style {
-  .news-preview[open] {
+  .news-preview[open],
+  .hg-dialog[open] {
     opacity: 0;
     transform: translate3d(0, 8px, 0) scale(0.98);
   }
 }
 
-.news-preview::backdrop {
+.news-preview::backdrop,
+.hg-dialog::backdrop {
   background-color: rgb(5 9 9 / 0.72);
   backdrop-filter: blur(6px);
   opacity: 1;
@@ -486,13 +490,15 @@ select optgroup {
     display 220ms var(--ease-entrance) allow-discrete;
 }
 
-.news-preview:not([open])::backdrop {
+.news-preview:not([open])::backdrop,
+.hg-dialog:not([open])::backdrop {
   opacity: 0;
   transition-duration: 160ms;
 }
 
 @starting-style {
-  .news-preview[open]::backdrop {
+  .news-preview[open]::backdrop,
+  .hg-dialog[open]::backdrop {
     opacity: 0;
   }
 }
@@ -629,12 +635,16 @@ select optgroup {
   /* Fade only: no rise, no scale. */
   .news-preview,
   .news-preview:not([open]),
-  .news-preview[open] {
+  .news-preview[open],
+  .hg-dialog,
+  .hg-dialog:not([open]),
+  .hg-dialog[open] {
     transform: none;
   }
 
   @starting-style {
-    .news-preview[open] {
+    .news-preview[open],
+    .hg-dialog[open] {
       transform: none;
     }
   }

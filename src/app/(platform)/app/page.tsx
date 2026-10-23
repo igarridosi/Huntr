@@ -29,6 +29,7 @@ import { useNewsLayout } from "@/components/insights/use-news-layout";
 import { HuntingGroundCard } from "@/components/insights/hunting-ground";
 import { FearGreedCard } from "@/components/insights/fear-greed";
 import { buildHuntingGround, HG_RULES, type HgCompany } from "@/lib/hunting-ground";
+import { toGicsSector } from "@/lib/screener/sectors";
 import { buildMarketCards, buildStockCards, MARKET_NEWS_SYMBOLS, pickNewsCandidates } from "@/lib/market-news";
 import { cn } from "@/lib/utils";
 
@@ -289,8 +290,10 @@ export default function InsightsPage() {
         .map((q) => ({
           ticker: q.ticker,
           name: profileMap[q.ticker]?.name ?? q.ticker,
-          // "Unknown" is a profile without a sector, not a sector to filter by.
-          sector: profileMap[q.ticker]?.sector && profileMap[q.ticker]!.sector !== "Unknown" ? profileMap[q.ticker]!.sector : null,
+          // GICS names throughout: some rows carry Yahoo's ("Technology",
+          // "Consumer Defensive"), which would split a sector in two;
+          // "Unknown" is no sector at all.
+          sector: toGicsSector(profileMap[q.ticker]?.sector),
           marketCap: q.market_cap,
           change: q.day_change_percent ?? 0,
           logo: profileMap[q.ticker]?.logo_url,

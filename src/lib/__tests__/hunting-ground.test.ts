@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHuntingGround, companyKey, placeCard, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
+import { buildHuntingGround, companyKey, isUnmeasured, placeCard, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
 
 const B = 1_000_000_000;
 const company = (ticker: string, over: Partial<HgCompany> = {}): HgCompany => ({
@@ -32,25 +32,41 @@ describe("yPosition", () => {
 });
 
 describe("buildHuntingGround", () => {
-  it("takes the largest companies, leaves out financials and the unscored, and says how many", () => {
+  it("takes the largest companies, leaves out lenders and the unscored, and says how many", () => {
     const ground = buildHuntingGround(
       [
         company("ADBE"),
-        company("JPM", { sector: "Financial Services" }),
+        company("JPM", { sector: "Financials" }),
         company("O", { sector: "Real Estate" }),
+        company("V", { sector: "Financials" }),
         company("NOQ"),
+        company("NOY"),
         company("TINY", { marketCap: 5 * B }),
       ],
       {
         ADBE: { quality: 87, fcfYield: 0.091 },
-        JPM: { quality: 33, fcfYield: null },
+        JPM: { quality: 33, fcfYield: null, industry: "Banks - Diversified" },
+        O: { quality: 50, fcfYield: 0.05, industry: "REIT - Retail" },
+        V: { quality: 84, fcfYield: 0.027, industry: "Credit Services" },
         NOQ: { quality: null, fcfYield: 0.03 },
+        NOY: { quality: 70, fcfYield: null },
         TINY: { quality: 90, fcfYield: 0.1 },
       }
     );
-    expect(ground.points.map((p) => [p.ticker, p.zone])).toEqual([["ADBE", "prime"]]);
-    expect(ground.financials).toBe(2);
-    expect(ground.unscored).toBe(1);
+    expect(ground.points.map((p) => [p.ticker, p.zone])).toEqual([
+      ["ADBE", "prime"],
+      ["V", "paying-up"],
+    ]);
+    expect(ground).toMatchObject({ considered: 6, financials: 2, noQuality: 1, noYield: 1, merged: 0 });
+  });
+
+  it("leaves a financial company out when its industry is unknown", () => {
+    expect(isUnmeasured("Financials", null)).toBe(true);
+    expect(isUnmeasured("Financials", "Financial Data & Stock Exchanges")).toBe(false);
+    expect(isUnmeasured("Real Estate", "Real Estate Services")).toBe(false);
+    expect(isUnmeasured("Real Estate", "Real Estate - Development")).toBe(true);
+    expect(isUnmeasured("Financials", "Insurance - Property & Casualty")).toBe(true);
+    expect(isUnmeasured("Industrials", null)).toBe(false);
   });
 });
 
