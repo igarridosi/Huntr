@@ -322,6 +322,21 @@ function ExpandedMap({
   const [zoom, setZoom] = useState<HgZone | null>(null);
   const points = ground.points;
 
+  // Back from a close-up, the side column's companies (rows and logos) are
+  // built once the camera has landed, as the close-up's own list is: built
+  // during the move, they held the main thread and the move stuttered.
+  const [listsReady, setListsReady] = useState(true);
+  const [prevZoom, setPrevZoom] = useState(zoom);
+  if (zoom !== prevZoom) {
+    setPrevZoom(zoom);
+    if (zoom == null) setListsReady(false);
+  }
+  useEffect(() => {
+    if (listsReady) return;
+    const id = window.setTimeout(() => setListsReady(true), CAMERA_MS);
+    return () => window.clearTimeout(id);
+  }, [listsReady]);
+
   // As many companies per zone as the side column has room for, so all four
   // zones show without scrolling: a zone's header and padding take about
   // 44 px, each company 26 px.
@@ -500,10 +515,9 @@ function ExpandedMap({
                     <span className="font-mono text-[11px] text-mist">{counts[zone]}</span>
                   </button>
                   <ol className="mt-1">
-                    {rankZone(shown, zone)
-                      .slice(0, perZone)
-                      .map((p) => (
-                        <li key={p.ticker}>
+                    {(listsReady ? rankZone(shown, zone).slice(0, perZone) : [])
+                      .map((p, i) => (
+                        <li key={p.ticker} className="hg-zoom-row" style={{ "--row-delay": `${i * 30}ms` } as React.CSSProperties}>
                           <button
                             type="button"
                             onClick={() => setPinned(p.ticker)}
@@ -838,17 +852,30 @@ function Scatter({
 
   // Where each bubble is drawn: where its figures put it, nudged just far
   // enough that it neither covers nor hides behind another (see separate).
-  // Recomputed when the frame changes (the view, its size), not per render.
+  // Each view's layout is kept until the companies or the frame's size
+  // change: the full map's (every company) takes a few dozen ms to work
+  // out, and spent as a close-up returned to it, that stalled the move.
+  const layouts = useMemo(
+    () => new Map<string, Map<string, { x: number; y: number }>>(),
+    // Not read inside: a change to any of them starts a fresh set.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [drawn, expanded, width, HEIGHT]
+  );
   const placed = useMemo(() => {
     if (width === 0) return new Map<string, { x: number; y: number }>();
+    const key = zoom ?? "all";
+    const kept = layouts.get(key);
+    if (kept) return kept;
     const inFrame = drawn.filter((p) => !outOfFrame(p));
-    return separate(
+    const layout = separate(
       inFrame.map((p) => ({ id: p.ticker, x: x(p.quality), y: y(p.fcfYield), r: radius(p.marketCap) })),
       { left: PAD.left, top: PAD.top, right: PAD.left + plotW, bottom: PAD.top + plotH }
     );
+    layouts.set(key, layout);
+    return layout;
     // x, y, radius and outOfFrame follow from these.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawn, zoom, expanded, width, HEIGHT, maxCap]);
+  }, [layouts, zoom, maxCap]);
   const at = (p: HgPoint) => placed.get(p.ticker) ?? { x: x(p.quality), y: y(p.fcfYield) };
 
   // Out of a close-up, the zone left behind: its companies glide back to

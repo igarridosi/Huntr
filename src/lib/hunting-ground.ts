@@ -265,9 +265,12 @@ export function separate(
         const b = pos[j];
         let dx = b.x - a.x;
         let dy = b.y - a.y;
-        let d = Math.hypot(dx, dy);
         const min = bubbles[i].r + bubbles[j].r + gap;
-        if (d >= min) continue;
+        // Squared first: most pairs are far apart, and a square root for
+        // each of them (tens of thousands a round) is what made this slow.
+        const d2 = dx * dx + dy * dy;
+        if (d2 >= min * min) continue;
+        let d = Math.sqrt(d2);
         if (d < 1e-6) {
           // On the very same spot: part them along a fixed angle per pair.
           const angle = ((i * 7 + j * 13) % 360) * (Math.PI / 180);
