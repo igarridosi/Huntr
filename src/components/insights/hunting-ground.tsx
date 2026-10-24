@@ -14,7 +14,14 @@ import { HG_RULES, HG_ZONES, placeCard, rankZone, yPosition, type HgPoint, type 
 
 /** The chart's least height; beside a taller card it grows to fill the row. */
 const MIN_HEIGHT = 380;
-const PAD = { top: 12, right: 12, bottom: 30, left: 40 };
+/**
+ * Space around the plot. Labels live in these margins, never over the
+ * plot, so nothing covers a company: the zones' names in a band above (the
+ * top two) and below (the bottom two), the ticks under the plot, and in the
+ * full map the yield median in a right-hand gutter.
+ */
+const PAD_CARD = { top: 30, right: 12, bottom: 50, left: 40 };
+const PAD_FULL = { top: 40, right: 64, bottom: 58, left: 44 };
 const Y_TICKS = [-0.02, 0, 0.01, 0.02, 0.04, 0.06, 0.1];
 /** Quality axis from 15: almost no large company scores below, and the room goes to where they are. */
 const Q_MIN = 15;
@@ -758,6 +765,7 @@ function Scatter({
   const { width } = size;
   const HEIGHT = size.height;
   const [hover, setHover] = useState<string | null>(null);
+  const [hoverZone, setHoverZone] = useState<HgZone | null>(null);
   const setPinned = (next: string | null | ((t: string | null) => string | null)) =>
     onPinnedChange(typeof next === "function" ? next(pinned) : next);
 
@@ -774,19 +782,29 @@ function Scatter({
   }, []);
 
   const view = zoom ? zoneView(zoom) : FULL_VIEW;
+  const PAD = expanded ? PAD_FULL : PAD_CARD;
+  // Companies are placed inside an inset of the plot, so one at an edge
+  // (a yield clamped at the top of the scale) sits within the frame.
+  const INSET = expanded ? 20 : 10;
   const plotW = Math.max(0, width - PAD.left - PAD.right);
   const plotH = HEIGHT - PAD.top - PAD.bottom;
-  const x = (q: number) => PAD.left + (((zoom ? q : Math.max(Q_MIN, q)) - view.q0) / (view.q1 - view.q0)) * plotW;
-  const yp = (pos: number) => PAD.top + (1 - (pos - view.p0) / (view.p1 - view.p0)) * plotH;
+  const x = (q: number) =>
+    PAD.left + INSET + (((zoom ? q : Math.max(Q_MIN, q)) - view.q0) / (view.q1 - view.q0)) * (plotW - 2 * INSET);
+  const yp = (pos: number) => PAD.top + INSET + (1 - (pos - view.p0) / (view.p1 - view.p0)) * (plotH - 2 * INSET);
   const y = (v: number) => yp(yPosition(v));
   const inView = (q: number, v: number) => {
     const pos = yPosition(v);
     return q >= view.q0 - 0.01 && q <= view.q1 + 0.01 && pos >= view.p0 - 0.001 && pos <= view.p1 + 0.001;
   };
-  const maxCap = Math.max(...points.map((p) => p.marketCap));
-  // 5 to 20 px in the card (6 to 28 at full size): big enough to see and to hit.
-  const radius = (cap: number) => (expanded ? 6 + 22 * Math.sqrt(cap / maxCap) : 5 + 15 * Math.sqrt(cap / maxCap));
-  const labelFrom = expanded ? 9 : 12;
+  // Sized against the largest company in frame: in a close-up, the zone's,
+  // so its biggest takes the full size rather than staying small beside a
+  // giant that is not in the zone.
+  const maxCap = Math.max(...points.filter((p) => !zoom || p.zone === zoom).map((p) => p.marketCap), 1);
+  // Big enough to see and to hit: 5 to 20 px in the card, 8 to 30 in the
+  // full map, 12 to 38 in a close-up, where there is room for it.
+  const [rMin, rMax] = zoom ? [12, 38] : expanded ? [8, 30] : [5, 20];
+  const radius = (cap: number) => rMin + (rMax - rMin) * Math.sqrt(cap / maxCap);
+  const labelFrom = expanded ? 11 : 12;
 
   // Biggest first, so the small ones sit on top and stay reachable.
   const drawn = useMemo(() => [...points].sort((a, b) => b.marketCap - a.marketCap), [points]);
@@ -806,13 +824,25 @@ function Scatter({
    * tapped (pinned) card stays until closed.
    */
   const onPointerMove = (e: React.PointerEvent) => {
+    const rect = box.current?.getBoundingClientRect();
+    if (!rect) return;
+    const px = e.clientX - rect.left;
+    const py = e.clientY - rect.top;
+    // Which zone the pointer is over, in the full map: it lights up to say
+    // it opens. A mouse only; a touch has no hover to light anything with.
+    if (expanded && !zoom && onZoom && e.pointerType === "mouse") {
+      const inPlot = px >= PAD.left && px <= PAD.left + plotW && py >= PAD.top && py <= PAD.top + plotH;
+      const zone: HgZone | null = !inPlot
+        ? null
+        : px >= x(HG_RULES.QUALITY_LINE)
+          ? py <= y(HG_RULES.CHEAP_YIELD) ? "prime" : "paying-up"
+          : py <= y(HG_RULES.CHEAP_YIELD) ? "trap" : "avoid";
+      if (zone !== hoverZone) setHoverZone(zone);
+    }
     if (!hover || overCard.current) return;
     const p = drawn.find((d) => d.ticker === hover);
-    const rect = box.current?.getBoundingClientRect();
-    if (!p || !rect) return;
-    const dx = e.clientX - rect.left - x(p.quality);
-    const dy = e.clientY - rect.top - y(p.fcfYield);
-    if (Math.hypot(dx, dy) > radius(p.marketCap) + HOVER_SLACK) setHover(null);
+    if (!p) return;
+    if (Math.hypot(px - x(p.quality), py - y(p.fcfYield)) > radius(p.marketCap) + HOVER_SLACK) setHover(null);
   };
 
   const qx = x(HG_RULES.QUALITY_LINE);
@@ -837,11 +867,12 @@ function Scatter({
   return (
     <div
       ref={box}
-      className="relative h-full"
+      className={cn("relative h-full", hoverZone && !hover && "cursor-zoom-in")}
       onPointerMove={onPointerMove}
       onPointerLeave={() => {
         overCard.current = false;
         setHover(null);
+        setHoverZone(null);
       }}
     >
       {width > 0 ? (
@@ -857,10 +888,12 @@ function Scatter({
                 y={0}
                 width={1}
                 height={1}
-                className={cn("hg-glide", clickable && "cursor-zoom-in")}
-                style={glide(r.x, r.y, Math.max(0, r.w), Math.max(0, r.h))}
+                className={cn("hg-glide hg-zone", clickable && "cursor-zoom-in")}
+                style={{
+                  ...glide(r.x, r.y, Math.max(0, r.w), Math.max(0, r.h)),
+                  opacity: (zone === "prime" ? 0.09 : zoom && zone !== zoom ? 0.02 : 0.04) + (hoverZone === zone ? 0.07 : 0),
+                }}
                 fill={ZONE_FILL[zone]}
-                opacity={zone === "prime" ? 0.09 : zoom && zone !== zoom ? 0.02 : 0.04}
                 onClick={clickable ? () => onZoom!(zone) : undefined}
               />
             );
@@ -878,14 +911,17 @@ function Scatter({
                 <>
                   <g className="hg-glide" style={glide(x(medians.quality), 0)}>
                     <line x1={0} x2={0} y1={PAD.top} y2={plotBottom} stroke="var(--color-golden-hour)" strokeOpacity={0.45} strokeDasharray="1 4" />
-                    <text x={4} y={plotBottom - 4} className="fill-golden-hour/80 text-[10px]">
+                    <text x={0} y={plotBottom + 28} textAnchor="middle" className="fill-golden-hour/90 text-[10px]">
                       median {medians.quality}
                     </text>
                   </g>
                   <g className="hg-glide" style={glide(0, y(medians.fcfYield))}>
                     <line x1={PAD.left} x2={plotRight} y1={0} y2={0} stroke="var(--color-golden-hour)" strokeOpacity={0.45} strokeDasharray="1 4" />
-                    <text x={PAD.left + 4} y={-4} className="fill-golden-hour/80 text-[10px]">
-                      median {formatPercent(medians.fcfYield, 1)}
+                    <text x={plotRight + 6} y={-2} className="fill-golden-hour/90 text-[10px]">
+                      median
+                    </text>
+                    <text x={plotRight + 6} y={10} className="fill-golden-hour/90 font-mono text-[10px]">
+                      {formatPercent(medians.fcfYield, 1)}
                     </text>
                   </g>
                 </>
@@ -902,7 +938,7 @@ function Scatter({
             </text>
           ))}
           {Q_TICKS.map((t) => (
-            <text key={t} x={0} y={HEIGHT - 14} textAnchor="middle" className="hg-glide fill-mist/60 font-mono text-[9.5px]" style={{ ...glide(x(t), 0), opacity: qTickShown(t) ? 1 : 0 }}>
+            <text key={t} x={0} y={plotBottom + 14} textAnchor="middle" className="hg-glide fill-mist/60 font-mono text-[9.5px]" style={{ ...glide(x(t), 0), opacity: qTickShown(t) ? 1 : 0 }}>
               {t}
             </text>
           ))}
@@ -920,7 +956,7 @@ function Scatter({
             const dim = (sector != null && p.sector !== sector) || (matches != null && !matches.has(p.ticker));
             // In a close-up there is room to name every company: inside a big bubble, beside a small one.
             const label = zoom ? true : r >= labelFrom;
-            const inside = r >= labelFrom;
+            const inside = r >= (zoom ? 12 : labelFrom);
             return (
               <g
                 key={p.ticker}
@@ -947,7 +983,7 @@ function Scatter({
                       className={cn(
                         "pointer-events-none font-mono font-semibold",
                         inside ? "fill-snow-peak" : "fill-snow-peak/75",
-                        inside && r < 12 ? "text-[7.5px]" : "text-[9px]"
+                        inside && r < 13 ? "text-[7.5px]" : zoom && r >= 20 ? "text-[10.5px]" : "text-[9px]"
                       )}
                     >
                       {p.ticker}
@@ -958,30 +994,33 @@ function Scatter({
             );
           })}
 
-          {/* The zones' names, over the bubbles, outlined in the card's colour so they read.
-              In the full map they open their zone; in a close-up they step aside. */}
+          {/* The zones' names, in the bands above and below the plot, never over a
+              company. In the full map they open their zone (the hovered one says
+              so); in a close-up they step aside for its title. */}
           {ZONE_ORDER.map((zone) => {
-            const r = zoneRect[zone];
             const right = zone === "prime" || zone === "paying-up";
             const top = zone === "prime" || zone === "trap";
-            const halo = { paintOrder: "stroke", stroke: "var(--color-wolf-surface)", strokeWidth: 4, strokeLinejoin: "round" } as React.CSSProperties;
             const clickable = expanded && !zoom && onZoom;
-            const lx = right ? Math.min(r.x + r.w, plotRight) - 8 : Math.max(r.x, PAD.left) + 8;
-            const ly = top ? Math.max(r.y, PAD.top) + 16 : Math.min(r.y + r.h, plotBottom) - 20;
+            const lit = hoverZone === zone;
             return (
               <g
                 key={zone}
                 className={cn("hg-glide", clickable ? "cursor-zoom-in" : "pointer-events-none")}
-                style={{ ...glide(lx, ly), opacity: zoom ? 0 : 1 }}
+                style={{ opacity: zoom ? 0 : 1 }}
                 onClick={clickable ? () => onZoom!(zone) : undefined}
               >
-                <text x={0} y={0} textAnchor={right ? "end" : "start"} className="text-[12px] font-semibold" style={{ ...halo, fill: ZONE_FILL[zone] }}>
+                <text
+                  x={right ? plotRight : PAD.left}
+                  y={top ? PAD.top - 10 : plotBottom + (expanded ? 44 : 32)}
+                  textAnchor={right ? "end" : "start"}
+                  className="text-[12px] font-semibold"
+                  style={{ fill: ZONE_FILL[zone] }}
+                >
+                  {right && lit ? <tspan className="fill-sunset-orange text-[11px] font-medium">Look closer → </tspan> : null}
                   {HG_ZONES[zone].label}
-                  <tspan className="fill-mist font-mono text-[11px] font-normal"> · {counts[zone]}</tspan>
-                </text>
-                <text x={0} y={14} textAnchor={right ? "end" : "start"} className="fill-mist text-[10.5px]" style={halo}>
-                  {HG_ZONES[zone].line}
-                  {clickable ? " · look closer" : ""}
+                  <tspan className="fill-mist font-mono text-[11px] font-normal"> {counts[zone]}</tspan>
+                  <tspan className="fill-mist text-[10.5px] font-normal"> · {HG_ZONES[zone].line}</tspan>
+                  {!right && lit ? <tspan className="fill-sunset-orange text-[11px] font-medium"> ← Look closer</tspan> : null}
                 </text>
               </g>
             );
@@ -1003,7 +1042,11 @@ function Scatter({
       ) : null}
 
       {zoom && onZoom ? (
-        <div key={zoom} className="hg-zoom-title pointer-events-auto absolute left-12 top-3 z-[5] flex items-center gap-2 rounded-lg bg-wolf-surface/90 px-2.5 py-1.5 ring-1 ring-inset ring-wolf-border/60 backdrop-blur">
+        <div
+          key={zoom}
+          className="hg-zoom-title pointer-events-auto absolute z-[5] flex items-center gap-2 rounded-lg bg-wolf-surface/90 px-2.5 py-1 ring-1 ring-inset ring-wolf-border/60 backdrop-blur"
+          style={{ left: PAD.left, top: 4 }}
+        >
           <button type="button" onClick={() => onZoom(null)} className="inline-flex items-center gap-1 text-[11.5px] text-mist transition-colors duration-150 hover:text-snow-peak">
             <ArrowLeft className="h-3.5 w-3.5" /> All zones
           </button>

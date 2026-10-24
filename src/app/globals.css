@@ -610,6 +610,19 @@ select optgroup {
     opacity 300ms var(--ease-entrance);
 }
 
+/* A bubble's size follows the view as well (bigger in a close-up). */
+.hg-bubble circle {
+  transition: r 500ms var(--ease-glide);
+}
+
+/* A zone lights up under the pointer, to say it opens: quick, since the
+ * pointer crosses zones all the time. */
+.hg-zone {
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 160ms ease;
+}
+
 /* The zone's detail arrives beside the close-up: a short slide in, then its
  * companies in turn. */
 @keyframes hg-panel-in {
@@ -660,7 +673,8 @@ select optgroup {
   .fg-history-reveal { animation: none; }
   .hg-bubble-body { animation: insight-row-fade 200ms ease both; }
   /* A close-up still changes what is shown, by fading, without the camera move. */
-  .hg-bubble, .hg-glide { transition: opacity 200ms ease; }
+  .hg-bubble, .hg-glide, .hg-zone { transition: opacity 200ms ease; }
+  .hg-bubble circle { transition: none; }
   .hg-zoom-panel, .hg-zoom-row, .hg-zoom-title { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }
 }
