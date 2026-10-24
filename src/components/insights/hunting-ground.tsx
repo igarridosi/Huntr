@@ -72,8 +72,8 @@ const signed = (v: number, digits = 1) => {
  * quality across and free-cash-flow yield up, sized by market cap and
  * coloured by today's move, in four named zones. Hover or tap a company for
  * its card; the sector chips dim the rest rather than remove it, so nothing
- * jumps. A dashed ring marks a company with a story in the news today. On a
- * phone, where a scatter cannot be read, each zone is a short list.
+ * jumps. On a phone, where a scatter cannot be read, each zone is a short
+ * list.
  *
  * Two views, the reader's choice (kept per browser): the map, and a simple
  * one with the same zones and data as four ranked lists laid out where the
@@ -199,9 +199,6 @@ export function HuntingGroundCard({
               </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-bearish/80" /> Down today
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2.5 w-2.5 rounded-full border border-dashed border-sunset-orange" /> In the news
           </span>
               <span>Size: market cap</span>
             </>
@@ -854,6 +851,22 @@ function Scatter({
   }, [drawn, zoom, expanded, width, HEIGHT, maxCap]);
   const at = (p: HgPoint) => placed.get(p.ticker) ?? { x: x(p.quality), y: y(p.fcfYield) };
 
+  // Out of a close-up, the zone left behind: its companies glide back to
+  // their places while the others, which were out of frame, take their
+  // places unseen and then fade in, a ripple spreading out from that zone.
+  // Flying them in from off the frame read as a burst.
+  const [prevZoom, setPrevZoom] = useState(zoom);
+  const [backFrom, setBackFrom] = useState<HgZone | null>(null);
+  if (zoom !== prevZoom) {
+    setPrevZoom(zoom);
+    setBackFrom(zoom == null ? prevZoom : null);
+  }
+  useEffect(() => {
+    if (!backFrom) return;
+    const id = window.setTimeout(() => setBackFrom(null), BACK_MS);
+    return () => window.clearTimeout(id);
+  }, [backFrom]);
+
   // The medians of the companies in frame (the zone, in a close-up), for the full map's reference lines.
   const medians = useMemo(() => {
     if (!expanded) return null;
@@ -900,6 +913,13 @@ function Scatter({
     "paying-up": { x: qx, y: qy, w: Math.max(plotRight, x(100)) - qx, h: Math.max(plotBottom, yp(0)) - qy },
     trap: { x: Math.min(PAD.left, x(Q_MIN)), y: Math.min(PAD.top, yp(1)), w: qx - Math.min(PAD.left, x(Q_MIN)), h: qy - Math.min(PAD.top, yp(1)) },
     avoid: { x: Math.min(PAD.left, x(Q_MIN)), y: qy, w: qx - Math.min(PAD.left, x(Q_MIN)), h: Math.max(plotBottom, yp(0)) - qy },
+  };
+  /** A returning company's fade-in delay: later the farther it sits from the zone left behind. */
+  const backDelay = (c: { x: number; y: number }): number | null => {
+    if (!backFrom) return null;
+    const r = zoneRect[backFrom];
+    const d = Math.hypot(c.x - (r.x + r.w / 2), c.y - (r.y + r.h / 2)) / Math.max(1, Math.hypot(plotW, plotH));
+    return Math.round(BACK_FROM_MS + Math.min(1, d) * BACK_SPREAD_MS);
   };
   // A tick shows when it is in frame and, out of a close-up, on the coarse scale.
   const qTickShown = (t: number) => t >= view.q0 && t <= view.q1 && (zoom ? true : t % 20 === 0);
@@ -1044,15 +1064,22 @@ function Scatter({
             const gone = outOfFrame(p);
             const dim = (sector != null && p.sector !== sector) || (matches != null && !matches.has(p.ticker));
             const isActive = active?.ticker === p.ticker;
+            const back = p.zone !== backFrom ? backDelay(c) : null;
             return (
               <div
                 key={p.ticker}
-                className={cn("hg-dot absolute left-0 top-0", expanded && "hg-dot-live", gone || dim ? "pointer-events-none" : "pointer-events-auto cursor-pointer")}
+                className={cn(
+                  "hg-dot absolute left-0 top-0",
+                  expanded && "hg-dot-live",
+                  back != null && "is-back",
+                  gone || dim ? "pointer-events-none" : "pointer-events-auto cursor-pointer"
+                )}
                 style={{
                   transform: `translate3d(${c.x}px, ${c.y}px, 0) scale(${scale})`,
                   opacity: gone ? 0 : dim ? 0.1 : 1,
                   zIndex: isActive ? 2 : undefined,
-                }}
+                  "--hg-back": back != null ? `${back}ms` : undefined,
+                } as React.CSSProperties}
                 onPointerEnter={() => !dim && !gone && setHover(p.ticker)}
                 onClick={() => !dim && !gone && setPinned((t) => (t === p.ticker ? null : p.ticker))}
               >
@@ -1068,7 +1095,6 @@ function Scatter({
                       : `0 0 0 ${1 / scale}px var(--color-wolf-surface)`,
                   } as React.CSSProperties}
                 />
-                {newsTickers.has(p.ticker) ? <DotNewsRing scale={scale} /> : null}
               </div>
             );
           })}
@@ -1081,12 +1107,14 @@ function Scatter({
             // In a close-up every company is named: inside a big bubble, beside a small one.
             const inside = r >= (zoom ? 12 : labelFrom);
             const shown = !gone && !dim && (zoom ? true : r >= labelFrom);
+            const back = p.zone !== backFrom ? backDelay(c) : null;
             return (
               <span
                 key={p.ticker}
                 className={cn(
                   "hg-label absolute left-0 top-0 whitespace-nowrap font-mono font-semibold",
                   shown && "is-on",
+                  back != null && "is-back",
                   inside ? "text-snow-peak" : "text-snow-peak/75",
                   inside && r < 14 ? "text-[7.5px]" : zoom && r >= 22 ? "text-[10.5px]" : "text-[9px]"
                 )}
@@ -1094,7 +1122,8 @@ function Scatter({
                   transform: inside
                     ? `translate3d(${c.x}px, ${c.y}px, 0) translate(-50%, -50%)`
                     : `translate3d(${c.x + r + 3}px, ${c.y}px, 0) translateY(-50%)`,
-                }}
+                  "--hg-back": back != null ? `${back}ms` : undefined,
+                } as React.CSSProperties}
                 aria-hidden
               >
                 {p.ticker}
@@ -1147,36 +1176,13 @@ function Scatter({
 const DOT_R = 20;
 
 /**
- * The "in the news" ring on an HTML bubble: an svg circle 4 px outside the
- * bubble, its dashes dividing the circle evenly, and its stroke and dashes
- * set against the bubble's scale so they read the same on every size.
+ * The way back out of a close-up: the first returning company starts to
+ * fade in as the zone's own settle (the camera's 500 ms), the farthest
+ * BACK_SPREAD_MS later, each over the CSS's 560 ms. BACK_MS covers it all.
  */
-function DotNewsRing({ scale }: { scale: number }) {
-  const r = DOT_R + 4 / scale;
-  const circumference = 2 * Math.PI * r;
-  const dashes = Math.max(8, Math.round((circumference * scale) / 6));
-  const step = circumference / dashes;
-  const box = r + 2 / scale;
-  return (
-    <svg
-      className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible"
-      width={2 * box}
-      height={2 * box}
-      viewBox={`${-box} ${-box} ${2 * box} ${2 * box}`}
-      aria-hidden
-    >
-      <circle
-        cx={0}
-        cy={0}
-        r={r}
-        fill="none"
-        stroke="var(--color-sunset-orange)"
-        strokeWidth={1.5 / scale}
-        strokeDasharray={`${(step * 0.6).toFixed(2)} ${(step * 0.4).toFixed(2)}`}
-      />
-    </svg>
-  );
-}
+const BACK_FROM_MS = 260;
+const BACK_SPREAD_MS = 420;
+const BACK_MS = 1400;
 
 /** The company under the pointer (or tapped): what it is, why it sits there, the way to its page. */
 function CompanyCard({

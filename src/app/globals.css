@@ -637,6 +637,17 @@ select optgroup {
     opacity 240ms var(--ease-entrance) 300ms;
 }
 
+/* Out of a close-up, the companies that were out of frame take their places
+ * at once, unseen, and fade in slowly, each at its own delay (--hg-back, set
+ * by distance from the zone left behind), their names just after. */
+.hg-dot.is-back {
+  transition: opacity 560ms var(--ease-entrance) var(--hg-back, 0ms);
+}
+
+.hg-label.is-on.is-back {
+  transition: opacity 360ms var(--ease-entrance) calc(var(--hg-back, 0ms) + 240ms);
+}
+
 /* Everything placed by the camera (zone backgrounds, split lines, ticks,
  * medians, zone names) glides with the bubbles when a zone opens, so the
  * close-up reads as one move into a corner of the same map. */
@@ -697,7 +708,7 @@ select optgroup {
   .fg-history-reveal { animation: none; }
   .hg-dot-body { animation: insight-row-fade 200ms ease both; }
   /* A close-up still changes what is shown, by fading, without the camera move. */
-  .hg-dot, .hg-glide, .hg-zone, .hg-label, .hg-label.is-on { transition: opacity 200ms ease; }
+  .hg-dot, .hg-glide, .hg-zone, .hg-label, .hg-label.is-on, .hg-dot.is-back, .hg-label.is-on.is-back { transition: opacity 200ms ease; }
   .hg-zoom-panel, .hg-zoom-row, .hg-zoom-title { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }
 }
