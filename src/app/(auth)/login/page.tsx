@@ -13,6 +13,7 @@ import { ROUTES } from "@/lib/constants";
 import { startPageFromCookieString } from "@/lib/settings/preferences";
 import { createClient } from "@/lib/supabase/client";
 import { humanizeAuthError } from "@/lib/auth-errors";
+import { loginMessage } from "@/lib/auth-callback";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,12 +26,9 @@ export default function LoginPage() {
   const [sendingReset, setSendingReset] = useState(false);
 
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("checkEmail") === "1") {
-      setNotice("Account created. Check your inbox to confirm it, then sign in.");
-    } else if (params.get("reset") === "1") {
-      setNotice("Password updated. Sign in with your new password.");
-    }
+    const message = loginMessage(new URLSearchParams(window.location.search));
+    if (message?.kind === "notice") setNotice(message.text);
+    else if (message) setError(message.text);
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

@@ -17,6 +17,7 @@ export const ROUTES = {
   APP_SETTINGS: "/app/settings",
   LOGIN: "/login",
   SIGNUP: "/signup",
+  AUTH_CALLBACK: "/auth/callback",
   SYMBOL: (ticker: string) => `/symbol/${ticker}`,
   SYMBOL_FINANCIALS: (ticker: string) => `/symbol/${ticker}/financials`,
   SYMBOL_VALUATION: (ticker: string) => `/symbol/${ticker}/valuation`,

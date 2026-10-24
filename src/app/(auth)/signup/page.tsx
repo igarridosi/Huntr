@@ -53,7 +53,7 @@ export default function SignupPage() {
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
-        options: { emailRedirectTo: `${baseUrl}${ROUTES.LOGIN}` },
+        options: { emailRedirectTo: `${baseUrl}${ROUTES.AUTH_CALLBACK}` },
       });
 
       if (signUpError) throw signUpError;
