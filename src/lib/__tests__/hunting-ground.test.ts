@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHuntingGround, companyKey, isUnmeasured, placeCard, rankZone, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
+import { buildHuntingGround, companyKey, isUnmeasured, placeCard, rankZone, separate, yPosition, zoneOf, type HgCompany } from "../hunting-ground";
 
 const B = 1_000_000_000;
 const company = (ticker: string, over: Partial<HgCompany> = {}): HgCompany => ({
@@ -121,5 +121,38 @@ describe("placeCard", () => {
   it("stays inside the chart near the top and bottom", () => {
     expect(placeCard({ x: 200, y: 10, r: 8 }, card, bounds).top).toBe(6);
     expect(placeCard({ x: 200, y: 495, r: 8 }, card, bounds).top).toBe(500 - 6 - 300);
+  });
+});
+
+describe("separate", () => {
+  const bounds = { left: 0, top: 0, right: 500, bottom: 500 };
+  const overlap = (a: { x: number; y: number }, b: { x: number; y: number }, ra: number, rb: number) => Math.hypot(a.x - b.x, a.y - b.y) < ra + rb;
+
+  it("pushes apart two bubbles on the same spot", () => {
+    const out = separate([{ id: "A", x: 250, y: 250, r: 20 }, { id: "B", x: 250, y: 250, r: 12 }], bounds);
+    expect(overlap(out.get("A")!, out.get("B")!, 20, 12)).toBe(false);
+  });
+
+  it("moves the smaller one more, and leaves bubbles that do not touch where they are", () => {
+    const out = separate(
+      [
+        { id: "BIG", x: 200, y: 200, r: 30 },
+        { id: "SMALL", x: 220, y: 200, r: 8 },
+        { id: "AWAY", x: 400, y: 400, r: 10 },
+      ],
+      bounds
+    );
+    const big = out.get("BIG")!;
+    const small = out.get("SMALL")!;
+    expect(Math.hypot(small.x - 220, small.y - 200)).toBeGreaterThan(Math.hypot(big.x - 200, big.y - 200));
+    expect(out.get("AWAY")).toEqual({ x: 400, y: 400 });
+  });
+
+  it("clears a crowd and keeps it in the frame", () => {
+    const crowd = Array.from({ length: 12 }, (_, i) => ({ id: `C${i}`, x: 250 + (i % 3), y: 250 + (i % 4), r: 14 }));
+    const out = separate(crowd, bounds);
+    for (let i = 0; i < crowd.length; i++)
+      for (let j = i + 1; j < crowd.length; j++) expect(overlap(out.get(crowd[i].id)!, out.get(crowd[j].id)!, 13.9, 13.9)).toBe(false);
+    for (const p of out.values()) expect(p.x >= 14 && p.x <= 486 && p.y >= 14 && p.y <= 486).toBe(true);
   });
 });

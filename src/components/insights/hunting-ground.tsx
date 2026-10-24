@@ -10,7 +10,7 @@ import { useStoredChoice } from "@/components/insights/use-stored-choice";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ROUTES } from "@/lib/constants";
 import { cn, formatCompactNumber, formatPercent } from "@/lib/utils";
-import { HG_RULES, HG_ZONES, placeCard, rankZone, yPosition, type HgPoint, type HgZone, type HuntingGround } from "@/lib/hunting-ground";
+import { HG_RULES, HG_ZONES, placeCard, rankZone, separate, yPosition, type HgPoint, type HgZone, type HuntingGround } from "@/lib/hunting-ground";
 
 /** The chart's least height; beside a taller card it grows to fill the row. */
 const MIN_HEIGHT = 380;
@@ -325,6 +325,24 @@ function ExpandedMap({
   const [zoom, setZoom] = useState<HgZone | null>(null);
   const points = ground.points;
 
+  // As many companies per zone as the side column has room for, so all four
+  // zones show without scrolling: a zone's header and padding take about
+  // 44 px, each company 26 px.
+  const aside = useRef<HTMLElement>(null);
+  const [perZone, setPerZone] = useState(5);
+  useLayoutEffect(() => {
+    const el = aside.current;
+    if (!el) return;
+    const measure = () => {
+      const room = (el.clientHeight - 3 * 8) / 4 - 44;
+      setPerZone(Math.max(1, Math.min(8, Math.floor(room / 26))));
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [zoom]);
+
   useEffect(() => {
     const el = dialog.current;
     if (el && !el.open) el.showModal();
@@ -469,9 +487,9 @@ function ExpandedMap({
               className="hidden lg:flex"
             />
           ) : (
-            <aside className="hidden min-h-0 flex-col gap-2 overflow-y-auto lg:flex" style={{ scrollbarWidth: "thin" }}>
+            <aside ref={aside} className="hidden min-h-0 flex-col gap-2 overflow-hidden lg:flex">
               {GRID_ORDER.map((zone) => (
-                <section key={zone} className="rounded-xl bg-snow-peak/[0.025] p-2.5 ring-1 ring-inset ring-wolf-border/40">
+                <section key={zone} className="min-h-0 flex-1 rounded-xl bg-snow-peak/[0.025] px-2.5 py-2 ring-1 ring-inset ring-wolf-border/40">
                   <button
                     type="button"
                     onClick={() => setZoom(zone)}
@@ -486,14 +504,14 @@ function ExpandedMap({
                   </button>
                   <ol className="mt-1">
                     {rankZone(shown, zone)
-                      .slice(0, 5)
+                      .slice(0, perZone)
                       .map((p) => (
                         <li key={p.ticker}>
                           <button
                             type="button"
                             onClick={() => setPinned(p.ticker)}
                             className={cn(
-                              "flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors duration-150 hover:bg-snow-peak/[0.05]",
+                              "flex h-[26px] w-full items-center gap-2 rounded-md px-1 text-left transition-colors duration-150 hover:bg-snow-peak/[0.05]",
                               pinned === p.ticker && "bg-snow-peak/[0.07]"
                             )}
                           >
@@ -526,6 +544,9 @@ const ZONE_RULE: Record<HgZone, string> = {
 };
 
 type ZoneSort = "best" | "quality" | "yield" | "size" | "today";
+
+/** How long the camera takes to move into a zone (the CSS transitions' 500 ms, less the last few frames). */
+const CAMERA_MS = 460;
 const SORTS = [
   { key: "best", label: "Best" },
   { key: "quality", label: "Quality" },
@@ -562,6 +583,13 @@ function ZoneDetail({
   className?: string;
 }) {
   const [sort, setSort] = useState<ZoneSort>("best");
+  // The list (dozens of rows and logos) mounts once the camera has arrived:
+  // built during the move, it held the main thread and the move stuttered.
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const id = window.setTimeout(() => setReady(true), CAMERA_MS);
+    return () => window.clearTimeout(id);
+  }, []);
   const rows = useMemo(() => {
     const by: Record<ZoneSort, (a: HgPoint, b: HgPoint) => number> = {
       best: () => 0,
@@ -654,7 +682,7 @@ function ZoneDetail({
         <span className="text-right">Today</span>
       </div>
       <ol className="mt-1 min-h-0 flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: "thin" }}>
-        {rows.map((p, i) => (
+        {(ready ? rows : []).map((p, i) => (
           <li key={p.ticker} className="hg-zoom-row" style={{ "--row-delay": `${Math.min(i * 25, 350)}ms` } as React.CSSProperties}>
             <button
               type="button"
@@ -809,6 +837,22 @@ function Scatter({
   // Biggest first, so the small ones sit on top and stay reachable.
   const drawn = useMemo(() => [...points].sort((a, b) => b.marketCap - a.marketCap), [points]);
   const active = drawn.find((p) => p.ticker === (hover ?? pinned)) ?? null;
+  const outOfFrame = (p: HgPoint) => zoom != null && (p.zone !== zoom || !inView(p.quality, p.fcfYield));
+
+  // Where each bubble is drawn: where its figures put it, nudged just far
+  // enough that it neither covers nor hides behind another (see separate).
+  // Recomputed when the frame changes (the view, its size), not per render.
+  const placed = useMemo(() => {
+    if (width === 0) return new Map<string, { x: number; y: number }>();
+    const inFrame = drawn.filter((p) => !outOfFrame(p));
+    return separate(
+      inFrame.map((p) => ({ id: p.ticker, x: x(p.quality), y: y(p.fcfYield), r: radius(p.marketCap) })),
+      { left: PAD.left, top: PAD.top, right: PAD.left + plotW, bottom: PAD.top + plotH }
+    );
+    // x, y, radius and outOfFrame follow from these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawn, zoom, expanded, width, HEIGHT, maxCap]);
+  const at = (p: HgPoint) => placed.get(p.ticker) ?? { x: x(p.quality), y: y(p.fcfYield) };
 
   // The medians of the companies in frame (the zone, in a close-up), for the full map's reference lines.
   const medians = useMemo(() => {
@@ -842,7 +886,8 @@ function Scatter({
     if (!hover || overCard.current) return;
     const p = drawn.find((d) => d.ticker === hover);
     if (!p) return;
-    if (Math.hypot(px - x(p.quality), py - y(p.fcfYield)) > radius(p.marketCap) + HOVER_SLACK) setHover(null);
+    const c = at(p);
+    if (Math.hypot(px - c.x, py - c.y) > radius(p.marketCap) + HOVER_SLACK) setHover(null);
   };
 
   const qx = x(HG_RULES.QUALITY_LINE);
@@ -949,51 +994,6 @@ function Scatter({
             Cheaper: free-cash-flow yield →
           </text>
 
-          {drawn.map((p, i) => {
-            const r = radius(p.marketCap);
-            const fill = colorBy === "sector" ? { color: sectorColor(p.sector), opacity: 0.8 } : moveFill(p.change);
-            const outOfFrame = zoom != null && (p.zone !== zoom || !inView(p.quality, p.fcfYield));
-            const dim = (sector != null && p.sector !== sector) || (matches != null && !matches.has(p.ticker));
-            // In a close-up there is room to name every company: inside a big bubble, beside a small one.
-            const label = zoom ? true : r >= labelFrom;
-            const inside = r >= (zoom ? 12 : labelFrom);
-            return (
-              <g
-                key={p.ticker}
-                className={cn("hg-bubble", outOfFrame ? "pointer-events-none" : "cursor-pointer")}
-                style={{
-                  "--hg-delay": `${Math.min(i * 3, 450)}ms`,
-                  transform: `translate(${x(p.quality)}px, ${y(p.fcfYield)}px)`,
-                  opacity: outOfFrame ? 0 : dim ? 0.1 : 1,
-                } as React.CSSProperties}
-                onPointerEnter={() => !dim && !outOfFrame && setHover(p.ticker)}
-                onClick={() => !dim && !outOfFrame && setPinned((t) => (t === p.ticker ? null : p.ticker))}
-              >
-                {/* A wider, invisible target than the bubble itself. */}
-                <circle cx={0} cy={0} r={r + 4} fill="transparent" />
-                {/* Bubble, ring and label move as one, scaled about their shared centre. */}
-                <g className="hg-bubble-body">
-                  <circle cx={0} cy={0} r={r} fill={fill.color} fillOpacity={fill.opacity} stroke="var(--color-wolf-surface)" strokeWidth={1} />
-                  {newsTickers.has(p.ticker) ? <NewsRing cx={0} cy={0} r={r + 4} /> : null}
-                  {label ? (
-                    <text
-                      x={inside ? 0 : r + 3}
-                      y={3}
-                      textAnchor={inside ? "middle" : "start"}
-                      className={cn(
-                        "pointer-events-none font-mono font-semibold",
-                        inside ? "fill-snow-peak" : "fill-snow-peak/75",
-                        inside && r < 13 ? "text-[7.5px]" : zoom && r >= 20 ? "text-[10.5px]" : "text-[9px]"
-                      )}
-                    >
-                      {p.ticker}
-                    </text>
-                  ) : null}
-                </g>
-              </g>
-            );
-          })}
-
           {/* The zones' names, in the bands above and below the plot, never over a
               company. In the full map they open their zone (the hovered one says
               so); in a close-up they step aside for its title. */}
@@ -1026,19 +1026,82 @@ function Scatter({
             );
           })}
 
-          {active ? (
-            <circle
-              cx={0}
-              cy={0}
-              r={radius(active.marketCap) + 2}
-              fill="none"
-              stroke="var(--color-snow-peak)"
-              strokeWidth={2}
-              className="hg-glide pointer-events-none"
-              style={glide(x(active.quality), y(active.fcfYield))}
-            />
-          ) : null}
         </svg>
+      ) : null}
+
+      {/* The companies, as HTML over the svg: each bubble is placed and sized
+          by one transform (translate3d and scale), which the compositor
+          animates on its own, so a hundred and more glide together without
+          a stutter (in svg every frame was repainted on the main thread).
+          Names are separate elements, never scaled, so they stay crisp. */}
+      {width > 0 ? (
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ clipPath: `inset(${PAD.top - 6}px ${PAD.right - 6}px ${PAD.bottom - 6}px ${PAD.left - 6}px)` }}>
+          {drawn.map((p, i) => {
+            const r = radius(p.marketCap);
+            const c = at(p);
+            const scale = r / DOT_R;
+            const fill = colorBy === "sector" ? { color: sectorColor(p.sector), opacity: 0.8 } : moveFill(p.change);
+            const gone = outOfFrame(p);
+            const dim = (sector != null && p.sector !== sector) || (matches != null && !matches.has(p.ticker));
+            const isActive = active?.ticker === p.ticker;
+            return (
+              <div
+                key={p.ticker}
+                className={cn("hg-dot absolute left-0 top-0", expanded && "hg-dot-live", gone || dim ? "pointer-events-none" : "pointer-events-auto cursor-pointer")}
+                style={{
+                  transform: `translate3d(${c.x}px, ${c.y}px, 0) scale(${scale})`,
+                  opacity: gone ? 0 : dim ? 0.1 : 1,
+                  zIndex: isActive ? 2 : undefined,
+                }}
+                onPointerEnter={() => !dim && !gone && setHover(p.ticker)}
+                onClick={() => !dim && !gone && setPinned((t) => (t === p.ticker ? null : p.ticker))}
+              >
+                <span
+                  className="hg-dot-body"
+                  style={{
+                    "--hg-delay": `${Math.min(i * 3, 450)}ms`,
+                    background: `color-mix(in srgb, ${fill.color} ${Math.round(fill.opacity * 100)}%, transparent)`,
+                    // Outlines in screen pixels whatever the scale: the surface's
+                    // edge always, and a white ring for the company whose card is open.
+                    boxShadow: isActive
+                      ? `0 0 0 ${1 / scale}px var(--color-wolf-surface), 0 0 0 ${3 / scale}px var(--color-snow-peak)`
+                      : `0 0 0 ${1 / scale}px var(--color-wolf-surface)`,
+                  } as React.CSSProperties}
+                />
+                {newsTickers.has(p.ticker) ? <DotNewsRing scale={scale} /> : null}
+              </div>
+            );
+          })}
+
+          {drawn.map((p) => {
+            const r = radius(p.marketCap);
+            const c = at(p);
+            const gone = outOfFrame(p);
+            const dim = (sector != null && p.sector !== sector) || (matches != null && !matches.has(p.ticker));
+            // In a close-up every company is named: inside a big bubble, beside a small one.
+            const inside = r >= (zoom ? 12 : labelFrom);
+            const shown = !gone && !dim && (zoom ? true : r >= labelFrom);
+            return (
+              <span
+                key={p.ticker}
+                className={cn(
+                  "hg-label absolute left-0 top-0 whitespace-nowrap font-mono font-semibold",
+                  shown && "is-on",
+                  inside ? "text-snow-peak" : "text-snow-peak/75",
+                  inside && r < 14 ? "text-[7.5px]" : zoom && r >= 22 ? "text-[10.5px]" : "text-[9px]"
+                )}
+                style={{
+                  transform: inside
+                    ? `translate3d(${c.x}px, ${c.y}px, 0) translate(-50%, -50%)`
+                    : `translate3d(${c.x + r + 3}px, ${c.y}px, 0) translateY(-50%)`,
+                }}
+                aria-hidden
+              >
+                {p.ticker}
+              </span>
+            );
+          })}
+        </div>
       ) : null}
 
       {zoom && onZoom ? (
@@ -1062,7 +1125,7 @@ function Scatter({
         <CompanyCard
           point={active}
           inNews={newsTickers.has(active.ticker)}
-          anchor={{ x: x(active.quality), y: y(active.fcfYield), r: radius(active.marketCap) }}
+          anchor={{ ...at(active), r: radius(active.marketCap) }}
           bounds={{ width, height: HEIGHT }}
           pinned={pinned === active.ticker}
           onClose={() => setPinned(null)}
@@ -1080,25 +1143,38 @@ function Scatter({
   );
 }
 
+/** A bubble's base radius; each is drawn at this size and scaled to its own. */
+const DOT_R = 20;
+
 /**
- * The "in the news" ring: dashes that divide the circle evenly, so no gap
- * falls where a dash should and the ring reads as centred on its bubble.
+ * The "in the news" ring on an HTML bubble: an svg circle 4 px outside the
+ * bubble, its dashes dividing the circle evenly, and its stroke and dashes
+ * set against the bubble's scale so they read the same on every size.
  */
-function NewsRing({ cx, cy, r }: { cx: number; cy: number; r: number }) {
+function DotNewsRing({ scale }: { scale: number }) {
+  const r = DOT_R + 4 / scale;
   const circumference = 2 * Math.PI * r;
-  const dashes = Math.max(8, Math.round(circumference / 6));
+  const dashes = Math.max(8, Math.round((circumference * scale) / 6));
   const step = circumference / dashes;
+  const box = r + 2 / scale;
   return (
-    <circle
-      cx={cx}
-      cy={cy}
-      r={r}
-      fill="none"
-      stroke="var(--color-sunset-orange)"
-      strokeWidth={1.5}
-      strokeDasharray={`${(step * 0.6).toFixed(2)} ${(step * 0.4).toFixed(2)}`}
-      className="pointer-events-none"
-    />
+    <svg
+      className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 overflow-visible"
+      width={2 * box}
+      height={2 * box}
+      viewBox={`${-box} ${-box} ${2 * box} ${2 * box}`}
+      aria-hidden
+    >
+      <circle
+        cx={0}
+        cy={0}
+        r={r}
+        fill="none"
+        stroke="var(--color-sunset-orange)"
+        strokeWidth={1.5 / scale}
+        strokeDasharray={`${(step * 0.6).toFixed(2)} ${(step * 0.4).toFixed(2)}`}
+      />
+    </svg>
   );
 }
 

@@ -234,3 +234,71 @@ export function placeCard(
   const top = Math.min(Math.max(anchor.y - card.height / 2, CARD_MARGIN), bounds.height - CARD_MARGIN - card.height);
   return { left: Math.max(CARD_MARGIN, left), top: Math.max(CARD_MARGIN, top) };
 }
+
+export interface Bubble {
+  id: string;
+  /** Where the company's figures put it, in pixels. */
+  x: number;
+  y: number;
+  r: number;
+}
+
+/**
+ * Bubbles that would overlap, pushed apart: two companies with almost the
+ * same quality and yield land on one spot, and the one underneath cannot
+ * be reached. Each overlapping pair is moved apart along the line between
+ * them, the smaller bubble more, and every bubble is pulled back towards
+ * where its figures put it, so it moves only as far as it has to. The
+ * figures themselves are on each company's card.
+ */
+export function separate(
+  bubbles: Bubble[],
+  bounds: { left: number; top: number; right: number; bottom: number },
+  { gap = 2, iterations = 160 }: { gap?: number; iterations?: number } = {}
+): Map<string, { x: number; y: number }> {
+  const pos = bubbles.map((b) => ({ x: b.x, y: b.y }));
+  for (let it = 0; it < iterations; it++) {
+    let moved = false;
+    for (let i = 0; i < bubbles.length; i++) {
+      for (let j = i + 1; j < bubbles.length; j++) {
+        const a = pos[i];
+        const b = pos[j];
+        let dx = b.x - a.x;
+        let dy = b.y - a.y;
+        let d = Math.hypot(dx, dy);
+        const min = bubbles[i].r + bubbles[j].r + gap;
+        if (d >= min) continue;
+        if (d < 1e-6) {
+          // On the very same spot: part them along a fixed angle per pair.
+          const angle = ((i * 7 + j * 13) % 360) * (Math.PI / 180);
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
+          d = 1;
+        }
+        const push = min - d;
+        const ux = dx / d;
+        const uy = dy / d;
+        // The smaller bubble moves more; a giant barely shifts.
+        const share = bubbles[i].r / (bubbles[i].r + bubbles[j].r);
+        a.x -= ux * push * (1 - share);
+        a.y -= uy * push * (1 - share);
+        b.x += ux * push * share;
+        b.y += uy * push * share;
+        moved = true;
+      }
+    }
+    // Back towards the figures, a little each round, for the first rounds
+    // only, so the last ones settle every overlap; and inside the frame.
+    const pull = it < iterations * 0.5 ? 0.04 : 0;
+    for (let i = 0; i < bubbles.length; i++) {
+      const p = pos[i];
+      const r = bubbles[i].r;
+      p.x += (bubbles[i].x - p.x) * pull;
+      p.y += (bubbles[i].y - p.y) * pull;
+      p.x = Math.min(Math.max(p.x, bounds.left + r), bounds.right - r);
+      p.y = Math.min(Math.max(p.y, bounds.top + r), bounds.bottom - r);
+    }
+    if (!moved) break;
+  }
+  return new Map(bubbles.map((b, i) => [b.id, pos[i]]));
+}

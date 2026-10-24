@@ -587,18 +587,54 @@ select optgroup {
   animation: fg-reveal 500ms var(--ease-entrance) both;
 }
 
-/* Hunting Ground bubbles settle in, largest first, a few ms apart. The
- * body animates, not the outer group: that group's opacity is the sector
- * filter's, which dims the rest without moving anything. */
-@keyframes hg-bubble-in {
+/* Hunting Ground bubbles are HTML, each drawn at a 20 px radius and placed
+ * and sized by a single transform (translate3d, then scale), centred on its
+ * spot. The compositor animates that transform on its own, so the camera
+ * move into a zone stays smooth with every company moving at once. */
+.hg-dot {
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 240ms var(--ease-entrance);
+}
+
+/* In the full map, where the camera moves, each bubble keeps its own layer
+ * from the start, so the first frame of a move is not spent creating them. */
+.hg-dot-live {
+  will-change: transform;
+}
+
+/* They settle in, the largest first, a few ms apart. The body animates, not
+ * the bubble: the bubble's own opacity is the sector filter's. */
+@keyframes hg-dot-in {
   from { opacity: 0; transform: scale(0.6); }
   to   { opacity: 1; transform: none; }
 }
 
-.hg-bubble {
+.hg-dot-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  animation: hg-dot-in 380ms var(--ease-entrance) var(--hg-delay, 0ms) both;
+}
+
+/* Names travel with their bubbles; one that appears (a close-up names
+ * every company) fades in as the camera arrives, not before. */
+.hg-label {
+  opacity: 0;
+  pointer-events: none;
   transition:
-    opacity 220ms var(--ease-entrance),
-    transform 500ms var(--ease-glide);
+    transform 500ms var(--ease-glide),
+    opacity 140ms ease-out;
+}
+
+.hg-label.is-on {
+  opacity: 1;
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 240ms var(--ease-entrance) 300ms;
 }
 
 /* Everything placed by the camera (zone backgrounds, split lines, ticks,
@@ -608,11 +644,6 @@ select optgroup {
   transition:
     transform 500ms var(--ease-glide),
     opacity 300ms var(--ease-entrance);
-}
-
-/* A bubble's size follows the view as well (bigger in a close-up). */
-.hg-bubble circle {
-  transition: r 500ms var(--ease-glide);
 }
 
 /* A zone lights up under the pointer, to say it opens: quick, since the
@@ -648,13 +679,6 @@ select optgroup {
   animation: hg-panel-in 280ms var(--ease-entrance) 240ms both;
 }
 
-/* The bubble's body (circle, news ring, label) scales about its shared centre. */
-.hg-bubble-body {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: hg-bubble-in 380ms var(--ease-entrance) var(--hg-delay, 0ms) both;
-}
-
 /* The company card: seen dozens of times while browsing, so barely moves. */
 @keyframes hg-card-in {
   from { opacity: 0; transform: translate3d(0, 3px, 0); }
@@ -671,10 +695,9 @@ select optgroup {
   .fg-needle-sweep { animation: none; }
   .hg-sweep { display: none; }
   .fg-history-reveal { animation: none; }
-  .hg-bubble-body { animation: insight-row-fade 200ms ease both; }
+  .hg-dot-body { animation: insight-row-fade 200ms ease both; }
   /* A close-up still changes what is shown, by fading, without the camera move. */
-  .hg-bubble, .hg-glide, .hg-zone { transition: opacity 200ms ease; }
-  .hg-bubble circle { transition: none; }
+  .hg-dot, .hg-glide, .hg-zone, .hg-label, .hg-label.is-on { transition: opacity 200ms ease; }
   .hg-zoom-panel, .hg-zoom-row, .hg-zoom-title { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }
 }
