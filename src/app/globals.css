@@ -108,6 +108,9 @@
   /* Strong ease-out for entrances. Kept alongside the existing --ease-out
    * rather than replacing it, since other components are tuned to that one. */
   --ease-entrance: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Strong ease-in-out, for something that travels across the screen (a
+   * camera move): it leaves gently and arrives gently. */
+  --ease-glide: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -593,7 +596,43 @@ select optgroup {
 }
 
 .hg-bubble {
-  transition: opacity 200ms var(--ease-entrance);
+  transition:
+    opacity 220ms var(--ease-entrance),
+    transform 500ms var(--ease-glide);
+}
+
+/* Everything placed by the camera (zone backgrounds, split lines, ticks,
+ * medians, zone names) glides with the bubbles when a zone opens, so the
+ * close-up reads as one move into a corner of the same map. */
+.hg-glide {
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 300ms var(--ease-entrance);
+}
+
+/* The zone's detail arrives beside the close-up: a short slide in, then its
+ * companies in turn. */
+@keyframes hg-panel-in {
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-zoom-panel {
+  animation: hg-panel-in 320ms var(--ease-entrance) both;
+}
+
+@keyframes hg-row-in {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-zoom-row {
+  animation: hg-row-in 260ms var(--ease-entrance) var(--row-delay, 0ms) both;
+}
+
+/* The close-up's title lands as the camera arrives. */
+.hg-zoom-title {
+  animation: hg-panel-in 280ms var(--ease-entrance) 240ms both;
 }
 
 /* The bubble's body (circle, news ring, label) scales about its shared centre. */
@@ -620,6 +659,9 @@ select optgroup {
   .hg-sweep { display: none; }
   .fg-history-reveal { animation: none; }
   .hg-bubble-body { animation: insight-row-fade 200ms ease both; }
+  /* A close-up still changes what is shown, by fading, without the camera move. */
+  .hg-bubble, .hg-glide { transition: opacity 200ms ease; }
+  .hg-zoom-panel, .hg-zoom-row, .hg-zoom-title { animation: insight-row-fade 200ms ease both; }
   .hg-card { animation: none; }
 }
 

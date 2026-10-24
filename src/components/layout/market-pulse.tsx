@@ -82,8 +82,12 @@ export function MarketPulse({ className }: { className?: string }) {
             <span className={cn("relative inline-flex h-2 w-2 rounded-full", PHASE[status.phase].dot)} />
           </span>
           <span className="font-medium text-snow-peak">{PHASE[status.phase].label}</span>
+          {/* Its own element, so the pill's gap sits evenly either side of it. */}
+          <span className="hidden text-mist/60 2xl:inline" aria-hidden>
+            ·
+          </span>
           <span className="hidden text-mist 2xl:inline">
-            · {status.next} {status.nextDayLabel ? `${status.nextDayLabel} 9:30 ET` : `in ${formatCountdown(status.minutesLeft)}`}
+            {status.next} {status.nextDayLabel ? `${status.nextDayLabel} 9:30 ET` : `in ${formatCountdown(status.minutesLeft)}`}
           </span>
         </span>
       ) : (

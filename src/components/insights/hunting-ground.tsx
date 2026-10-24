@@ -2,14 +2,14 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Crosshair, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Crosshair, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X, ZoomIn } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
 import { useStoredChoice } from "@/components/insights/use-stored-choice";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ROUTES } from "@/lib/constants";
-import { cn, formatPercent } from "@/lib/utils";
+import { cn, formatCompactNumber, formatPercent } from "@/lib/utils";
 import { HG_RULES, HG_ZONES, placeCard, rankZone, yPosition, type HgPoint, type HgZone, type HuntingGround } from "@/lib/hunting-ground";
 
 /** The chart's least height; beside a taller card it grows to fill the row. */
@@ -293,8 +293,9 @@ function Criteria({ ground, className }: { ground: HuntingGround; className?: st
  * The map at full size, with what the card has no room for: a search that
  * finds and opens a company, colour by sector as well as by today's move,
  * a label on most bubbles, a finer grid with the medians of the companies
- * shown, and each zone's best beside the map. A native <dialog>, on the
- * same transitions as the news preview.
+ * shown, and each zone's best beside the map. A zone opens in close-up:
+ * the camera glides into its corner of the map, and beside it the zone's
+ * companies in full. A native <dialog>, on the news preview's transitions.
  */
 function ExpandedMap({
   ground,
@@ -314,6 +315,7 @@ function ExpandedMap({
   const [colorBy, setColorBy] = useState<ColorBy>("move");
   const [query, setQuery] = useState("");
   const [pinned, setPinned] = useState<string | null>(null);
+  const [zoom, setZoom] = useState<HgZone | null>(null);
   const points = ground.points;
 
   useEffect(() => {
@@ -341,6 +343,13 @@ function ExpandedMap({
       ref={dialog}
       aria-label="The Hunting Ground, full map"
       onClose={onClose}
+      // Escape steps out of a zone first, then closes the map.
+      onCancel={(e) => {
+        if (zoom) {
+          e.preventDefault();
+          setZoom(null);
+        }
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) dialog.current?.close();
       }}
@@ -354,7 +363,11 @@ function ExpandedMap({
             </span>
             <div>
               <p className="text-[16px] font-semibold leading-tight">The Hunting Ground</p>
-              <p className="text-[11.5px] text-mist">{shown.length} companies · quality across, cheaper up, size is market cap</p>
+              <p className="text-[11.5px] text-mist">
+                {zoom
+                  ? `${HG_ZONES[zoom].label} close up · Escape or "All zones" to step back`
+                  : `${shown.length} companies · quality across, cheaper up, size is market cap · click a zone to look closer`}
+              </p>
             </div>
           </div>
 
@@ -364,7 +377,10 @@ function ExpandedMap({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter" && matches[0]) setPinned(matches[0].ticker);
+                if (e.key === "Enter" && matches[0]) {
+                  setPinned(matches[0].ticker);
+                  if (zoom && matches[0].zone !== zoom) setZoom(matches[0].zone);
+                }
               }}
               placeholder="Find a company"
               aria-label="Find a company on the map"
@@ -412,7 +428,12 @@ function ExpandedMap({
           ))}
         </div>
 
-        <div className="mt-3 grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_17rem]">
+        <div
+          className={cn(
+            "mt-3 grid min-h-0 flex-1 grid-cols-1 gap-4",
+            zoom ? "lg:grid-cols-[minmax(0,1fr)_minmax(0,30rem)]" : "lg:grid-cols-[minmax(0,1fr)_17rem]"
+          )}
+        >
           <div className="min-h-[24rem]">
             <Scatter
               points={points}
@@ -426,45 +447,242 @@ function ExpandedMap({
               expanded
               colorBy={colorBy}
               matches={q ? new Set(matches.map((p) => p.ticker)) : null}
+              zoom={zoom}
+              onZoom={setZoom}
             />
           </div>
-          <aside className="hidden min-h-0 flex-col gap-2 overflow-y-auto lg:flex" style={{ scrollbarWidth: "thin" }}>
-            {GRID_ORDER.map((zone) => (
-              <section key={zone} className="rounded-xl bg-snow-peak/[0.025] p-2.5 ring-1 ring-inset ring-wolf-border/40">
-                <p className="flex items-baseline justify-between gap-2 px-1">
-                  <span className="text-[12px] font-semibold" style={{ color: ZONE_FILL[zone] }}>
-                    {HG_ZONES[zone].label}
-                  </span>
-                  <span className="font-mono text-[11px] text-mist">{counts[zone]}</span>
-                </p>
-                <ol className="mt-1">
-                  {rankZone(shown, zone)
-                    .slice(0, 5)
-                    .map((p) => (
-                      <li key={p.ticker}>
-                        <button
-                          type="button"
-                          onClick={() => setPinned(p.ticker)}
-                          className={cn(
-                            "flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors duration-150 hover:bg-snow-peak/[0.05]",
-                            pinned === p.ticker && "bg-snow-peak/[0.07]"
-                          )}
-                        >
-                          <TickerLogo ticker={p.ticker} src={p.logo} className="h-5 w-5" imageClassName="rounded" fallbackClassName="rounded text-[7px]" />
-                          <span className="w-12 text-[11.5px] font-semibold">{p.ticker}</span>
-                          <span className="flex-1 truncate font-mono text-[10.5px] text-mist">
-                            Q {p.quality} · {formatPercent(p.fcfYield, 1)}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                </ol>
-              </section>
-            ))}
-          </aside>
+          {zoom ? (
+            <ZoneDetail
+              key={`${zoom}-${sector ?? "all"}`}
+              zone={zoom}
+              points={shown.filter((p) => p.zone === zoom)}
+              pinned={pinned}
+              onPin={setPinned}
+              onBack={() => setZoom(null)}
+              className="hidden lg:flex"
+            />
+          ) : (
+            <aside className="hidden min-h-0 flex-col gap-2 overflow-y-auto lg:flex" style={{ scrollbarWidth: "thin" }}>
+              {GRID_ORDER.map((zone) => (
+                <section key={zone} className="rounded-xl bg-snow-peak/[0.025] p-2.5 ring-1 ring-inset ring-wolf-border/40">
+                  <button
+                    type="button"
+                    onClick={() => setZoom(zone)}
+                    className="group flex w-full items-baseline justify-between gap-2 rounded-md px-1 text-left"
+                    title={`Look closer at ${HG_ZONES[zone].label}`}
+                  >
+                    <span className="flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: ZONE_FILL[zone] }}>
+                      {HG_ZONES[zone].label}
+                      <ZoomIn className="h-3 w-3 opacity-0 transition-opacity duration-150 group-hover:opacity-100 group-focus-visible:opacity-100" />
+                    </span>
+                    <span className="font-mono text-[11px] text-mist">{counts[zone]}</span>
+                  </button>
+                  <ol className="mt-1">
+                    {rankZone(shown, zone)
+                      .slice(0, 5)
+                      .map((p) => (
+                        <li key={p.ticker}>
+                          <button
+                            type="button"
+                            onClick={() => setPinned(p.ticker)}
+                            className={cn(
+                              "flex w-full items-center gap-2 rounded-md px-1 py-1 text-left transition-colors duration-150 hover:bg-snow-peak/[0.05]",
+                              pinned === p.ticker && "bg-snow-peak/[0.07]"
+                            )}
+                          >
+                            <TickerLogo ticker={p.ticker} src={p.logo} className="h-5 w-5" imageClassName="rounded" fallbackClassName="rounded text-[7px]" />
+                            <span className="w-12 text-[11.5px] font-semibold">{p.ticker}</span>
+                            <span className="flex-1 truncate font-mono text-[10.5px] text-mist">
+                              Q {p.quality} · {formatPercent(p.fcfYield, 1)}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                  </ol>
+                </section>
+              ))}
+            </aside>
+          )}
         </div>
       </div>
     </dialog>
+  );
+}
+
+// ── A zone, close up ───────────────────────────────────────────────────────
+
+const ZONE_RULE: Record<HgZone, string> = {
+  prime: `A quality of ${HG_RULES.QUALITY_LINE} or more, and a free-cash-flow yield of ${HG_RULES.CHEAP_YIELD * 100}% or more: good businesses for 25 times their cash or less.`,
+  "paying-up": `A quality of ${HG_RULES.QUALITY_LINE} or more, at a yield under ${HG_RULES.CHEAP_YIELD * 100}%: good businesses the market already prices as such.`,
+  trap: `A yield of ${HG_RULES.CHEAP_YIELD * 100}% or more, at a quality under ${HG_RULES.QUALITY_LINE}: cheap, and the business explains why.`,
+  avoid: `A quality under ${HG_RULES.QUALITY_LINE} and a yield under ${HG_RULES.CHEAP_YIELD * 100}%: neither a good business nor a cheap one.`,
+};
+
+type ZoneSort = "best" | "quality" | "yield" | "size" | "today";
+const SORTS = [
+  { key: "best", label: "Best" },
+  { key: "quality", label: "Quality" },
+  { key: "yield", label: "Yield" },
+  { key: "size", label: "Size" },
+  { key: "today", label: "Today" },
+] as const;
+
+const median = (vs: number[]) => {
+  if (vs.length === 0) return null;
+  const s = [...vs].sort((a, b) => a - b);
+  return s[Math.floor(s.length / 2)];
+};
+
+/**
+ * Everything about one zone: what puts a company there, the zone in
+ * numbers (how many, the medians, its weight in the market, how it trades
+ * today, its sector mix), and every company in it, sortable, each opening
+ * its card on the map.
+ */
+function ZoneDetail({
+  zone,
+  points,
+  pinned,
+  onPin,
+  onBack,
+  className,
+}: {
+  zone: HgZone;
+  points: HgPoint[];
+  pinned: string | null;
+  onPin: (ticker: string) => void;
+  onBack: () => void;
+  className?: string;
+}) {
+  const [sort, setSort] = useState<ZoneSort>("best");
+  const rows = useMemo(() => {
+    const by: Record<ZoneSort, (a: HgPoint, b: HgPoint) => number> = {
+      best: () => 0,
+      quality: (a, b) => b.quality - a.quality,
+      yield: (a, b) => b.fcfYield - a.fcfYield,
+      size: (a, b) => b.marketCap - a.marketCap,
+      today: (a, b) => b.change - a.change,
+    };
+    return sort === "best" ? rankZone(points, zone) : [...points].sort(by[sort]);
+  }, [points, zone, sort]);
+
+  const medQ = median(points.map((p) => p.quality));
+  const medY = median(points.map((p) => p.fcfYield));
+  const cap = points.reduce((sum, p) => sum + p.marketCap, 0);
+  const up = points.filter((p) => p.change > 0).length;
+  const avgMove = points.length ? points.reduce((s, p) => s + p.change, 0) / points.length : 0;
+  const mix = useMemo(() => {
+    const c = new Map<string, number>();
+    for (const p of points) c.set(p.sector ?? "Other", (c.get(p.sector ?? "Other") ?? 0) + 1);
+    return [...c.entries()].sort((a, b) => b[1] - a[1]);
+  }, [points]);
+
+  const stats = [
+    { label: "Companies", value: String(points.length) },
+    { label: "Median quality", value: medQ != null ? String(medQ) : "–" },
+    { label: "Median FCF yield", value: medY != null ? formatPercent(medY, 1) : "–", hint: medY && medY > 0 ? `${Math.round(1 / medY)}× cash` : undefined },
+    { label: "Market cap", value: `$${formatCompactNumber(cap)}` },
+    { label: "Up today", value: `${up} of ${points.length}` },
+    { label: "Average move", value: signed(avgMove, 2), tone: avgMove >= 0 ? "text-bullish" : "text-bearish" },
+  ];
+
+  return (
+    <aside className={cn("hg-zoom-panel min-h-0 flex-col overflow-hidden rounded-xl bg-snow-peak/[0.02] ring-1 ring-inset ring-wolf-border/40", className)}>
+      <div className="border-b border-wolf-border/30 p-3.5">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-1 rounded-md text-[11.5px] text-mist transition-colors duration-150 hover:text-snow-peak"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" /> All zones
+        </button>
+        <p className="mt-2 flex items-baseline gap-2">
+          <span className="text-[17px] font-semibold" style={{ color: ZONE_FILL[zone] }}>
+            {HG_ZONES[zone].label}
+          </span>
+          <span className="text-[12px] text-mist">{HG_ZONES[zone].line}</span>
+        </p>
+        <p className="mt-1 text-[11.5px] leading-relaxed text-mist">{ZONE_RULE[zone]}</p>
+
+        <dl className="mt-3 grid grid-cols-3 gap-1.5">
+          {stats.map((s) => (
+            <div key={s.label} className="rounded-lg bg-snow-peak/[0.03] px-2 py-1.5 ring-1 ring-inset ring-wolf-border/30">
+              <dt className="truncate text-[10px] text-mist">{s.label}</dt>
+              <dd className={cn("font-mono text-[13px] font-semibold tabular-nums text-snow-peak", s.tone)}>
+                {s.value}
+                {s.hint ? <span className="ml-1 text-[10px] font-normal text-mist">{s.hint}</span> : null}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        {mix.length > 0 ? (
+          <div className="mt-3">
+            <div className="flex h-1.5 overflow-hidden rounded-full" aria-hidden>
+              {mix.map(([name, n]) => (
+                <span key={name} style={{ width: `${(n / points.length) * 100}%`, background: sectorColor(name) }} />
+              ))}
+            </div>
+            <p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-mist">
+              {mix.slice(0, 4).map(([name, n]) => (
+                <span key={name} className="inline-flex items-center gap-1">
+                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: sectorColor(name) }} />
+                  {name} {n}
+                </span>
+              ))}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 px-3.5 pt-2.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-mist">Companies</span>
+        <SegmentedTabs items={SORTS} value={sort} onChange={setSort} ariaLabel="Sort the zone's companies" size="sm" />
+      </div>
+      <div className="mt-1.5 grid grid-cols-[minmax(0,1fr)_4.5rem_4.25rem_3.5rem_3.5rem] gap-2 px-3.5 text-[9.5px] uppercase tracking-[0.08em] text-mist/60">
+        <span>Company</span>
+        <span>Quality</span>
+        <span className="text-right">FCF yield</span>
+        <span className="text-right">Cap</span>
+        <span className="text-right">Today</span>
+      </div>
+      <ol className="mt-1 min-h-0 flex-1 overflow-y-auto px-2 pb-2" style={{ scrollbarWidth: "thin" }}>
+        {rows.map((p, i) => (
+          <li key={p.ticker} className="hg-zoom-row" style={{ "--row-delay": `${Math.min(i * 25, 350)}ms` } as React.CSSProperties}>
+            <button
+              type="button"
+              onClick={() => onPin(p.ticker)}
+              className={cn(
+                "grid w-full grid-cols-[minmax(0,1fr)_4.5rem_4.25rem_3.5rem_3.5rem] items-center gap-2 rounded-lg px-1.5 py-1.5 text-left transition-colors duration-150 hover:bg-snow-peak/[0.05]",
+                pinned === p.ticker && "bg-snow-peak/[0.08] ring-1 ring-inset ring-wolf-border/60"
+              )}
+            >
+              <span className="flex min-w-0 items-center gap-2">
+                <TickerLogo ticker={p.ticker} src={p.logo} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[8px]" />
+                <span className="min-w-0">
+                  <span className="block text-[12px] font-semibold leading-tight">{p.ticker}</span>
+                  <span className="block truncate text-[10.5px] leading-tight text-mist">{p.name}</span>
+                </span>
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-5 font-mono text-[11.5px] tabular-nums">{p.quality}</span>
+                <span className="h-1 flex-1 overflow-hidden rounded-full bg-snow-peak/[0.08]">
+                  <span className="block h-full rounded-full bg-sunset-orange/80" style={{ width: `${p.quality}%` }} />
+                </span>
+              </span>
+              <span className="text-right font-mono text-[11.5px] tabular-nums">
+                {formatPercent(p.fcfYield, 1)}
+                <span className="block text-[9.5px] text-mist">{p.fcfYield > 0 ? `${Math.round(1 / p.fcfYield)}× cash` : "burns cash"}</span>
+              </span>
+              <span className="text-right font-mono text-[11px] tabular-nums text-mist">${formatCompactNumber(p.marketCap)}</span>
+              <span className={cn("text-right font-mono text-[11.5px] tabular-nums", p.change >= 0 ? "text-bullish" : "text-bearish")}>
+                {signed(p.change)}
+              </span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </aside>
   );
 }
 
@@ -472,6 +690,34 @@ function ExpandedMap({
 
 /** How far past a bubble's edge the pointer may go before its card closes. */
 const HOVER_SLACK = 22;
+
+/** What the camera frames: a span of quality across and of yield position (0-1) up. */
+interface View {
+  q0: number;
+  q1: number;
+  p0: number;
+  p1: number;
+}
+
+const FULL_VIEW: View = { q0: Q_MIN, q1: 100, p0: 0, p1: 1 };
+
+/** A zone's corner of the map, with a little of its neighbours for context. */
+function zoneView(zone: HgZone): View {
+  const q = HG_RULES.QUALITY_LINE;
+  const p = yPosition(HG_RULES.CHEAP_YIELD);
+  const right = zone === "prime" || zone === "paying-up";
+  const top = zone === "prime" || zone === "trap";
+  return {
+    q0: right ? q - 3 : Q_MIN,
+    q1: right ? 100 : q + 3,
+    p0: top ? p - 0.03 : 0,
+    p1: top ? 1 : p + 0.03,
+  };
+}
+
+/** Every quality and yield tick the camera may show; each appears when there is room. */
+const Q_TICKS = Array.from({ length: 18 }, (_, i) => 15 + i * 5);
+const Y_TICKS_ALL = [-0.02, -0.01, 0, 0.005, 0.01, 0.015, 0.02, 0.03, 0.04, 0.05, 0.06, 0.08, 0.1];
 
 function Scatter({
   points,
@@ -485,6 +731,8 @@ function Scatter({
   expanded = false,
   colorBy = "move",
   matches = null,
+  zoom = null,
+  onZoom,
 }: {
   points: HgPoint[];
   sector: string | null;
@@ -500,6 +748,9 @@ function Scatter({
   colorBy?: ColorBy;
   /** A search's matches: the rest is dimmed. */
   matches?: Set<string> | null;
+  /** The zone in close-up, in the full map. */
+  zoom?: HgZone | null;
+  onZoom?: (zone: HgZone | null) => void;
 }) {
   const box = useRef<HTMLDivElement>(null);
   const overCard = useRef(false);
@@ -522,10 +773,16 @@ function Scatter({
     return () => ro.disconnect();
   }, []);
 
+  const view = zoom ? zoneView(zoom) : FULL_VIEW;
   const plotW = Math.max(0, width - PAD.left - PAD.right);
   const plotH = HEIGHT - PAD.top - PAD.bottom;
-  const x = (q: number) => PAD.left + ((Math.max(Q_MIN, q) - Q_MIN) / (100 - Q_MIN)) * plotW;
-  const y = (v: number) => PAD.top + (1 - yPosition(v)) * plotH;
+  const x = (q: number) => PAD.left + (((zoom ? q : Math.max(Q_MIN, q)) - view.q0) / (view.q1 - view.q0)) * plotW;
+  const yp = (pos: number) => PAD.top + (1 - (pos - view.p0) / (view.p1 - view.p0)) * plotH;
+  const y = (v: number) => yp(yPosition(v));
+  const inView = (q: number, v: number) => {
+    const pos = yPosition(v);
+    return q >= view.q0 - 0.01 && q <= view.q1 + 0.01 && pos >= view.p0 - 0.001 && pos <= view.p1 + 0.001;
+  };
   const maxCap = Math.max(...points.map((p) => p.marketCap));
   // 5 to 20 px in the card (6 to 28 at full size): big enough to see and to hit.
   const radius = (cap: number) => (expanded ? 6 + 22 * Math.sqrt(cap / maxCap) : 5 + 15 * Math.sqrt(cap / maxCap));
@@ -535,17 +792,13 @@ function Scatter({
   const drawn = useMemo(() => [...points].sort((a, b) => b.marketCap - a.marketCap), [points]);
   const active = drawn.find((p) => p.ticker === (hover ?? pinned)) ?? null;
 
-  // The medians of the companies shown, for the full map's reference lines.
+  // The medians of the companies in frame (the zone, in a close-up), for the full map's reference lines.
   const medians = useMemo(() => {
     if (!expanded) return null;
-    const shown = sector ? points.filter((p) => p.sector === sector) : points;
+    const shown = points.filter((p) => (!sector || p.sector === sector) && (!zoom || p.zone === zoom));
     if (shown.length < 3) return null;
-    const mid = (vs: number[]) => {
-      const s = [...vs].sort((a, b) => a - b);
-      return s[Math.floor(s.length / 2)];
-    };
-    return { quality: mid(shown.map((p) => p.quality)), fcfYield: mid(shown.map((p) => p.fcfYield)) };
-  }, [expanded, points, sector]);
+    return { quality: median(shown.map((p) => p.quality))!, fcfYield: median(shown.map((p) => p.fcfYield))! };
+  }, [expanded, points, sector, zoom]);
 
   /**
    * A hovered card stays while the pointer is near its bubble (or on the
@@ -564,12 +817,22 @@ function Scatter({
 
   const qx = x(HG_RULES.QUALITY_LINE);
   const qy = y(HG_RULES.CHEAP_YIELD);
+  const plotRight = PAD.left + plotW;
+  const plotBottom = PAD.top + plotH;
+  // Zone backgrounds run past the frame in a close-up; the svg clips them.
   const zoneRect: Record<HgZone, { x: number; y: number; w: number; h: number }> = {
-    prime: { x: qx, y: PAD.top, w: PAD.left + plotW - qx, h: qy - PAD.top },
-    "paying-up": { x: qx, y: qy, w: PAD.left + plotW - qx, h: PAD.top + plotH - qy },
-    trap: { x: PAD.left, y: PAD.top, w: qx - PAD.left, h: qy - PAD.top },
-    avoid: { x: PAD.left, y: qy, w: qx - PAD.left, h: PAD.top + plotH - qy },
+    prime: { x: qx, y: Math.min(PAD.top, yp(1)), w: Math.max(plotRight, x(100)) - qx, h: qy - Math.min(PAD.top, yp(1)) },
+    "paying-up": { x: qx, y: qy, w: Math.max(plotRight, x(100)) - qx, h: Math.max(plotBottom, yp(0)) - qy },
+    trap: { x: Math.min(PAD.left, x(Q_MIN)), y: Math.min(PAD.top, yp(1)), w: qx - Math.min(PAD.left, x(Q_MIN)), h: qy - Math.min(PAD.top, yp(1)) },
+    avoid: { x: Math.min(PAD.left, x(Q_MIN)), y: qy, w: qx - Math.min(PAD.left, x(Q_MIN)), h: Math.max(plotBottom, yp(0)) - qy },
   };
+  // A tick shows when it is in frame and, out of a close-up, on the coarse scale.
+  const qTickShown = (t: number) => t >= view.q0 && t <= view.q1 && (zoom ? true : t % 20 === 0);
+  const yTickShown = (t: number) => {
+    const pos = yPosition(t);
+    return pos >= view.p0 && pos <= view.p1 && (zoom ? true : (Y_TICKS as readonly number[]).includes(t));
+  };
+  const glide = (tx: number, ty: number, sx = 1, sy = 1) => ({ transform: `translate(${tx}px, ${ty}px) scale(${sx}, ${sy})` });
 
   return (
     <div
@@ -583,48 +846,67 @@ function Scatter({
     >
       {width > 0 ? (
         <svg width={width} height={HEIGHT} className="absolute inset-0 block" role="img" aria-label="Companies by quality score and free-cash-flow yield">
+          {/* Zone backgrounds: unit squares placed and stretched by transform, so they glide with the camera. */}
           {ZONE_ORDER.map((zone) => {
             const r = zoneRect[zone];
-            return <rect key={zone} x={r.x} y={r.y} width={Math.max(0, r.w)} height={Math.max(0, r.h)} fill={ZONE_FILL[zone]} opacity={zone === "prime" ? 0.09 : 0.04} />;
+            const clickable = expanded && !zoom && onZoom;
+            return (
+              <rect
+                key={zone}
+                x={0}
+                y={0}
+                width={1}
+                height={1}
+                className={cn("hg-glide", clickable && "cursor-zoom-in")}
+                style={glide(r.x, r.y, Math.max(0, r.w), Math.max(0, r.h))}
+                fill={ZONE_FILL[zone]}
+                opacity={zone === "prime" ? 0.09 : zoom && zone !== zoom ? 0.02 : 0.04}
+                onClick={clickable ? () => onZoom!(zone) : undefined}
+              />
+            );
           })}
 
           {expanded ? (
             <g className="pointer-events-none">
-              {[20, 30, 40, 50, 70, 80, 90].map((qv) => (
-                <line key={qv} x1={x(qv)} x2={x(qv)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--color-mist)" strokeOpacity={0.08} />
+              {Q_TICKS.map((t) => (
+                <line key={t} x1={0} x2={0} y1={PAD.top} y2={plotBottom} className="hg-glide" style={{ ...glide(x(t), 0), opacity: qTickShown(t) || (t % 10 === 0 && !zoom && t >= view.q0) ? 1 : 0 }} stroke="var(--color-mist)" strokeOpacity={0.08} />
               ))}
-              {Y_TICKS.map((t) => (
-                <line key={t} x1={PAD.left} x2={PAD.left + plotW} y1={y(t)} y2={y(t)} stroke="var(--color-mist)" strokeOpacity={0.08} />
+              {Y_TICKS_ALL.map((t) => (
+                <line key={t} x1={PAD.left} x2={plotRight} y1={0} y2={0} className="hg-glide" style={{ ...glide(0, y(t)), opacity: yTickShown(t) ? 1 : 0 }} stroke="var(--color-mist)" strokeOpacity={0.08} />
               ))}
               {medians ? (
                 <>
-                  <line x1={x(medians.quality)} x2={x(medians.quality)} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--color-golden-hour)" strokeOpacity={0.45} strokeDasharray="1 4" />
-                  <line x1={PAD.left} x2={PAD.left + plotW} y1={y(medians.fcfYield)} y2={y(medians.fcfYield)} stroke="var(--color-golden-hour)" strokeOpacity={0.45} strokeDasharray="1 4" />
-                  <text x={x(medians.quality) + 4} y={PAD.top + plotH - 4} className="fill-golden-hour/80 text-[10px]">
-                    median {medians.quality}
-                  </text>
-                  <text x={PAD.left + 4} y={y(medians.fcfYield) - 4} className="fill-golden-hour/80 text-[10px]">
-                    median {formatPercent(medians.fcfYield, 1)}
-                  </text>
+                  <g className="hg-glide" style={glide(x(medians.quality), 0)}>
+                    <line x1={0} x2={0} y1={PAD.top} y2={plotBottom} stroke="var(--color-golden-hour)" strokeOpacity={0.45} strokeDasharray="1 4" />
+                    <text x={4} y={plotBottom - 4} className="fill-golden-hour/80 text-[10px]">
+                      median {medians.quality}
+                    </text>
+                  </g>
+                  <g className="hg-glide" style={glide(0, y(medians.fcfYield))}>
+                    <line x1={PAD.left} x2={plotRight} y1={0} y2={0} stroke="var(--color-golden-hour)" strokeOpacity={0.45} strokeDasharray="1 4" />
+                    <text x={PAD.left + 4} y={-4} className="fill-golden-hour/80 text-[10px]">
+                      median {formatPercent(medians.fcfYield, 1)}
+                    </text>
+                  </g>
                 </>
               ) : null}
             </g>
           ) : null}
 
           {/* The split lines, and the axes' scales. */}
-          <line x1={qx} x2={qx} y1={PAD.top} y2={PAD.top + plotH} stroke="var(--color-mist)" strokeOpacity={0.35} strokeDasharray="4 4" />
-          <line x1={PAD.left} x2={PAD.left + plotW} y1={qy} y2={qy} stroke="var(--color-mist)" strokeOpacity={0.35} strokeDasharray="4 4" />
-          {Y_TICKS.map((t) => (
-            <text key={t} x={PAD.left - 6} y={y(t) + 3} textAnchor="end" className="fill-mist/60 font-mono text-[9.5px]">
-              {formatPercent(t, 0)}
+          <line x1={0} x2={0} y1={PAD.top} y2={plotBottom} className="hg-glide" style={glide(qx, 0)} stroke="var(--color-mist)" strokeOpacity={0.35} strokeDasharray="4 4" />
+          <line x1={PAD.left} x2={plotRight} y1={0} y2={0} className="hg-glide" style={glide(0, qy)} stroke="var(--color-mist)" strokeOpacity={0.35} strokeDasharray="4 4" />
+          {Y_TICKS_ALL.map((t) => (
+            <text key={t} x={PAD.left - 6} y={3} textAnchor="end" className="hg-glide fill-mist/60 font-mono text-[9.5px]" style={{ ...glide(0, y(t)), opacity: yTickShown(t) ? 1 : 0 }}>
+              {formatPercent(t, Math.round(t * 1000) % 10 === 0 ? 0 : 1)}
             </text>
           ))}
-          {[20, 40, 60, 80, 100].map((q) => (
-            <text key={q} x={x(q)} y={HEIGHT - 14} textAnchor="middle" className="fill-mist/60 font-mono text-[9.5px]">
-              {q}
+          {Q_TICKS.map((t) => (
+            <text key={t} x={0} y={HEIGHT - 14} textAnchor="middle" className="hg-glide fill-mist/60 font-mono text-[9.5px]" style={{ ...glide(x(t), 0), opacity: qTickShown(t) ? 1 : 0 }}>
+              {t}
             </text>
           ))}
-          <text x={PAD.left + plotW} y={HEIGHT - 2} textAnchor="end" className="fill-mist text-[10.5px]">
+          <text x={plotRight} y={HEIGHT - 2} textAnchor="end" className="fill-mist text-[10.5px]">
             Huntr quality score →
           </text>
           <text x={10} y={PAD.top + plotH / 2} textAnchor="middle" transform={`rotate(-90 10 ${PAD.top + plotH / 2})`} className="fill-mist text-[10.5px]">
@@ -634,29 +916,39 @@ function Scatter({
           {drawn.map((p, i) => {
             const r = radius(p.marketCap);
             const fill = colorBy === "sector" ? { color: sectorColor(p.sector), opacity: 0.8 } : moveFill(p.change);
+            const outOfFrame = zoom != null && (p.zone !== zoom || !inView(p.quality, p.fcfYield));
             const dim = (sector != null && p.sector !== sector) || (matches != null && !matches.has(p.ticker));
-            const cx = x(p.quality);
-            const cy = y(p.fcfYield);
+            // In a close-up there is room to name every company: inside a big bubble, beside a small one.
+            const label = zoom ? true : r >= labelFrom;
+            const inside = r >= labelFrom;
             return (
               <g
                 key={p.ticker}
-                className="hg-bubble cursor-pointer"
-                style={{ "--hg-delay": `${Math.min(i * 3, 450)}ms`, opacity: dim ? 0.1 : 1 } as React.CSSProperties}
-                onPointerEnter={() => !dim && setHover(p.ticker)}
-                onClick={() => !dim && setPinned((t) => (t === p.ticker ? null : p.ticker))}
+                className={cn("hg-bubble", outOfFrame ? "pointer-events-none" : "cursor-pointer")}
+                style={{
+                  "--hg-delay": `${Math.min(i * 3, 450)}ms`,
+                  transform: `translate(${x(p.quality)}px, ${y(p.fcfYield)}px)`,
+                  opacity: outOfFrame ? 0 : dim ? 0.1 : 1,
+                } as React.CSSProperties}
+                onPointerEnter={() => !dim && !outOfFrame && setHover(p.ticker)}
+                onClick={() => !dim && !outOfFrame && setPinned((t) => (t === p.ticker ? null : p.ticker))}
               >
                 {/* A wider, invisible target than the bubble itself. */}
-                <circle cx={cx} cy={cy} r={r + 4} fill="transparent" />
+                <circle cx={0} cy={0} r={r + 4} fill="transparent" />
                 {/* Bubble, ring and label move as one, scaled about their shared centre. */}
                 <g className="hg-bubble-body">
-                  <circle cx={cx} cy={cy} r={r} fill={fill.color} fillOpacity={fill.opacity} stroke="var(--color-wolf-surface)" strokeWidth={1} />
-                  {newsTickers.has(p.ticker) ? <NewsRing cx={cx} cy={cy} r={r + 4} /> : null}
-                  {r >= labelFrom ? (
+                  <circle cx={0} cy={0} r={r} fill={fill.color} fillOpacity={fill.opacity} stroke="var(--color-wolf-surface)" strokeWidth={1} />
+                  {newsTickers.has(p.ticker) ? <NewsRing cx={0} cy={0} r={r + 4} /> : null}
+                  {label ? (
                     <text
-                      x={cx}
-                      y={cy + 3}
-                      textAnchor="middle"
-                      className={cn("pointer-events-none fill-snow-peak font-mono font-semibold", r < 12 ? "text-[7.5px]" : "text-[9px]")}
+                      x={inside ? 0 : r + 3}
+                      y={3}
+                      textAnchor={inside ? "middle" : "start"}
+                      className={cn(
+                        "pointer-events-none font-mono font-semibold",
+                        inside ? "fill-snow-peak" : "fill-snow-peak/75",
+                        inside && r < 12 ? "text-[7.5px]" : "text-[9px]"
+                      )}
                     >
                       {p.ticker}
                     </text>
@@ -666,32 +958,30 @@ function Scatter({
             );
           })}
 
-          {/* The zones' names, over the bubbles, outlined in the card's colour so they read. */}
+          {/* The zones' names, over the bubbles, outlined in the card's colour so they read.
+              In the full map they open their zone; in a close-up they step aside. */}
           {ZONE_ORDER.map((zone) => {
             const r = zoneRect[zone];
             const right = zone === "prime" || zone === "paying-up";
             const top = zone === "prime" || zone === "trap";
             const halo = { paintOrder: "stroke", stroke: "var(--color-wolf-surface)", strokeWidth: 4, strokeLinejoin: "round" } as React.CSSProperties;
+            const clickable = expanded && !zoom && onZoom;
+            const lx = right ? Math.min(r.x + r.w, plotRight) - 8 : Math.max(r.x, PAD.left) + 8;
+            const ly = top ? Math.max(r.y, PAD.top) + 16 : Math.min(r.y + r.h, plotBottom) - 20;
             return (
-              <g key={zone} className="pointer-events-none">
-                <text
-                  x={right ? r.x + r.w - 8 : r.x + 8}
-                  y={top ? r.y + 16 : r.y + r.h - 20}
-                  textAnchor={right ? "end" : "start"}
-                  className="text-[12px] font-semibold"
-                  style={{ ...halo, fill: ZONE_FILL[zone] }}
-                >
+              <g
+                key={zone}
+                className={cn("hg-glide", clickable ? "cursor-zoom-in" : "pointer-events-none")}
+                style={{ ...glide(lx, ly), opacity: zoom ? 0 : 1 }}
+                onClick={clickable ? () => onZoom!(zone) : undefined}
+              >
+                <text x={0} y={0} textAnchor={right ? "end" : "start"} className="text-[12px] font-semibold" style={{ ...halo, fill: ZONE_FILL[zone] }}>
                   {HG_ZONES[zone].label}
                   <tspan className="fill-mist font-mono text-[11px] font-normal"> · {counts[zone]}</tspan>
                 </text>
-                <text
-                  x={right ? r.x + r.w - 8 : r.x + 8}
-                  y={top ? r.y + 30 : r.y + r.h - 6}
-                  textAnchor={right ? "end" : "start"}
-                  className="fill-mist text-[10.5px]"
-                  style={halo}
-                >
+                <text x={0} y={14} textAnchor={right ? "end" : "start"} className="fill-mist text-[10.5px]" style={halo}>
                   {HG_ZONES[zone].line}
+                  {clickable ? " · look closer" : ""}
                 </text>
               </g>
             );
@@ -699,16 +989,30 @@ function Scatter({
 
           {active ? (
             <circle
-              cx={x(active.quality)}
-              cy={y(active.fcfYield)}
+              cx={0}
+              cy={0}
               r={radius(active.marketCap) + 2}
               fill="none"
               stroke="var(--color-snow-peak)"
               strokeWidth={2}
-              className="pointer-events-none"
+              className="hg-glide pointer-events-none"
+              style={glide(x(active.quality), y(active.fcfYield))}
             />
           ) : null}
         </svg>
+      ) : null}
+
+      {zoom && onZoom ? (
+        <div key={zoom} className="hg-zoom-title pointer-events-auto absolute left-12 top-3 z-[5] flex items-center gap-2 rounded-lg bg-wolf-surface/90 px-2.5 py-1.5 ring-1 ring-inset ring-wolf-border/60 backdrop-blur">
+          <button type="button" onClick={() => onZoom(null)} className="inline-flex items-center gap-1 text-[11.5px] text-mist transition-colors duration-150 hover:text-snow-peak">
+            <ArrowLeft className="h-3.5 w-3.5" /> All zones
+          </button>
+          <span className="h-3 w-px bg-wolf-border/70" aria-hidden />
+          <span className="text-[12.5px] font-semibold" style={{ color: ZONE_FILL[zoom] }}>
+            {HG_ZONES[zoom].label}
+          </span>
+          <span className="font-mono text-[11px] text-mist">{counts[zoom]}</span>
+        </div>
       ) : null}
 
       {active ? (
