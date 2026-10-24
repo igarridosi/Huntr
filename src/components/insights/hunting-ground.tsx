@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowUpRight, Info, LayoutGrid, Maximize2, Newspaper, ScatterChart, Search, Star, Target, X } from "lucide-react";
+import { ArrowUpRight, Crosshair, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
@@ -118,7 +118,7 @@ export function HuntingGroundCard({
     <Card className={className}>
       <CardContent className="flex h-full flex-col p-4 sm:p-5">
         <SectionHeader
-          icon={Target}
+          icon={Crosshair}
           title="The Hunting Ground"
           subtitle="Where the largest companies sit on quality and price"
         >
@@ -164,7 +164,7 @@ export function HuntingGroundCard({
           <p className="mt-6 text-[13px] text-mist">No company has both a quality score and a free-cash-flow yield yet.</p>
         ) : (
           view === "simple" ? (
-            <ZoneGrid points={points} sector={sector} counts={counts} newsTickers={newsTickers} className="mt-3 flex-1" />
+            <ZoneGrid points={points} sector={sector} counts={counts} className="mt-3 flex-1" />
           ) : (
             <>
               <div className="mt-3 hidden min-h-[380px] flex-1 sm:block">
@@ -350,7 +350,7 @@ function ExpandedMap({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sunset-orange/[0.08] ring-1 ring-inset ring-sunset-orange/25">
-              <Target className="h-[18px] w-[18px] text-sunset-orange" />
+              <Crosshair className="h-[18px] w-[18px] text-sunset-orange" />
             </span>
             <div>
               <p className="text-[16px] font-semibold leading-tight">The Hunting Ground</p>
@@ -861,12 +861,6 @@ function CompanyCard({
         ))}
       </ul>
 
-      {inNews ? (
-        <p className="mt-2.5 flex items-center gap-1.5 text-[11px] text-sunset-orange">
-          <Newspaper className="h-3.5 w-3.5" /> In today&apos;s news, above
-        </p>
-      ) : null}
-
       <div className="mt-3 flex items-center gap-2">
         <Link
           href={ROUTES.SYMBOL(point.ticker)}
@@ -946,13 +940,11 @@ function ZoneGrid({
   points,
   sector,
   counts,
-  newsTickers,
   className,
 }: {
   points: HgPoint[];
   sector: string | null;
   counts: Record<HgZone, number>;
-  newsTickers: Set<string>;
   className?: string;
 }) {
   const shown = sector ? points.filter((p) => p.sector === sector) : points;
@@ -988,7 +980,6 @@ function ZoneGrid({
                       <TickerLogo ticker={p.ticker} src={p.logo} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[8px]" />
                       <span className="flex items-center gap-1 text-[12px] font-semibold text-snow-peak">
                         {p.ticker}
-                        {newsTickers.has(p.ticker) ? <Newspaper className="h-3 w-3 text-sunset-orange" aria-label="In today's news" /> : null}
                       </span>
                       <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-mist">
                         <span className="shrink-0">Q {p.quality}</span>

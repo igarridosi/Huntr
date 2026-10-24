@@ -67,7 +67,7 @@ export function FearGreedCard({ className }: { className?: string }) {
   const latest = points.at(-1);
 
   return (
-    <Card className={className}>
+    <Card id="fear-greed" className={cn("scroll-mt-20", className)}>
       <CardContent className="flex h-full flex-col p-4 sm:p-5">
         <SectionHeader
           icon={Gauge}
