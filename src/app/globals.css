@@ -108,6 +108,9 @@
   /* Strong ease-out for entrances. Kept alongside the existing --ease-out
    * rather than replacing it, since other components are tuned to that one. */
   --ease-entrance: cubic-bezier(0.23, 1, 0.32, 1);
+  /* Strong ease-in-out, for something that travels across the screen (a
+   * camera move): it leaves gently and arrives gently. */
+  --ease-glide: cubic-bezier(0.77, 0, 0.175, 1);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────
@@ -443,6 +446,298 @@ select optgroup {
 /* A loading indicator, so it loops; slow, so it reads as waiting, not alarm. */
 .price-ghost {
   animation: price-ghost 1.6s ease-in-out infinite;
+}
+
+/* News preview (Insights), a native <dialog>. Opened now and then, so a
+ * standard entrance: the panel rises 8px and settles from 98% while it fades
+ * in (220ms), and leaves faster than it came (160ms), back the way it came.
+ * Transitions, not keyframes: closing mid-open reverses from where it is.
+ * `display` and `overlay` are carried discretely so the dialog stays in the
+ * top layer until its exit has played; a browser without that just closes. */
+.news-preview,
+.hg-dialog {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity 220ms var(--ease-entrance),
+    transform 220ms var(--ease-entrance),
+    overlay 220ms var(--ease-entrance) allow-discrete,
+    display 220ms var(--ease-entrance) allow-discrete;
+}
+
+.news-preview:not([open]),
+.hg-dialog:not([open]) {
+  opacity: 0;
+  transform: translate3d(0, 6px, 0) scale(0.985);
+  transition-duration: 160ms;
+  /* While it fades out it is still laid out over the page: clicks go through. */
+  pointer-events: none;
+}
+
+@starting-style {
+  .news-preview[open],
+  .hg-dialog[open] {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.98);
+  }
+}
+
+.news-preview::backdrop,
+.hg-dialog::backdrop {
+  background-color: rgb(5 9 9 / 0.72);
+  backdrop-filter: blur(6px);
+  opacity: 1;
+  transition:
+    opacity 220ms var(--ease-entrance),
+    overlay 220ms var(--ease-entrance) allow-discrete,
+    display 220ms var(--ease-entrance) allow-discrete;
+}
+
+.news-preview:not([open])::backdrop,
+.hg-dialog:not([open])::backdrop {
+  opacity: 0;
+  transition-duration: 160ms;
+}
+
+@starting-style {
+  .news-preview[open]::backdrop,
+  .hg-dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* The summary arrives after the panel: it fades into the space held for it. */
+.news-preview-summary {
+  animation: insight-row-fade 200ms var(--ease-entrance) both;
+}
+
+/* Fear & Greed needle. Its angle is an SVG attribute; this only adds the
+ * entrance: a swing in from fear to the reading, once, when the data
+ * arrives (a measurement being taken). If this never loads, the needle
+ * still points right. */
+@keyframes fg-needle-in {
+  from { transform: rotate(var(--fg-from, 0deg)); }
+  to   { transform: none; }
+}
+
+.fg-needle-in {
+  transform-box: view-box;
+  transform-origin: 120px 112px;
+  animation: fg-needle-in 750ms var(--ease-entrance) both;
+}
+
+/* Loading: the unlit needle sweeps the dial, back and forth. */
+@keyframes fg-needle-sweep {
+  from { transform: rotate(-78deg); }
+  to   { transform: rotate(78deg); }
+}
+
+.fg-needle-sweep {
+  transform-box: view-box;
+  transform-origin: 120px 112px;
+  animation: fg-needle-sweep 1.8s cubic-bezier(0.77, 0, 0.175, 1) infinite alternate;
+}
+
+/* Loading: the history's stripes breathe in turn, left to right. */
+@keyframes fg-stripe {
+  0%, 100% { opacity: 0.03; }
+  50%      { opacity: 0.12; }
+}
+
+/* Faint before its turn comes (`both` holds the first frame through the
+ * stagger's delay), and faint where animation does not run. */
+.fg-stripes-ghost > span {
+  background: var(--color-mist);
+  opacity: 0.05;
+  animation: fg-stripe 1.6s ease-in-out infinite both;
+  animation-delay: calc(var(--i) * 70ms);
+}
+
+/* Loading the Hunting Ground: dots light up where companies will land, and
+ * a soft sweep crosses the ground, a radar looking. */
+@keyframes hg-dot {
+  0%, 100% { opacity: 0.08; transform: scale(0.85); }
+  50%      { opacity: 0.32; transform: none; }
+}
+
+.hg-ghost-dot {
+  opacity: 0.12;
+  animation: hg-dot 2.2s ease-in-out infinite both;
+  animation-delay: var(--d, 0ms);
+}
+
+@keyframes hg-sweep {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(340%); }
+}
+
+.hg-sweep {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--color-sunset-orange) 9%, transparent), transparent);
+  animation: hg-sweep 2.4s linear infinite;
+}
+
+/* The history line is revealed left to right, as time runs, on every range:
+ * a clip on its layer, so the whole line always ends at its last point. */
+@keyframes fg-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to   { clip-path: inset(0 0 0 0); }
+}
+
+.fg-history-reveal {
+  animation: fg-reveal 500ms var(--ease-entrance) both;
+}
+
+/* Hunting Ground bubbles are HTML, each drawn at a 20 px radius and placed
+ * and sized by a single transform (translate3d, then scale), centred on its
+ * spot. The compositor animates that transform on its own, so the camera
+ * move into a zone stays smooth with every company moving at once. */
+.hg-dot {
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 240ms var(--ease-entrance);
+}
+
+/* In the full map, where the camera moves, each bubble keeps its own layer
+ * from the start, so the first frame of a move is not spent creating them. */
+.hg-dot-live {
+  will-change: transform;
+}
+
+/* They settle in, the largest first, a few ms apart. The body animates, not
+ * the bubble: the bubble's own opacity is the sector filter's. */
+@keyframes hg-dot-in {
+  from { opacity: 0; transform: scale(0.6); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-dot-body {
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  animation: hg-dot-in 380ms var(--ease-entrance) var(--hg-delay, 0ms) both;
+}
+
+/* Names travel with their bubbles; one that appears (a close-up names
+ * every company) fades in as the camera arrives, not before. */
+.hg-label {
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 140ms ease-out;
+}
+
+.hg-label.is-on {
+  opacity: 1;
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 240ms var(--ease-entrance) 300ms;
+}
+
+/* Out of a close-up, the companies that were out of frame take their places
+ * at once, unseen, and fade in slowly, each at its own delay (--hg-back, set
+ * by distance from the zone left behind), their names just after. */
+.hg-dot.is-back {
+  transition: opacity 560ms var(--ease-entrance) var(--hg-back, 0ms);
+}
+
+.hg-label.is-on.is-back {
+  transition: opacity 360ms var(--ease-entrance) calc(var(--hg-back, 0ms) + 240ms);
+}
+
+/* Everything placed by the camera (zone backgrounds, split lines, ticks,
+ * medians, zone names) glides with the bubbles when a zone opens, so the
+ * close-up reads as one move into a corner of the same map. */
+.hg-glide {
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 300ms var(--ease-entrance);
+}
+
+/* A zone lights up under the pointer, to say it opens: quick, since the
+ * pointer crosses zones all the time. */
+.hg-zone {
+  transition:
+    transform 500ms var(--ease-glide),
+    opacity 160ms ease;
+}
+
+/* The zone's detail arrives beside the close-up: a short slide in, then its
+ * companies in turn. */
+@keyframes hg-panel-in {
+  from { opacity: 0; transform: translate3d(14px, 0, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-zoom-panel {
+  animation: hg-panel-in 320ms var(--ease-entrance) both;
+}
+
+@keyframes hg-row-in {
+  from { opacity: 0; transform: translate3d(0, 4px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-zoom-row {
+  animation: hg-row-in 260ms var(--ease-entrance) var(--row-delay, 0ms) both;
+}
+
+/* The close-up's title lands as the camera arrives. */
+.hg-zoom-title {
+  animation: hg-panel-in 280ms var(--ease-entrance) 240ms both;
+}
+
+/* The company card: seen dozens of times while browsing, so barely moves. */
+@keyframes hg-card-in {
+  from { opacity: 0; transform: translate3d(0, 3px, 0); }
+  to   { opacity: 1; transform: none; }
+}
+
+.hg-card {
+  animation: hg-card-in 140ms var(--ease-entrance) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fg-needle-in { animation: none; }
+  .fg-needle-sweep, .fg-stripes-ghost > span, .hg-ghost-dot { animation-duration: 3s; }
+  .fg-needle-sweep { animation: none; }
+  .hg-sweep { display: none; }
+  .fg-history-reveal { animation: none; }
+  .hg-dot-body { animation: insight-row-fade 200ms ease both; }
+  /* A close-up still changes what is shown, by fading, without the camera move. */
+  .hg-dot, .hg-glide, .hg-zone, .hg-label, .hg-label.is-on, .hg-dot.is-back, .hg-label.is-on.is-back { transition: opacity 200ms ease; }
+  .hg-zoom-panel, .hg-zoom-row, .hg-zoom-title { animation: insight-row-fade 200ms ease both; }
+  .hg-card { animation: none; }
+}
+
+/* The excerpt fades out over its last line, as an article's opening does
+ * when the rest is behind a "continue reading". A fixed band, not a share
+ * of the height, so a two-line excerpt keeps its first line whole. */
+.news-preview-excerpt {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.9em), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.9em), transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* Fade only: no rise, no scale. */
+  .news-preview,
+  .news-preview:not([open]),
+  .news-preview[open],
+  .hg-dialog,
+  .hg-dialog:not([open]),
+  .hg-dialog[open] {
+    transform: none;
+  }
+
+  @starting-style {
+    .news-preview[open],
+    .hg-dialog[open] {
+      transform: none;
+    }
+  }
 }
 
 .symbol-field-bar {

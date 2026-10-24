@@ -951,3 +951,110 @@ export async function invalidateAllForTicker(ticker: string): Promise<void> {
     console.warn(`[Cache] Failed to invalidate all cache for ${ticker}`);
   }
 }
+
+export interface HuntingGroundMetrics {
+  /** Huntr quality score, 0-100, from the weekly cron; null when not scored. */
+  quality: number | null;
+  profitability: number | null;
+  financialHealth: number | null;
+  growth: number | null;
+  cashGeneration: number | null;
+  /** Trailing free cash flow over market cap; null when unknown or not yet comparable. */
+  fcfYield: number | null;
+  sector: string | null;
+  /** Yahoo's industry ("Banks - Diversified", "Credit Services"), when cached. */
+  industry: string | null;
+  /**
+   * When the statements and the price are in different currencies (an ADR):
+   * the raw figures, for the caller to convert. fcfYield is null until then.
+   */
+  pendingFx: { fcf: number; marketCap: number; from: string; to: string } | null;
+  /** The yield was converted from the reporting currency. */
+  fxFrom: string | null;
+}
+
+/**
+ * What The Hunting Ground plots for each company, read light: the screener's
+ * batch read pulls whole statements for every ticker, far too heavy for a
+ * page's worth of companies. This asks the cached quote for the fields the
+ * free-cash-flow yield needs, the cached profiles for the industry, and the
+ * quality table for its scores. Three queries, whatever the count; no Yahoo
+ * calls (src/lib/api/hunting-ground.ts does the conversions and fills gaps).
+ */
+export async function getHuntingGroundMetrics(tickers: string[]): Promise<Record<string, HuntingGroundMetrics>> {
+  const normalized = Array.from(new Set(tickers.map((t) => t.toUpperCase())));
+  if (normalized.length === 0) return {};
+  const supabase = await createClient();
+
+  const [{ data: quoteRows }, { data: profileRows }, { data: qualityRows }] = await Promise.all([
+    supabase
+      .from("stock_cache")
+      .select(
+        "ticker, fcf:data->financialData->freeCashflow, cap:data->summaryDetail->marketCap, capStats:data->defaultKeyStatistics->marketCap, quoteCurrency:data->price->currency, reportCurrency:data->financialData->financialCurrency, sector:data->assetProfile->sector, industry:data->assetProfile->industry"
+      )
+      .in("ticker", normalized)
+      .eq("cache_key", "quote"),
+    supabase
+      .from("stock_cache")
+      .select("ticker, industry:data->summaryProfile->industry")
+      .in("ticker", normalized)
+      .eq("cache_key", "profile"),
+    supabase
+      .from("stock_quality_scores")
+      .select("ticker, quality_overall, quality_profitability, quality_financial_health, quality_growth, quality_cash_generation, sector")
+      .in("ticker", normalized),
+  ]);
+
+  const out: Record<string, HuntingGroundMetrics> = {};
+  const blank = (): HuntingGroundMetrics => ({
+    quality: null,
+    profitability: null,
+    financialHealth: null,
+    growth: null,
+    cashGeneration: null,
+    fcfYield: null,
+    sector: null,
+    industry: null,
+    pendingFx: null,
+    fxFrom: null,
+  });
+
+  for (const row of (quoteRows ?? []) as Array<Record<string, unknown>>) {
+    const ticker = String(row.ticker);
+    const fcf = extractYahooNum(row.fcf);
+    const cap = extractYahooNum(row.cap) ?? extractYahooNum(row.capStats);
+    const quoteCurrency = typeof row.quoteCurrency === "string" ? row.quoteCurrency : null;
+    const reportCurrency = typeof row.reportCurrency === "string" ? row.reportCurrency : null;
+    const same = !quoteCurrency || !reportCurrency || quoteCurrency === reportCurrency;
+    const entry = blank();
+    entry.sector = toGicsSector(typeof row.sector === "string" ? row.sector : null);
+    entry.industry = typeof row.industry === "string" && row.industry ? row.industry : null;
+    if (fcf !== null && cap && cap > 0) {
+      if (same) {
+        const y = fcf / cap;
+        entry.fcfYield = Math.abs(y) <= 1 ? y : null;
+      } else {
+        // An ADR quoted in dollars and reporting in its own currency: rupiah
+        // over dollars until converted.
+        entry.pendingFx = { fcf, marketCap: cap, from: reportCurrency!, to: quoteCurrency! };
+      }
+    }
+    out[ticker] = entry;
+  }
+
+  for (const row of (profileRows ?? []) as Array<Record<string, unknown>>) {
+    const entry = (out[String(row.ticker)] ??= blank());
+    if (!entry.industry && typeof row.industry === "string" && row.industry) entry.industry = row.industry;
+  }
+
+  for (const row of qualityRows ?? []) {
+    const entry = (out[row.ticker] ??= blank());
+    entry.quality = row.quality_overall ?? null;
+    entry.profitability = row.quality_profitability ?? null;
+    entry.financialHealth = row.quality_financial_health ?? null;
+    entry.growth = row.quality_growth ?? null;
+    entry.cashGeneration = row.quality_cash_generation ?? null;
+    entry.sector ??= toGicsSector(row.sector ?? null);
+  }
+  return out;
+}

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { KoFiSupport } from "@/components/ui/kofi-support";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AddTickerDialog } from "@/components/ui/add-ticker-dialog";
+import { MarketPulse } from "@/components/layout/market-pulse";
 
 interface TopbarProps {
   onSearchClick?: () => void;
@@ -36,10 +37,14 @@ export function Topbar({
         <span className="text-sm font-bold tracking-tight">HUNTR</span>
       </div>
 
-      <div className="flex-1" />
+      {/* The left side, used: the market's day, the indices, the mood. */}
+      <MarketPulse className="ml-3 hidden flex-1 sm:flex lg:ml-0" />
+      <div className="flex-1 sm:hidden" />
 
       {/* Add ticker */}
-      <AddTickerDialog />
+      <span className="ml-3 shrink-0">
+        <AddTickerDialog />
+      </span>
 
       {/* Search trigger (mobile + desktop) */}
       <button

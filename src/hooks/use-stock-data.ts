@@ -33,7 +33,9 @@ import {
   fetchTranscriptDocument,
   fetchScreenerMetrics,
 } from "@/app/actions/stock";
-import type { ScreenerMetrics } from "@/lib/api/cache";
+import type { HuntingGroundMetrics, ScreenerMetrics } from "@/lib/api/cache";
+import type { FearGreedPoint } from "@/lib/fear-greed";
+import type { NewsItem } from "@/lib/market-news";
 import { fetchSECFundamentals } from "@/app/actions/stock";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
 
@@ -120,6 +122,83 @@ export function useAllQuotes() {
     queryKey: ["stock", "quotes", "all"],
     queryFn: () => fetchAllQuotes(),
     staleTime: STALE_TIMES.QUOTE,
+  });
+}
+
+/**
+ * Recent headlines for the symbols the Insights page asks about (the
+ * indices, and today's standout movers). A route handler, so a slow fetch never
+ * queues the page's Server Actions behind it.
+ */
+export function useMarketNews(symbols: string[], enabled: boolean = true) {
+  const key = Array.from(new Set(symbols.map((s) => s.toUpperCase()))).join(",");
+  return useQuery<Record<string, NewsItem[]>>({
+    queryKey: QUERY_KEYS.MARKET_NEWS(key),
+    queryFn: async () => {
+      const res = await fetch(`/api/market/news?symbols=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error(`Market news failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    enabled: enabled && key.length > 0,
+  });
+}
+
+/** Huntr's Fear & Greed index, the last ~270 trading days (computed and cached hourly on the server). */
+export function useFearGreed() {
+  return useQuery<{ computedAt: string | null; points: FearGreedPoint[] }>({
+    queryKey: QUERY_KEYS.FEAR_GREED,
+    queryFn: async () => {
+      const res = await fetch("/api/market/fear-greed");
+      if (!res.ok) throw new Error(`Fear & Greed failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 30 * 60 * 1000,
+  });
+}
+
+/** Quality score and free-cash-flow yield for The Hunting Ground, from our caches only. */
+export function useHuntingGroundMetrics(tickers: string[]) {
+  const key = Array.from(new Set(tickers.map((t) => t.toUpperCase()))).sort().join(",");
+  return useQuery<Record<string, HuntingGroundMetrics>>({
+    queryKey: QUERY_KEYS.HUNTING_GROUND(key),
+    queryFn: async () => {
+      const res = await fetch(`/api/market/hunting-ground?tickers=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error(`Hunting Ground failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 30 * 60 * 1000,
+    enabled: key.length > 0,
+  });
+}
+
+/** Gold, crude oil, the 10-year yield and bitcoin today, for the Insights news. */
+export function useNewsAssets(enabled: boolean = true) {
+  return useQuery<MarketIndexQuote[]>({
+    queryKey: QUERY_KEYS.NEWS_ASSETS,
+    queryFn: async () => {
+      const res = await fetch("/api/market/assets");
+      if (!res.ok) throw new Error(`News assets failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 60 * 1000,
+    enabled,
+  });
+}
+
+/** The preview's summary of one story; fetched when the preview opens, kept for the session. */
+export function useNewsSummary(symbol: string | null, id: string | null) {
+  return useQuery<{ summary: string | null }>({
+    queryKey: QUERY_KEYS.NEWS_SUMMARY(symbol ?? "", id ?? ""),
+    queryFn: async () => {
+      const params = new URLSearchParams({ symbol: symbol ?? "", id: id ?? "" });
+      const res = await fetch(`/api/market/news/summary?${params}`);
+      if (!res.ok) throw new Error(`News summary failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: Infinity,
+    retry: 1,
+    enabled: !!symbol && !!id,
   });
 }
 
