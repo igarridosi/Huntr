@@ -38,7 +38,6 @@ export const QUERY_KEYS = {
   STOCK_BUYBACK: (tickersKey: string) => ["stock", "buyback", tickersKey] as const,
   STOCK_EARNINGS_INSIGHTS: (tickersKey: string) => ["stock", "earnings-insights", tickersKey] as const,
   INSIDERS: (ticker: string) => ["insiders", ticker] as const,
-  INSIDER_FEED: (tickersKey: string) => ["insiders", "feed", tickersKey] as const,
   TRANSCRIPT_PERIODS: (ticker: string) => ["transcript", "periods", ticker] as const,
   TRANSCRIPT_DOCUMENT: (ticker: string, year: number, quarter: number) =>
     ["transcript", "document", ticker, year, quarter] as const,

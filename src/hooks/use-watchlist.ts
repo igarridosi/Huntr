@@ -191,16 +191,17 @@ const ALERTS_QUERY_KEY = ["watchlist", "alerts"] as const;
 
 // ---- The Hook ----
 
-export function useWatchlist() {
+/**
+ * The watchlists themselves (lists, tickers, notes), without their quotes:
+ * for a page that only needs to know which companies are on them.
+ */
+export function useWatchlistStore() {
   const { supabase, user, isLoading: isAuthLoading } = useSupabase();
-  const { openGate } = useAuthGate();
   const queryClient = useQueryClient();
   const watchlistQueryKey = [...WATCHLIST_KEY, user?.id ?? "anon"] as const;
   const alertsQueryKey = [...ALERTS_QUERY_KEY, user?.id ?? "anon"] as const;
 
-  // ── Store query ──
-
-  const storeQuery = useQuery<WatchlistStore>({
+  return useQuery<WatchlistStore>({
     queryKey: watchlistQueryKey,
     queryFn: async () => {
       if (!user) return getStore();
@@ -211,6 +212,18 @@ export function useWatchlist() {
     staleTime: Infinity,
     enabled: !isAuthLoading,
   });
+}
+
+export function useWatchlist() {
+  const { supabase, user, isLoading: isAuthLoading } = useSupabase();
+  const { openGate } = useAuthGate();
+  const queryClient = useQueryClient();
+  const watchlistQueryKey = [...WATCHLIST_KEY, user?.id ?? "anon"] as const;
+  const alertsQueryKey = [...ALERTS_QUERY_KEY, user?.id ?? "anon"] as const;
+
+  // ── Store query ──
+
+  const storeQuery = useWatchlistStore();
 
   const store = storeQuery.data ?? createDefaultStore();
   const activeListId = store.activeListId;

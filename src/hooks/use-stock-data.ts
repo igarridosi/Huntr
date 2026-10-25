@@ -28,7 +28,6 @@ import {
   fetchCompanyFinancials,
   fetchSearchTickers,
   fetchInsiderActivity,
-  fetchInsiderFeed,
   fetchTranscriptPeriods,
   fetchTranscriptDocument,
   fetchScreenerMetrics,
@@ -422,17 +421,6 @@ export function useInsiderActivity(ticker: string, enabled: boolean = true) {
   }, [t, pending, enabled, queryClient]);
 
   return query;
-}
-
-export function useInsiderFeed(tickers: string[], enabled: boolean = true) {
-  const normalized = Array.from(new Set(tickers.map((t) => t.toUpperCase()).filter(Boolean))).sort();
-  return useQuery({
-    queryKey: QUERY_KEYS.INSIDER_FEED(normalized.join(",")),
-    queryFn: () => fetchInsiderFeed(normalized),
-    staleTime: 6 * 60 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    enabled: enabled && normalized.length > 0,
-  });
 }
 
 // ---------- Transcripts ----------
