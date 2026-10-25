@@ -13,7 +13,7 @@ import { ROUTES } from "@/lib/constants";
 import { startPageFromCookieString } from "@/lib/settings/preferences";
 import { createClient } from "@/lib/supabase/client";
 import { humanizeAuthError } from "@/lib/auth-errors";
-import { loginMessage } from "@/lib/auth-callback";
+import { loginMessage, safeReturnPath, withReturnPath } from "@/lib/auth-callback";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -24,9 +24,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [sendingReset, setSendingReset] = useState(false);
+  // The page they came from (the account invitation sends it), to go back to.
+  const [next, setNext] = useState<string | null>(null);
 
   useEffect(() => {
-    const message = loginMessage(new URLSearchParams(window.location.search));
+    const params = new URLSearchParams(window.location.search);
+    setNext(safeReturnPath(params.get("next")));
+    const message = loginMessage(params);
     if (message?.kind === "notice") setNotice(message.text);
     else if (message) setError(message.text);
   }, []);
@@ -45,8 +49,8 @@ export default function LoginPage() {
 
       if (signInError) throw signInError;
 
-      // The start page chosen in Settings, when there is one on file.
-      router.replace(startPageFromCookieString(document.cookie));
+      // Back where they were, else the start page chosen in Settings.
+      router.replace(next ?? startPageFromCookieString(document.cookie));
       router.refresh();
     } catch (err) {
       setError(humanizeAuthError(err, "Couldn't sign you in. Please try again."));
@@ -100,7 +104,7 @@ export default function LoginPage() {
         <>
           Don&apos;t have an account?{" "}
           <Link
-            href={ROUTES.SIGNUP}
+            href={withReturnPath(ROUTES.SIGNUP, next)}
             className="font-medium text-sunset-orange transition-colors hover:text-sunset-orange/80"
           >
             Create one

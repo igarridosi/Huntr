@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { confirmOutcome, forwardToCallback, loginMessage } from "../auth-callback";
+import { confirmOutcome, forwardToCallback, loginMessage, safeReturnPath, withReturnPath } from "../auth-callback";
 
 describe("forwardToCallback", () => {
   it("forwards a confirmation code that landed on the home page, keeping it", () => {
@@ -49,5 +49,29 @@ describe("loginMessage", () => {
   it("says nothing for anything else", () => {
     expect(msg("")).toBeNull();
     expect(msg("confirm=whatever")).toBeNull();
+  });
+});
+
+describe("safeReturnPath", () => {
+  it("keeps the app's own pages, query included", () => {
+    expect(safeReturnPath("/app")).toBe("/app");
+    expect(safeReturnPath("/app/dcf-calculator?ticker=AAPL")).toBe("/app/dcf-calculator?ticker=AAPL");
+    expect(safeReturnPath("/symbol/MSFT/financials")).toBe("/symbol/MSFT/financials");
+  });
+
+  it("refuses anything that could leave the site or is not a page of the app", () => {
+    for (const bad of [null, "", "https://evil.example", "//evil.example", "/\\evil.example", "/apps", "/login", "/app\\..\\x", "/app /x", "/symbolic"]) {
+      expect(safeReturnPath(bad)).toBeNull();
+    }
+  });
+});
+
+describe("withReturnPath", () => {
+  it("adds the page as next, encoded", () => {
+    expect(withReturnPath("/signup", "/app/watchlists?x=1")).toBe("/signup?next=%2Fapp%2Fwatchlists%3Fx%3D1");
+  });
+
+  it("leaves the route bare for a page it would not return to", () => {
+    expect(withReturnPath("/login", "/")).toBe("/login");
   });
 });
