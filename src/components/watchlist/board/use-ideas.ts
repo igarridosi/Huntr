@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import type { HuntingGroundMetrics } from "@/lib/api/cache";
 import type { SavedDCFScenario } from "@/hooks/use-dcf-scenarios";
+import type { DCFScenarioKey } from "@/lib/calculations";
 import type { InsiderSignal } from "@/lib/insiders/signal";
 import { isUnmeasured } from "@/lib/hunting-ground";
 import { toGicsSector } from "@/lib/screener/sectors";
@@ -57,6 +58,7 @@ export function useIdeas({
   signals,
   monthly,
   alerts,
+  choices,
 }: {
   items: readonly WatchlistTickerItem[];
   entries: readonly WatchlistEntry[] | undefined;
@@ -65,6 +67,8 @@ export function useIdeas({
   signals: Record<string, InsiderSignal> | undefined;
   monthly: Record<string, number> | undefined;
   alerts: readonly PriceAlert[];
+  /** The DCF scenario chosen per company, where not the saved one. */
+  choices: Record<string, DCFScenarioKey>;
 }): Idea[] {
   // The day the page opened: events count from it.
   const [now] = useState(() => Date.now());
@@ -78,7 +82,7 @@ export function useIdeas({
       const quote = entry?.quote ?? null;
       const profile = entry?.profile ?? null;
       const price = quote?.price && quote.price > 0 ? quote.price : null;
-      const fair = fairValueOf(valuations.get(ticker), item.target_price, price);
+      const fair = fairValueOf(valuations.get(ticker), item.target_price, price, choices[ticker]);
       const gap = gapOf(price, fair);
       const m = metrics?.[ticker] ?? null;
       const tickerAlerts = alerts.filter((a) => a.ticker.toUpperCase() === ticker);
@@ -110,5 +114,5 @@ export function useIdeas({
         pending: !entry,
       };
     });
-  }, [items, entries, saved, metrics, signals, monthly, alerts, now]);
+  }, [items, entries, saved, metrics, signals, monthly, alerts, choices, now]);
 }

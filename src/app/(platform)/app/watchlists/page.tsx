@@ -18,6 +18,7 @@ import { DaySummary } from "@/components/watchlist/board/day-summary";
 import { IdeaList, IdeaListSkeleton } from "@/components/watchlist/board/idea-list";
 import { IdeaPanel, type IdeaActions } from "@/components/watchlist/board/idea-panel";
 import { useIdeas } from "@/components/watchlist/board/use-ideas";
+import { useScenarioChoices } from "@/components/watchlist/board/use-scenario-choice";
 import { HuntingGroundCard } from "@/components/insights/hunting-ground";
 import { useStoredChoice } from "@/components/insights/use-stored-choice";
 import { MaterialPanel } from "@/components/ui/material-panel";
@@ -91,6 +92,7 @@ export default function WatchlistsPage() {
   const metrics = useHuntingGroundMetrics(tickers);
   const signals = useInsiderSignals(tickers);
   const { data: monthly } = useBatchPeriodPerformance(tickers, "1M");
+  const [choices, chooseScenario] = useScenarioChoices();
 
   const ideas = useIdeas({
     items,
@@ -100,6 +102,7 @@ export default function WatchlistsPage() {
     signals: signals.data,
     monthly,
     alerts,
+    choices,
   });
   const sorted = useMemo(() => sortIdeas(ideas, sort), [ideas, sort]);
   const summary = useMemo(() => summarize(ideas), [ideas]);
@@ -158,8 +161,8 @@ export default function WatchlistsPage() {
   );
 
   const actions = useMemo<IdeaActions>(
-    () => ({ setTargetPrice, updateNotes, addAlert, removeAlert, removeTicker: (t) => removeTicker(t) }),
-    [setTargetPrice, updateNotes, addAlert, removeAlert, removeTicker]
+    () => ({ setTargetPrice, updateNotes, addAlert, removeAlert, removeTicker: (t) => removeTicker(t), chooseScenario }),
+    [setTargetPrice, updateNotes, addAlert, removeAlert, removeTicker, chooseScenario]
   );
 
   const openIdea = ideas.find((i) => i.ticker === open) ?? null;

@@ -235,7 +235,7 @@ export default function DcfCalculatorPage() {
   const animationRef = useRef<number | null>(null);
   const { user } = useSupabase();
   const { openGate } = useAuthGate();
-  const { savedScenarios, isLoading: savedScenariosLoading, saveScenario, deleteScenario } = useDCFScenarios();
+  const { savedScenarios, isLoading: savedScenariosLoading, isSettled: savedScenariosSettled, saveScenario, deleteScenario } = useDCFScenarios();
 
   const {
     data: quote,
@@ -804,15 +804,6 @@ export default function DcfCalculatorPage() {
     setCapitalWacc(0.1);
   }, []);
 
-  // A link from elsewhere (the watchlist) can open the calculator on a
-  // company: /app/dcf-calculator?ticker=MSFT. Read once, on arrival: the URL
-  // is outside React, and reading it during render would differ from the
-  // server's, so this is the one place it can be applied.
-  useEffect(() => {
-    const t = (new URLSearchParams(window.location.search).get("ticker") ?? "").toUpperCase();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (/^[A-Z0-9.\-]{1,12}$/.test(t)) handleTickerSelect(t);
-  }, [handleTickerSelect]);
 
   const applySavedScenario = useCallback((payload: {
     ticker: string;
@@ -862,6 +853,31 @@ export default function DcfCalculatorPage() {
     setOcfMargin(baselineOcf);
     setCapexMargin(baselineCapex);
   }, [animateInputsTo, quote?.price, bases]);
+
+  // A link from elsewhere (the watchlist) can open the calculator on a
+  // company, /app/dcf-calculator?ticker=MSFT, and on one of its saved
+  // scenarios, &scenario=bear: the saved set opens as if picked from the
+  // Saved menu, else the company opens fresh. The URL is read once, on
+  // arrival (reading it during render would differ from the server's), and
+  // applied once the saved sets are known.
+  const deepLink = useRef<{ ticker: string; scenario: DCFScenarioKey | null } | null | undefined>(undefined);
+  useEffect(() => {
+    if (deepLink.current === undefined) {
+      const params = new URLSearchParams(window.location.search);
+      const t = (params.get("ticker") ?? "").toUpperCase();
+      const s = params.get("scenario");
+      deepLink.current = /^[A-Z0-9.\-]{1,12}$/.test(t)
+        ? { ticker: t, scenario: s === "bear" || s === "base" || s === "bull" ? s : null }
+        : null;
+    }
+    const link = deepLink.current;
+    if (!link || !savedScenariosSettled) return;
+    deepLink.current = null;
+    const saved = savedScenarios.find((entry) => entry.ticker === link.ticker);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (saved) applySavedScenario(link.scenario ? { ...saved, activeScenario: link.scenario } : saved);
+    else handleTickerSelect(link.ticker);
+  }, [savedScenariosSettled, savedScenarios, applySavedScenario, handleTickerSelect]);
 
   // The comparison price is always the live quote, never a stored snapshot.
   // Adjusted during render: the value is a pure function of the quote.

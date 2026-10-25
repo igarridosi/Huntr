@@ -41,6 +41,15 @@ describe("fairValueOf", () => {
     expect(fair!.high!).toBeGreaterThan(fair!.value);
   });
 
+  it("values on the chosen scenario, keeping the one it was saved on", () => {
+    const fair = fairValueOf({ scenarios: set, activeScenario: "base", updatedAt: "2026-10-22T10:00:00Z" }, null, null, "bear");
+    expect(fair?.scenario).toBe("bear");
+    expect(fair?.savedOn).toBe("base");
+    expect(fair?.value).toBeCloseTo(runDCF(set.bear.inputs).intrinsicValuePerShare, 6);
+    expect(fair?.cases?.bull).toBeCloseTo(runDCF(set.bull.inputs).intrinsicValuePerShare, 6);
+    expect(fair?.updatedAt).toBe("2026-10-22T10:00:00Z");
+  });
+
   it("falls back to the typed buy price, and to nothing", () => {
     expect(fairValueOf(null, 120)).toEqual({ value: 120, source: "target" });
     expect(fairValueOf(undefined, null)).toBeNull();

@@ -17,6 +17,12 @@ export interface FairValue {
   source: "dcf" | "target";
   /** The scenario the value comes from, for a DCF. */
   scenario?: DCFScenarioKey;
+  /** The scenario the DCF was saved on, the one used unless another is chosen. */
+  savedOn?: DCFScenarioKey;
+  /** Each scenario's value per share, for a DCF; null where it does not value. */
+  cases?: Record<DCFScenarioKey, number | null>;
+  /** When the DCF was last saved. */
+  updatedAt?: string;
   /** Bear and bull, for a DCF whose three cases all value. */
   low?: number;
   high?: number;
@@ -26,7 +32,10 @@ export interface FairValue {
 export interface SavedValuation {
   scenarios: DCFScenarioSet;
   activeScenario: DCFScenarioKey;
+  updatedAt?: string;
 }
+
+export const SCENARIOS: readonly DCFScenarioKey[] = ["bear", "base", "bull"];
 
 /** How far the price sits from the fair value: within this, above it, reads as close. */
 export const NEAR_GAP = 0.1;
@@ -48,27 +57,38 @@ function valueOf(set: DCFScenarioSet, key: DCFScenarioKey): number | null {
 }
 
 /**
- * The fair value to hold a price against: the saved DCF's, else the typed buy
- * price, else none. Given the price, a DCF that values the company out of all
+ * The fair value to hold a price against: the saved DCF's, on the scenario
+ * chosen for it or else the one it was saved on; else the typed buy price;
+ * else none. Given the price, a DCF that values the company out of all
  * proportion to it (statements in yen against a dollar ADR, most often) is
  * passed over, as the calculator itself refuses to show it.
  */
 export function fairValueOf(
   saved: SavedValuation | null | undefined,
   target: number | null | undefined,
-  price?: number | null
+  price?: number | null,
+  choice?: DCFScenarioKey | null
 ): FairValue | null {
   if (saved) {
-    const value = valueOf(saved.scenarios, saved.activeScenario);
+    const cases = {
+      bear: valueOf(saved.scenarios, "bear"),
+      base: valueOf(saved.scenarios, "base"),
+      bull: valueOf(saved.scenarios, "bull"),
+    };
+    const scenario = choice && cases[choice] != null ? choice : saved.activeScenario;
+    const value = cases[scenario];
     const upside = value != null && price != null && price > 0 ? value / price - 1 : null;
     const plausible = upside == null || (upside <= MAX_PLAUSIBLE_UPSIDE && upside >= MIN_PLAUSIBLE_UPSIDE);
     if (value != null && plausible) {
-      const low = valueOf(saved.scenarios, "bear");
-      const high = valueOf(saved.scenarios, "bull");
+      const low = cases.bear;
+      const high = cases.bull;
       return {
         value,
         source: "dcf",
-        scenario: saved.activeScenario,
+        scenario,
+        savedOn: saved.activeScenario,
+        cases,
+        ...(saved.updatedAt ? { updatedAt: saved.updatedAt } : {}),
         ...(low != null && high != null && low <= value && value <= high ? { low, high } : {}),
       };
     }

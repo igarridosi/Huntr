@@ -21,6 +21,8 @@ import { ROUTES } from "@/lib/constants";
 import { HG_ZONES, zoneOf } from "@/lib/hunting-ground";
 import { cn } from "@/lib/utils";
 import type { PriceAlert } from "@/types/watchlist";
+import type { DCFScenarioKey } from "@/lib/calculations";
+import { SCENARIOS } from "@/lib/watchlist/ideas";
 import type { Idea } from "./use-ideas";
 import {
   eventText,
@@ -42,6 +44,8 @@ export interface IdeaActions {
   addAlert: (alert: Omit<PriceAlert, "id" | "created_at">) => void;
   removeAlert: (id: string) => void;
   removeTicker: (ticker: string) => void;
+  /** Hold the company against another DCF scenario; null for the saved one. */
+  chooseScenario: (ticker: string, scenario: DCFScenarioKey | null) => void;
 }
 
 /**
@@ -192,30 +196,48 @@ function parsePrice(raw: string): number | null {
 
 function FairValueSection({ idea, currency, actions }: { idea: Idea; currency?: string; actions: IdeaActions }) {
   const [draft, setDraft] = useState(idea.target != null ? String(idea.target) : "");
-  const fromDcf = idea.fair?.source === "dcf";
+  const fair = idea.fair;
+  const fromDcf = fair?.source === "dcf" && fair.cases != null;
   const save = () => {
     const next = draft.trim() ? parsePrice(draft) : null;
     if (next !== idea.target) actions.setTargetPrice(idea.ticker, next);
   };
+  // Opens the calculator on this company's saved set, on the scenario in view.
+  const dcfHref = `${ROUTES.APP_DCF_CALCULATOR}?ticker=${encodeURIComponent(idea.ticker)}${
+    fromDcf && fair?.scenario ? `&scenario=${fair.scenario}` : ""
+  }`;
 
   return (
-    <Section title="Fair value">
-      {idea.fair && idea.gap != null ? (
+    <Section
+      title="Fair value"
+      aside={
+        fromDcf ? (
+          <Link href={dcfHref} className="inline-flex items-center gap-1 text-[11.5px] text-sunset-orange hover:underline">
+            <Calculator className="h-3 w-3" />
+            Edit scenarios
+          </Link>
+        ) : null
+      }
+    >
+      {fromDcf && fair && idea.price != null ? (
+        <DcfValuation
+          idea={idea}
+          price={idea.price}
+          currency={currency}
+          onChoose={(key) => actions.chooseScenario(idea.ticker, key === fair.savedOn ? null : key)}
+        />
+      ) : fair && idea.gap != null ? (
         <div className="rounded-xl bg-snow-peak/[0.025] p-4 ring-1 ring-inset ring-wolf-border/40">
           <div className="flex items-baseline justify-between gap-3">
-            <span className="font-mono text-xl font-semibold tabular-nums">{money(idea.fair.value, currency)}</span>
-            <span className="text-[11px] text-mist">{fairSource(idea.fair)}</span>
+            <span className="font-mono text-xl font-semibold tabular-nums">{money(fair.value, currency)}</span>
+            <span className="text-[11px] text-mist">{fairSource(fair)}</span>
           </div>
           <p className={cn("mt-1 text-[13px] font-medium", STANCE_TEXT[idea.stance])}>
             {idea.gap <= 0
-              ? `The price is ${Math.abs(idea.gap * 100).toFixed(0)}% below it`
-              : `The price is ${(idea.gap * 100).toFixed(0)}% above it`}
+              ? `The price is ${Math.abs(idea.gap * 100).toFixed(0)}% below your buy price`
+              : `The price has to fall ${((1 - 1 / (1 + idea.gap)) * 100).toFixed(0)}% to reach your buy price`}
           </p>
-          {idea.fair.low != null && idea.fair.high != null && idea.price != null ? (
-            <RangeBar low={idea.fair.low} base={idea.fair.value} high={idea.fair.high} price={idea.price} currency={currency} />
-          ) : (
-            <GapBar gap={idea.gap} stance={idea.stance} className="mt-3" />
-          )}
+          <GapBar gap={idea.gap} stance={idea.stance} className="mt-3" />
         </div>
       ) : (
         <p className="rounded-xl bg-snow-peak/[0.025] p-4 text-xs leading-relaxed text-mist ring-1 ring-inset ring-wolf-border/40">
@@ -241,7 +263,7 @@ function FairValueSection({ idea, currency, actions }: { idea: Idea; currency?: 
         />
         {!fromDcf ? (
           <Link
-            href={`${ROUTES.APP_DCF_CALCULATOR}?ticker=${encodeURIComponent(idea.ticker)}`}
+            href={dcfHref}
             className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-lg px-3 text-xs text-sunset-orange ring-1 ring-inset ring-sunset-orange/35 transition-colors duration-150 hover:bg-sunset-orange/10"
           >
             <Calculator className="h-3.5 w-3.5" />
@@ -253,31 +275,179 @@ function FairValueSection({ idea, currency, actions }: { idea: Idea; currency?: 
   );
 }
 
-/** Bear to bull, with the base case and today's price on it. */
-function RangeBar({ low, base, high, price, currency }: { low: number; base: number; high: number; price: number; currency?: string }) {
-  const min = Math.min(low, price) * 0.95;
-  const max = Math.max(high, price) * 1.05;
-  const at = (v: number) => `${((v - min) / (max - min)) * 100}%`;
+const CASE_LABEL: Record<DCFScenarioKey, string> = { bear: "Bear", base: "Base", bull: "Bull" };
+
+/** "Oct 22, 2026 · 3 days ago". */
+function updatedText(iso: string): string {
+  const t = Date.parse(iso);
+  if (!Number.isFinite(t)) return "";
+  const days = Math.floor((Date.now() - t) / 86_400_000);
+  const age =
+    days <= 0 ? "today" : days === 1 ? "yesterday" : days < 60 ? `${days} days ago` : `${Math.round(days / 30)} months ago`;
+  const date = new Date(t).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  return `${date} · ${age}`;
+}
+
+/** Where the price sits among the three cases, in a sentence. */
+function placeAmongCases(price: number, cases: Record<DCFScenarioKey, number | null>): string | null {
+  const { bear, base, bull } = cases;
+  if (bear == null || base == null || bull == null) return null;
+  if (price <= bear) return "Below even your bear case: the market is pricing in less than your most pessimistic scenario.";
+  if (price <= base) return "Between your bear and base cases: cheaper than your central scenario, above your worst one.";
+  if (price <= bull) return "Between your base and bull cases: the price already assumes more than your central scenario.";
+  return "Above your bull case: the price assumes more than your most optimistic scenario.";
+}
+
+/**
+ * A saved DCF read against the price: the three cases as choices, each with
+ * what it implies from today's price; a verdict and one sentence on where
+ * the price sits; and a scale with the buy zone (up to the chosen case)
+ * shaded, so today's dot is either in it or not.
+ */
+function DcfValuation({
+  idea,
+  price,
+  currency,
+  onChoose,
+}: {
+  idea: Idea;
+  price: number;
+  currency?: string;
+  onChoose: (key: DCFScenarioKey) => void;
+}) {
+  const fair = idea.fair!;
+  const cases = fair.cases!;
+  const chosen = fair.scenario ?? "base";
+  const gap = idea.gap ?? 0;
+  const place = placeAmongCases(price, cases);
+
+  return (
+    <div className="rounded-xl bg-snow-peak/[0.025] p-4 ring-1 ring-inset ring-wolf-border/40">
+      <p className="text-[11px] text-mist">
+        Your DCF{fair.updatedAt ? ` · last updated ${updatedText(fair.updatedAt)}` : ""}
+      </p>
+
+      <p className="mt-3 text-[11px] text-mist">Compare today&apos;s price with</p>
+      <div className="mt-1.5 grid grid-cols-3 gap-1.5" role="radiogroup" aria-label="Scenario to compare the price with">
+        {SCENARIOS.map((key) => {
+          const value = cases[key];
+          const active = key === chosen;
+          const upside = value != null ? value / price - 1 : null;
+          return (
+            <button
+              key={key}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              disabled={value == null}
+              onClick={() => onChoose(key)}
+              className={cn(
+                "rounded-lg px-2.5 py-2 text-left ring-1 ring-inset transition-[background-color,box-shadow] duration-150 ease-out",
+                active ? "bg-sunset-orange/10 ring-sunset-orange/45" : "ring-wolf-border/50 hover:bg-snow-peak/[0.04]",
+                "disabled:cursor-not-allowed disabled:opacity-40"
+              )}
+            >
+              <span className="flex items-center justify-between gap-1">
+                <span className={cn("text-[11px] font-medium", active ? "text-sunset-orange" : "text-mist")}>{CASE_LABEL[key]}</span>
+                {key === fair.savedOn ? (
+                  <span className="rounded bg-snow-peak/[0.06] px-1 text-[9.5px] text-mist" title="The scenario the DCF was saved on">
+                    saved
+                  </span>
+                ) : null}
+              </span>
+              <span className="mt-0.5 block font-mono text-[14px] font-semibold tabular-nums text-snow-peak">
+                {value != null ? money(value, currency) : "—"}
+              </span>
+              {upside != null ? (
+                <span className={cn("block font-mono text-[10.5px] tabular-nums", upside >= 0 ? "text-bullish" : "text-bearish")}>
+                  {upside >= 0 ? `+${(upside * 100).toFixed(0)}% upside` : `${(upside * 100).toFixed(0)}% downside`}
+                </span>
+              ) : null}
+            </button>
+          );
+        })}
+      </div>
+
+      <p className={cn("mt-4 text-[14px] font-semibold", STANCE_TEXT[idea.stance])}>
+        {gap <= 0
+          ? `${Math.abs(gap * 100).toFixed(0)}% below your ${CASE_LABEL[chosen].toLowerCase()} case: in your buy zone`
+          : `${(gap * 100).toFixed(0)}% above your ${CASE_LABEL[chosen].toLowerCase()} case`}
+      </p>
+      {place ? <p className="mt-1 text-xs leading-relaxed text-mist">{place}</p> : null}
+
+      <CaseScale cases={cases} chosen={chosen} price={price} currency={currency} />
+    </div>
+  );
+}
+
+/** The cases on one line, the buy zone shaded up to the chosen one, and today's price on it. */
+function CaseScale({
+  cases,
+  chosen,
+  price,
+  currency,
+}: {
+  cases: Record<DCFScenarioKey, number | null>;
+  chosen: DCFScenarioKey;
+  price: number;
+  currency?: string;
+}) {
+  const values = [...SCENARIOS.map((k) => cases[k]).filter((v): v is number => v != null), price];
+  const min = Math.min(...values) * 0.9;
+  const max = Math.max(...values) * 1.08;
+  const at = (v: number) => ((v - min) / (max - min)) * 100;
+  const fairValue = cases[chosen] ?? price;
+  const inZone = price <= fairValue;
   return (
     <div className="mt-4">
-      <div className="relative h-8">
-        <span className="absolute top-3 h-1.5 w-full rounded-full bg-snow-peak/[0.06]" />
+      <div className="relative h-4">
+        {SCENARIOS.map((k) =>
+          cases[k] != null ? (
+            <span
+              key={k}
+              className={cn("absolute -translate-x-1/2 text-[10px]", k === chosen ? "font-medium text-snow-peak" : "text-mist")}
+              style={{ left: `${at(cases[k]!)}%` }}
+            >
+              {CASE_LABEL[k]}
+            </span>
+          ) : null
+        )}
+      </div>
+      <div className="relative mt-1 h-2.5 rounded-full bg-snow-peak/[0.06]">
+        <span className="absolute inset-y-0 left-0 rounded-l-full bg-bullish/25" style={{ width: `${at(fairValue)}%` }} />
+        {SCENARIOS.map((k) =>
+          cases[k] != null ? (
+            <span
+              key={k}
+              className={cn(
+                "absolute top-1/2 h-4 w-0.5 -translate-x-1/2 -translate-y-1/2 rounded",
+                k === chosen ? "bg-bullish" : "bg-mist/50"
+              )}
+              style={{ left: `${at(cases[k]!)}%` }}
+            />
+          ) : null
+        )}
         <span
-          className="absolute top-3 h-1.5 rounded-full bg-bullish/30"
-          style={{ left: at(low), width: `calc(${at(high)} - ${at(low)})` }}
-        />
-        <span className="absolute top-2 h-3.5 w-0.5 -translate-x-1/2 rounded bg-bullish" style={{ left: at(base) }} title="Base" />
-        <span
-          className="absolute top-1 h-5 w-1 -translate-x-1/2 rounded-full bg-snow-peak shadow"
-          style={{ left: at(price) }}
-          title="Price"
+          className={cn(
+            "absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full ring-2 ring-wolf-surface",
+            inZone ? "bg-bullish" : "bg-snow-peak"
+          )}
+          style={{ left: `${at(price)}%` }}
+          title={`Today ${money(price, currency)}`}
         />
       </div>
-      <div className="flex justify-between font-mono text-[10.5px] tabular-nums text-mist">
-        <span>Bear {money(low, currency)}</span>
-        <span className="text-snow-peak">Price {money(price, currency)}</span>
-        <span>Bull {money(high, currency)}</span>
+      <div className="relative mt-1.5 h-4">
+        <span
+          className="absolute -translate-x-1/2 whitespace-nowrap font-mono text-[10.5px] tabular-nums text-snow-peak"
+          style={{ left: `${Math.min(86, Math.max(14, at(price)))}%` }}
+        >
+          Today {money(price, currency)}
+        </span>
       </div>
+      <p className="mt-2 flex items-center gap-1.5 text-[10.5px] text-mist">
+        <span className="h-2 w-3 rounded-sm bg-bullish/25" />
+        Buy zone: at or below your {CASE_LABEL[chosen].toLowerCase()} case
+      </p>
     </div>
   );
 }
