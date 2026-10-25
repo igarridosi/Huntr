@@ -70,9 +70,7 @@ export function DaySummary({
         label="The list today"
         value={loading ? null : summary.today == null ? "—" : signedPct(summary.today)}
         valueTone={summary.today == null ? undefined : summary.today > 0 ? "text-bullish" : summary.today < 0 ? "text-bearish" : undefined}
-        note="equal weighted · biggest falls first"
-        active={sort === "today"}
-        onClick={() => onSort("today")}
+        note="equal weighted, across the list"
       />
     </div>
   );

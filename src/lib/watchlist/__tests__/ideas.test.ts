@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { runDCF, type DCFInputs, type DCFScenarioKey, type DCFScenarioSet } from "@/lib/calculations";
-import { daysUntil, fairValueOf, gapOf, nextEvent, sortIdeas, stanceOf, summarize, type IdeaRank } from "../ideas";
+import { daysUntil, fairValueOf, gapOf, nextEvent, sortIdeas, stanceOf, summarize, trendOf, type IdeaRank } from "../ideas";
 
 const base: DCFInputs = {
   baseRevenue: 100e9,
@@ -101,14 +101,26 @@ describe("sortIdeas", () => {
     idea("B", { gap: -0.1, quality: 80, change: -0.02, event: { kind: "earnings", days: 9, date: "" } }),
     idea("C", { quality: 90, event: { kind: "earnings", days: 2, date: "" } }),
     idea("D", { gap: 0.05, change: -0.01 }),
+    idea("E", { quality: 95 }),
+    idea("F"),
   ];
-  it("puts the closest to a buy first and the unvalued last", () => {
-    expect(sortIdeas(list, "closest").map((i) => i.ticker)).toEqual(["B", "D", "A", "C"]);
+  it("puts the closest to a buy first, then the unvalued, best business first", () => {
+    expect(sortIdeas(list, "closest").map((i) => i.ticker)).toEqual(["B", "D", "A", "E", "C", "F"]);
   });
-  it("orders by next event, quality and today's fall", () => {
-    expect(sortIdeas(list, "event").map((i) => i.ticker)).toEqual(["C", "B", "A", "D"]);
-    expect(sortIdeas(list, "quality").map((i) => i.ticker)).toEqual(["C", "B", "A", "D"]);
-    expect(sortIdeas(list, "today").map((i) => i.ticker)).toEqual(["B", "D", "A", "C"]);
+  it("orders by next event and quality", () => {
+    expect(sortIdeas(list, "event").map((i) => i.ticker)).toEqual(["C", "B", "A", "D", "E", "F"]);
+    expect(sortIdeas(list, "quality").map((i) => i.ticker)).toEqual(["E", "C", "B", "A", "D", "F"]);
+  });
+});
+
+describe("trendOf", () => {
+  it("reads the month's move", () => {
+    expect(trendOf(0.12)).toBe("rocket");
+    expect(trendOf(0.03)).toBe("bull");
+    expect(trendOf(-0.01)).toBe("neutral");
+    expect(trendOf(-0.05)).toBe("bear");
+    expect(trendOf(-0.2)).toBe("strong-bear");
+    expect(trendOf(null)).toBeNull();
   });
 });
 

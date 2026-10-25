@@ -31,6 +31,8 @@ export interface Idea extends IdeaRank {
   /** A bank, insurer or landlord: free cash flow does not measure it. */
   unmeasured: boolean;
   signal: InsiderSignal | null;
+  /** The move over the last 30 days, a fraction; null until loaded. */
+  month: number | null;
   alerts: PriceAlert[];
   /** An active alert the price has crossed. */
   alertHit: boolean;
@@ -53,6 +55,7 @@ export function useIdeas({
   saved,
   metrics,
   signals,
+  monthly,
   alerts,
 }: {
   items: readonly WatchlistTickerItem[];
@@ -60,6 +63,7 @@ export function useIdeas({
   saved: readonly SavedDCFScenario[];
   metrics: Record<string, HuntingGroundMetrics> | undefined;
   signals: Record<string, InsiderSignal> | undefined;
+  monthly: Record<string, number> | undefined;
   alerts: readonly PriceAlert[];
 }): Idea[] {
   // The day the page opened: events count from it.
@@ -96,6 +100,7 @@ export function useIdeas({
         metrics: m,
         unmeasured: isUnmeasured(profile?.sector ?? m?.sector ?? null, profile?.industry ?? m?.industry),
         signal: signals?.[ticker] ?? null,
+        month: monthly?.[ticker] ?? null,
         alerts: tickerAlerts,
         alertHit,
         notes: item.notes,
@@ -105,5 +110,5 @@ export function useIdeas({
         pending: !entry,
       };
     });
-  }, [items, entries, saved, metrics, signals, alerts, now]);
+  }, [items, entries, saved, metrics, signals, monthly, alerts, now]);
 }

@@ -1,10 +1,13 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
-import { List, Plus, ScatterChart, Star } from "lucide-react";
+import { List, Plus, ScatterChart, SearchAlert, Star } from "lucide-react";
 import { useWatchlist, useWatchlistStore } from "@/hooks/use-watchlist";
 import { useDCFScenarios } from "@/hooks/use-dcf-scenarios";
-import { useHuntingGroundMetrics, useInsiderSignals } from "@/hooks/use-stock-data";
+import { useBatchPeriodPerformance, useHuntingGroundMetrics, useInsiderSignals } from "@/hooks/use-stock-data";
+import { useSupabase } from "@/providers/supabase-provider";
+import { useAuthGate } from "@/providers/auth-gate-provider";
+import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
 import { EmptyState } from "@/components/watchlist/empty-state";
 import { ImportExportActions } from "@/components/watchlist/import-export";
 import { ListTabs } from "@/components/watchlist/board/list-tabs";
@@ -21,19 +24,19 @@ import { ErrorState } from "@/components/ui/error-state";
 import { buildHuntingGround, type HgCompany } from "@/lib/hunting-ground";
 import { sortIdeas, summarize, type IdeaSort } from "@/lib/watchlist/ideas";
 
-type BoardView = "list" | "map";
+type BoardView = "list" | "map" | "dips";
 
-const SORTS: readonly IdeaSort[] = ["closest", "event", "quality", "today"];
+const SORTS: readonly IdeaSort[] = ["closest", "event", "quality"];
 const SORT_ITEMS = [
   { key: "closest" as const, label: "Closest to buy" },
   { key: "event" as const, label: "Next event" },
   { key: "quality" as const, label: "Quality" },
-  { key: "today" as const, label: "Today" },
 ];
-const VIEWS: readonly BoardView[] = ["list", "map"];
+const VIEWS: readonly BoardView[] = ["list", "map", "dips"];
 const VIEW_ITEMS = [
   { key: "list" as const, label: "List", icon: <List className="h-3.5 w-3.5" /> },
   { key: "map" as const, label: "Map", icon: <ScatterChart className="h-3.5 w-3.5" /> },
+  { key: "dips" as const, label: "Dip Finder", icon: <SearchAlert className="h-3.5 w-3.5" /> },
 ];
 const NO_NEWS = new Set<string>();
 const WATCHED = () => true;
@@ -68,6 +71,8 @@ export default function WatchlistsPage() {
   // The list itself, which is all the rows need to be on screen.
   const { isPending: listPending } = useWatchlistStore();
   const { savedScenarios } = useDCFScenarios();
+  const { user } = useSupabase();
+  const { openGate } = useAuthGate();
 
   const [sort, setSort] = useStoredChoice<IdeaSort>("huntr:watchlist-sort", SORTS, "closest");
   const [view, setView] = useStoredChoice<BoardView>("huntr:watchlist-view", VIEWS, "list");
@@ -77,6 +82,7 @@ export default function WatchlistsPage() {
   const tickers = useMemo(() => items.map((i) => i.ticker.toUpperCase()), [items]);
   const metrics = useHuntingGroundMetrics(tickers);
   const signals = useInsiderSignals(tickers);
+  const { data: monthly } = useBatchPeriodPerformance(tickers, "1M");
 
   const ideas = useIdeas({
     items,
@@ -84,6 +90,7 @@ export default function WatchlistsPage() {
     saved: savedScenarios,
     metrics: metrics.data,
     signals: signals.data,
+    monthly,
     alerts,
   });
   const sorted = useMemo(() => sortIdeas(ideas, sort), [ideas, sort]);
@@ -100,6 +107,25 @@ export default function WatchlistsPage() {
     );
     return buildHuntingGround(companies, metrics.data, { minMarketCap: 0, maxCompanies: Infinity });
   }, [ideas, metrics.data]);
+
+  // The panel is for keeping work on a company (a buy price, a thesis,
+  // alerts): without an account there is nowhere to keep it, so the
+  // invitation opens instead, rather than behind a panel it cannot save.
+  const openCompany = useCallback(
+    (ticker: string) => {
+      if (!user) {
+        openGate("watchlist");
+        return;
+      }
+      setOpen(ticker);
+    },
+    [user, openGate]
+  );
+
+  const dipItems = useMemo(
+    () => ideas.flatMap((i) => (i.price != null ? [{ ticker: i.ticker, name: i.name, sector: i.sector ?? undefined, price: i.price }] : [])),
+    [ideas]
+  );
 
   const openSearch = useCallback(() => {
     document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
@@ -174,15 +200,17 @@ export default function WatchlistsPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             {view === "list" ? (
               <SegmentedTabs items={SORT_ITEMS} value={sort} onChange={setSort} ariaLabel="Order the list by" size="sm" />
-            ) : (
+            ) : view === "map" ? (
               <p className="text-xs text-mist">Quality across, cheaper up. Tap a company to open it.</p>
+            ) : (
+              <p className="text-xs text-mist">How far each price sits from its recent level: the deepest pullbacks first.</p>
             )}
             <SegmentedTabs items={VIEW_ITEMS} value={view} onChange={setView} ariaLabel="View" size="sm" />
           </div>
 
           {view === "list" ? (
             <MaterialPanel className="p-2 sm:p-3">
-              {listPending ? <IdeaListSkeleton /> : <IdeaList ideas={sorted} selected={open} onOpen={setOpen} />}
+              {listPending ? <IdeaListSkeleton /> : <IdeaList ideas={sorted} selected={open} onOpen={openCompany} />}
               {!listPending && summary.unvalued > 0 && !quotesPending ? (
                 <p className="px-4 pb-1 pt-3 text-[11.5px] text-mist/80">
                   {summary.unvalued} {summary.unvalued === 1 ? "company has" : "companies have"} no fair value yet. Open one to type a
@@ -190,15 +218,17 @@ export default function WatchlistsPage() {
                 </p>
               ) : null}
             </MaterialPanel>
-          ) : (
+          ) : view === "map" ? (
             <HuntingGroundCard
               ground={ground}
               loading={metrics.isLoading || quotesPending}
               newsTickers={NO_NEWS}
-              onWatch={setOpen}
+              onWatch={openCompany}
               isWatched={WATCHED}
               scope="watchlist"
             />
+          ) : (
+            <DipFinderPanel title="Dip Finder" subtitle="Discounted prices across this list" items={dipItems} />
           )}
         </>
       )}

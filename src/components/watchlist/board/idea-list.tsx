@@ -1,7 +1,19 @@
 "use client";
 
 import { memo } from "react";
-import { ArrowUpRight, BellRing, CalendarClock, NotebookPen, Users } from "lucide-react";
+import {
+  ArrowUpRight,
+  BellRing,
+  CalendarClock,
+  Minus,
+  NotebookPen,
+  Rocket,
+  TrendingDown,
+  TrendingUp,
+  Users,
+  type LucideIcon,
+} from "lucide-react";
+import { trendOf, type Trend } from "@/lib/watchlist/ideas";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { cn, enterDelay } from "@/lib/utils";
 import type { Idea } from "./use-ideas";
@@ -18,8 +30,13 @@ import {
   yieldTone,
 } from "./idea-bits";
 
-// Company · price · fair value · quality · FCF yield · next event · signals.
-const GRID = "md:grid md:grid-cols-[minmax(0,2.1fr)_minmax(0,1fr)_minmax(0,2fr)_minmax(0,0.75fr)_minmax(0,0.75fr)_minmax(0,1.1fr)_minmax(0,0.8fr)] md:items-center md:gap-4";
+// Company · price · fair value · quality · FCF yield · 30-day trend · next
+// event · signals. Each number column is right-aligned against a text
+// column that starts left, so those pairs get extra room between them.
+const GRID =
+  "md:grid md:grid-cols-[minmax(0,2fr)_minmax(0,0.9fr)_minmax(0,1.9fr)_minmax(0,0.6fr)_minmax(0,0.7fr)_minmax(0,0.95fr)_minmax(0,1.05fr)_minmax(0,0.7fr)] md:items-center md:gap-x-5";
+/** The left edge of a text column that follows a right-aligned number. */
+const AFTER_NUMBER = "md:pl-5";
 
 /**
  * The list, one row per company, each opening its panel. The columns are the
@@ -46,9 +63,10 @@ export function IdeaList({
       >
         <span>Company</span>
         <span className="text-right">Price</span>
-        <span>To fair value</span>
+        <span className={AFTER_NUMBER}>To fair value</span>
         <span className="text-right">Quality</span>
         <span className="text-right">FCF yield</span>
+        <span className={AFTER_NUMBER}>30 days</span>
         <span>Next</span>
         <span className="text-right">Signals</span>
       </div>
@@ -126,7 +144,7 @@ const IdeaRow = memo(function IdeaRow({
       </span>
 
       {/* Fair value */}
-      <span className="col-span-2 min-w-0 md:col-span-1">
+      <span className={cn("col-span-2 min-w-0 md:col-span-1", AFTER_NUMBER)}>
         {idea.fair && idea.gap != null ? (
           <>
             <span className="flex items-baseline justify-between gap-2">
@@ -170,6 +188,11 @@ const IdeaRow = memo(function IdeaRow({
         )}
       </span>
 
+      {/* 30-day trend */}
+      <span className={cn("hidden min-w-0 md:block", AFTER_NUMBER)}>
+        <TrendMark month={idea.month} />
+      </span>
+
       {/* Next event */}
       <span className="hidden min-w-0 md:block">
         {idea.event ? (
@@ -194,6 +217,28 @@ const IdeaRow = memo(function IdeaRow({
     </button>
   );
 });
+
+const TREND: Record<Trend, { label: string; Icon: LucideIcon; tone: string }> = {
+  rocket: { label: "Rocket", Icon: Rocket, tone: "text-bullish" },
+  bull: { label: "Bull", Icon: TrendingUp, tone: "text-bullish" },
+  neutral: { label: "Flat", Icon: Minus, tone: "text-mist" },
+  bear: { label: "Bear", Icon: TrendingDown, tone: "text-bearish" },
+  "strong-bear": { label: "Strong bear", Icon: TrendingDown, tone: "text-bearish" },
+};
+
+/** The last 30 days in a word, with the move itself on hover. */
+export function TrendMark({ month }: { month: number | null }) {
+  const trend = trendOf(month);
+  if (!trend || month == null) return <span className="text-xs text-mist/60">—</span>;
+  const { label, Icon, tone } = TREND[trend];
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 text-xs font-medium", tone)} title={`${signedPct(month)} over the last 30 days`}>
+      <Icon className="h-3.5 w-3.5 shrink-0" />
+      {label}
+      <span className="font-mono text-[10.5px] font-normal tabular-nums opacity-70">{signedPct(month, 1)}</span>
+    </span>
+  );
+}
 
 function Signals({ idea }: { idea: Idea }) {
   const s = idea.signal;

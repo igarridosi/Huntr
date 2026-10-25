@@ -33,7 +33,7 @@ export const NEAR_GAP = 0.1;
 
 export type Stance = "buy" | "near" | "far" | "none";
 
-export type IdeaSort = "closest" | "event" | "quality" | "today";
+export type IdeaSort = "closest" | "event" | "quality";
 
 function valueOf(set: DCFScenarioSet, key: DCFScenarioKey): number | null {
   const inputs = set[key]?.inputs;
@@ -128,26 +128,37 @@ const last = (v: number | null, dir: 1 | -1) => (v == null ? Infinity : dir * v)
 /**
  * The order of the list. Closest to buy: furthest below its fair value
  * first, then those above it by how little; companies without a fair value
- * last. Next event: soonest first. Quality: best first. Today: biggest
- * fall first (where a price moves toward a buy). Ties keep the list order.
+ * after them, best business first (their distance to a buy is unknown, so
+ * the one most worth valuing leads). Next event: soonest first. Quality:
+ * best first. Ties keep the list order.
  */
 export function sortIdeas<T extends IdeaRank>(ideas: readonly T[], sort: IdeaSort): T[] {
-  const key = (i: T): number => {
+  const key = (i: T): [number, number] => {
     switch (sort) {
       case "closest":
-        return last(i.gap, 1);
+        return [last(i.gap, 1), i.gap == null ? last(i.quality, -1) : 0];
       case "event":
-        return last(i.event?.days ?? null, 1);
+        return [last(i.event?.days ?? null, 1), 0];
       case "quality":
-        return last(i.quality, -1);
-      case "today":
-        return last(i.change, 1);
+        return [last(i.quality, -1), 0];
     }
   };
   return ideas
     .map((idea, index) => ({ idea, index, k: key(idea) }))
-    .sort((a, b) => (a.k === b.k ? a.index - b.index : a.k - b.k))
+    .sort((a, b) => (a.k[0] !== b.k[0] ? a.k[0] - b.k[0] : a.k[1] !== b.k[1] ? a.k[1] - b.k[1] : a.index - b.index))
     .map((x) => x.idea);
+}
+
+export type Trend = "rocket" | "bull" | "neutral" | "bear" | "strong-bear";
+
+/** The last 30 days' move, read as a word: within 2% either way is flat, 10% or more a run. */
+export function trendOf(monthChange: number | null | undefined): Trend | null {
+  if (monthChange == null || !Number.isFinite(monthChange)) return null;
+  if (monthChange >= 0.1) return "rocket";
+  if (monthChange >= 0.02) return "bull";
+  if (monthChange > -0.02) return "neutral";
+  if (monthChange > -0.1) return "bear";
+  return "strong-bear";
 }
 
 export interface DaySummary {
