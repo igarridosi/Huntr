@@ -34,6 +34,7 @@ import {
 } from "@/app/actions/stock";
 import type { HuntingGroundMetrics, ScreenerMetrics } from "@/lib/api/cache";
 import type { FearGreedPoint } from "@/lib/fear-greed";
+import type { InsiderSignal } from "@/lib/insiders/signal";
 import type { NewsItem } from "@/lib/market-news";
 import { fetchSECFundamentals } from "@/app/actions/stock";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
@@ -157,6 +158,21 @@ export function useFearGreed() {
 }
 
 /** Quality score and free-cash-flow yield for The Hunting Ground, from our caches only. */
+/** Insider signals for a list of companies, from what is already on file (no EDGAR request). */
+export function useInsiderSignals(tickers: string[]) {
+  const key = Array.from(new Set(tickers.map((t) => t.toUpperCase()))).sort().join(",");
+  return useQuery<Record<string, InsiderSignal>>({
+    queryKey: QUERY_KEYS.INSIDER_SIGNALS(key),
+    queryFn: async () => {
+      const res = await fetch(`/api/market/insider-signals?tickers=${encodeURIComponent(key)}`);
+      if (!res.ok) throw new Error(`Insider signals failed: ${res.status}`);
+      return res.json();
+    },
+    staleTime: 30 * 60 * 1000,
+    enabled: key.length > 0,
+  });
+}
+
 export function useHuntingGroundMetrics(tickers: string[]) {
   const key = Array.from(new Set(tickers.map((t) => t.toUpperCase()))).sort().join(",");
   return useQuery<Record<string, HuntingGroundMetrics>>({

@@ -47,6 +47,7 @@ export const QUERY_KEYS = {
   NEWS_ASSETS: ["market", "news-assets"] as const,
   FEAR_GREED: ["market", "fear-greed"] as const,
   HUNTING_GROUND: (tickersKey: string) => ["market", "hunting-ground", tickersKey] as const,
+  INSIDER_SIGNALS: (tickersKey: string) => ["insiders", "signals", tickersKey] as const,
   FINANCIALS: (ticker: string) => ["financials", ticker] as const,
   WATCHLIST: (userId: string) => ["watchlist", userId] as const,
   SEARCH: (query: string) => ["search", query] as const,

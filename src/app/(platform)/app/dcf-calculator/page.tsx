@@ -804,6 +804,16 @@ export default function DcfCalculatorPage() {
     setCapitalWacc(0.1);
   }, []);
 
+  // A link from elsewhere (the watchlist) can open the calculator on a
+  // company: /app/dcf-calculator?ticker=MSFT. Read once, on arrival: the URL
+  // is outside React, and reading it during render would differ from the
+  // server's, so this is the one place it can be applied.
+  useEffect(() => {
+    const t = (new URLSearchParams(window.location.search).get("ticker") ?? "").toUpperCase();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (/^[A-Z0-9.\-]{1,12}$/.test(t)) handleTickerSelect(t);
+  }, [handleTickerSelect]);
+
   const applySavedScenario = useCallback((payload: {
     ticker: string;
     scenarios: DCFScenarioSet;

@@ -498,7 +498,8 @@ export function useWatchlist() {
     enabled: !isAuthLoading,
   });
 
-  const alerts = alertsQuery.data ?? [];
+  // One array across renders, so what is worked out from it is not redone each time.
+  const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
 
   const addAlert = useCallback(
     (alert: Omit<PriceAlert, "id" | "created_at">) => {

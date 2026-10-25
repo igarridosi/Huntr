@@ -27,7 +27,7 @@ const Y_TICKS = [-0.02, 0, 0.01, 0.02, 0.04, 0.06, 0.1];
 const Q_MIN = 15;
 
 /** Zone tints: green where to hunt, red where not to, neutral in between. */
-const ZONE_FILL: Record<HgZone, string> = {
+export const ZONE_FILL: Record<HgZone, string> = {
   prime: "var(--color-bullish)",
   "paying-up": "var(--color-glacier)",
   trap: "var(--color-golden-hour)",
@@ -80,6 +80,17 @@ const signed = (v: number, digits = 1) => {
  * zones sit on the map.
  */
 type HgView = "map" | "simple";
+
+/**
+ * Whose companies the map holds: the market's largest (Insights) or the
+ * reader's own watchlist, which changes the names and the criteria's count.
+ */
+export type HgScope = "market" | "watchlist";
+
+const SCOPE_COPY: Record<HgScope, { title: string; subtitle: string }> = {
+  market: { title: "The Hunting Ground", subtitle: "Where the largest companies sit on quality and price" },
+  watchlist: { title: "Your Hunting Ground", subtitle: "Where your companies sit on quality and price" },
+};
 const VIEWS: readonly HgView[] = ["map", "simple"];
 const VIEW_ITEMS = [
   { key: "map", label: "Map", icon: <ScatterChart className="h-3.5 w-3.5" /> },
@@ -92,10 +103,12 @@ export function HuntingGroundCard({
   newsTickers,
   onWatch,
   isWatched,
+  scope = "market",
   className,
 }: {
   ground: HuntingGround | null;
   loading: boolean;
+  scope?: HgScope;
   /** Companies with a story in "What's moving the market" today. */
   newsTickers: Set<string>;
   /** Opens the page's watchlist picker for a company (or the sign-in gate). */
@@ -126,8 +139,8 @@ export function HuntingGroundCard({
       <CardContent className="flex h-full flex-col p-4 sm:p-5">
         <SectionHeader
           icon={Crosshair}
-          title="The Hunting Ground"
-          subtitle="Where the largest companies sit on quality and price"
+          title={SCOPE_COPY[scope].title}
+          subtitle={SCOPE_COPY[scope].subtitle}
         >
           <SegmentedTabs items={VIEW_ITEMS} value={view} onChange={setView} ariaLabel="Hunting Ground view" size="sm" />
           {points.length > 0 ? (
@@ -174,7 +187,9 @@ export function HuntingGroundCard({
             <ZoneGrid points={points} sector={sector} counts={counts} className="mt-3 flex-1" />
           ) : (
             <>
-              <div className="mt-3 hidden min-h-[380px] flex-1 sm:block">
+              {/* A grid, so the plot fills the minimum height even where the
+                  card's height is not set by its row (a watchlist's map). */}
+              <div className="mt-3 hidden min-h-[380px] flex-1 sm:grid">
                 <Scatter
                   points={points}
                   sector={sector}
@@ -205,12 +220,13 @@ export function HuntingGroundCard({
           ) : (
             <span>Same zones as the map: across is quality, up is cheaper. Best first in each.</span>
           )}
-          {ground ? <Criteria ground={ground} className="ml-auto" /> : null}
+          {ground ? <Criteria ground={ground} scope={scope} className="ml-auto" /> : null}
         </div>
       </CardContent>
       {ground && expanded ? (
         <ExpandedMap
           ground={ground}
+          scope={scope}
           newsTickers={newsTickers}
           onWatch={onWatch}
           isWatched={isWatched}
@@ -227,7 +243,7 @@ export function HuntingGroundCard({
  * "How companies get here": the rules, each with how many companies it
  * placed or left out today, so a missing name has a reason.
  */
-function Criteria({ ground, className }: { ground: HuntingGround; className?: string }) {
+function Criteria({ ground, scope, className }: { ground: HuntingGround; scope: HgScope; className?: string }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -261,7 +277,7 @@ function Criteria({ ground, className }: { ground: HuntingGround; className?: st
         className="inline-flex items-center gap-1.5 rounded-md px-1.5 py-0.5 text-mist/80 transition-colors duration-150 hover:bg-snow-peak/[0.05] hover:text-snow-peak"
       >
         <Info className="h-3.5 w-3.5" />
-        {ground.points.length} of the {ground.considered} largest · how companies get here
+        {ground.points.length} of {scope === "market" ? `the ${ground.considered} largest` : `your ${ground.considered}`} · how companies get here
       </button>
       {open ? (
         <div
@@ -271,7 +287,10 @@ function Criteria({ ground, className }: { ground: HuntingGround; className?: st
         >
           <p className="text-[13px] font-semibold text-snow-peak">How companies get on the map</p>
           <p className="mt-1.5">
-            The {ground.considered} largest companies in Huntr (over $10B), placed by their quality score and free-cash-flow yield.
+            {scope === "market"
+              ? `The ${ground.considered} largest companies in Huntr (over $10B), placed`
+              : `The ${ground.considered} companies on this watchlist, placed`}{" "}
+            by their quality score and free-cash-flow yield.
             A foreign filer&apos;s cash flow is converted to its share&apos;s currency first.
           </p>
           <ul className="mt-2.5 space-y-1.5">
@@ -303,12 +322,14 @@ function Criteria({ ground, className }: { ground: HuntingGround; className?: st
  */
 function ExpandedMap({
   ground,
+  scope,
   newsTickers,
   onWatch,
   isWatched,
   onClose,
 }: {
   ground: HuntingGround;
+  scope: HgScope;
   newsTickers: Set<string>;
   onWatch: (ticker: string) => void;
   isWatched: (ticker: string) => boolean;
@@ -378,7 +399,7 @@ function ExpandedMap({
   return (
     <dialog
       ref={dialog}
-      aria-label="The Hunting Ground, full map"
+      aria-label={`${SCOPE_COPY[scope].title}, full map`}
       onClose={onClose}
       // Escape steps out of a zone first, then closes the map.
       onCancel={(e) => {
@@ -399,7 +420,7 @@ function ExpandedMap({
               <Crosshair className="h-[18px] w-[18px] text-sunset-orange" />
             </span>
             <div>
-              <p className="text-[16px] font-semibold leading-tight">The Hunting Ground</p>
+              <p className="text-[16px] font-semibold leading-tight">{SCOPE_COPY[scope].title}</p>
               <p className="text-[11.5px] text-mist">
                 {zoom
                   ? `${HG_ZONES[zoom].label} close up · Escape or "All zones" to step back`

@@ -1351,3 +1351,64 @@ html:not([data-hero-ready]) :is(.hero-scene-enter, .hero-veil, .hero-headline-en
   from { transform: scaleX(0); }
   to   { transform: scaleX(1); }
 }
+
+/* Watchlist idea panel: a sheet from the right edge on the iOS drawer
+ * curve. A modal <dialog>, so it sits in the top layer; `display` and
+ * `overlay` are carried discretely for browsers that can play the exit. */
+.idea-drawer {
+  transform: none;
+  transition:
+    transform 320ms var(--ease-settle),
+    overlay 320ms var(--ease-settle) allow-discrete,
+    display 320ms var(--ease-settle) allow-discrete;
+}
+
+.idea-drawer:not([open]) {
+  transform: translate3d(100%, 0, 0);
+  transition-duration: 200ms;
+  pointer-events: none;
+}
+
+@starting-style {
+  .idea-drawer[open] {
+    transform: translate3d(100%, 0, 0);
+  }
+}
+
+.idea-drawer::backdrop {
+  background-color: rgb(5 9 9 / 0.55);
+  backdrop-filter: blur(3px);
+  opacity: 1;
+  transition:
+    opacity 220ms var(--ease-entrance),
+    overlay 220ms var(--ease-entrance) allow-discrete,
+    display 220ms var(--ease-entrance) allow-discrete;
+}
+
+.idea-drawer:not([open])::backdrop {
+  opacity: 0;
+}
+
+@starting-style {
+  .idea-drawer[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: the panel fades in place instead of travelling. */
+@media (prefers-reduced-motion: reduce) {
+  .idea-drawer,
+  .idea-drawer:not([open]) {
+    transform: none;
+    transition-property: opacity, overlay, display;
+  }
+  .idea-drawer:not([open]) {
+    opacity: 0;
+  }
+  @starting-style {
+    .idea-drawer[open] {
+      transform: none;
+      opacity: 0;
+    }
+  }
+}
