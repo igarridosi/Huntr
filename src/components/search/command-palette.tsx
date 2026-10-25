@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Command } from "cmdk";
 import { useQueryClient } from "@tanstack/react-query";
-import { Search, ArrowRight } from "lucide-react";
+import { Search, ArrowRight, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ROUTES, QUERY_KEYS, STALE_TIMES } from "@/lib/constants";
 import { useSearch } from "@/hooks/use-stock-data";
@@ -18,12 +18,23 @@ interface CommandPaletteProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   redirectTo?: string;
+  /**
+   * Picking instead of going: the chosen ticker is handed back and the page
+   * stays where it is (adding a company to a watchlist, say).
+   */
+  onPick?: (ticker: string) => void;
+  placeholder?: string;
+  /** Whether Cmd+K toggles this one: only the app-wide palette should. */
+  shortcut?: boolean;
 }
 
 export function CommandPalette({
   open,
   onOpenChange,
   redirectTo,
+  onPick,
+  placeholder = "Search tickers, companies...",
+  shortcut = true,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState("");
   const router = useRouter();
@@ -35,7 +46,7 @@ export function CommandPalette({
   useKeyboardShortcut(
     { key: "k", metaKey: true },
     () => onOpenChange(!open),
-    true
+    shortcut
   );
 
   // Search results from hook
@@ -78,9 +89,10 @@ export function CommandPalette({
       // Fire-and-forget warmup to persist data in shared server cache.
       void fetchFullStockData(ticker).catch(() => null);
       onOpenChange(false);
-      router.push(redirectTo ?? ROUTES.SYMBOL(ticker));
+      if (onPick) onPick(ticker);
+      else router.push(redirectTo ?? ROUTES.SYMBOL(ticker));
     },
-    [onOpenChange, redirectTo, router]
+    [onOpenChange, onPick, redirectTo, router]
   );
 
   // Close on Escape
@@ -157,7 +169,7 @@ export function CommandPalette({
               ref={inputRef}
               value={query}
               onValueChange={setQuery}
-              placeholder="Search tickers, companies..."
+              placeholder={placeholder}
               className={cn(
                 "flex-1 h-12 bg-transparent text-sm text-snow-peak",
                 "placeholder:text-mist/50 outline-none border-none px-3",
@@ -217,7 +229,11 @@ export function CommandPalette({
                     </div>
 
                     {/* Arrow */}
-                    <ArrowRight className="w-4 h-4 text-mist/30 shrink-0" />
+                    {onPick ? (
+                      <Plus className="w-4 h-4 text-mist/40 shrink-0" />
+                    ) : (
+                      <ArrowRight className="w-4 h-4 text-mist/30 shrink-0" />
+                    )}
                   </Command.Item>
                 ))}
               </Command.Group>

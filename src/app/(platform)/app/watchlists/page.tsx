@@ -8,6 +8,9 @@ import { useBatchPeriodPerformance, useHuntingGroundMetrics, useInsiderSignals }
 import { useSupabase } from "@/providers/supabase-provider";
 import { useAuthGate } from "@/providers/auth-gate-provider";
 import { DipFinderPanel } from "@/components/dip-finder/dip-finder-panel";
+import { CommandPalette } from "@/components/search/command-palette";
+import { FeedbackToast } from "@/components/ui/feedback-toast";
+import { AddToListsDialog } from "@/components/watchlist/board/add-to-lists-dialog";
 import { EmptyState } from "@/components/watchlist/empty-state";
 import { ImportExportActions } from "@/components/watchlist/import-export";
 import { ListTabs } from "@/components/watchlist/board/list-tabs";
@@ -60,6 +63,7 @@ export default function WatchlistsPage() {
     renameList,
     deleteList,
     removeTicker,
+    addTickerToLists,
     setTargetPrice,
     updateNotes,
     alerts,
@@ -77,6 +81,10 @@ export default function WatchlistsPage() {
   const [sort, setSort] = useStoredChoice<IdeaSort>("huntr:watchlist-sort", SORTS, "closest");
   const [view, setView] = useStoredChoice<BoardView>("huntr:watchlist-view", VIEWS, "list");
   const [open, setOpen] = useState<string | null>(null);
+  // Adding a company: the search, then the lists it goes on.
+  const [searching, setSearching] = useState(false);
+  const [adding, setAdding] = useState<string | null>(null);
+  const [added, setAdded] = useState<string | null>(null);
 
   const items = useMemo(() => activeList?.items ?? [], [activeList]);
   const tickers = useMemo(() => items.map((i) => i.ticker.toUpperCase()), [items]);
@@ -128,8 +136,26 @@ export default function WatchlistsPage() {
   );
 
   const openSearch = useCallback(() => {
-    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
-  }, []);
+    if (!user) {
+      openGate("watchlist");
+      return;
+    }
+    setSearching(true);
+  }, [user, openGate]);
+
+  const saveAdding = useCallback(
+    (listIds: string[], newListName: string | null) => {
+      if (!adding) return;
+      addTickerToLists(adding, listIds, newListName ?? undefined);
+      const names = [
+        ...lists.filter((l) => listIds.includes(l.id)).map((l) => l.name),
+        ...(newListName ? [newListName] : []),
+      ];
+      setAdded(`${adding} added to ${names.length === 1 ? names[0] : `${names.length} lists`}`);
+      setAdding(null);
+    },
+    [adding, addTickerToLists, lists]
+  );
 
   const actions = useMemo<IdeaActions>(
     () => ({ setTargetPrice, updateNotes, addAlert, removeAlert, removeTicker: (t) => removeTicker(t) }),
@@ -232,6 +258,25 @@ export default function WatchlistsPage() {
           )}
         </>
       )}
+
+      <CommandPalette
+        open={searching}
+        onOpenChange={setSearching}
+        onPick={setAdding}
+        placeholder="Search a company to add..."
+        shortcut={false}
+      />
+      {adding ? (
+        <AddToListsDialog
+          key={adding}
+          ticker={adding}
+          lists={lists}
+          activeId={activeList?.id ?? ""}
+          onSave={saveAdding}
+          onClose={() => setAdding(null)}
+        />
+      ) : null}
+      <FeedbackToast open={added != null} title={added ?? ""} onClose={() => setAdded(null)} durationMs={3000} />
 
       {openIdea ? (
         <IdeaPanel idea={openIdea} listName={activeList?.name ?? "this list"} actions={actions} onClose={() => setOpen(null)} />
