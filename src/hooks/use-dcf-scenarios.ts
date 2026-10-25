@@ -119,6 +119,8 @@ export function useDCFScenarios() {
   return {
     savedScenarios: scenariosQuery.data ?? [],
     isLoading: scenariosQuery.isLoading,
+    /** Whether the saved list is known: signed in and fetched, or known to be signed out. */
+    isSettled: !isAuthLoading && !scenariosQuery.isPending,
     saveScenario,
     deleteScenario,
     refetch: scenariosQuery.refetch,

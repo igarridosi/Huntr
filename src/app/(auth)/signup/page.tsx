@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
@@ -10,6 +10,7 @@ import { AuthShell } from "@/components/auth/auth-shell";
 import { AuthField } from "@/components/auth/auth-field";
 import { AuthError, PasswordRules } from "@/components/auth/auth-feedback";
 import { ROUTES } from "@/lib/constants";
+import { safeReturnPath, withReturnPath } from "@/lib/auth-callback";
 import { createClient } from "@/lib/supabase/client";
 import { checkPassword, humanizeAuthError, passwordMeetsRules } from "@/lib/auth-errors";
 
@@ -22,6 +23,11 @@ export default function SignupPage() {
   const [confirmTouched, setConfirmTouched] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The page they came from (the account invitation sends it), to go back to.
+  const [next, setNext] = useState<string | null>(null);
+  useEffect(() => {
+    setNext(safeReturnPath(new URLSearchParams(window.location.search).get("next")));
+  }, []);
 
   const rules = checkPassword(password);
   const strongEnough = passwordMeetsRules(password);
@@ -59,12 +65,13 @@ export default function SignupPage() {
       if (signUpError) throw signUpError;
 
       if (data.session) {
-        router.replace(ROUTES.APP);
+        router.replace(next ?? ROUTES.APP);
         router.refresh();
         return;
       }
 
-      router.replace(`${ROUTES.LOGIN}?checkEmail=1`);
+      const login = withReturnPath(ROUTES.LOGIN, next);
+      router.replace(`${login}${login.includes("?") ? "&" : "?"}checkEmail=1`);
     } catch (err) {
       setError(humanizeAuthError(err, "Couldn't create your account. Please try again."));
     } finally {
@@ -80,7 +87,7 @@ export default function SignupPage() {
         <>
           Already have an account?{" "}
           <Link
-            href={ROUTES.LOGIN}
+            href={withReturnPath(ROUTES.LOGIN, next)}
             className="font-medium text-sunset-orange transition-colors hover:text-sunset-orange/80"
           >
             Sign in

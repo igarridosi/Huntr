@@ -57,3 +57,21 @@ export function loginMessage(params: URLSearchParams): { kind: "notice" | "error
   }
   return null;
 }
+
+/**
+ * A page inside the app to come back to after signing in or up, or null.
+ * Only the app's own pages (/app…, /symbol/…), so a crafted link cannot send
+ * someone off-site once they have signed in.
+ */
+export function safeReturnPath(value: string | null | undefined): string | null {
+  if (!value || value.length > 512) return null;
+  if (!/^\/(app|symbol)(\/|\?|$)/.test(value)) return null;
+  if (/[\\\s]/.test(value)) return null;
+  return value;
+}
+
+/** `route` with the page to come back to, when it is one safeReturnPath accepts. */
+export function withReturnPath(route: string, path: string | null | undefined): string {
+  const next = safeReturnPath(path);
+  return next ? `${route}?next=${encodeURIComponent(next)}` : route;
+}

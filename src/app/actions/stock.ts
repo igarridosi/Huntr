@@ -21,7 +21,7 @@ import { getEpsTrend, getFxRate, getShareBasis, type YahooShareBasis } from "@/l
 import { readNtmSnapshots } from "@/lib/api/forward-eps";
 import type { ForwardInputs } from "@/lib/chart-builder/forward";
 import type { SECFundamentals } from "@/lib/api/sec-edgar";
-import { getCachedInsiderActivity, getInsiderActivity, type InsiderActivity } from "@/lib/api/sec-form4";
+import { getInsiderActivity, type InsiderActivity } from "@/lib/api/sec-form4";
 
 const TICKER_RE = /^[A-Z0-9.\-^]{1,12}$/;
 // 500 covers large portfolios/watchlists for authenticated users.
@@ -115,23 +115,6 @@ export async function fetchSECFundamentals(
  */
 export async function fetchInsiderActivity(ticker: string): Promise<InsiderActivity | null> {
   return getInsiderActivity(sanitizeTicker(ticker));
-}
-
-/**
- * Insider activity across a list of tickers, from the cache only. A cold
- * ticker is a burst of SEC requests, so the feed never loads one: it
- * returns what is on file and names the tickers that are not, for the
- * page to load one at a time if the reader asks.
- */
-export async function fetchInsiderFeed(
-  tickers: string[]
-): Promise<{ activities: InsiderActivity[]; missing: string[] }> {
-  const list = sanitizeTickers(tickers);
-  const found = await Promise.all(list.map((t) => getCachedInsiderActivity(t)));
-  return {
-    activities: found.filter((a): a is InsiderActivity => a !== null),
-    missing: list.filter((_, i) => found[i] === null),
-  };
 }
 
 export async function fetchAlphaFinancials(

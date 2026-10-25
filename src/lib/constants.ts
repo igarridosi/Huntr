@@ -38,7 +38,6 @@ export const QUERY_KEYS = {
   STOCK_BUYBACK: (tickersKey: string) => ["stock", "buyback", tickersKey] as const,
   STOCK_EARNINGS_INSIGHTS: (tickersKey: string) => ["stock", "earnings-insights", tickersKey] as const,
   INSIDERS: (ticker: string) => ["insiders", ticker] as const,
-  INSIDER_FEED: (tickersKey: string) => ["insiders", "feed", tickersKey] as const,
   TRANSCRIPT_PERIODS: (ticker: string) => ["transcript", "periods", ticker] as const,
   TRANSCRIPT_DOCUMENT: (ticker: string, year: number, quarter: number) =>
     ["transcript", "document", ticker, year, quarter] as const,
@@ -48,6 +47,7 @@ export const QUERY_KEYS = {
   NEWS_ASSETS: ["market", "news-assets"] as const,
   FEAR_GREED: ["market", "fear-greed"] as const,
   HUNTING_GROUND: (tickersKey: string) => ["market", "hunting-ground", tickersKey] as const,
+  INSIDER_SIGNALS: (tickersKey: string) => ["insiders", "signals", tickersKey] as const,
   FINANCIALS: (ticker: string) => ["financials", ticker] as const,
   WATCHLIST: (userId: string) => ["watchlist", userId] as const,
   SEARCH: (query: string) => ["search", query] as const,

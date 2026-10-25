@@ -191,16 +191,17 @@ const ALERTS_QUERY_KEY = ["watchlist", "alerts"] as const;
 
 // ---- The Hook ----
 
-export function useWatchlist() {
+/**
+ * The watchlists themselves (lists, tickers, notes), without their quotes:
+ * for a page that only needs to know which companies are on them.
+ */
+export function useWatchlistStore() {
   const { supabase, user, isLoading: isAuthLoading } = useSupabase();
-  const { openGate } = useAuthGate();
   const queryClient = useQueryClient();
   const watchlistQueryKey = [...WATCHLIST_KEY, user?.id ?? "anon"] as const;
   const alertsQueryKey = [...ALERTS_QUERY_KEY, user?.id ?? "anon"] as const;
 
-  // ── Store query ──
-
-  const storeQuery = useQuery<WatchlistStore>({
+  return useQuery<WatchlistStore>({
     queryKey: watchlistQueryKey,
     queryFn: async () => {
       if (!user) return getStore();
@@ -211,6 +212,18 @@ export function useWatchlist() {
     staleTime: Infinity,
     enabled: !isAuthLoading,
   });
+}
+
+export function useWatchlist() {
+  const { supabase, user, isLoading: isAuthLoading } = useSupabase();
+  const { openGate } = useAuthGate();
+  const queryClient = useQueryClient();
+  const watchlistQueryKey = [...WATCHLIST_KEY, user?.id ?? "anon"] as const;
+  const alertsQueryKey = [...ALERTS_QUERY_KEY, user?.id ?? "anon"] as const;
+
+  // ── Store query ──
+
+  const storeQuery = useWatchlistStore();
 
   const store = storeQuery.data ?? createDefaultStore();
   const activeListId = store.activeListId;
@@ -325,6 +338,51 @@ export function useWatchlist() {
       }));
     },
     [activeListId, updateStore]
+  );
+
+  /**
+   * Puts a company on several lists at once, optionally on a list made for
+   * it, in one change to the store: one write to the cloud, so a new list
+   * and the company on it cannot arrive out of order. Returns the new
+   * list's id, if one was made.
+   */
+  const addTickerToLists = useCallback(
+    (ticker: string, listIds: readonly string[], newListName?: string): string | null => {
+      const upper = ticker.toUpperCase();
+      const name = newListName?.trim();
+      const newId = name ? uid() : null;
+      const targets = new Set(newId ? [...listIds, newId] : listIds);
+      if (targets.size === 0) return null;
+      const item = () => ({
+        ticker: upper,
+        added_at: new Date().toISOString(),
+        notes: "",
+        tags: [],
+        target_price: null,
+      });
+      updateStore((s) => {
+        const lists = newId
+          ? [
+              ...s.lists,
+              {
+                id: newId,
+                name: name!,
+                color: LIST_COLORS[s.lists.length % LIST_COLORS.length],
+                items: [],
+                created_at: new Date().toISOString(),
+              },
+            ]
+          : s.lists;
+        return {
+          ...s,
+          lists: lists.map((l) =>
+            !targets.has(l.id) || l.items.some((i) => i.ticker === upper) ? l : { ...l, items: [...l.items, item()] }
+          ),
+        };
+      });
+      return newId;
+    },
+    [updateStore]
   );
 
   const removeTicker = useCallback(
@@ -485,7 +543,8 @@ export function useWatchlist() {
     enabled: !isAuthLoading,
   });
 
-  const alerts = alertsQuery.data ?? [];
+  // One array across renders, so what is worked out from it is not redone each time.
+  const alerts = useMemo(() => alertsQuery.data ?? [], [alertsQuery.data]);
 
   const addAlert = useCallback(
     (alert: Omit<PriceAlert, "id" | "created_at">) => {
@@ -673,6 +732,7 @@ export function useWatchlist() {
 
     // Ticker CRUD
     addTicker,
+    addTickerToLists,
     removeTicker,
     toggleTicker,
     isInWatchlist,

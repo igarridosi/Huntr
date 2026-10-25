@@ -142,11 +142,16 @@ export function yPosition(fcfYield: number): number {
   return (f(v) - f(HG_RULES.Y_MIN)) / (f(HG_RULES.Y_MAX) - f(HG_RULES.Y_MIN));
 }
 
-export function buildHuntingGround(companies: HgCompany[], metrics: Record<string, Partial<HgMetrics> | undefined>): HuntingGround {
+export function buildHuntingGround(
+  companies: HgCompany[],
+  metrics: Record<string, Partial<HgMetrics> | undefined>,
+  // The market's map keeps the largest; a watchlist's keeps every company on it.
+  { minMarketCap = HG_RULES.MIN_MARKET_CAP, maxCompanies = HG_RULES.MAX_COMPANIES }: { minMarketCap?: number; maxCompanies?: number } = {}
+): HuntingGround {
   const largest = companies
-    .filter((c) => c.marketCap >= HG_RULES.MIN_MARKET_CAP)
+    .filter((c) => c.marketCap >= minMarketCap)
     .sort((a, b) => b.marketCap - a.marketCap)
-    .slice(0, HG_RULES.MAX_COMPANIES);
+    .slice(0, maxCompanies);
 
   let financials = 0;
   let noQuality = 0;

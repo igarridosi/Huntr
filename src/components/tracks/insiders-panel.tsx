@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { AlertTriangle, FileSearch } from "lucide-react";
 import { MaterialPanel } from "@/components/ui/material-panel";
 import { TickerLogo } from "@/components/ui/ticker-logo";
@@ -7,7 +8,8 @@ import { TickerPicker } from "./ticker-picker";
 import { InsiderSummary } from "./insider-summary";
 import { InsiderChart } from "./insider-chart";
 import { InsiderLines } from "./insider-lines";
-import { InsiderFeed } from "./insider-feed";
+import { TracksStart } from "./tracks-start";
+import { useRecentTracks } from "./use-recent-tracks";
 import { InsiderLoader, ReadingProgress } from "./insider-loader";
 import { useBatchDailyHistory, useInsiderActivity, useStockProfile } from "@/hooks/use-stock-data";
 
@@ -27,19 +29,19 @@ export function InsidersPanel({ ticker, onTicker }: InsidersPanelProps) {
   const history = useBatchDailyHistory(ticker ? [ticker] : [], "1Y", ticker.length > 0);
   const prices = history.data?.[ticker] ?? [];
   const a = activity.data;
+  const [recent, remember] = useRecentTracks();
+
+  // Kept as a shortcut once it has a record to show.
+  useEffect(() => {
+    if (ticker && a) remember(ticker);
+  }, [ticker, a, remember]);
 
   return (
     <div className="space-y-5">
       <TickerPicker key={ticker} value={ticker} onPick={onTicker} />
 
       {!ticker ? (
-        <MaterialPanel>
-          <h2 className="text-[0.95rem] font-semibold tracking-[-0.01em] text-snow-peak">Across your watchlist</h2>
-          <p className="mt-1 text-xs text-mist">The latest open-market trades by officers and directors of the companies you follow.</p>
-          <div className="mt-4">
-            <InsiderFeed onOpen={onTicker} />
-          </div>
-        </MaterialPanel>
+        <TracksStart onOpen={onTicker} recent={recent} />
       ) : activity.isLoading ? (
         <InsiderLoader ticker={ticker} name={profile.data?.name} />
       ) : !a ? (
