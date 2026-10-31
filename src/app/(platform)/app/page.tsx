@@ -28,6 +28,7 @@ import type { SymbolInfo } from "@/components/insights/news-preview";
 import { useNewsLayout } from "@/components/insights/use-news-layout";
 import { HuntingGroundCard } from "@/components/insights/hunting-ground";
 import { FearGreedCard } from "@/components/insights/fear-greed";
+import { WatchlistGlanceCard } from "@/components/insights/watchlist-glance";
 import { buildHuntingGround, HG_RULES, type HgCompany } from "@/lib/hunting-ground";
 import { toGicsSector } from "@/lib/screener/sectors";
 import { buildMarketCards, buildStockCards, MARKET_NEWS_SYMBOLS, pickNewsCandidates } from "@/lib/market-news";
@@ -62,7 +63,7 @@ export default function InsightsPage() {
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
   const { data: quotes = [], isLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
   const { data: profiles = [], isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
-  const { lists, addTicker, removeTicker, isInWatchlist } = useWatchlist();
+  const { lists, activeList, alerts, addTicker, removeTicker, isInWatchlist } = useWatchlist();
   const { user } = useSupabase();
   const { openGate } = useAuthGate();
 
@@ -399,6 +400,9 @@ export default function InsightsPage() {
         />
         <FearGreedCard />
       </div>
+
+      {/* The reader's own companies, under the market's. */}
+      <WatchlistGlanceCard lists={lists} activeListId={activeList?.id ?? ""} alerts={alerts} />
 
       <MarketNews
         marketCards={marketCards}
