@@ -13,6 +13,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
   WatchlistStore,
   WatchlistEntry,
+  WatchlistList,
   PriceAlert,
 } from "@/types/watchlist";
 import { DEFAULT_TAGS, LIST_COLORS, DEFAULT_TICKERS } from "@/types/watchlist";
@@ -211,6 +212,40 @@ export function useWatchlistStore() {
     },
     staleTime: Infinity,
     enabled: !isAuthLoading,
+  });
+}
+
+/**
+ * A list's companies with their profile and quote, one request each. Keyed
+ * by the list and its tickers, so every page reading the same list shares
+ * one cache entry.
+ */
+export function useListEntries(list: WatchlistList | undefined) {
+  const tickers = useMemo(() => list?.items.map((i) => i.ticker) ?? [], [list]);
+  return useQuery<WatchlistEntry[]>({
+    queryKey: [...WATCHLIST_ENRICHED_KEY, list?.id ?? "", tickers.join(",")],
+    queryFn: async () => {
+      if (!list || list.items.length === 0) return [];
+      return Promise.all(
+        list.items.map(async (item) => {
+          const [profile, quote] = await Promise.all([
+            fetchStockProfile(item.ticker),
+            fetchStockQuote(item.ticker),
+          ]);
+          return {
+            ticker: item.ticker,
+            added_at: item.added_at,
+            notes: item.notes,
+            tags: item.tags,
+            target_price: item.target_price,
+            profile,
+            quote,
+          };
+        })
+      );
+    },
+    staleTime: STALE_TIMES.WATCHLIST,
+    enabled: tickers.length > 0,
   });
 }
 
@@ -627,43 +662,7 @@ export function useWatchlist() {
 
   // ── Data Enrichment ──
 
-  const activeTickers = useMemo(
-    () => activeList?.items.map((i) => i.ticker) ?? [],
-    [activeList]
-  );
-
-  const enrichedQuery = useQuery<WatchlistEntry[]>({
-    queryKey: [
-      ...WATCHLIST_ENRICHED_KEY,
-      activeListId,
-      activeTickers.join(","),
-    ],
-    queryFn: async () => {
-      if (!activeList || activeList.items.length === 0) return [];
-
-      const entries = await Promise.all(
-        activeList.items.map(async (item) => {
-          const [profile, quote] = await Promise.all([
-            fetchStockProfile(item.ticker),
-            fetchStockQuote(item.ticker),
-          ]);
-          return {
-            ticker: item.ticker,
-            added_at: item.added_at,
-            notes: item.notes,
-            tags: item.tags,
-            target_price: item.target_price,
-            profile,
-            quote,
-          };
-        })
-      );
-
-      return entries;
-    },
-    staleTime: STALE_TIMES.WATCHLIST,
-    enabled: activeTickers.length > 0,
-  });
+  const enrichedQuery = useListEntries(activeList);
 
   // Merge enriched data with latest store metadata so notes/tags
   // updates reflect instantly without waiting for a re-fetch.

@@ -1412,3 +1412,51 @@ html:not([data-hero-ready]) :is(.hero-scene-enter, .hero-veil, .hero-headline-en
     }
   }
 }
+
+/* The brand's one idle motion. Every 15 s a band of light crosses the mark
+ * (clipped to its shape), then the wordmark: 1.3 s of travel on the strong
+ * in-out curve, so it reads as light catching the logo, not as an alert.
+ * Transform only for the mark; the wordmark's sweep is a background on 5
+ * letters. The first pass comes 4 s after load. Off under reduced motion:
+ * it is decoration and carries no meaning. */
+@keyframes brand-glint {
+  0%      { transform: translate3d(0, 0, 0); }
+  8.7%    { transform: translate3d(640px, 0, 0); }
+  100%    { transform: translate3d(640px, 0, 0); }
+}
+
+.brand-glint {
+  animation: brand-glint 15s var(--ease-glide) 4s infinite both;
+}
+
+@keyframes brand-sheen {
+  0%, 2%   { background-position: 100% 0; }
+  10.7%    { background-position: 0% 0; }
+  100%     { background-position: 0% 0; }
+}
+
+.brand-wordmark {
+  background-image: linear-gradient(
+    100deg,
+    var(--color-snow-peak) 40%,
+    var(--color-sunset-orange) 50%,
+    var(--color-snow-peak) 60%
+  );
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: brand-sheen 15s var(--ease-glide) 4s infinite both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brand-glint {
+    animation: none;
+    opacity: 0;
+  }
+  .brand-wordmark {
+    animation: none;
+  }
+}

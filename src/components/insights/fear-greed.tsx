@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { SectionHeader } from "@/components/insights/section-header";
 import { useFearGreed } from "@/hooks/use-stock-data";
+import { useHydrated } from "@/hooks/use-hydrated";
 import { cn } from "@/lib/utils";
 import {
   extremesOf,
@@ -61,7 +62,13 @@ const dayLabel = (iso: string) =>
  * what it means, so the number is never a black box.
  */
 export function FearGreedCard({ className }: { className?: string }) {
-  const { data, isLoading, isError } = useFearGreed();
+  const query = useFearGreed();
+  // The top bar reads the same index, so it can be cached before this card
+  // hydrates: shown only once hydrated, so the first render matches the server's.
+  const hydrated = useHydrated();
+  const data = hydrated ? query.data : undefined;
+  const isLoading = !hydrated || query.isLoading;
+  const isError = hydrated && query.isError;
   const [range, setRange] = useState<FearGreedRange>("1M");
   const points = useMemo(() => data?.points ?? [], [data]);
   const latest = points.at(-1);
@@ -102,9 +109,14 @@ const CX = 120;
 const CY = 112;
 const R = 92;
 
+// To the hundredth of a unit: the server and the browser print trigonometry's
+// last digits differently, and an unrounded coordinate differs between the
+// two renders (a hydration mismatch). A hundredth is far below a pixel.
+const round2 = (v: number) => Math.round(v * 100) / 100;
+
 const polar = (value: number, radius = R) => {
   const a = Math.PI * (1 - value / 100);
-  return { x: CX + radius * Math.cos(a), y: CY - radius * Math.sin(a) };
+  return { x: round2(CX + radius * Math.cos(a)), y: round2(CY - radius * Math.sin(a)) };
 };
 
 function arc(from: number, to: number, radius = R) {

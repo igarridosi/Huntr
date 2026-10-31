@@ -73,7 +73,8 @@ export default function PlatformLayout({
       <div
         className={cn(
           "flex flex-col min-h-screen",
-          useDock ? "lg:pl-20" : "lg:pl-64"
+          // The sidebar floats 12px in from the edge, with 12px of air after it.
+          useDock ? "lg:pl-20" : "lg:pl-[17.5rem]"
         )}
       >
         {/* Topbar */}

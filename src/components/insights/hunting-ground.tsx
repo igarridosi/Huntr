@@ -2,11 +2,12 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, Crosshair, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X, ZoomIn } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X, ZoomIn, Map as MapIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
 import { useStoredChoice } from "@/components/insights/use-stored-choice";
+import { WatchlistPane, type WatchlistLens } from "@/components/insights/watchlist-glance";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ROUTES } from "@/lib/constants";
 import { cn, formatCompactNumber, formatPercent } from "@/lib/utils";
@@ -79,7 +80,7 @@ const signed = (v: number, digits = 1) => {
  * one with the same zones and data as four ranked lists laid out where the
  * zones sit on the map.
  */
-type HgView = "map" | "simple";
+type HgView = "map" | "simple" | "watchlist";
 
 /**
  * Whose companies the map holds: the market's largest (Insights) or the
@@ -96,6 +97,12 @@ const VIEW_ITEMS = [
   { key: "map", label: "Map", icon: <ScatterChart className="h-3.5 w-3.5" /> },
   { key: "simple", label: "Simple", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
 ] as const;
+/** With the reader's watchlist as a third view (Insights). */
+const VIEWS_WITH_WATCHLIST: readonly HgView[] = ["map", "simple", "watchlist"];
+const VIEW_ITEMS_WITH_WATCHLIST = [
+  ...VIEW_ITEMS,
+  { key: "watchlist", label: "Watchlist", icon: <Star className="h-3.5 w-3.5" /> },
+] as const;
 
 export function HuntingGroundCard({
   ground,
@@ -104,6 +111,7 @@ export function HuntingGroundCard({
   onWatch,
   isWatched,
   scope = "market",
+  watchlist,
   className,
 }: {
   ground: HuntingGround | null;
@@ -114,10 +122,12 @@ export function HuntingGroundCard({
   /** Opens the page's watchlist picker for a company (or the sign-in gate). */
   onWatch: (ticker: string) => void;
   isWatched: (ticker: string) => boolean;
+  /** The reader's watchlists, which add a view of how those companies trade. */
+  watchlist?: WatchlistLens;
   className?: string;
 }) {
   const [sector, setSector] = useState<string | null>(null);
-  const [view, setView] = useStoredChoice<HgView>("huntr:hunting-view", VIEWS, "map");
+  const [view, setView] = useStoredChoice<HgView>("huntr:hunting-view", watchlist ? VIEWS_WITH_WATCHLIST : VIEWS, "map");
   const [pinned, setPinned] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const points = useMemo(() => ground?.points ?? [], [ground]);
@@ -134,15 +144,35 @@ export function HuntingGroundCard({
     return c;
   }, [points, sector]);
 
+  const viewTabs = (
+    <SegmentedTabs
+      items={watchlist ? VIEW_ITEMS_WITH_WATCHLIST : VIEW_ITEMS}
+      value={view}
+      onChange={setView}
+      ariaLabel="Hunting Ground view"
+      size="sm"
+    />
+  );
+
+  if (view === "watchlist" && watchlist) {
+    return (
+      <Card className={className}>
+        <CardContent className="flex h-full flex-col p-4 sm:p-5">
+          <WatchlistPane {...watchlist} viewTabs={viewTabs} />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className={className}>
       <CardContent className="flex h-full flex-col p-4 sm:p-5">
         <SectionHeader
-          icon={Crosshair}
+          icon={MapIcon}
           title={SCOPE_COPY[scope].title}
           subtitle={SCOPE_COPY[scope].subtitle}
         >
-          <SegmentedTabs items={VIEW_ITEMS} value={view} onChange={setView} ariaLabel="Hunting Ground view" size="sm" />
+          {viewTabs}
           {points.length > 0 ? (
             <button
               type="button"
@@ -184,7 +214,7 @@ export function HuntingGroundCard({
           <p className="mt-6 text-[13px] text-mist">No company has both a quality score and a free-cash-flow yield yet.</p>
         ) : (
           view === "simple" ? (
-            <ZoneGrid points={points} sector={sector} counts={counts} className="mt-3 flex-1" />
+            <ZoneGrid points={points} sector={sector} counts={counts} className="mt-3" />
           ) : (
             <>
               {/* A grid, so the plot fills the minimum height even where the
@@ -417,7 +447,7 @@ function ExpandedMap({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sunset-orange/[0.08] ring-1 ring-inset ring-sunset-orange/25">
-              <Crosshair className="h-[18px] w-[18px] text-sunset-orange" />
+              <MapIcon className="h-[18px] w-[18px] text-sunset-orange" />
             </span>
             <div>
               <p className="text-[16px] font-semibold leading-tight">{SCOPE_COPY[scope].title}</p>
@@ -1425,58 +1455,85 @@ function ZoneGrid({
   className?: string;
 }) {
   const shown = sector ? points.filter((p) => p.sector === sector) : points;
+
+  // From sm up the four zones share the map's height rather than set their
+  // own: the grid is laid over that space, and each zone lists as many
+  // companies as fit in it (each row 34 px; a zone's padding, header and
+  // "more" line about 74 px). Stacked on a phone, they keep GRID_ROWS.
+  const box = useRef<HTMLDivElement>(null);
+  const [rows, setRows] = useState(GRID_ROWS);
+  useLayoutEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const wide = window.matchMedia("(min-width: 640px)");
+    const measure = () => {
+      const zone = (el.clientHeight - 10) / 2;
+      setRows(wide.matches ? Math.max(2, Math.min(14, Math.floor((zone - 74) / 34))) : GRID_ROWS);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    wide.addEventListener("change", measure);
+    return () => {
+      ro.disconnect();
+      wide.removeEventListener("change", measure);
+    };
+  }, []);
+
   return (
-    <div className={cn("grid grid-cols-1 gap-2.5 sm:grid-cols-2", className)}>
-      {GRID_ORDER.map((zone) => {
-        const ranked = rankZone(shown, zone);
-        return (
-          <section
-            key={zone}
-            className="flex flex-col rounded-xl p-3 ring-1 ring-inset ring-wolf-border/40"
-            style={{ background: `color-mix(in srgb, ${ZONE_FILL[zone]} ${zone === "prime" ? 9 : 4}%, transparent)` }}
-          >
-            <header className="flex items-baseline justify-between gap-2">
-              <p className="flex items-baseline gap-1.5">
-                <span className="text-[13px] font-semibold" style={{ color: ZONE_FILL[zone] }}>
-                  {HG_ZONES[zone].label}
-                </span>
-                <span className="font-mono text-[11.5px] text-mist">{counts[zone]}</span>
-              </p>
-              <span className="truncate text-[11px] text-mist">{HG_ZONES[zone].line}</span>
-            </header>
-            {ranked.length === 0 ? (
-              <p className="mt-3 text-[11.5px] text-mist/70">None right now.</p>
-            ) : (
-              <ol className="mt-2 flex-1 space-y-0.5">
-                {ranked.slice(0, GRID_ROWS).map((p) => (
-                  <li key={p.ticker}>
-                    <Link
-                      href={ROUTES.SYMBOL(p.ticker)}
-                      className="grid grid-cols-[1.5rem_3.5rem_minmax(0,1fr)_3.25rem] items-center gap-2 rounded-lg px-1.5 py-1 transition-colors duration-150 hover:bg-snow-peak/[0.05]"
-                    >
-                      <TickerLogo ticker={p.ticker} src={p.logo} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[8px]" />
-                      <span className="flex items-center gap-1 text-[12px] font-semibold text-snow-peak">
-                        {p.ticker}
-                      </span>
-                      <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-mist">
-                        <span className="shrink-0">Q {p.quality}</span>
-                        <span className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-snow-peak/[0.08]">
-                          <span className="block h-full rounded-full bg-sunset-orange/80" style={{ width: `${p.quality}%` }} />
+    <div ref={box} className={cn("relative flex-1 sm:min-h-[380px]", className)}>
+      <div className="grid grid-cols-1 gap-2.5 sm:absolute sm:inset-0 sm:grid-cols-2 sm:grid-rows-2">
+        {GRID_ORDER.map((zone) => {
+          const ranked = rankZone(shown, zone);
+          return (
+            <section
+              key={zone}
+              className="flex min-h-0 flex-col overflow-hidden rounded-xl p-3 ring-1 ring-inset ring-wolf-border/40"
+              style={{ background: `color-mix(in srgb, ${ZONE_FILL[zone]} ${zone === "prime" ? 9 : 4}%, transparent)` }}
+            >
+              <header className="flex items-baseline justify-between gap-2">
+                <p className="flex items-baseline gap-1.5">
+                  <span className="text-[13px] font-semibold" style={{ color: ZONE_FILL[zone] }}>
+                    {HG_ZONES[zone].label}
+                  </span>
+                  <span className="font-mono text-[11.5px] text-mist">{counts[zone]}</span>
+                </p>
+                <span className="truncate text-[11px] text-mist">{HG_ZONES[zone].line}</span>
+              </header>
+              {ranked.length === 0 ? (
+                <p className="mt-3 text-[11.5px] text-mist/70">None right now.</p>
+              ) : (
+                <ol className="mt-2 flex-1 space-y-0.5">
+                  {ranked.slice(0, rows).map((p) => (
+                    <li key={p.ticker}>
+                      <Link
+                        href={ROUTES.SYMBOL(p.ticker)}
+                        className="grid grid-cols-[1.5rem_3.5rem_minmax(0,1fr)_3.25rem] items-center gap-2 rounded-lg px-1.5 py-1 transition-colors duration-150 hover:bg-snow-peak/[0.05]"
+                      >
+                        <TickerLogo ticker={p.ticker} src={p.logo} className="h-6 w-6" imageClassName="rounded-md" fallbackClassName="rounded-md text-[8px]" />
+                        <span className="flex items-center gap-1 text-[12px] font-semibold text-snow-peak">
+                          {p.ticker}
                         </span>
-                        <span className="truncate font-mono tabular-nums">FCF {formatPercent(p.fcfYield, 1)}</span>
-                      </span>
-                      <span className={cn("text-right font-mono text-[11.5px] tabular-nums", p.change >= 0 ? "text-bullish" : "text-bearish")}>
-                        {signed(p.change)}
-                      </span>
-                    </Link>
-                  </li>
-                ))}
-              </ol>
-            )}
-            {ranked.length > GRID_ROWS ? <p className="mt-1.5 px-1.5 text-[11px] text-mist/70">+{ranked.length - GRID_ROWS} more</p> : null}
-          </section>
-        );
-      })}
+                        <span className="flex min-w-0 items-center gap-1.5 text-[11px] text-mist">
+                          <span className="shrink-0">Q {p.quality}</span>
+                          <span className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-snow-peak/[0.08]">
+                            <span className="block h-full rounded-full bg-sunset-orange/80" style={{ width: `${p.quality}%` }} />
+                          </span>
+                          <span className="truncate font-mono tabular-nums">FCF {formatPercent(p.fcfYield, 1)}</span>
+                        </span>
+                        <span className={cn("text-right font-mono text-[11.5px] tabular-nums", p.change >= 0 ? "text-bullish" : "text-bearish")}>
+                          {signed(p.change)}
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ol>
+              )}
+              {ranked.length > rows ? <p className="mt-1.5 px-1.5 text-[11px] text-mist/70">+{ranked.length - rows} more</p> : null}
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1489,7 +1546,10 @@ const GHOST_DOTS = Array.from({ length: 34 }, (_, i) => {
   const b = Math.sin(i * 78.233) * 12345.6789;
   const fx = a - Math.floor(a);
   const fy = b - Math.floor(b);
-  return { x: 30 + fx * 62, y: 18 + fy * 70, r: 3 + ((i * 7) % 9), d: (i * 137) % 1800 };
+  // Rounded to a hundredth of a percent: unrounded, the server and the
+  // browser print the last digits differently and hydration fails.
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+  return { x: round2(30 + fx * 62), y: round2(18 + fy * 70), r: 3 + ((i * 7) % 9), d: (i * 137) % 1800 };
 });
 
 /**

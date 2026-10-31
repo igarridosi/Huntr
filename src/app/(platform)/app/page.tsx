@@ -62,7 +62,7 @@ export default function InsightsPage() {
   const [selectedLists, setSelectedLists] = useState<string[]>([]);
   const { data: quotes = [], isLoading, isError: quotesError, refetch: refetchQuotes } = useAllQuotes();
   const { data: profiles = [], isError: profilesError, refetch: refetchProfiles } = useAllProfiles();
-  const { lists, addTicker, removeTicker, isInWatchlist } = useWatchlist();
+  const { lists, activeList, alerts, addTicker, removeTicker, isInWatchlist } = useWatchlist();
   const { user } = useSupabase();
   const { openGate } = useAuthGate();
 
@@ -311,6 +311,9 @@ export default function InsightsPage() {
     [stockCards]
   );
 
+  const activeListId = activeList?.id ?? "";
+  const watchlistLens = useMemo(() => ({ lists, activeListId, alerts }), [lists, activeListId, alerts]);
+
   // One object across renders, so the memoised Radar skips the page's
   // unrelated re-renders.
   const radarSignals = useMemo(
@@ -396,6 +399,7 @@ export default function InsightsPage() {
           newsTickers={newsTickers}
           onWatch={openPickerForTicker}
           isWatched={isInWatchlist}
+          watchlist={watchlistLens}
         />
         <FearGreedCard />
       </div>

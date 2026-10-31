@@ -105,32 +105,31 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
   return (
       <aside
         className={cn(
-          "fixed left-0 top-0 z-40 hidden h-screen w-64 flex-col bg-wolf-surface lg:flex",
-          // A hairline edge rather than a border: the panel is already a
-          // different surface from the page, so the divider only has to mark
-          // where one ends.
-          "after:absolute after:inset-y-0 after:right-0 after:w-px after:bg-wolf-border/40 after:content-['']"
+          "fixed bottom-3 left-3 top-3 z-40 hidden w-64 flex-col overflow-hidden rounded-2xl lg:flex",
+          // A floating material, as the dock is on every other page, rather
+          // than a column ruled off from the page: the surface and its shadow
+          // separate it, so no line has to.
+          "bg-wolf-surface supports-[backdrop-filter]:bg-wolf-surface/75 backdrop-blur-xl",
+          "shadow-lg shadow-wolf-black/25 ring-1 ring-inset ring-wolf-border/60",
+          "[@media(prefers-reduced-transparency:reduce)]:bg-wolf-surface [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none"
         )}
       >
       {/* ---- Logo / Brand ---- */}
-      {/* The height matches the topbar so the two dividers line up across the
-          page, which means the room this block needs has to come from the
-          sides rather than from growing downwards. The wordmark was competing
+      {/* The height matches the topbar, so the brand and the bar's controls
+          share a line across the page, which means the room this block needs
+          has to come from the sides rather than from growing downwards. The wordmark was competing
           with a 44px logo and a close button inside 256px, so the tagline wrapped
           onto a second line and pushed the whole group out of a 56px header -
           which is what made it look crowded. A smaller mark, a wider gutter and
           a tagline that truncates instead of wrapping give it back its air. */}
-      <div className="flex h-14 shrink-0 items-center gap-3.5 border-b border-wolf-border/40 px-5">
-        <BrandMark title="Huntr" className="w-10" />
-        <div className="min-w-0 flex-1">
-          {/* A wordmark, not a heading: the page's h1 is its own title. */}
-          <span className="block text-base font-bold leading-tight tracking-tight text-snow-peak">
-            HUNTR
-          </span>
-          <p className="truncate font-mono text-[9px] uppercase leading-tight tracking-[0.14em] text-mist/50">
-            Wolf of Value St.
-          </p>
-        </div>
+      <div className="flex h-14 shrink-0 items-center gap-3.5 px-5">
+        <BrandMark title="Huntr" className="w-10" glint />
+        {/* A wordmark, not a heading: the page's h1 is its own title. The
+            brand's own face, heavy and tightly set as large type wants; one
+            line with no leading, so it sits on the mark's centre. */}
+        <span className="brand-wordmark text-[20px] font-extrabold leading-none tracking-[-0.02em] text-snow-peak">
+          HUNTR
+        </span>
       </div>
 
       {/* ---- Search Trigger ---- */}
