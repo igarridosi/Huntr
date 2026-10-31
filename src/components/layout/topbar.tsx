@@ -8,6 +8,7 @@ import { KoFiSupport } from "@/components/ui/kofi-support";
 import { ThemeToggle } from "@/components/ui/theme-toggle";
 import { AddTickerDialog } from "@/components/ui/add-ticker-dialog";
 import { MarketPulse } from "@/components/layout/market-pulse";
+import { useScrolled } from "@/hooks/use-scrolled";
 
 interface TopbarProps {
   onSearchClick?: () => void;
@@ -18,8 +19,20 @@ export function Topbar({
   onSearchClick,
   onMenuClick,
 }: TopbarProps) {
+  const scrolled = useScrolled();
   return (
-    <header className="sticky top-0 z-30 flex items-center h-14 px-4 lg:px-6 bg-wolf-black/80 backdrop-blur-md border-b border-wolf-border/30">
+    <header
+      data-scrolled={scrolled || undefined}
+      className={cn(
+        // On large screens the bar is 12px taller at the top, so its controls
+        // sit on the same line as the floating sidebar's brand row.
+        "sticky top-0 z-30 flex h-14 items-center px-4 lg:h-[4.25rem] lg:px-6 lg:pt-3",
+        "bg-wolf-black/80 backdrop-blur-md [@media(prefers-reduced-transparency:reduce)]:bg-wolf-black [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
+        // No divider: a scroll edge. Content fades into the bar, and only once
+        // it is actually passing under it.
+        "after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-6 after:bg-gradient-to-b after:from-wolf-black/80 after:to-transparent after:opacity-0 after:transition-opacity after:duration-300 after:content-[''] data-[scrolled]:after:opacity-100 motion-reduce:after:transition-none"
+      )}
+    >
       {/* Mobile menu toggle */}
       <Button
         variant="ghost"
