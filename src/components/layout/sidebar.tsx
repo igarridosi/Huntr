@@ -121,11 +121,11 @@ export function Sidebar({ onSearchClick }: SidebarProps) {
           which is what made it look crowded. A smaller mark, a wider gutter and
           a tagline that truncates instead of wrapping give it back its air. */}
       <div className="flex h-14 shrink-0 items-center gap-3.5 border-b border-wolf-border/40 px-5">
-        <BrandMark title="Huntr" className="w-9" glint />
-        {/* A wordmark, not a heading: the page's h1 is its own title. Small
-            capitals want open tracking; a single line sits on the mark's
-            optical centre. */}
-        <span className="brand-wordmark text-[13px] font-semibold leading-none tracking-[0.24em] text-snow-peak">
+        <BrandMark title="Huntr" className="w-10" glint />
+        {/* A wordmark, not a heading: the page's h1 is its own title. The
+            brand's own face, heavy and tightly set as large type wants; one
+            line with no leading, so it sits on the mark's centre. */}
+        <span className="brand-wordmark text-[20px] font-extrabold leading-none tracking-[-0.02em] text-snow-peak">
           HUNTR
         </span>
       </div>

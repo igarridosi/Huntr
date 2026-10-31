@@ -15,7 +15,7 @@ export function brandMarkSvg(wolf: string): string {
  * so it is light on the dark theme and near-black on the light one, with no
  * tile behind it. Size it with a width class; the height follows.
  *
- * `glint` adds the brand's one idle motion: every 20 seconds a band of light
+ * `glint` adds the brand's one idle motion: every 15 seconds a band of light
  * crosses the mark, clipped to its shape (see .brand-glint).
  */
 export function BrandMark({

@@ -105,7 +105,7 @@ export function DockSidebar({ expanded, onExpandedChange, onSearchClick }: DockS
             <BrandMark className="w-9" glint />
           </Link>
           <Reveal expanded={expanded} className="min-w-0">
-            <span className="brand-wordmark block text-[13px] font-semibold leading-none tracking-[0.24em] text-snow-peak">
+            <span className="brand-wordmark block text-[19px] font-extrabold leading-none tracking-[-0.02em] text-snow-peak">
               HUNTR
             </span>
           </Reveal>

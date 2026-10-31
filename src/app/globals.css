@@ -1413,7 +1413,7 @@ html:not([data-hero-ready]) :is(.hero-scene-enter, .hero-veil, .hero-headline-en
   }
 }
 
-/* The brand's one idle motion. Every 20 s a band of light crosses the mark
+/* The brand's one idle motion. Every 15 s a band of light crosses the mark
  * (clipped to its shape), then the wordmark: 1.3 s of travel on the strong
  * in-out curve, so it reads as light catching the logo, not as an alert.
  * Transform only for the mark; the wordmark's sweep is a background on 5
@@ -1421,17 +1421,17 @@ html:not([data-hero-ready]) :is(.hero-scene-enter, .hero-veil, .hero-headline-en
  * it is decoration and carries no meaning. */
 @keyframes brand-glint {
   0%      { transform: translate3d(0, 0, 0); }
-  6.5%    { transform: translate3d(640px, 0, 0); }
+  8.7%    { transform: translate3d(640px, 0, 0); }
   100%    { transform: translate3d(640px, 0, 0); }
 }
 
 .brand-glint {
-  animation: brand-glint 20s var(--ease-glide) 4s infinite both;
+  animation: brand-glint 15s var(--ease-glide) 4s infinite both;
 }
 
 @keyframes brand-sheen {
-  0%, 1.5% { background-position: 100% 0; }
-  8%       { background-position: 0% 0; }
+  0%, 2%   { background-position: 100% 0; }
+  10.7%    { background-position: 0% 0; }
   100%     { background-position: 0% 0; }
 }
 
@@ -1448,7 +1448,7 @@ html:not([data-hero-ready]) :is(.hero-scene-enter, .hero-veil, .hero-headline-en
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: brand-sheen 20s var(--ease-glide) 4s infinite both;
+  animation: brand-sheen 15s var(--ease-glide) 4s infinite both;
 }
 
 @media (prefers-reduced-motion: reduce) {
