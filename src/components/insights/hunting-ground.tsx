@@ -1489,7 +1489,10 @@ const GHOST_DOTS = Array.from({ length: 34 }, (_, i) => {
   const b = Math.sin(i * 78.233) * 12345.6789;
   const fx = a - Math.floor(a);
   const fy = b - Math.floor(b);
-  return { x: 30 + fx * 62, y: 18 + fy * 70, r: 3 + ((i * 7) % 9), d: (i * 137) % 1800 };
+  // Rounded to a hundredth of a percent: unrounded, the server and the
+  // browser print the last digits differently and hydration fails.
+  const round2 = (v: number) => Math.round(v * 100) / 100;
+  return { x: round2(30 + fx * 62), y: round2(18 + fy * 70), r: 3 + ((i * 7) % 9), d: (i * 137) % 1800 };
 });
 
 /**
