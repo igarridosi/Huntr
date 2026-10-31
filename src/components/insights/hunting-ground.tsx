@@ -7,6 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
 import { useStoredChoice } from "@/components/insights/use-stored-choice";
+import { WatchlistPane, type WatchlistLens } from "@/components/insights/watchlist-glance";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { ROUTES } from "@/lib/constants";
 import { cn, formatCompactNumber, formatPercent } from "@/lib/utils";
@@ -79,7 +80,7 @@ const signed = (v: number, digits = 1) => {
  * one with the same zones and data as four ranked lists laid out where the
  * zones sit on the map.
  */
-type HgView = "map" | "simple";
+type HgView = "map" | "simple" | "watchlist";
 
 /**
  * Whose companies the map holds: the market's largest (Insights) or the
@@ -96,6 +97,12 @@ const VIEW_ITEMS = [
   { key: "map", label: "Map", icon: <ScatterChart className="h-3.5 w-3.5" /> },
   { key: "simple", label: "Simple", icon: <LayoutGrid className="h-3.5 w-3.5" /> },
 ] as const;
+/** With the reader's watchlist as a third view (Insights). */
+const VIEWS_WITH_WATCHLIST: readonly HgView[] = ["map", "simple", "watchlist"];
+const VIEW_ITEMS_WITH_WATCHLIST = [
+  ...VIEW_ITEMS,
+  { key: "watchlist", label: "Watchlist", icon: <Star className="h-3.5 w-3.5" /> },
+] as const;
 
 export function HuntingGroundCard({
   ground,
@@ -104,6 +111,7 @@ export function HuntingGroundCard({
   onWatch,
   isWatched,
   scope = "market",
+  watchlist,
   className,
 }: {
   ground: HuntingGround | null;
@@ -114,10 +122,12 @@ export function HuntingGroundCard({
   /** Opens the page's watchlist picker for a company (or the sign-in gate). */
   onWatch: (ticker: string) => void;
   isWatched: (ticker: string) => boolean;
+  /** The reader's watchlists, which add a view of how those companies trade. */
+  watchlist?: WatchlistLens;
   className?: string;
 }) {
   const [sector, setSector] = useState<string | null>(null);
-  const [view, setView] = useStoredChoice<HgView>("huntr:hunting-view", VIEWS, "map");
+  const [view, setView] = useStoredChoice<HgView>("huntr:hunting-view", watchlist ? VIEWS_WITH_WATCHLIST : VIEWS, "map");
   const [pinned, setPinned] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const points = useMemo(() => ground?.points ?? [], [ground]);
@@ -134,6 +144,26 @@ export function HuntingGroundCard({
     return c;
   }, [points, sector]);
 
+  const viewTabs = (
+    <SegmentedTabs
+      items={watchlist ? VIEW_ITEMS_WITH_WATCHLIST : VIEW_ITEMS}
+      value={view}
+      onChange={setView}
+      ariaLabel="Hunting Ground view"
+      size="sm"
+    />
+  );
+
+  if (view === "watchlist" && watchlist) {
+    return (
+      <Card className={className}>
+        <CardContent className="flex h-full flex-col p-4 sm:p-5">
+          <WatchlistPane {...watchlist} viewTabs={viewTabs} />
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <Card className={className}>
       <CardContent className="flex h-full flex-col p-4 sm:p-5">
@@ -142,7 +172,7 @@ export function HuntingGroundCard({
           title={SCOPE_COPY[scope].title}
           subtitle={SCOPE_COPY[scope].subtitle}
         >
-          <SegmentedTabs items={VIEW_ITEMS} value={view} onChange={setView} ariaLabel="Hunting Ground view" size="sm" />
+          {viewTabs}
           {points.length > 0 ? (
             <button
               type="button"

@@ -28,7 +28,6 @@ import type { SymbolInfo } from "@/components/insights/news-preview";
 import { useNewsLayout } from "@/components/insights/use-news-layout";
 import { HuntingGroundCard } from "@/components/insights/hunting-ground";
 import { FearGreedCard } from "@/components/insights/fear-greed";
-import { WatchlistGlanceCard } from "@/components/insights/watchlist-glance";
 import { buildHuntingGround, HG_RULES, type HgCompany } from "@/lib/hunting-ground";
 import { toGicsSector } from "@/lib/screener/sectors";
 import { buildMarketCards, buildStockCards, MARKET_NEWS_SYMBOLS, pickNewsCandidates } from "@/lib/market-news";
@@ -312,6 +311,9 @@ export default function InsightsPage() {
     [stockCards]
   );
 
+  const activeListId = activeList?.id ?? "";
+  const watchlistLens = useMemo(() => ({ lists, activeListId, alerts }), [lists, activeListId, alerts]);
+
   // One object across renders, so the memoised Radar skips the page's
   // unrelated re-renders.
   const radarSignals = useMemo(
@@ -397,12 +399,10 @@ export default function InsightsPage() {
           newsTickers={newsTickers}
           onWatch={openPickerForTicker}
           isWatched={isInWatchlist}
+          watchlist={watchlistLens}
         />
         <FearGreedCard />
       </div>
-
-      {/* The reader's own companies, under the market's. */}
-      <WatchlistGlanceCard lists={lists} activeListId={activeList?.id ?? ""} alerts={alerts} />
 
       <MarketNews
         marketCards={marketCards}
