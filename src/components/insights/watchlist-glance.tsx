@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, Binoculars, CalendarClock, Maximize2, X } from "lucide-react";
+import { ArrowUpRight, CalendarClock, Map as MapIcon, Maximize2, X } from "lucide-react";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { TickerLogo } from "@/components/ui/ticker-logo";
@@ -36,6 +36,9 @@ const SORT_ITEMS = [
   { key: "month" as const, label: "30 days" },
 ];
 const NO_IDEAS: Idea[] = [];
+const NO_ROWS: Row[] = [];
+/** Enough placeholder rows to fill the tallest card. */
+const PLACEHOLDER_ROWS = 12;
 
 /** A row: the company, its moves, and the extra columns of the full view. */
 interface Row {
@@ -76,9 +79,9 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
   const items = useMemo(() => list?.items ?? [], [list]);
   const tickers = useMemo(() => items.map((i) => i.ticker.toUpperCase()), [items]);
   const entries = useListEntries(list);
-  const { data: week } = useBatchPeriodPerformance(tickers, "1W");
-  const { data: monthly } = useBatchPeriodPerformance(tickers, "1M");
-  const { data: history } = useBatchDailyHistory(tickers, "1M");
+  const { data: week, isPending: weekPending } = useBatchPeriodPerformance(tickers, "1W");
+  const { data: monthly, isPending: monthPending } = useBatchPeriodPerformance(tickers, "1M");
+  const { data: history, isPending: historyPending } = useBatchDailyHistory(tickers, "1M");
   // The year so far is a column of the full view only.
   const { data: ytd } = useBatchPeriodPerformance(tickers, "YTD", expanded);
   const { savedScenarios } = useDCFScenarios();
@@ -109,9 +112,12 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
   const summary = useMemo(() => summarize(ideas), [ideas]);
   const up = ideas.filter((i) => (i.change ?? 0) > 0).length;
   const down = ideas.filter((i) => (i.change ?? 0) < 0).length;
-  const loading = !hydrated || isPending || (items.length > 0 && entries.isPending);
+  // Until the list itself is known there is nothing to show but its shape;
+  // once it is, the companies are on screen and only their figures wait.
+  const listLoading = !hydrated || isPending;
+  const pending = { week: weekPending, month: monthPending || historyPending };
 
-  const subtitle = loading
+  const subtitle = listLoading || (items.length > 0 && entries.isPending)
     ? "Your watchlist, lately"
     : items.length === 0
       ? `${list?.name ?? "Your watchlist"} has no companies yet`
@@ -134,7 +140,7 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
 
   return (
     <>
-      <SectionHeader icon={Binoculars} title="The Hunting Ground" subtitle={subtitle}>
+      <SectionHeader icon={MapIcon} title="The Hunting Ground" subtitle={subtitle}>
         {viewTabs}
         {hydrated && items.length > 0 ? (
           <button
@@ -154,8 +160,8 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
         <SegmentedTabs items={SORT_ITEMS} value={sort} onChange={setSort} ariaLabel="Biggest moves over" size="sm" />
       </div>
 
-      {loading ? (
-        <GlanceSkeleton />
+      {listLoading ? (
+        <GlanceList rows={NO_ROWS} pending={pending} placeholder />
       ) : items.length === 0 ? (
         <p className="mt-6 text-[13px] text-mist">
           Add companies on the{" "}
@@ -165,7 +171,7 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
           to follow them here.
         </p>
       ) : (
-        <GlanceList rows={sorted} />
+        <GlanceList rows={sorted} pending={pending} />
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-mist">
@@ -198,8 +204,21 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
 const GLANCE_GRID =
   "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 sm:grid-cols-[minmax(0,1.25fr)_minmax(0,0.75fr)_minmax(0,0.8fr)_minmax(0,0.55fr)_minmax(0,2.1fr)]";
 
-/** Today's move, the last five days and the 30-day trend, a row each. */
-function GlanceList({ rows }: { rows: readonly Row[] }) {
+/**
+ * Today's move, the last five days and the 30-day trend, a row each. While
+ * the list itself loads, its rows are drawn in outline; once it is known,
+ * each company is on screen at once and only the figures still on their way
+ * shimmer, in the shape they will take.
+ */
+function GlanceList({
+  rows,
+  pending,
+  placeholder = false,
+}: {
+  rows: readonly Row[];
+  pending: { week: boolean; month: boolean };
+  placeholder?: boolean;
+}) {
   const { ref, edges, onScroll } = useScrollEdges<HTMLUListElement>(rows.length);
   return (
     <div className="mt-3 flex min-h-0 flex-1 flex-col">
@@ -214,8 +233,19 @@ function GlanceList({ rows }: { rows: readonly Row[] }) {
           out over this box rather than in it, so a long list scrolls inside
           the card instead of stretching it (and the row beside it). */}
       <div className="relative min-h-[20rem] flex-1">
-        <ul ref={ref} onScroll={onScroll} className="scroll-quiet absolute -inset-x-1 inset-y-0 space-y-1 overflow-y-auto px-1">
-          {rows.map(({ idea, week, closes }) => (
+        <ul
+          ref={ref}
+          onScroll={onScroll}
+          aria-busy={placeholder || undefined}
+          className={cn(
+            "scroll-quiet absolute -inset-x-1 inset-y-0 space-y-1 px-1",
+            placeholder ? "overflow-hidden" : "overflow-y-auto"
+          )}
+        >
+          {placeholder
+            ? Array.from({ length: PLACEHOLDER_ROWS }, (_, i) => <PlaceholderRow key={i} index={i} />)
+            : null}
+          {rows.map(({ idea, week, closes }, i) => (
             <li key={idea.ticker}>
               <Link
                 href={ROUTES.SYMBOL(idea.ticker)}
@@ -228,21 +258,36 @@ function GlanceList({ rows }: { rows: readonly Row[] }) {
                   <TickerLogo ticker={idea.ticker} src={idea.logo} className="h-8 w-8 shrink-0 rounded-lg" />
                   <span className="min-w-0">
                     <span className="block text-[13px] font-semibold leading-tight text-snow-peak">{idea.ticker}</span>
-                    <span className="block truncate text-[11px] leading-snug text-mist">{idea.name}</span>
+                    {idea.pending ? (
+                      <Bone className="mt-1 h-2.5 w-20" delay={i * 90} />
+                    ) : (
+                      <span className="block truncate text-[11px] leading-snug text-mist">{idea.name}</span>
+                    )}
                   </span>
                 </span>
-                <span className="hidden text-right font-mono text-[13px] tabular-nums text-snow-peak sm:block">
-                  {idea.price != null ? money(idea.price, idea.quote?.currency) : "—"}
+                <span className="hidden justify-end text-right font-mono text-[13px] tabular-nums text-snow-peak sm:flex">
+                  {idea.pending ? <Bone className="h-3 w-14" delay={i * 90} /> : idea.price != null ? money(idea.price, idea.quote?.currency) : "—"}
                 </span>
-                <span className="text-right">
-                  <DayChip change={idea.change} />
+                <span className="flex justify-end">
+                  {idea.pending ? <Bone className="h-[26px] w-[4.75rem] rounded-lg" delay={i * 90 + 40} /> : <DayChip change={idea.change} />}
                 </span>
-                <span className="hidden text-right sm:block">
-                  <Move value={week} />
+                <span className="hidden justify-end sm:flex">
+                  {pending.week ? <Bone className="h-2.5 w-10" delay={i * 90 + 80} /> : <Move value={week} />}
                 </span>
                 <span className="col-span-2 mt-1.5 flex items-center gap-3 sm:col-span-1 sm:mt-0 sm:pl-3">
-                  <Sparkline closes={closes} />
-                  <span className="whitespace-nowrap"><TrendMark month={idea.month} /></span>
+                  {pending.month ? (
+                    <>
+                      <Bone className="h-[3px] w-16" delay={i * 90 + 120} />
+                      <Bone className="h-2.5 w-24" delay={i * 90 + 160} />
+                    </>
+                  ) : (
+                    <>
+                      <Sparkline closes={closes} />
+                      <span className="whitespace-nowrap">
+                        <TrendMark month={idea.month} />
+                      </span>
+                    </>
+                  )}
                 </span>
               </Link>
             </li>
@@ -285,8 +330,9 @@ function useScrollEdges<T extends HTMLElement>(contentKey: number) {
 }
 
 /**
- * A scroll edge: the rows blur and fade into the card where more of them
- * wait beyond it, and the edge is gone once there is nothing more that way.
+ * A scroll edge: a narrow band where the rows soften into the card, only
+ * there to say more of them wait beyond it. Gone once there is nothing more
+ * that way.
  */
 function EdgeFade({ side, shown }: { side: "top" | "bottom"; shown: boolean }) {
   return (
@@ -294,10 +340,10 @@ function EdgeFade({ side, shown }: { side: "top" | "bottom"; shown: boolean }) {
       aria-hidden
       className={cn(
         "pointer-events-none absolute inset-x-0 transition-opacity duration-300 ease-[var(--ease-settle)] motion-reduce:transition-none",
-        "backdrop-blur-[3px] [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
+        "backdrop-blur-[1.5px] [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
         side === "bottom"
-          ? "bottom-0 h-20 bg-gradient-to-t from-wolf-surface via-wolf-surface/75 to-transparent [mask-image:linear-gradient(to_top,black_35%,transparent)]"
-          : "top-0 h-10 bg-gradient-to-b from-wolf-surface via-wolf-surface/60 to-transparent [mask-image:linear-gradient(to_bottom,black_30%,transparent)]",
+          ? "bottom-0 h-7 bg-gradient-to-t from-wolf-surface/90 to-transparent [mask-image:linear-gradient(to_top,black,transparent)]"
+          : "top-0 h-5 bg-gradient-to-b from-wolf-surface/80 to-transparent [mask-image:linear-gradient(to_bottom,black,transparent)]",
         shown ? "opacity-100" : "opacity-0"
       )}
     />
@@ -362,18 +408,43 @@ function Move({ value, decimals = 1 }: { value: number | null; decimals?: number
   );
 }
 
-function GlanceSkeleton() {
+/** A placeholder in the shape of what it stands for, with a sweep of light. */
+function Bone({ className, delay = 0 }: { className?: string; delay?: number }) {
   return (
-    <ul className="mt-4 space-y-1" aria-hidden>
-      {Array.from({ length: 5 }, (_, i) => (
-        <li key={i} className="flex h-[52px] items-center gap-3 rounded-xl px-3">
-          <span className="h-8 w-8 animate-pulse rounded-lg bg-snow-peak/[0.05]" />
-          <span className="h-3 w-24 animate-pulse rounded bg-snow-peak/[0.05]" />
-          <span className="ml-auto h-6 w-20 animate-pulse rounded-lg bg-snow-peak/[0.05]" />
-          <span className="h-3 w-28 animate-pulse rounded bg-snow-peak/[0.04]" />
-        </li>
-      ))}
-    </ul>
+    <span
+      aria-hidden
+      className={cn("huntr-skeleton block rounded-full", className)}
+      style={{ "--shimmer-delay": `${delay}ms` } as CSSProperties}
+    />
+  );
+}
+
+/** A row drawn in outline, in the list's own columns, before it is known. */
+function PlaceholderRow({ index }: { index: number }) {
+  const d = index * 90;
+  return (
+    <li aria-hidden className={cn(GLANCE_GRID, "px-3 py-2.5")}>
+      <span className="flex items-center gap-2.5">
+        <Bone className="h-8 w-8 shrink-0 rounded-lg" delay={d} />
+        <span className="space-y-1.5">
+          <Bone className="h-3 w-12" delay={d} />
+          <Bone className="h-2.5 w-20" delay={d + 40} />
+        </span>
+      </span>
+      <span className="hidden justify-end sm:flex">
+        <Bone className="h-3 w-14" delay={d + 40} />
+      </span>
+      <span className="flex justify-end">
+        <Bone className="h-[26px] w-[4.75rem] rounded-lg" delay={d + 80} />
+      </span>
+      <span className="hidden justify-end sm:flex">
+        <Bone className="h-2.5 w-10" delay={d + 120} />
+      </span>
+      <span className="col-span-2 mt-1.5 flex items-center gap-3 sm:col-span-1 sm:mt-0 sm:pl-3">
+        <Bone className="h-[3px] w-16" delay={d + 160} />
+        <Bone className="h-2.5 w-24" delay={d + 200} />
+      </span>
+    </li>
   );
 }
 
@@ -423,7 +494,7 @@ function ExpandedWatchlist({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sunset-orange/[0.08] ring-1 ring-inset ring-sunset-orange/25">
-              <Binoculars className="h-[18px] w-[18px] text-sunset-orange" />
+              <MapIcon className="h-[18px] w-[18px] text-sunset-orange" />
             </span>
             <div className="min-w-0">
               <p className="truncate text-[16px] font-semibold leading-tight">{title}</p>
@@ -560,23 +631,24 @@ function FullRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
 }
 
 /**
- * Where the price sits between its 52-week low and high, with how far it is
- * below the high: near the top is strength, near the bottom a pullback.
+ * Where the price sits between its 52-week low and high: a hairline for the
+ * year's range, the part below the price drawn a little brighter, and a
+ * short tick at the price. How far it is below the high beside it.
  */
 function RangeBar({ low, high, price }: { low: number; high: number; price: number }) {
   const span = high - low;
   const at = span > 0 ? Math.min(1, Math.max(0, (price - low) / span)) : 1;
+  const left = `${Math.round(at * 1000) / 10}%`;
   const offHigh = high > 0 ? price / high - 1 : 0;
   return (
-    <span className="block space-y-1" title={`52-week low ${low.toFixed(2)} · high ${high.toFixed(2)}`}>
-      <span className="relative block h-1 rounded-full bg-gradient-to-r from-bearish/40 via-mist/25 to-bullish/40">
-        <span
-          className="absolute top-1/2 h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-snow-peak ring-2 ring-wolf-surface"
-          style={{ left: `${Math.round(at * 1000) / 10}%` }}
-        />
+    <span className="flex items-center gap-3" title={`52-week low ${low.toFixed(2)} · high ${high.toFixed(2)}`}>
+      <span className="relative h-3 min-w-0 flex-1">
+        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-snow-peak/15" />
+        <span className="absolute left-0 top-1/2 h-px -translate-y-1/2 bg-snow-peak/45" style={{ width: left }} />
+        <span className="absolute top-0 h-3 w-[2px] -translate-x-1/2 rounded-full bg-snow-peak" style={{ left }} />
       </span>
-      <span className="block text-[10.5px] font-mono tabular-nums text-mist">
-        {offHigh >= -0.005 ? "At its high" : `${signedPct(offHigh, 0)} from high`}
+      <span className="w-12 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-mist">
+        {offHigh >= -0.005 ? "High" : signedPct(offHigh, 0)}
       </span>
     </span>
   );
