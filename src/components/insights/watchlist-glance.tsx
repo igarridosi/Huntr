@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowUpRight, CalendarClock, Map as MapIcon, Maximize2, X } from "lucide-react";
-import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
@@ -19,7 +18,16 @@ import { useBatchDailyHistory, useBatchPeriodPerformance } from "@/hooks/use-sto
 import { useListEntries, useWatchlistStore } from "@/hooks/use-watchlist";
 import { ROUTES } from "@/lib/constants";
 import { cn } from "@/lib/utils";
-import { summarize } from "@/lib/watchlist/ideas";
+import {
+  GLANCE_ORDER,
+  GLANCE_SORTS,
+  offHigh as offHighOf,
+  sortGlance,
+  volumeRatio,
+  type GlanceFigures,
+  type GlanceSort,
+} from "@/lib/watchlist/glance";
+import { daysUntil, summarize } from "@/lib/watchlist/ideas";
 import type { PriceAlert, WatchlistList } from "@/types/watchlist";
 
 export interface WatchlistLens {
@@ -28,13 +36,77 @@ export interface WatchlistLens {
   alerts: readonly PriceAlert[];
 }
 
-type Sort = "today" | "week" | "month";
-const SORTS: readonly Sort[] = ["today", "week", "month"];
-const SORT_ITEMS = [
-  { key: "today" as const, label: "Today" },
-  { key: "week" as const, label: "5 days" },
-  { key: "month" as const, label: "30 days" },
+const SORT_GROUPS = [
+  {
+    label: "Today",
+    options: [
+      { value: "day-up" as const, label: "Top gainers today" },
+      { value: "day-down" as const, label: "Top losers today" },
+      { value: "volume" as const, label: "Heaviest volume today", keywords: "unusual activity" },
+    ],
+  },
+  {
+    label: "Trend",
+    options: [
+      { value: "month-up" as const, label: "Strongest 30 days", keywords: "momentum month" },
+      { value: "month-down" as const, label: "Weakest 30 days", keywords: "momentum month" },
+      { value: "ytd-up" as const, label: "Best year to date", keywords: "ytd" },
+      { value: "ytd-down" as const, label: "Worst year to date", keywords: "ytd" },
+    ],
+  },
+  {
+    label: "Calendar",
+    options: [{ value: "earnings" as const, label: "Next earnings report", keywords: "quarterly results" }],
+  },
+  {
+    label: "Value",
+    options: [
+      { value: "closest" as const, label: "Closest to a buy", keywords: "fair value dcf target" },
+      { value: "off-high" as const, label: "Furthest below 52-week high", keywords: "dip pullback drawdown" },
+    ],
+  },
 ];
+
+/** What the list is ordered by, in a line under it. */
+const SORT_NOTE: Record<GlanceSort, string> = {
+  "day-up": "Today's biggest gainers first.",
+  "day-down": "Today's biggest losers first.",
+  volume: "Trading most heavily against its average first: a move with conviction behind it.",
+  "month-up": "Strongest over the last 30 days first.",
+  "month-down": "Weakest over the last 30 days first.",
+  "ytd-up": "Best since the start of the year first.",
+  "ytd-down": "Worst since the start of the year first.",
+  earnings: "Reporting soonest first.",
+  closest: "Furthest below your buy price first; companies without one last.",
+  "off-high": "Furthest below their 52-week high first.",
+};
+
+/**
+ * The fourth column shows whatever the list is ordered by, when the other
+ * columns do not already: the last five days for today's and the month's
+ * orders, the ordering figure for the rest.
+ */
+type Context = "week" | "ytd" | "volume" | "earnings" | "gap" | "offHigh";
+const CONTEXT: Record<GlanceSort, Context> = {
+  "day-up": "week",
+  "day-down": "week",
+  volume: "volume",
+  "month-up": "week",
+  "month-down": "week",
+  "ytd-up": "ytd",
+  "ytd-down": "ytd",
+  earnings: "earnings",
+  closest: "gap",
+  "off-high": "offHigh",
+};
+const CONTEXT_LABEL: Record<Context, string> = {
+  week: "5 days",
+  ytd: "YTD",
+  volume: "Volume",
+  earnings: "Earnings",
+  gap: "To buy",
+  offHigh: "From high",
+};
 const NO_IDEAS: Idea[] = [];
 const NO_ROWS: Row[] = [];
 /** Enough placeholder rows to fill the tallest card. */
@@ -47,13 +119,11 @@ interface Row {
   ytd: number | null;
   /** Daily closes over the last month, oldest first. */
   closes: number[] | null;
+  /** What the list can be ordered by. */
+  figures: GlanceFigures;
 }
 
-/** Biggest moves first, either way, over the chosen window. */
-function byMove(rows: readonly Row[], sort: Sort): Row[] {
-  const move = (r: Row) => (sort === "today" ? r.idea.change : sort === "week" ? r.week : r.idea.month);
-  return [...rows].sort((a, b) => Math.abs(move(b) ?? 0) - Math.abs(move(a) ?? 0));
-}
+const figuresOf = (row: Row) => row.figures;
 
 /**
  * The Hunting Ground's third view: one of the reader's watchlists, read for
@@ -73,7 +143,9 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
   const fallback = listIds.includes(activeListId) ? activeListId : (listIds[0] ?? "");
   const [chosen, choose] = useStoredChoice<string>("huntr:insights-watchlist", listIds, fallback);
   const list = lists.find((l) => l.id === chosen) ?? lists[0];
-  const [sort, setSort] = useStoredChoice<Sort>("huntr:insights-watchlist-sort", SORTS, "today");
+  const [sort, setSort] = useStoredChoice<GlanceSort>("huntr:insights-watchlist-order", GLANCE_SORTS, "day-up");
+  // The day the page opened: reports count from it.
+  const [now] = useState(() => Date.now());
   const [expanded, setExpanded] = useState(false);
 
   const items = useMemo(() => list?.items ?? [], [list]);
@@ -82,8 +154,7 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
   const { data: week, isPending: weekPending } = useBatchPeriodPerformance(tickers, "1W");
   const { data: monthly, isPending: monthPending } = useBatchPeriodPerformance(tickers, "1M");
   const { data: history, isPending: historyPending } = useBatchDailyHistory(tickers, "1M");
-  // The year so far is a column of the full view only.
-  const { data: ytd } = useBatchPeriodPerformance(tickers, "YTD", expanded);
+  const { data: ytd, isPending: ytdPending } = useBatchPeriodPerformance(tickers, "YTD");
   const { savedScenarios } = useDCFScenarios();
   const [choices] = useScenarioChoices();
 
@@ -99,15 +170,28 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
   });
   const rows = useMemo(
     () =>
-      (hydrated ? ideas : NO_IDEAS).map((idea) => ({
-        idea,
-        week: week?.[idea.ticker] ?? null,
-        ytd: ytd?.[idea.ticker] ?? null,
-        closes: history?.[idea.ticker]?.map((p) => p.close).filter((c) => c > 0) ?? null,
-      })),
-    [hydrated, ideas, week, ytd, history]
+      (hydrated ? ideas : NO_IDEAS).map((idea) => {
+        const q = idea.quote;
+        const ytdMove = ytd?.[idea.ticker] ?? null;
+        return {
+          idea,
+          week: week?.[idea.ticker] ?? null,
+          ytd: ytdMove,
+          closes: history?.[idea.ticker]?.map((p) => p.close).filter((c) => c > 0) ?? null,
+          figures: {
+            change: idea.change,
+            month: idea.month,
+            ytd: ytdMove,
+            volume: volumeRatio(q?.current_volume, q?.avg_volume),
+            earningsDays: daysUntil(q?.next_earnings_date, now),
+            gap: idea.gap,
+            offHigh: offHighOf(idea.price, q?.fifty_two_week_high),
+          },
+        };
+      }),
+    [hydrated, ideas, week, ytd, history, now]
   );
-  const sorted = useMemo(() => byMove(rows, sort), [rows, sort]);
+  const sorted = useMemo(() => sortGlance(rows, sort, figuresOf), [rows, sort]);
 
   const summary = useMemo(() => summarize(ideas), [ideas]);
   const up = ideas.filter((i) => (i.change ?? 0) > 0).length;
@@ -115,7 +199,7 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
   // Until the list itself is known there is nothing to show but its shape;
   // once it is, the companies are on screen and only their figures wait.
   const listLoading = !hydrated || isPending;
-  const pending = { week: weekPending, month: monthPending || historyPending };
+  const pending = { week: weekPending, month: monthPending || historyPending, ytd: ytdPending };
 
   const subtitle = listLoading || (items.length > 0 && entries.isPending)
     ? "Your watchlist, lately"
@@ -137,6 +221,9 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
     hydrated && lists.length > 1 ? (
       <SelectMenu groups={listOptions} value={list?.id ?? ""} onChange={choose} ariaLabel="Watchlist shown" className="w-40" />
     ) : null;
+  const sortSelect = (
+    <SelectMenu groups={SORT_GROUPS} value={sort} onChange={setSort} ariaLabel="Order the list by" className="w-56" />
+  );
 
   return (
     <>
@@ -157,11 +244,11 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
         {listSelect ?? <span />}
-        <SegmentedTabs items={SORT_ITEMS} value={sort} onChange={setSort} ariaLabel="Biggest moves over" size="sm" />
+        {sortSelect}
       </div>
 
       {listLoading ? (
-        <GlanceList rows={NO_ROWS} pending={pending} placeholder />
+        <GlanceList rows={NO_ROWS} sort={sort} pending={pending} placeholder />
       ) : items.length === 0 ? (
         <p className="mt-6 text-[13px] text-mist">
           Add companies on the{" "}
@@ -171,11 +258,11 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
           to follow them here.
         </p>
       ) : (
-        <GlanceList rows={sorted} pending={pending} />
+        <GlanceList rows={sorted} sort={sort} pending={pending} />
       )}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-mist">
-        <span>Biggest moves first, either way. 30 days: the trend in a word.</span>
+        <span>{SORT_NOTE[sort]}</span>
         <Link href={ROUTES.APP_WATCHLISTS} className="ml-auto inline-flex items-center gap-1 font-medium transition-colors duration-150 hover:text-snow-peak">
           Watchlists <ArrowUpRight className="h-3 w-3" />
         </Link>
@@ -186,10 +273,11 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
           title={list.name}
           subtitle={subtitle}
           rows={sorted}
+          sortedBy={GLANCE_ORDER[sort].figure}
           controls={
             <>
               {listSelect}
-              <SegmentedTabs items={SORT_ITEMS} value={sort} onChange={setSort} ariaLabel="Biggest moves over" size="sm" />
+              {sortSelect}
             </>
           }
           onClose={() => setExpanded(false)}
@@ -212,22 +300,28 @@ const GLANCE_GRID =
  */
 function GlanceList({
   rows,
+  sort,
   pending,
   placeholder = false,
 }: {
   rows: readonly Row[];
-  pending: { week: boolean; month: boolean };
+  sort: GlanceSort;
+  pending: { week: boolean; month: boolean; ytd: boolean };
   placeholder?: boolean;
 }) {
   const { ref, edges, onScroll } = useScrollEdges<HTMLUListElement>(rows.length);
+  const context = CONTEXT[sort];
+  const figure = GLANCE_ORDER[sort].figure;
+  // The ordering column's heading is lit, so the order explains itself.
+  const lit = (on: boolean) => (on ? "text-sunset-orange" : undefined);
   return (
     <div className="mt-3 flex min-h-0 flex-1 flex-col">
       <div className={cn(GLANCE_GRID, "hidden px-3 pb-2 text-[10.5px] font-medium uppercase tracking-[0.08em] text-mist/80 sm:grid")} aria-hidden>
         <span>Company</span>
         <span className="text-right">Price</span>
-        <span className="text-right">Today</span>
-        <span className="text-right">5 days</span>
-        <span className="pl-3">30 days</span>
+        <span className={cn("text-right", lit(figure === "change"))}>Today</span>
+        <span className={cn("text-right", lit(context !== "week"))}>{CONTEXT_LABEL[context]}</span>
+        <span className={cn("pl-3", lit(figure === "month"))}>30 days</span>
       </div>
       {/* As tall as the card, whatever sets its height: the list is laid
           out over this box rather than in it, so a long list scrolls inside
@@ -245,53 +339,56 @@ function GlanceList({
           {placeholder
             ? Array.from({ length: PLACEHOLDER_ROWS }, (_, i) => <PlaceholderRow key={i} index={i} />)
             : null}
-          {rows.map(({ idea, week, closes }, i) => (
-            <li key={idea.ticker}>
-              <Link
-                href={ROUTES.SYMBOL(idea.ticker)}
-                className={cn(
-                  GLANCE_GRID,
-                  "rounded-xl px-3 py-2.5 ring-1 ring-inset ring-transparent transition-colors duration-150 hover:bg-snow-peak/[0.035] hover:ring-wolf-border/50 focus-visible:outline-none focus-visible:ring-sunset-orange/60"
-                )}
-              >
-                <span className="flex min-w-0 items-center gap-2.5">
-                  <TickerLogo ticker={idea.ticker} src={idea.logo} className="h-8 w-8 shrink-0 rounded-lg" />
-                  <span className="min-w-0">
-                    <span className="block text-[13px] font-semibold leading-tight text-snow-peak">{idea.ticker}</span>
-                    {idea.pending ? (
-                      <Bone className="mt-1 h-2.5 w-20" delay={i * 90} />
+          {rows.map((row, i) => {
+            const { idea, closes } = row;
+            return (
+              <li key={idea.ticker}>
+                <Link
+                  href={ROUTES.SYMBOL(idea.ticker)}
+                  className={cn(
+                    GLANCE_GRID,
+                    "rounded-xl px-3 py-2.5 ring-1 ring-inset ring-transparent transition-colors duration-150 hover:bg-snow-peak/[0.035] hover:ring-wolf-border/50 focus-visible:outline-none focus-visible:ring-sunset-orange/60"
+                  )}
+                >
+                  <span className="flex min-w-0 items-center gap-2.5">
+                    <TickerLogo ticker={idea.ticker} src={idea.logo} className="h-8 w-8 shrink-0 rounded-lg" />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-semibold leading-tight text-snow-peak">{idea.ticker}</span>
+                      {idea.pending ? (
+                        <Bone className="mt-1 h-2.5 w-20" delay={i * 90} />
+                      ) : (
+                        <span className="block truncate text-[11px] leading-snug text-mist">{idea.name}</span>
+                      )}
+                    </span>
+                  </span>
+                  <span className="hidden justify-end text-right font-mono text-[13px] tabular-nums text-snow-peak sm:flex">
+                    {idea.pending ? <Bone className="h-3 w-14" delay={i * 90} /> : idea.price != null ? money(idea.price, idea.quote?.currency) : "—"}
+                  </span>
+                  <span className="flex justify-end">
+                    {idea.pending ? <Bone className="h-[26px] w-[4.75rem] rounded-lg" delay={i * 90 + 40} /> : <DayChip change={idea.change} />}
+                  </span>
+                  <span className="hidden justify-end sm:flex">
+                    <ContextCell row={row} context={context} pending={pending} delay={i * 90 + 80} />
+                  </span>
+                  <span className="col-span-2 mt-1.5 flex items-center gap-3 sm:col-span-1 sm:mt-0 sm:pl-3">
+                    {pending.month ? (
+                      <>
+                        <Bone className="h-[3px] w-16" delay={i * 90 + 120} />
+                        <Bone className="h-2.5 w-24" delay={i * 90 + 160} />
+                      </>
                     ) : (
-                      <span className="block truncate text-[11px] leading-snug text-mist">{idea.name}</span>
+                      <>
+                        <Sparkline closes={closes} />
+                        <span className="whitespace-nowrap">
+                          <TrendMark month={idea.month} />
+                        </span>
+                      </>
                     )}
                   </span>
-                </span>
-                <span className="hidden justify-end text-right font-mono text-[13px] tabular-nums text-snow-peak sm:flex">
-                  {idea.pending ? <Bone className="h-3 w-14" delay={i * 90} /> : idea.price != null ? money(idea.price, idea.quote?.currency) : "—"}
-                </span>
-                <span className="flex justify-end">
-                  {idea.pending ? <Bone className="h-[26px] w-[4.75rem] rounded-lg" delay={i * 90 + 40} /> : <DayChip change={idea.change} />}
-                </span>
-                <span className="hidden justify-end sm:flex">
-                  {pending.week ? <Bone className="h-2.5 w-10" delay={i * 90 + 80} /> : <Move value={week} />}
-                </span>
-                <span className="col-span-2 mt-1.5 flex items-center gap-3 sm:col-span-1 sm:mt-0 sm:pl-3">
-                  {pending.month ? (
-                    <>
-                      <Bone className="h-[3px] w-16" delay={i * 90 + 120} />
-                      <Bone className="h-2.5 w-24" delay={i * 90 + 160} />
-                    </>
-                  ) : (
-                    <>
-                      <Sparkline closes={closes} />
-                      <span className="whitespace-nowrap">
-                        <TrendMark month={idea.month} />
-                      </span>
-                    </>
-                  )}
-                </span>
-              </Link>
-            </li>
-          ))}
+                </Link>
+              </li>
+            );
+          })}
         </ul>
         <EdgeFade side="top" shown={edges.top} />
         <EdgeFade side="bottom" shown={edges.bottom} />
@@ -399,6 +496,68 @@ function DayChip({ change }: { change: number | null }) {
   );
 }
 
+/** The figure the list is ordered by, where the fixed columns do not show it. */
+function ContextCell({
+  row,
+  context,
+  pending,
+  delay,
+}: {
+  row: Row;
+  context: Context;
+  pending: { week: boolean; ytd: boolean };
+  delay: number;
+}) {
+  const { idea, figures } = row;
+  const waiting =
+    (context === "week" && pending.week) || (context === "ytd" && pending.ytd) || (context !== "week" && context !== "ytd" && idea.pending);
+  if (waiting) return <Bone className="h-2.5 w-10" delay={delay} />;
+  const muted = <span className="text-xs text-mist/60">—</span>;
+  switch (context) {
+    case "week":
+      return <Move value={row.week} />;
+    case "ytd":
+      return <Move value={row.ytd} />;
+    case "volume":
+      return figures.volume != null ? <VolumeMark ratio={figures.volume} /> : muted;
+    case "earnings": {
+      const d = figures.earningsDays;
+      if (d == null) return muted;
+      return (
+        <span className={cn("whitespace-nowrap text-[12px]", d <= 7 ? "font-medium text-golden-hour" : "text-mist")}>
+          {d === 0 ? "Today" : d === 1 ? "Tomorrow" : `in ${d}d`}
+        </span>
+      );
+    }
+    case "gap":
+      return figures.gap != null ? (
+        <span className={cn("font-mono text-[12px] tabular-nums", STANCE_TEXT[idea.stance])}>{signedPct(figures.gap, 0)}</span>
+      ) : (
+        muted
+      );
+    case "offHigh":
+      return figures.offHigh != null ? (
+        <span className="font-mono text-[12px] tabular-nums text-mist">
+          {figures.offHigh >= -0.005 ? "High" : signedPct(figures.offHigh, 0)}
+        </span>
+      ) : (
+        muted
+      );
+  }
+}
+
+/** Today's volume against its average; heavy days in the accent. */
+function VolumeMark({ ratio }: { ratio: number }) {
+  return (
+    <span
+      className={cn("font-mono text-[12px] tabular-nums", ratio >= 1.5 ? "font-semibold text-sunset-orange" : "text-mist")}
+      title="Today's volume against its average"
+    >
+      {ratio.toFixed(1)}×
+    </span>
+  );
+}
+
 function Move({ value, decimals = 1 }: { value: number | null; decimals?: number }) {
   if (value == null) return <span className="text-xs text-mist/60">—</span>;
   return (
@@ -451,7 +610,7 @@ function PlaceholderRow({ index }: { index: number }) {
 // ── The full view ──────────────────────────────────────────────────────────
 
 const FULL_GRID =
-  "md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.6fr)_minmax(0,1.7fr)_minmax(0,0.6fr)_minmax(0,1.3fr)_minmax(0,0.6fr)_minmax(0,1.5fr)_minmax(0,1fr)] md:items-center md:gap-x-4";
+  "md:grid md:grid-cols-[minmax(0,1.7fr)_minmax(0,0.8fr)_minmax(0,0.75fr)_minmax(0,0.6fr)_minmax(0,1.6fr)_minmax(0,0.6fr)_minmax(0,1.9fr)_minmax(0,0.55fr)_minmax(0,1.3fr)_minmax(0,1fr)] md:items-center md:gap-x-4";
 
 /**
  * Every company on the list, with what a glance leaves out: the year so far,
@@ -463,15 +622,19 @@ function ExpandedWatchlist({
   title,
   subtitle,
   rows,
+  sortedBy,
   controls,
   onClose,
 }: {
   title: string;
   subtitle: string;
   rows: readonly Row[];
+  /** The figure the list is ordered by, whose heading is lit. */
+  sortedBy: keyof GlanceFigures;
   controls: ReactNode;
   onClose: () => void;
 }) {
+  const lit = (figure: keyof GlanceFigures) => (sortedBy === figure ? "text-sunset-orange" : undefined);
   const dialog = useRef<HTMLDialogElement>(null);
   const router = useRouter();
 
@@ -523,14 +686,14 @@ function ExpandedWatchlist({
         <div className={cn(FULL_GRID, "mt-4 hidden px-4 pb-2 text-[10.5px] font-medium uppercase tracking-[0.08em] text-mist/80")} aria-hidden>
           <span>Company</span>
           <span className="text-right">Price</span>
-          <span className="text-right">Today</span>
+          <span className={cn("text-right", lit("change"))}>Today</span>
           <span className="text-right">5 days</span>
-          <span className="pl-3">30 days</span>
-          <span className="text-right">YTD</span>
-          <span className="pl-3">52-week range</span>
-          <span className="text-right">Volume</span>
-          <span className="pl-3">To fair value</span>
-          <span>Next</span>
+          <span className={cn("pl-3", lit("month"))}>30 days</span>
+          <span className={cn("text-right", lit("ytd"))}>YTD</span>
+          <span className={cn("pl-3", lit("offHigh"))}>52-week range</span>
+          <span className={cn("text-right", lit("volume"))}>Volume</span>
+          <span className={cn("pl-3", lit("gap"))}>To fair value</span>
+          <span className={lit("earningsDays")}>Next</span>
         </div>
 
         <ul className="scroll-quiet -mx-1 mt-2 min-h-0 flex-1 space-y-1 overflow-y-auto px-1 md:mt-0">
@@ -549,7 +712,7 @@ function FullRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
   const { idea, week, ytd } = row;
   const q = idea.quote;
   const currency = q?.currency;
-  const volume = q && q.avg_volume > 0 && q.current_volume ? q.current_volume / q.avg_volume : null;
+  const volume = row.figures.volume;
   return (
     <button
       type="button"
@@ -584,19 +747,14 @@ function FullRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
       </span>
       <span className="md:pl-3">
         {q && q.fifty_two_week_high > 0 && q.fifty_two_week_low > 0 && idea.price != null ? (
-          <RangeBar low={q.fifty_two_week_low} high={q.fifty_two_week_high} price={idea.price} />
+          <RangeBar low={q.fifty_two_week_low} high={q.fifty_two_week_high} price={idea.price} currency={currency} />
         ) : (
           <span className="text-xs text-mist/60">—</span>
         )}
       </span>
       <span className="text-right">
         {volume != null ? (
-          <span
-            className={cn("font-mono text-[12px] tabular-nums", volume >= 1.5 ? "font-semibold text-sunset-orange" : "text-mist")}
-            title="Today's volume against its average"
-          >
-            {volume.toFixed(1)}×
-          </span>
+          <VolumeMark ratio={volume} />
         ) : (
           <span className="text-xs text-mist/60">—</span>
         )}
@@ -630,25 +788,50 @@ function FullRow({ row, onOpen }: { row: Row; onOpen: () => void }) {
   );
 }
 
+/** A range's end, to the dollar from $100 up: the bar is a sketch, not a quote. */
+function rangeEnd(value: number, currency = "USD"): string {
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: value >= 100 ? 0 : 2,
+      minimumFractionDigits: value >= 100 ? 0 : 2,
+    }).format(value);
+  } catch {
+    return value.toFixed(value >= 100 ? 0 : 2);
+  }
+}
+
 /**
- * Where the price sits between its 52-week low and high: a hairline for the
- * year's range, the part below the price drawn a little brighter, and a
- * short tick at the price. How far it is below the high beside it.
+ * Where the price sits between its 52-week low and high, drawn like the
+ * product's other measures (the quality bars): a soft track, filled in the
+ * accent from the low up to the price, with a short tick at the price. Each
+ * end is named under it, and how far the price is below the high beside it.
  */
-function RangeBar({ low, high, price }: { low: number; high: number; price: number }) {
+function RangeBar({ low, high, price, currency }: { low: number; high: number; price: number; currency?: string }) {
   const span = high - low;
   const at = span > 0 ? Math.min(1, Math.max(0, (price - low) / span)) : 1;
   const left = `${Math.round(at * 1000) / 10}%`;
-  const offHigh = high > 0 ? price / high - 1 : 0;
+  const off = offHighOf(price, high) ?? 0;
   return (
-    <span className="flex items-center gap-3" title={`52-week low ${low.toFixed(2)} · high ${high.toFixed(2)}`}>
-      <span className="relative h-3 min-w-0 flex-1">
-        <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-snow-peak/15" />
-        <span className="absolute left-0 top-1/2 h-px -translate-y-1/2 bg-snow-peak/45" style={{ width: left }} />
-        <span className="absolute top-0 h-3 w-[2px] -translate-x-1/2 rounded-full bg-snow-peak" style={{ left }} />
+    <span className="flex items-start gap-3">
+      <span className="min-w-0 flex-1">
+        <span className="relative block h-2.5">
+          <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 overflow-hidden rounded-full bg-snow-peak/[0.08]">
+            <span className="block h-full rounded-full bg-sunset-orange/80" style={{ width: left }} />
+          </span>
+          <span
+            className="absolute top-0 h-2.5 w-[3px] -translate-x-1/2 rounded-full bg-snow-peak ring-2 ring-wolf-surface"
+            style={{ left }}
+          />
+        </span>
+        <span className="mt-1 flex justify-between gap-2 font-mono text-[10px] tabular-nums text-mist/80">
+          <span title="52-week low">{rangeEnd(low, currency)}</span>
+          <span title="52-week high">{rangeEnd(high, currency)}</span>
+        </span>
       </span>
-      <span className="w-12 shrink-0 text-right font-mono text-[10.5px] tabular-nums text-mist">
-        {offHigh >= -0.005 ? "High" : signedPct(offHigh, 0)}
+      <span className="w-10 shrink-0 pt-px text-right font-mono text-[11px] tabular-nums text-mist">
+        {off >= -0.005 ? "High" : signedPct(off, 0)}
       </span>
     </span>
   );
