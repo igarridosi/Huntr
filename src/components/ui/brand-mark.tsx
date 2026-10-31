@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useId, type CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 // Traced from the logo, the same paths as app/icon.svg.
@@ -14,8 +14,22 @@ export function brandMarkSvg(wolf: string): string {
  * The Huntr mark, drawn rather than loaded: the wolf takes the text colour,
  * so it is light on the dark theme and near-black on the light one, with no
  * tile behind it. Size it with a width class; the height follows.
+ *
+ * `glint` adds the brand's one idle motion: every 20 seconds a band of light
+ * crosses the mark, clipped to its shape (see .brand-glint).
  */
-export function BrandMark({ className, style, title }: { className?: string; style?: CSSProperties; title?: string }) {
+export function BrandMark({
+  className,
+  style,
+  title,
+  glint = false,
+}: {
+  className?: string;
+  style?: CSSProperties;
+  title?: string;
+  glint?: boolean;
+}) {
+  const id = useId().replace(/:/g, "");
   return (
     <svg
       viewBox="54 30 470 361"
@@ -27,6 +41,24 @@ export function BrandMark({ className, style, title }: { className?: string; sty
     >
       <path fill="currentColor" fillRule="evenodd" d={WOLF} />
       <path fill="#E8682A" fillRule="evenodd" d={ARROW} />
+      {glint ? (
+        <>
+          <defs>
+            <clipPath id={`${id}-clip`}>
+              <path fillRule="evenodd" d={WOLF} />
+              <path fillRule="evenodd" d={ARROW} />
+            </clipPath>
+            <linearGradient id={`${id}-band`} x1="0" x2="1" y1="0" y2="0" gradientTransform="rotate(18 0.5 0.5)">
+              <stop offset="0" stopColor="#fff" stopOpacity="0" />
+              <stop offset="0.5" stopColor="#fff" stopOpacity="0.75" />
+              <stop offset="1" stopColor="#fff" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <g clipPath={`url(#${id}-clip)`}>
+            <rect className="brand-glint" x="-90" y="20" width="110" height="390" fill={`url(#${id}-band)`} />
+          </g>
+        </>
+      ) : null}
     </svg>
   );
 }

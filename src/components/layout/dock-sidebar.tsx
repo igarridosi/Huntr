@@ -102,12 +102,11 @@ export function DockSidebar({ expanded, onExpandedChange, onSearchClick }: DockS
             aria-label="Huntr, go to Insights"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-150 active:scale-[0.94] motion-reduce:active:scale-100"
           >
-            <BrandMark className="w-9" />
+            <BrandMark className="w-9" glint />
           </Link>
           <Reveal expanded={expanded} className="min-w-0">
-            <span className="block text-[15px] font-bold leading-tight tracking-[-0.01em] text-snow-peak">HUNTR</span>
-            <span className="block truncate font-mono text-[9px] uppercase leading-tight tracking-[0.14em] text-mist/50">
-              Wolf of Value St.
+            <span className="brand-wordmark block text-[13px] font-semibold leading-none tracking-[0.24em] text-snow-peak">
+              HUNTR
             </span>
           </Reveal>
         </div>
