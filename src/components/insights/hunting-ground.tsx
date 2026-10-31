@@ -2,7 +2,7 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, ArrowUpRight, Crosshair, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X, ZoomIn } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Binoculars, Info, LayoutGrid, Maximize2, ScatterChart, Search, Star, X, ZoomIn } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { TickerLogo } from "@/components/ui/ticker-logo";
 import { SectionHeader } from "@/components/insights/section-header";
@@ -168,7 +168,7 @@ export function HuntingGroundCard({
     <Card className={className}>
       <CardContent className="flex h-full flex-col p-4 sm:p-5">
         <SectionHeader
-          icon={Crosshair}
+          icon={Binoculars}
           title={SCOPE_COPY[scope].title}
           subtitle={SCOPE_COPY[scope].subtitle}
         >
@@ -447,7 +447,7 @@ function ExpandedMap({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sunset-orange/[0.08] ring-1 ring-inset ring-sunset-orange/25">
-              <Crosshair className="h-[18px] w-[18px] text-sunset-orange" />
+              <Binoculars className="h-[18px] w-[18px] text-sunset-orange" />
             </span>
             <div>
               <p className="text-[16px] font-semibold leading-tight">{SCOPE_COPY[scope].title}</p>

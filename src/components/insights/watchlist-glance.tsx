@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpRight, CalendarClock, Crosshair, Maximize2, X } from "lucide-react";
+import { ArrowUpRight, Binoculars, CalendarClock, Maximize2, X } from "lucide-react";
 import { SegmentedTabs } from "@/components/ui/segmented-tabs";
 import { SelectMenu } from "@/components/ui/select-menu";
 import { TickerLogo } from "@/components/ui/ticker-logo";
@@ -134,7 +134,7 @@ export function WatchlistPane({ lists, activeListId, alerts, viewTabs }: Watchli
 
   return (
     <>
-      <SectionHeader icon={Crosshair} title="The Hunting Ground" subtitle={subtitle}>
+      <SectionHeader icon={Binoculars} title="The Hunting Ground" subtitle={subtitle}>
         {viewTabs}
         {hydrated && items.length > 0 ? (
           <button
@@ -200,6 +200,7 @@ const GLANCE_GRID =
 
 /** Today's move, the last five days and the 30-day trend, a row each. */
 function GlanceList({ rows }: { rows: readonly Row[] }) {
+  const { ref, edges, onScroll } = useScrollEdges<HTMLUListElement>(rows.length);
   return (
     <div className="mt-3 flex min-h-0 flex-1 flex-col">
       <div className={cn(GLANCE_GRID, "hidden px-3 pb-2 text-[10.5px] font-medium uppercase tracking-[0.08em] text-mist/80 sm:grid")} aria-hidden>
@@ -209,41 +210,97 @@ function GlanceList({ rows }: { rows: readonly Row[] }) {
         <span className="text-right">5 days</span>
         <span className="pl-3">30 days</span>
       </div>
-      <ul className="scroll-quiet -mx-1 max-h-[28rem] space-y-1 overflow-y-auto px-1">
-        {rows.map(({ idea, week, closes }) => (
-          <li key={idea.ticker}>
-            <Link
-              href={ROUTES.SYMBOL(idea.ticker)}
-              className={cn(
-                GLANCE_GRID,
-                "rounded-xl px-3 py-2.5 ring-1 ring-inset ring-transparent transition-colors duration-150 hover:bg-snow-peak/[0.035] hover:ring-wolf-border/50 focus-visible:outline-none focus-visible:ring-sunset-orange/60"
-              )}
-            >
-              <span className="flex min-w-0 items-center gap-2.5">
-                <TickerLogo ticker={idea.ticker} src={idea.logo} className="h-8 w-8 shrink-0 rounded-lg" />
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-semibold leading-tight text-snow-peak">{idea.ticker}</span>
-                  <span className="block truncate text-[11px] leading-snug text-mist">{idea.name}</span>
+      {/* As tall as the card, whatever sets its height: the list is laid
+          out over this box rather than in it, so a long list scrolls inside
+          the card instead of stretching it (and the row beside it). */}
+      <div className="relative min-h-[20rem] flex-1">
+        <ul ref={ref} onScroll={onScroll} className="scroll-quiet absolute -inset-x-1 inset-y-0 space-y-1 overflow-y-auto px-1">
+          {rows.map(({ idea, week, closes }) => (
+            <li key={idea.ticker}>
+              <Link
+                href={ROUTES.SYMBOL(idea.ticker)}
+                className={cn(
+                  GLANCE_GRID,
+                  "rounded-xl px-3 py-2.5 ring-1 ring-inset ring-transparent transition-colors duration-150 hover:bg-snow-peak/[0.035] hover:ring-wolf-border/50 focus-visible:outline-none focus-visible:ring-sunset-orange/60"
+                )}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <TickerLogo ticker={idea.ticker} src={idea.logo} className="h-8 w-8 shrink-0 rounded-lg" />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-semibold leading-tight text-snow-peak">{idea.ticker}</span>
+                    <span className="block truncate text-[11px] leading-snug text-mist">{idea.name}</span>
+                  </span>
                 </span>
-              </span>
-              <span className="hidden text-right font-mono text-[13px] tabular-nums text-snow-peak sm:block">
-                {idea.price != null ? money(idea.price, idea.quote?.currency) : "—"}
-              </span>
-              <span className="text-right">
-                <DayChip change={idea.change} />
-              </span>
-              <span className="hidden text-right sm:block">
-                <Move value={week} />
-              </span>
-              <span className="col-span-2 mt-1.5 flex items-center gap-3 sm:col-span-1 sm:mt-0 sm:pl-3">
-                <Sparkline closes={closes} />
-                <span className="whitespace-nowrap"><TrendMark month={idea.month} /></span>
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+                <span className="hidden text-right font-mono text-[13px] tabular-nums text-snow-peak sm:block">
+                  {idea.price != null ? money(idea.price, idea.quote?.currency) : "—"}
+                </span>
+                <span className="text-right">
+                  <DayChip change={idea.change} />
+                </span>
+                <span className="hidden text-right sm:block">
+                  <Move value={week} />
+                </span>
+                <span className="col-span-2 mt-1.5 flex items-center gap-3 sm:col-span-1 sm:mt-0 sm:pl-3">
+                  <Sparkline closes={closes} />
+                  <span className="whitespace-nowrap"><TrendMark month={idea.month} /></span>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <EdgeFade side="top" shown={edges.top} />
+        <EdgeFade side="bottom" shown={edges.bottom} />
+      </div>
     </div>
+  );
+}
+
+/**
+ * Whether a scroller has more above or below what it shows. Measured on
+ * scroll, on resize and when its rows change, a frame later so the new
+ * layout is in.
+ */
+function useScrollEdges<T extends HTMLElement>(contentKey: number) {
+  const ref = useRef<T>(null);
+  const [edges, setEdges] = useState({ top: false, bottom: false });
+  const onScroll = useCallback(() => {
+    const el = ref.current;
+    if (!el) return;
+    const top = el.scrollTop > 2;
+    const bottom = el.scrollTop + el.clientHeight < el.scrollHeight - 2;
+    setEdges((prev) => (prev.top === top && prev.bottom === bottom ? prev : { top, bottom }));
+  }, []);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const frame = requestAnimationFrame(onScroll);
+    const ro = new ResizeObserver(onScroll);
+    ro.observe(el);
+    return () => {
+      cancelAnimationFrame(frame);
+      ro.disconnect();
+    };
+  }, [onScroll, contentKey]);
+  return { ref, edges, onScroll };
+}
+
+/**
+ * A scroll edge: the rows blur and fade into the card where more of them
+ * wait beyond it, and the edge is gone once there is nothing more that way.
+ */
+function EdgeFade({ side, shown }: { side: "top" | "bottom"; shown: boolean }) {
+  return (
+    <div
+      aria-hidden
+      className={cn(
+        "pointer-events-none absolute inset-x-0 transition-opacity duration-300 ease-[var(--ease-settle)] motion-reduce:transition-none",
+        "backdrop-blur-[3px] [@media(prefers-reduced-transparency:reduce)]:backdrop-blur-none",
+        side === "bottom"
+          ? "bottom-0 h-20 bg-gradient-to-t from-wolf-surface via-wolf-surface/75 to-transparent [mask-image:linear-gradient(to_top,black_35%,transparent)]"
+          : "top-0 h-10 bg-gradient-to-b from-wolf-surface via-wolf-surface/60 to-transparent [mask-image:linear-gradient(to_bottom,black_30%,transparent)]",
+        shown ? "opacity-100" : "opacity-0"
+      )}
+    />
   );
 }
 
@@ -366,7 +423,7 @@ function ExpandedWatchlist({
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-sunset-orange/[0.08] ring-1 ring-inset ring-sunset-orange/25">
-              <Crosshair className="h-[18px] w-[18px] text-sunset-orange" />
+              <Binoculars className="h-[18px] w-[18px] text-sunset-orange" />
             </span>
             <div className="min-w-0">
               <p className="truncate text-[16px] font-semibold leading-tight">{title}</p>
