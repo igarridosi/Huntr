@@ -205,6 +205,11 @@ run "first_stage_blob_only" {
     condition     = azurerm_monitor_scheduled_query_rules_alert_v2.ingest.evaluation_frequency == "PT1H" && azurerm_monitor_scheduled_query_rules_alert_v2.ingest.enabled
     error_message = "One alert rule, evaluated hourly."
   }
+
+  assert {
+    condition     = strcontains(azurerm_monitor_scheduled_query_rules_alert_v2.ingest.criteria[0].query, "\"msg\":\"run.ok\"") && !strcontains(azurerm_monitor_scheduled_query_rules_alert_v2.ingest.criteria[0].query, "success == true")
+    error_message = "Success is read from the run.ok line, not from the host's request record."
+  }
 }
 
 run "real_mode" {

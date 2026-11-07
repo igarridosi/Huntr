@@ -6,6 +6,11 @@
 # or every run fails before logging). Evaluated hourly, the lowest frequency
 # that still reports a failed night the same morning.
 #
+# Success is the run.ok line the handler writes, not the host's request
+# record: Flex Consumption can reclaim the instance before that record is
+# sent, which made good nights read as missing (see src/azure.ts). A
+# failure is run.failed, or a failed request when one does arrive.
+#
 # It also fires after the first deploy until the first run succeeds: run it
 # once by hand.
 
@@ -42,12 +47,13 @@ resource "azurerm_monitor_scheduled_query_rules_alert_v2" "ingest" {
   criteria {
     query                   = <<-QUERY
       let failed = toscalar(
-        requests
-        | where timestamp > ago(1h) and operation_Name == "sec_ingest" and success == false
+        union
+          (traces | where timestamp > ago(1h) and message has '"msg":"run.failed"'),
+          (requests | where timestamp > ago(1h) and operation_Name == "sec_ingest" and success == false)
         | count);
       let lastSuccess = toscalar(
-        requests
-        | where timestamp > ago(2d) and operation_Name == "sec_ingest" and success == true
+        traces
+        | where timestamp > ago(2d) and message has '"msg":"run.ok"'
         | summarize max(timestamp));
       print problems = iff(failed > 0, 1, 0) + iff(isnull(lastSuccess) or lastSuccess < ago(26h), 1, 0)
       QUERY
