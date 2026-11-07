@@ -7,7 +7,8 @@ name: SEC ingest (run once)
 # productionAzure, so this waits for an approval), masked before anything
 # can print it, and only ever passed to curl in a header. The run itself is
 # asynchronous: 202 means it was accepted; its outcome is in Application
-# Insights (traces | where message has "run.summary") and in the alert.
+# Insights (traces | where message has "run.summary"; it ends with run.ok or
+# run.failed) and in the alert.
 
 on:
   workflow_dispatch:

@@ -15,11 +15,25 @@
  * later would redo work the next night does anyway, and hammer the same
  * sources that may have caused the failure. Companies that failed are
  * already retried per company, the next night (see ingest.ts).
+ *
+ * Each invocation ends with one line the alert reads, run.ok or run.failed,
+ * and then holds the instance for TELEMETRY_FLUSH_MS. Flex Consumption can
+ * reclaim the instance as soon as the handler returns, and the host sends
+ * telemetry in batches: on 2026-11-06 and 11-07 the runs succeeded (the
+ * cursor moved) but their last ten seconds of logs, run.summary and the
+ * invocation's own request record never reached Application Insights, so
+ * the alert saw no success. The host's request record is written after the
+ * handler returns and cannot be waited for; the line is.
  */
 
 import { app, type InvocationContext, type Timer } from "@azure/functions";
 import { runNightly } from "./function";
 import type { Logger } from "./log";
+
+/** Longer than the host's telemetry send interval (30 s by default). */
+export const TELEMETRY_FLUSH_MS = 45_000;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 /** The pipeline's JSON lines, through the context so they reach Application Insights with the invocation. */
 function contextLogger(context: InvocationContext): Logger {
@@ -31,12 +45,26 @@ function contextLogger(context: InvocationContext): Logger {
   };
 }
 
+/** The timer's handler; tests pass their own run and wait. */
+export function nightlyHandler(run: typeof runNightly = runNightly, wait: (ms: number) => Promise<void> = sleep) {
+  return async (timer: Timer, context: InvocationContext) => {
+    const log = contextLogger(context);
+    if (timer.isPastDue) log("warn", "timer.past-due", { note: "running a missed occurrence" });
+    try {
+      await run(process.env, log);
+      log("info", "run.ok");
+    } catch (error) {
+      log("error", "run.failed", { error: error instanceof Error ? error.message : String(error) });
+      throw error;
+    } finally {
+      await wait(TELEMETRY_FLUSH_MS);
+    }
+  };
+}
+
 app.timer("sec_ingest", {
   schedule: "%SEC_INGEST_SCHEDULE%",
   runOnStartup: false,
   useMonitor: true,
-  handler: async (timer: Timer, context: InvocationContext) => {
-    if (timer.isPastDue) context.warn(JSON.stringify({ level: "warn", msg: "timer.past-due", note: "running a missed occurrence" }));
-    await runNightly(process.env, contextLogger(context));
-  },
+  handler: nightlyHandler(),
 });
